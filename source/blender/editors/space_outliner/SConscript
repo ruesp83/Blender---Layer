@@ -1,0 +1,14 @@
+#!/usr/bin/python
+Import ('env')
+
+sources = env.Glob('*.c')
+defs = []
+
+incs = '../include ../../blenlib ../../blenfont ../../blenkernel ../../makesdna ../../imbuf'
+incs += ' ../../windowmanager #/intern/guardedalloc ../../makesrna ../../blenloader'
+incs += ' #/extern/glew/include'
+
+if env['WITH_BF_INTERNATIONAL']:
+    defs.append('WITH_INTERNATIONAL')
+
+env.BlenderLib ( 'bf_editors_space_outliner', sources, Split(incs), defines=defs, libtype=['core'], priority=[60] )
