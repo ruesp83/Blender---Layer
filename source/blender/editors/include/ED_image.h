@@ -68,7 +68,7 @@ int ED_space_image_show_uvshadow(struct SpaceImage *sima, struct Object *obedit)
 void ED_image_update_frame(const struct Main *mainp, int cfra);
 
 void ED_image_draw_info(struct ARegion *ar, int color_manage, int channels, int x, int y,
-                        const unsigned char cp[4], const float fp[4], int *zp, float *zpf);
+                        const unsigned char cp[4], const float fp[4], int *zp, float *zpf, const char type);
 
 #endif /* __ED_IMAGE_H__ */
 

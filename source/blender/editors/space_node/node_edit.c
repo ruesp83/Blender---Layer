@@ -1348,8 +1348,8 @@ static void sample_draw(const bContext *C, ARegion *ar, void *arg_info)
 
 	ED_image_draw_info(ar, (scene->r.color_mgt_flag & R_COLOR_MANAGEMENT), info->channels,
 	                   info->x, info->y, info->col, info->colf,
-	                   NULL, NULL /* zbuf - unused for nodes */
-	                   );
+	                   NULL, NULL, /* zbuf - unused for nodes */
+	                   1);
 }
 
 static void sample_apply(bContext *C, wmOperator *op, wmEvent *event)
