@@ -752,6 +752,88 @@ class USERPREF_PT_theme(Panel):
                 colsub = padding.column()
                 colsub = padding.column()
                 colsub.row().prop(ui, "show_colored_constraints")
+        elif theme.theme_area == 'IMAGE_EDITOR':
+            def theme_generic_recurse(data):
+                col.label(data.rna_type.name)
+                row = col.row()
+                subsplit = row.split(percentage=0.95)
+
+                padding1 = subsplit.split(percentage=0.15)
+                padding1.column()
+
+                subsplit = row.split(percentage=0.85)
+
+                padding2 = subsplit.split(percentage=0.15)
+                padding2.column()
+
+                colsub_pair = padding1.column(), padding2.column()
+
+                props_type = {}
+
+                for i, prop in enumerate(data.rna_type.properties):
+                    if prop.identifier == "rna_type":
+                        continue
+
+                    props_type.setdefault((prop.type, prop.subtype), []).append(prop)
+
+                for props_type, props_ls in sorted(props_type.items()):
+                    if props_type[0] == 'POINTER':
+                        for i, prop in enumerate(props_ls):
+                            theme_generic_recurse(getattr(data, prop.identifier))
+                    else:
+                        for i, prop in enumerate(props_ls):
+                            colsub_pair[i % 2].row().prop(data, prop.identifier)
+
+            data = getattr(theme, theme.theme_area.lower())
+            col = split.column()
+
+            ui = theme.image_editor
+            col.label(text="Theme Image Editor")
+
+            row = col.row()
+
+            subsplit = row.split(percentage=0.95)
+            padding = subsplit.split(percentage=0.15)
+            colsub = padding.column()
+            colsub = padding.column()
+            colsub.row().prop(ui, "editmesh_active")
+            colsub.row().prop(ui, "face_dot")
+            colsub.row().prop(ui, "scope_back")
+            colsub.row().prop(ui, "preview_stitch_edge")
+            colsub.row().prop(ui, "preview_stitch_stitchable")
+            colsub.row().prop(ui, "preview_stitch_vert")
+            colsub.row().prop(ui, "vertex_select")
+            colsub.row().prop(ui, "facedot_size")
+            colsub.row().prop(ui, "col1_boundary_layer")
+            colsub.row().prop(ui, "show_boundary_layer")
+
+            subsplit = row.split(percentage=0.85)
+            padding = subsplit.split(percentage=0.15)
+            colsub = padding.column()
+            colsub = padding.column()
+            colsub.row().prop(ui, "face")
+            colsub.row().prop(ui, "face_select")
+            colsub.row().prop(ui, "scope_back")
+            colsub.row().prop(ui, "preview_stitch_active")
+            colsub.row().prop(ui, "preview_stitch_face")
+            colsub.row().prop(ui, "preview_stitch_unstitchable")
+            colsub.row().prop(ui, "vertex")
+            colsub.row().prop(ui, "vertex_size")
+            colsub.row().prop(ui, "col2_boundary_layer")
+
+            props_type = {}
+
+            for i, prop in enumerate(data.rna_type.properties):
+                if prop.identifier == "rna_type":
+                    continue
+
+                props_type.setdefault((prop.type, prop.subtype), []).append(prop)
+
+            for props_type, props_ls in sorted(props_type.items()):
+                if props_type[0] == 'POINTER':
+                    for i, prop in enumerate(props_ls):
+                        theme_generic_recurse(getattr(data, prop.identifier))
+
         else:
             self._theme_generic(split, getattr(theme, theme.theme_area.lower()))
 

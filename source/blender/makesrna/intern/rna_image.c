@@ -38,6 +38,7 @@
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
 #include "BKE_image.h"
+#include "BKE_layer.h"
 
 #include "WM_types.h"
 #include "WM_api.h"
@@ -48,6 +49,31 @@ static EnumPropertyItem image_source_items[] = {
 	{IMA_SRC_MOVIE, "MOVIE", 0, "Movie", "Movie file"},
 	{IMA_SRC_GENERATED, "GENERATED", 0, "Generated", "Generated image"},
 	{IMA_SRC_VIEWER, "VIEWER", 0, "Viewer", "Compositing node viewer"},
+	{0, NULL, 0, NULL, NULL}};
+
+EnumPropertyItem image_layer_mode_items[] = {
+	{IMA_LAYER_NORMAL, "NORMAL", 0, "Normal", ""},
+	{IMA_LAYER_MULTIPLY, "MULTIPLY", 0, "Multiply", ""},
+	{IMA_LAYER_SCREEN, "SCREEN", 0, "Screen", ""},
+	{IMA_LAYER_OVERLAY, "OVERLAY", 0, "Overlay", ""},
+	{IMA_LAYER_SOFT_LIGHT, "SOFT_LIGHT", 0, "Soft Light", ""},
+	{IMA_LAYER_HARD_LIGHT, "HARD_LIGHT", 0, "Hard Light", ""},
+	{IMA_LAYER_COLOR_DODGE, "COLOR_DODGE", 0, "Color Dodge", ""},
+	{IMA_LAYER_LINEAR_DODGE, "LINEAR_DODGE", 0, "Linear Dodge", ""},
+	{IMA_LAYER_COLOR_BURN, "COLOR_BURN", 0, "Color Burn", ""},
+	{IMA_LAYER_LINEAR_BURN, "LINEAR_BURN", 0, "Linear Burn", ""},
+	{IMA_LAYER_AVERAGE, "AVERAGE", 0, "Average", ""},
+	{IMA_LAYER_ADD, "ADD", 0, "Add", ""},
+	{IMA_LAYER_SUBTRACT, "SUBTRACT", 0, "Subtract", ""},
+	{IMA_LAYER_DIFFERENCE, "DIFFERENCE", 0, "Difference", ""},
+	{IMA_LAYER_LIGHTEN, "LIGHTEN", 0, "Lighten", ""}, 
+	{IMA_LAYER_DARKEN, "DARKEN", 0, "Darken", ""}, 
+	{IMA_LAYER_NEGATION, "NEGATION", 0, "Negation", ""},
+	{IMA_LAYER_EXCLUSION, "EXCLUSION", 0, "Exclusion", ""},
+	{IMA_LAYER_LINEAR_LIGHT, "LINEAR_LIGHT", 0, "Linear Light", ""},
+	{IMA_LAYER_VIVID_LIGHT, "VIVID_LIGHT", 0, "Vivid Light", ""},
+	{IMA_LAYER_PIN_LIGHT, "PIN_LIGHT", 0, "Pin Light", ""}, 
+	{IMA_LAYER_HARD_MIX, "HARD_MIX", 0, "Hard Mix", ""},
 	{0, NULL, 0, NULL, NULL}};
 
 #ifdef RNA_RUNTIME
@@ -286,6 +312,62 @@ static int rna_Image_depth_get(PointerRNA *ptr)
 	return planes;
 }
 
+static PointerRNA rna_Image_active_image_layer_get(PointerRNA *ptr)
+{
+	Image *ima= (Image*)ptr->data;
+	ImageLayer *layer= imalayer_get_current(ima);
+ 
+	return rna_pointer_inherit_refine(ptr, &RNA_ImageLayer, layer);
+}
+
+static void rna_Image_active_image_layer_set(PointerRNA *ptr, PointerRNA value)
+{
+	Image *ima= (Image*)ptr->data;
+	ImageLayer *layer= (ImageLayer*)value.data;
+	const int index= BLI_findindex(&ima->imlayers, layer);
+	if (index != -1) ima->Act_Layers= index;
+}
+
+static void rna_Image_layers_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+	Image *ima= (Image*)ptr->data;
+	rna_iterator_listbase_begin(iter, &ima->imlayers, NULL);
+}
+
+static int rna_Image_count_image_layer_get(PointerRNA *ptr)
+{
+	Image *ima= (Image*)ptr->data;
+	return imalayer_get_count(ima);
+}
+
+static int rna_Image_active_image_layer_index_get(PointerRNA *ptr)
+{
+	Image *ima= (Image*)ptr->data;
+	return imalayer_get_current_act(ima);
+}
+ 
+static void rna_Image_active_image_layer_index_set(PointerRNA *ptr, int value)
+{
+	Image *ima= (Image*)ptr->data;
+	imalayer_set_current_act(ima, value);
+}
+ 
+static void rna_Image_active_image_layer_index_range(PointerRNA *ptr, int *min, int *max)
+{
+	Image *im= (Image*)ptr->data;
+	void *lock;
+	ImBuf *ibuf= BKE_image_acquire_ibuf(im, NULL, &lock);
+
+	/**min= 0;
+	*max= BLI_countlist(&im->imlayers)-1;
+	*max= MAX2(0, *max);*/
+	*min= BLI_countlist(&im->imlayers)-1;
+	*max= 0;
+	*min= MAX2(0, *min);
+
+	BKE_image_release_ibuf(im, lock);
+}
+
 static int rna_Image_pixels_get_length(PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION])
 {
 	Image *ima = ptr->id.data;
@@ -413,6 +495,111 @@ static void rna_def_imageuser(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Pass", "Pass in multilayer image");
 }
 
+static void rna_def_image_layer_common(StructRNA *srna)
+{
+	PropertyRNA *prop;
+
+	static EnumPropertyItem prop_type_items[] = {
+		{IMA_LAYER_BASE, "BASE", 0, "Base", ""},
+		{IMA_LAYER_LAYER, "LAYER", 0, "Layer", ""},
+		{0, NULL, 0, NULL, NULL}};
+
+	static EnumPropertyItem prop_background_items[] = {
+		{IMA_LAYER_BG_RGB, "RGB", 0, "RGB", ""},
+		{IMA_LAYER_BG_WHITE, "WHITE", 0, "White", ""},
+		{IMA_LAYER_BG_ALPHA, "ALPHA", 0, "Transparent", ""},
+		{0, NULL, 0, NULL, NULL}};
+
+	prop= RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_default(prop, "ImageLayer");
+	RNA_def_property_string_maxlength(prop, IMA_LAYER_MAX_LEN);
+	RNA_def_property_update(prop, NC_OBJECT|ND_MODIFIER|NA_RENAME, NULL);
+	RNA_def_property_ui_text(prop, "Name", "The name of the image layer.");
+	RNA_def_struct_name_property(srna, prop);
+
+ 	prop= RNA_def_property(srna, "visible", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_ui_text(prop, "", "Hides the layer in the UV/Image Editor");
+	RNA_def_property_boolean_sdna(prop, NULL, "visible", IMA_LAYER_VISIBLE);
+	RNA_def_property_update(prop, NC_IMAGE|ND_DISPLAY, NULL);
+
+	prop= RNA_def_property(srna, "lock", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_ui_text(prop, "", "Blocks the layer in the UV/Image Editor");
+	RNA_def_property_boolean_sdna(prop, NULL, "lock", IMA_LAYER_LOCK);
+	RNA_def_property_update(prop, NC_IMAGE|ND_DISPLAY, NULL);
+
+	prop= RNA_def_property(srna, "opacity", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "opacity");
+	RNA_def_property_range(prop, 0.0, 1.0);
+	RNA_def_property_ui_range(prop, 0, 1.0, 1, 3);
+	RNA_def_property_ui_text(prop, "Opacity", "The opacity of the image layer when blended.");
+	RNA_def_property_update(prop, NC_IMAGE|ND_DISPLAY, NULL);
+
+	prop= RNA_def_property(srna, "blend_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "mode");
+	RNA_def_property_enum_items(prop, image_layer_mode_items);
+	RNA_def_property_ui_text(prop, "Blend Modes", "Determine how two Layers are blended into each other.");
+	RNA_def_property_update(prop, NC_IMAGE|ND_DISPLAY, NULL);
+
+	prop= RNA_def_property(srna, "background", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "background");
+	RNA_def_property_enum_items(prop, prop_background_items);
+	RNA_def_property_ui_text(prop, "Type Background", "");
+	RNA_def_property_update(prop, NC_IMAGE|ND_DISPLAY, NULL);
+
+	prop= RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+	//RNA_def_property_ui_text(prop, "", "Defines the type of layer");
+	//RNA_def_property_boolean_sdna(prop, NULL, "type", IMA_LAYER_BASE);
+	RNA_def_property_enum_sdna(prop, NULL, "type");
+	RNA_def_property_enum_items(prop, prop_type_items);
+	RNA_def_property_update(prop, NC_IMAGE|ND_DISPLAY, NULL);
+}
+
+static void rna_def_image_layer(BlenderRNA *brna)
+{
+	StructRNA *srna;
+		
+	srna= RNA_def_struct(brna, "ImageLayer", NULL);
+	RNA_def_struct_ui_text(srna, "Image Layer", "Image layer");
+	RNA_def_struct_ui_icon(srna, ICON_TEXTURE_DATA);
+
+	rna_def_image_layer_common(srna);
+}
+
+static void rna_def_image_layers(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	FunctionRNA *func;
+	PropertyRNA *parm;
+
+	RNA_def_property_srna(cprop, "ImageLayers");
+	srna= RNA_def_struct(brna, "ImageLayers", NULL);
+	RNA_def_struct_sdna(srna, "Image");
+	RNA_def_struct_ui_text(srna, "Image Layers", "Image layer");
+
+	prop= RNA_def_property(srna, "active_image_layer", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "ImageLayer");
+	RNA_def_property_pointer_funcs(prop, "rna_Image_active_image_layer_get", 
+								   "rna_Image_active_image_layer_set", NULL, NULL);
+	RNA_def_property_flag(prop, PROP_EDITABLE|PROP_NEVER_NULL);
+	RNA_def_property_ui_text(prop, "Active Image Layer", "Active image layer");
+	RNA_def_property_update(prop, NC_IMAGE|ND_DISPLAY, NULL);
+ 
+	prop= RNA_def_property(srna, "active_image_layer_index", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "Act_Layers");
+	RNA_def_property_int_funcs(prop, "rna_Image_active_image_layer_index_get", "rna_Image_active_image_layer_index_set", 
+							   "rna_Image_active_image_layer_index_range");
+	RNA_def_property_ui_text(prop, "Active Image Layer Index", "Index of active image layer slot");
+	RNA_def_property_update(prop, NC_IMAGE|ND_DISPLAY, NULL);
+
+	prop= RNA_def_property(srna, "count_image_layers", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "Count_Layers");
+	RNA_def_property_int_funcs(prop, "rna_Image_count_image_layer_get", NULL, NULL);
+	RNA_def_property_ui_text(prop, "Total number of layers", "");
+	RNA_def_property_update(prop, NC_IMAGE|ND_DISPLAY, NULL);
+}
+
 static void rna_def_image(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -479,6 +666,14 @@ static void rna_def_image(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Field Order", "Order of video fields (select which lines are displayed first)");
 	RNA_def_property_update(prop, NC_IMAGE|ND_DISPLAY, NULL);
 	
+	/* Image Layers */
+ 	prop= RNA_def_property(srna, "image_layers", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "imlayers", NULL);
+	RNA_def_property_struct_type(prop, "ImageLayer");
+	RNA_def_property_collection_funcs(prop, "rna_Image_layers_begin", "rna_iterator_listbase_next", "rna_iterator_listbase_end", "rna_iterator_listbase_get", 0, 0, 0, 0);
+	RNA_def_property_ui_text(prop, "Image Layers", "");
+	rna_def_image_layers(brna, prop);
+
 	/* booleans */
 	prop = RNA_def_property(srna, "use_fields", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", IMA_FIELDS);
@@ -636,6 +831,7 @@ static void rna_def_image(BlenderRNA *brna)
 
 void RNA_def_image(BlenderRNA *brna)
 {
+	rna_def_image_layer(brna);
 	rna_def_image(brna);
 	rna_def_imageuser(brna);
 }

@@ -73,6 +73,7 @@
 #include "BKE_global.h"
 #include "BKE_icons.h"
 #include "BKE_image.h"
+#include "BKE_layer.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_packedFile.h"
@@ -202,6 +203,7 @@ void free_image(Image *ima)
 {
 	int a;
 
+	image_free_image_layers(ima);
 	image_free_buffers(ima);
 	if (ima->packedfile) {
 		freePackedFile(ima->packedfile);
@@ -218,6 +220,7 @@ void free_image(Image *ima)
 			ima->renders[a]= NULL;
 		}
 	}
+	
 }
 
 /* only image block itself */
@@ -243,11 +246,21 @@ static Image *image_alloc(const char *name, short source, short type)
 /* get the ibuf from an image cache, local use here only */
 static ImBuf *image_get_ibuf(Image *ima, int index, int frame)
 {
+	/* unsigned int totsize= 0; */
+
 	/* this function is intended to be thread safe. with IMA_NO_INDEX this
 	 * should be OK, but when iterating over the list this is more tricky
 	 * */
-	if (index==IMA_NO_INDEX)
+	if (index==IMA_NO_INDEX) {
+		/* TODO: (kwk) This is an ugly hack to return always the active layer's ibuf */
+		ImageLayer *layer= imalayer_get_current(ima);
+		
+		if (layer && layer->ibufs.last)
+			return layer->ibufs.last;
+		
+		/* Only return "normal" image ibuf if no layer ibuf was found. */
 		return ima->ibufs.first;
+	}
 	else {
 		ImBuf *ibuf;
 
@@ -296,6 +309,12 @@ static void image_assign_ibuf(Image *ima, ImBuf *ibuf, int index, int frame)
 		/* now we don't want copies? */
 		if (link && ibuf->index==link->index)
 			image_remove_ibuf(ima, link);
+
+		image_add_image_layer_base(ima);
+		if (strlen(ima->name) != 0) {
+			((ImageLayer *)ima->imlayers.last)->background = IMA_LAYER_BG_IMAGE;
+			strcpy(((ImageLayer *)ima->imlayers.last)->file_path, ima->name);
+		}
 	}
 }
 
@@ -560,7 +579,46 @@ Image *BKE_add_image_file(const char *name)
 	return ima;
 }
 
-static ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short uvtestgrid, float color[4])
+ImageLayer *BKE_add_image_file_as_layer(Image *ima, const char *name)
+{
+	ImageLayer *iml, *layer_act;
+	int file, len;
+	const char *newname;
+	char str[FILE_MAX], strtest[FILE_MAX];
+	
+	BLI_strncpy(str, name, sizeof(str));
+	
+	/* exists? */
+	file= BLI_open(str, O_BINARY|O_RDONLY, 0);
+	if (file== -1) return NULL;
+	close(file);
+	
+	/* create a short library name */
+	len= strlen(name);
+	
+	while (len > 0 && name[len - 1] != '/' && name[len - 1] != '\\') len--;
+	newname= name+len;
+	
+	//iml = image_add_image_layer(ima, newname, alpha ? 32 : 24, color, 2);
+	
+	layer_act = imalayer_get_current(ima);
+	layer_act->select = !IMA_LAYER_SEL_CURRENT;
+	
+	iml = layer_alloc(ima, newname);
+	if (iml) {
+
+		BLI_addhead(&ima->imlayers, iml);
+		ima->Act_Layers = 0;
+		ima->Count_Layers += 1;
+
+		//if (color[3] == 1.0f)
+		//	im_l->background = IMA_LAYER_BG_RGB;
+		//copy_v4_v4(im_l->default_color, color)
+	}
+	return iml;
+}
+
+ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short uvtestgrid, float color[4])
 {
 	ImBuf *ibuf;
 	unsigned char *rect= NULL;
@@ -609,7 +667,7 @@ Image *BKE_add_image_size(unsigned int width, unsigned int height, const char *n
 		
 		ibuf= add_ibuf_size(width, height, ima->name, depth, floatbuf, uvtestgrid, color);
 		image_assign_ibuf(ima, ibuf, IMA_NO_INDEX, 0);
-		
+
 		ima->ok= IMA_OK_LOADED;
 	}
 
