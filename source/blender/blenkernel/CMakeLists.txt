@@ -99,7 +99,6 @@ set(SRC
 	intern/key.c
 	intern/lamp.c
 	intern/lattice.c
-	intern/layer.c
 	intern/library.c
 	intern/material.c
 	intern/mball.c
@@ -186,7 +185,6 @@ set(SRC
 	BKE_key.h
 	BKE_lamp.h
 	BKE_lattice.h
-	BKE_layer.h
 	BKE_library.h
 	BKE_main.h
 	BKE_material.h

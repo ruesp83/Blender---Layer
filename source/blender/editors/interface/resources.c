@@ -441,15 +441,6 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 				case TH_STITCH_PREVIEW_ACTIVE:
 					cp = ts->preview_stitch_active;
 					break;
-				case TH_SHOW_BOUNDARY_LAYER:
-					cp = &ts->show_boundary_layer;
-					break;
-				case TH_COL1_BOUNDARY_LAYER:
-					cp = ts->col1_boundary_layer;
-					break;
-				case TH_COL2_BOUNDARY_LAYER:
-					cp = ts->col2_boundary_layer;
-					break;
 				case TH_MARKER_OUTLINE:
 					cp = ts->marker_outline; break;
 				case TH_MARKER:
@@ -799,9 +790,6 @@ void ui_theme_init_default(void)
 	rgba_char_args_set_fl(btheme->tima.preview_stitch_vert, 0.0, 0.0, 1.0, 0.2);
 	rgba_char_args_set_fl(btheme->tima.preview_stitch_stitchable, 0.0, 1.0, 0.0, 1.0);
 	rgba_char_args_set_fl(btheme->tima.preview_stitch_unstitchable, 1.0, 0.0, 0.0, 1.0);
-	btheme->tima.show_boundary_layer = TH_IMAGE_LAYER_BOUNDARY;
-	rgba_char_args_set(btheme->tima.col1_boundary_layer, 255, 255, 0, 255);
-	rgba_char_args_set(btheme->tima.col2_boundary_layer, 255, 0, 255, 255);
 
 	/* space text */
 	btheme->text = btheme->tv3d;
@@ -1764,7 +1752,6 @@ void init_userdef_do_versions(void)
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			if (btheme->tui.wcol_menu_item.item[3] == 255)
 				rgba_char_args_set(btheme->tui.wcol_menu_item.item, 172, 172, 172, 128);
-			
 		}
 	}
 
@@ -1786,9 +1773,6 @@ void init_userdef_do_versions(void)
 			if (btheme->tseq.movieclip[0] == 0) {
 				rgba_char_args_set(btheme->tseq.movieclip,  32, 32, 143, 255);
 			}
-			btheme->tima.show_boundary_layer = TH_IMAGE_LAYER_BOUNDARY;
-			rgba_char_args_set_fl(btheme->tima.col1_boundary_layer, 1.0, 1.0, 0.0, 1.0);
-			rgba_char_args_set_fl(btheme->tima.col2_boundary_layer, 0.94, 0.34, 1.0, 1.0);
 		}
 	}
 

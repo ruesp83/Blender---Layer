@@ -420,7 +420,7 @@ static SpaceLink *image_new(const bContext *UNUSED(C))
 	
 	BLI_addtail(&simage->regionbase, ar);
 	ar->regiontype = RGN_TYPE_WINDOW;
-
+	
 	return (SpaceLink *)simage;
 }
 
@@ -491,17 +491,6 @@ static void image_operatortypes(void)
 
 	WM_operatortype_append(IMAGE_OT_properties);
 	WM_operatortype_append(IMAGE_OT_scopes);
-
-	WM_operatortype_append(IMAGE_OT_image_layer_move);
-	//WM_operatortype_append(IMAGE_OT_image_layer_fill_color);
-	WM_operatortype_append(IMAGE_OT_image_layer_remove);
-	WM_operatortype_append(IMAGE_OT_image_layer_add);
-	WM_operatortype_append(IMAGE_OT_image_layer_add_below);
-	WM_operatortype_append(IMAGE_OT_image_layer_add_above);
-	WM_operatortype_append(IMAGE_OT_image_layer_duplicate);
-	WM_operatortype_append(IMAGE_OT_image_layer_select);
-	WM_operatortype_append(IMAGE_OT_image_layer_clean);
-	WM_operatortype_append(IMAGE_OT_image_layer_merge);
 }
 
 static void image_keymap(struct wmKeyConfig *keyconf)
@@ -511,31 +500,12 @@ static void image_keymap(struct wmKeyConfig *keyconf)
 	int i;
 	
 	WM_keymap_add_item(keymap, "IMAGE_OT_new", NKEY, KM_PRESS, KM_ALT, 0);
-	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_open", OKEY, KM_PRESS, KM_ALT, 0);
-	RNA_enum_set(kmi->ptr, "action", IMA_LAYER_OPEN_IMAGE);
-	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_open", OKEY, KM_PRESS, KM_SHIFT|KM_ALT, 0);
-	RNA_enum_set(kmi->ptr, "action", IMA_LAYER_OPEN_LAYER);
+	WM_keymap_add_item(keymap, "IMAGE_OT_open", OKEY, KM_PRESS, KM_ALT, 0);
 	WM_keymap_add_item(keymap, "IMAGE_OT_reload", RKEY, KM_PRESS, KM_ALT, 0);
 	WM_keymap_add_item(keymap, "IMAGE_OT_save", SKEY, KM_PRESS, KM_ALT, 0);
 	WM_keymap_add_item(keymap, "IMAGE_OT_save_as", F3KEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "IMAGE_OT_properties", NKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "IMAGE_OT_scopes", TKEY, KM_PRESS, 0, 0);
-
-	/*Layers*/
-	WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_add", NKEY, KM_PRESS, KM_SHIFT|KM_ALT, 0);
-	WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_add_above", UPARROWKEY, KM_PRESS, KM_SHIFT|KM_ALT, 0);
-	WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_add_below", DOWNARROWKEY, KM_PRESS, KM_SHIFT|KM_ALT, 0);
-
-	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_select", PAGEUPKEY, KM_PRESS, 0, 0);
-	RNA_enum_set(kmi->ptr, "action", IMA_LAYER_SEL_PREVIOUS);
-	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_select", PAGEDOWNKEY, KM_PRESS, 0, 0);
-	RNA_enum_set(kmi->ptr, "action", IMA_LAYER_SEL_NEXT);
-	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_select", HOMEKEY, KM_PRESS, 0, 0);
-	RNA_enum_set(kmi->ptr, "action", IMA_LAYER_SEL_TOP);
-	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_select", ENDKEY, KM_PRESS, 0, 0);
-	RNA_enum_set(kmi->ptr, "action", IMA_LAYER_SEL_BOTTOM);
-
-	WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_clean", DELKEY, KM_PRESS, 0, 0);
 
 	WM_keymap_add_item(keymap, "IMAGE_OT_cycle_render_slot", JKEY, KM_PRESS, 0, 0);
 	RNA_boolean_set(WM_keymap_add_item(keymap, "IMAGE_OT_cycle_render_slot", JKEY, KM_PRESS, KM_ALT, 0)->ptr, "reverse", TRUE);
@@ -879,7 +849,6 @@ static void image_main_area_listener(ARegion *ar, wmNotifier *wmn)
 			break;
 	}
 }
-
 
 /* *********************** buttons region ************************ */
 

@@ -3002,52 +3002,19 @@ static void link_ibuf_list(FileData *fd, ListBase *lb)
 	lb->last= prev;
 }
 
-static void link_imalayers_list(FileData *fd, ListBase *lb)
-{
-	Link *ln, *prev;
-	ImageLayer *layer;
-	
-	if(lb->first==NULL) return;
-	
-	lb->first = newimaadr(fd, lb->first);
-	printf("1\n");
-	ln = lb->first;
-	printf("2\n");
-	layer = (ImageLayer*)ln;
-	printf("3\n");
-	if (layer->name)
-		printf("Name=%s\n", layer->name);
-	else{
-		printf("4\n");
-		printf("Opacity=%d\n", layer->opacity);
-	}
-	prev= NULL;
-	while(ln) {
-		ln->next = newimaadr(fd, ln->next);
-		ln->prev = prev;
-		prev = ln;
-		layer = (ImageLayer*)ln;
-		printf("Name=%s\n", layer->name);
-		link_ibuf_list(fd, &layer->ibufs);
-		ln = ln->next;
-	}
-	lb->last= prev;
-}
-
 static void direct_link_image(FileData *fd, Image *ima)
 {
 	/* for undo system, pointers could be restored */
 	if (fd->imamap)
 		link_ibuf_list(fd, &ima->ibufs);
 	else
-		ima->ibufs.first = ima->ibufs.last = NULL;
+		ima->ibufs.first= ima->ibufs.last= NULL;
 	
 	/* if not restored, we keep the binded opengl index */
 	if (ima->ibufs.first==NULL) {
 		ima->bindcode= 0;
 		ima->gputexture= NULL;
 	}
-	
 	
 	ima->anim= NULL;
 	ima->rr= NULL;
@@ -3068,10 +3035,6 @@ static void direct_link_image(FileData *fd, Image *ima)
 	ima->packedfile = direct_link_packedfile(fd, ima->packedfile);
 	ima->preview = direct_link_preview_image(fd, ima->preview);
 	ima->ok= 1;
-	if (ima->imlayers.first)
-		link_imalayers_list(fd, &ima->imlayers);
-	else
-		ima->imlayers.first = ima->imlayers.last = NULL;
 }
 
 

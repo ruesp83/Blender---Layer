@@ -1887,7 +1887,7 @@ static void write_images(WriteData *wd, ListBase *idbase)
 {
 	Image *ima;
 	PackedFile * pf;
-	ImageLayer *iml;
+
 
 	ima= idbase->first;
 	while (ima) {
@@ -1902,13 +1902,6 @@ static void write_images(WriteData *wd, ListBase *idbase)
 				writedata(wd, DATA, pf->size, pf->data);
 			}
 
-			if (ima->imlayers.first) {
-				iml = ima->imlayers.first;
-				while(iml) {
-					writestruct(wd, DATA, "ImageLayer", 1, iml);
-					iml= iml->next;
-				}
-			}
 			write_previews(wd, ima->preview);
 		}
 		ima= ima->id.next;

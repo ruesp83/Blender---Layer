@@ -130,8 +130,6 @@ void BKE_image_release_ibuf(struct Image *ima, void *lock);
 
 /* returns existing Image when filename/type is same (frame optional) */
 struct Image *BKE_add_image_file(const char *name);
-struct ImageLayer *BKE_add_image_file_as_layer(struct Image *ima, const char *name);
-struct ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short uvtestgrid, float color[4]);
 
 /* adds image, adds ibuf, generates color or pattern */
 struct Image *BKE_add_image_size(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short uvtestgrid, float color[4]);

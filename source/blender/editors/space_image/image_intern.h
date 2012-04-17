@@ -93,17 +93,5 @@ void image_buttons_register(struct ARegionType *art);
 void IMAGE_OT_properties(struct wmOperatorType *ot);
 void IMAGE_OT_scopes(struct wmOperatorType *ot);
 
-/* image layers */
-void IMAGE_OT_image_layer_move(struct wmOperatorType *ot);
-//void IMAGE_OT_image_layer_fill_color(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_remove(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_add(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_add_below(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_add_above(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_duplicate(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_select(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_clean(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_merge(struct wmOperatorType *ot);
-
-
 #endif /* __IMAGE_INTERN_H__ */
+
