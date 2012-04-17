@@ -774,11 +774,6 @@ int BLI_begin_edgefill(ScanFillContext *sf_ctx)
 
 int BLI_edgefill(ScanFillContext *sf_ctx, const short do_quad_tri_speedup)
 {
-	return BLI_edgefill_ex(sf_ctx, do_quad_tri_speedup, NULL);
-}
-
-int BLI_edgefill_ex(ScanFillContext *sf_ctx, const short do_quad_tri_speedup, const float nor_proj[3])
-{
 	/*
 	 * - fill works with its own lists, so create that first (no faces!)
 	 * - for vertices, put in ->tmp.v the old pointer
@@ -791,7 +786,7 @@ int BLI_edgefill_ex(ScanFillContext *sf_ctx, const short do_quad_tri_speedup, co
 	ScanFillVert *eve;
 	ScanFillEdge *eed, *nexted;
 	PolyFill *pflist, *pf;
-	float *min_xy_p, *max_xy_p;
+	float limit, *min_xy_p, *max_xy_p, *v1, *v2, norm[3], len;
 	short a, c, poly = 0, ok = 0, toggle = 0;
 	int totfaces = 0; /* total faces added */
 	int co_x, co_y;
@@ -818,7 +813,7 @@ int BLI_edgefill_ex(ScanFillContext *sf_ctx, const short do_quad_tri_speedup, co
 
 		eve = sf_ctx->fillvertbase.first;
 		/* no need to check 'eve->next->next->next' is valid, already counted */
-		/* use shortest diagonal for quad */
+		/*use shortest diagonal for quad*/
 		sub_v3_v3v3(vec1, eve->co, eve->next->next->co);
 		sub_v3_v3v3(vec2, eve->next->co, eve->next->next->next->co);
 
@@ -853,41 +848,41 @@ int BLI_edgefill_ex(ScanFillContext *sf_ctx, const short do_quad_tri_speedup, co
 		eve = eve->next;
 	}
 
-	if (ok == 0) {
-		return 0;
-	}
-	else {
-		float n[3];
+	if (ok == 0) return 0;
 
-		if (nor_proj) {
-			copy_v3_v3(n, nor_proj);
-		}
-		else {
-			/* define projection: with 'best' normal */
-			/* Newell's Method */
-			/* Similar code used elsewhere, but this checks for double ups
-			 * which historically this function supports so better not change */
-			float *v_prev;
+	/* NEW NEW! define projection: with 'best' normal */
+	/* just use the first three different vertices */
+	
+	/* THIS PART STILL IS PRETTY WEAK! (ton) */
 
-			zero_v3(n);
-			eve = sf_ctx->fillvertbase.last;
-			v_prev = eve->co;
+	eve = sf_ctx->fillvertbase.last;
+	len = 0.0;
+	v1 = eve->co;
+	v2 = 0;
+	eve = sf_ctx->fillvertbase.first;
+	limit = 1e-8f;
 
-			for (eve = sf_ctx->fillvertbase.first; eve; eve = eve->next) {
-				if (LIKELY(!compare_v3v3(v_prev, eve->co, COMPLIMIT))) {
-					add_newell_cross_v3_v3v3(n, v_prev, eve->co);
+	while (eve) {
+		if (v2) {
+			if (!compare_v3v3(v2, eve->co, COMPLIMIT)) {
+				float inner = angle_v3v3v3(v1, v2, eve->co);
+				inner = MIN2(fabsf(inner), fabsf(M_PI - inner));
+
+				if (inner > limit) {
+					limit = inner;
+					len = normal_tri_v3(norm, v1, v2, eve->co);
 				}
-				v_prev = eve->co;
 			}
 		}
+		else if (!compare_v3v3(v1, eve->co, COMPLIMIT))
+			v2 = eve->co;
 
-		if (UNLIKELY(normalize_v3(n) == 0.0f)) {
-			n[2] = 1.0f; /* other axis set to 0.0 */
-		}
-
-		axis_dominant_v3(&co_x, &co_y, n);
+		eve = eve->next;
 	}
 
+	if (len == 0.0f) return 0;  /* no fill possible */
+
+	axis_dominant_v3(&co_x, &co_y, norm);
 
 	/* STEP 1: COUNT POLYS */
 	eve = sf_ctx->fillvertbase.first;

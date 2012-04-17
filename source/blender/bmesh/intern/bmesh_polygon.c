@@ -84,7 +84,9 @@ static void compute_poly_normal(float normal[3], float verts[][3], int nverts)
 
 	/* Newell's Method */
 	for (i = 0; i < nverts; v_prev = v_curr, v_curr = verts[++i]) {
-		add_newell_cross_v3_v3v3(n, v_prev, v_curr);
+		n[0] += (v_prev[1] - v_curr[1]) * (v_prev[2] + v_curr[2]);
+		n[1] += (v_prev[2] - v_curr[2]) * (v_prev[0] + v_curr[0]);
+		n[2] += (v_prev[0] - v_curr[0]) * (v_prev[1] + v_curr[1]);
 	}
 
 	if (UNLIKELY(normalize_v3_v3(normal, n) == 0.0f)) {
@@ -107,7 +109,9 @@ static void bm_face_compute_poly_normal(BMFace *f)
 
 	/* Newell's Method */
 	do {
-		add_newell_cross_v3_v3v3(n, v_prev, v_curr);
+		n[0] += (v_prev[1] - v_curr[1]) * (v_prev[2] + v_curr[2]);
+		n[1] += (v_prev[2] - v_curr[2]) * (v_prev[0] + v_curr[0]);
+		n[2] += (v_prev[0] - v_curr[0]) * (v_prev[1] + v_curr[1]);
 
 		l_iter = l_iter->next;
 		v_prev = v_curr;
@@ -138,7 +142,9 @@ static void bm_face_compute_poly_normal_vertex_cos(BMFace *f, float n[3],
 
 	/* Newell's Method */
 	do {
-		add_newell_cross_v3_v3v3(n, v_prev, v_curr);
+		n[0] += (v_prev[1] - v_curr[1]) * (v_prev[2] + v_curr[2]);
+		n[1] += (v_prev[2] - v_curr[2]) * (v_prev[0] + v_curr[0]);
+		n[2] += (v_prev[0] - v_curr[0]) * (v_prev[1] + v_curr[1]);
 
 		l_iter = l_iter->next;
 		v_prev = v_curr;
@@ -529,8 +535,8 @@ static int linecrossesf(const float v1[2], const float v2[2], const float v3[2],
 	GETMIN2(v1, v2, mv1, mv2);
 	GETMIN2(v3, v4, mv3, mv4);
 	
-	/* do an interval test on the x and y axes */
-	/* first do x axis */
+	/* do an interval test on the x and y axe */
+	/* first do x axi */
 	if (ABS(v1[1] - v2[1]) < EPS &&
 	    ABS(v3[1] - v4[1]) < EPS &&
 	    ABS(v1[1] - v3[1]) < EPS)
@@ -538,7 +544,7 @@ static int linecrossesf(const float v1[2], const float v2[2], const float v3[2],
 		return (mv4[0] >= mv1[0] && mv3[0] <= mv2[0]);
 	}
 
-	/* now do y axis */
+	/* now do y axi */
 	if (ABS(v1[0] - v2[0]) < EPS &&
 	    ABS(v3[0] - v4[0]) < EPS &&
 	    ABS(v1[0] - v3[0]) < EPS)

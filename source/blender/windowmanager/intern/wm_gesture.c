@@ -253,9 +253,8 @@ static void draw_filled_lasso(wmGesture *gt)
 	
 	/* highly unlikely this will fail, but could crash if (gt->points == 0) */
 	if (firstv) {
-		float zvec[3] = {0.0f, 0.0f, 1.0f};
 		BLI_addfilledge(&sf_ctx, firstv, v);
-		BLI_edgefill_ex(&sf_ctx, FALSE, zvec);
+		BLI_edgefill(&sf_ctx, FALSE);
 	
 		glEnable(GL_BLEND);
 		glColor4f(1.0, 1.0, 1.0, 0.05);

@@ -3131,7 +3131,7 @@ static int mesh_separate_selected(Main *bmain, Scene *scene, Base *editbase, wmO
 	BMesh *bm_new;
 	
 	if (!em)
-		return FALSE;
+		return OPERATOR_CANCELLED;
 		
 	bm_new = BM_mesh_create(&bm_mesh_allocsize_default);
 	CustomData_copy(&em->bm->vdata, &bm_new->vdata, CD_MASK_BMESH, CD_CALLOC, 0);
@@ -3182,41 +3182,13 @@ static int mesh_separate_selected(Main *bmain, Scene *scene, Base *editbase, wmO
 	BM_mesh_free(bm_new);
 	((Mesh *)basenew->object->data)->edit_btmesh = NULL;
 	
-	return TRUE;
+	return 1;
 }
 
-static int mesh_separate_material(Main *bmain, Scene *scene, Base *editbase, wmOperator *wmop)
+//BMESH_TODO
+static int mesh_separate_material(Main *UNUSED(bmain), Scene *UNUSED(scene), Base *UNUSED(editbase), wmOperator *UNUSED(wmop))
 {
-	BMFace *f_cmp, *f;
-	BMIter iter;
-	int result = FALSE;
-	Object *obedit = editbase->object;
-	BMEditMesh *em = BMEdit_FromObject(obedit);
-	BMesh *bm = em->bm;
-
-	EDBM_flag_disable_all(em, BM_ELEM_SELECT);
-
-	while ((f_cmp = BM_iter_at_index(bm, BM_FACES_OF_MESH, NULL, 0))) {
-		const short mat_nr = f_cmp->mat_nr;
-		int tot = 0;
-
-		BM_ITER(f, &iter, bm, BM_FACES_OF_MESH, NULL) {
-			if (f->mat_nr == mat_nr) {
-				BM_face_select_set(bm, f, TRUE);
-				tot++;
-			}
-		}
-
-		/* leave the current object with some materials */
-		if (tot == bm->totface) {
-			break;
-		}
-
-		/* Move selection into a separate object */
-		result |= mesh_separate_selected(bmain, scene, editbase, wmop);
-	}
-
-	return result;
+	return 0;
 }
 
 static int mesh_separate_loose(Main *bmain, Scene *scene, Base *editbase, wmOperator *wmop)
@@ -3227,14 +3199,21 @@ static int mesh_separate_loose(Main *bmain, Scene *scene, Base *editbase, wmOper
 	BMVert *v_seed;
 	BMWalker walker;
 	BMIter iter;
-	int result = FALSE;
+	int result = 0;
 	Object *obedit = editbase->object;
-	BMEditMesh *em = BMEdit_FromObject(obedit);
+	Mesh *me = obedit->data;
+	BMEditMesh *em = me->edit_btmesh;
 	BMesh *bm = em->bm;
 	int max_iter = bm->totvert;
 
 	/* Clear all selected vertices */
-	EDBM_flag_disable_all(em, BM_ELEM_SELECT);
+	BM_ITER(v, &iter, bm, BM_VERTS_OF_MESH, NULL) {
+		BM_elem_select_set(bm, v, FALSE);
+	}
+
+	/* Flush the selection to clear edge/face selections to match
+	 * selected vertices */
+	EDBM_selectmode_flush_ex(em, SCE_SELECT_VERTEX);
 
 	/* A "while (true)" loop should work here as each iteration should
 	 * select and remove at least one vertex and when all vertices

@@ -112,8 +112,7 @@ bool KX_NavMeshObject::BuildVertIndArrays(float *&vertices, int& nverts,
 {
 	DerivedMesh* dm = mesh_create_derived_no_virtual(KX_GetActiveScene()->GetBlenderScene(), GetBlenderObject(), 
 													NULL, CD_MASK_MESH);
-	CustomData *pdata = dm->getPolyDataLayout(dm);
-	int* recastData = (int*) CustomData_get_layer(pdata, CD_RECAST);
+	int* recastData = (int*) dm->getTessFaceDataArray(dm, CD_RECAST);
 	if (recastData)
 	{
 		int *dtrisToPolysMap=NULL, *dtrisToTrisMap=NULL, *trisToFacesMap=NULL;
