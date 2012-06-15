@@ -80,6 +80,7 @@
 #include "BKE_packedFile.h"
 #include "BKE_report.h"
 #include "BKE_sound.h"
+#include "BKE_screen.h"
 #include "BKE_texture.h"
 
 
@@ -332,8 +333,9 @@ static int wm_read_exotic(Scene *UNUSED(scene), const char *name)
 				retval = BKE_READ_EXOTIC_OK_BLEND;
 			}
 			else {
-				//XXX waitcursor(1);
 #if 0           /* historic stuff - no longer used */
+				WM_cursor_wait(TRUE);
+
 				if (is_foo_format(name)) {
 					read_foo(name);
 					retval = BKE_READ_EXOTIC_OK_OTHER;
@@ -343,7 +345,9 @@ static int wm_read_exotic(Scene *UNUSED(scene), const char *name)
 				{
 					retval = BKE_READ_EXOTIC_FAIL_FORMAT;
 				}
-				//XXX waitcursor(0);
+#if 0
+				WM_cursor_wait(FALSE);
+#endif
 			}
 		}
 	}
@@ -360,7 +364,7 @@ void WM_read_file(bContext *C, const char *filepath, ReportList *reports)
 
 	WM_cursor_wait(1);
 
-	BLI_exec_cb(CTX_data_main(C), NULL, BLI_CB_EVT_LOAD_PRE);
+	BLI_callback_exec(CTX_data_main(C), NULL, BLI_CB_EVT_LOAD_PRE);
 
 	/* first try to append data from exotic file formats... */
 	/* it throws error box when file doesn't exist and returns -1 */
@@ -371,6 +375,9 @@ void WM_read_file(bContext *C, const char *filepath, ReportList *reports)
 	if (retval == BKE_READ_EXOTIC_OK_BLEND) {
 		int G_f = G.f;
 		ListBase wmbase;
+
+		/* assume automated tasks with background, don't write recent file list */
+		const int do_history = (G.background == FALSE) && (CTX_wm_manager(C)->op_undo_depth == 0);
 
 		/* put aside screens to match with persistent windows later */
 		/* also exit screens and editors */
@@ -389,8 +396,6 @@ void WM_read_file(bContext *C, const char *filepath, ReportList *reports)
 		/* match the read WM with current WM */
 		wm_window_match_do(C, &wmbase);
 		WM_check(C); /* opens window(s), checks keymaps */
-		
-// XXX		mainwindow_set_filename_to_title(G.main->name);
 
 		if (retval == BKE_READ_FILE_OK_USERPREFS) {
 			/* in case a userdef is read from regular .blend */
@@ -399,8 +404,9 @@ void WM_read_file(bContext *C, const char *filepath, ReportList *reports)
 		
 		if (retval != BKE_READ_FILE_FAIL) {
 			G.relbase_valid = 1;
-			if (!G.background) /* assume automated tasks with background, don't write recent file list */
+			if (do_history) {
 				write_history();
+			}
 		}
 
 
@@ -420,7 +426,7 @@ void WM_read_file(bContext *C, const char *filepath, ReportList *reports)
 #endif
 
 		/* important to do before NULL'ing the context */
-		BLI_exec_cb(CTX_data_main(C), NULL, BLI_CB_EVT_LOAD_POST);
+		BLI_callback_exec(CTX_data_main(C), NULL, BLI_CB_EVT_LOAD_POST);
 
 		if (!G.background) {
 			/* in background mode this makes it hard to load
@@ -448,7 +454,6 @@ void WM_read_file(bContext *C, const char *filepath, ReportList *reports)
 		}
 #endif
 
-		// XXX		undo_editmode_clear();
 		BKE_reset_undo();
 		BKE_write_undo(C, "original");  /* save current state */
 	}
@@ -483,7 +488,7 @@ int WM_read_homefile(bContext *C, ReportList *UNUSED(reports), short from_memory
 	char tstr[FILE_MAX];
 	int success = 0;
 	
-	free_ttfont(); /* still weird... what does it here? */
+	BKE_vfont_free_global_ttf(); /* still weird... what does it here? */
 		
 	G.relbase_valid = 0;
 	if (!from_memory) {
@@ -541,8 +546,7 @@ int WM_read_homefile(bContext *C, ReportList *UNUSED(reports), short from_memory
 	/* XXX */
 	G.save_over = 0;    // start with save preference untitled.blend
 	G.fileflags &= ~G_FILE_AUTOPLAY;    /*  disable autoplay in startup.blend... */
-//	mainwindow_set_filename_to_title("");	// empty string re-initializes title to "Blender"
-	
+
 //	refresh_interface_font();
 	
 //	undo_editmode_clear();
@@ -662,23 +666,47 @@ static void write_history(void)
 	}
 }
 
-static ImBuf *blend_file_thumb(Scene *scene, int **thumb_pt)
+/* screen can be NULL */
+static ImBuf *blend_file_thumb(Scene *scene, bScreen *screen, int **thumb_pt)
 {
 	/* will be scaled down, but gives some nice oversampling */
 	ImBuf *ibuf;
 	int *thumb;
 	char err_out[256] = "unknown";
 
+	/* screen if no camera found */
+	ScrArea *sa = NULL;
+	ARegion *ar = NULL;
+	View3D *v3d = NULL;
+
 	*thumb_pt = NULL;
 
 	/* scene can be NULL if running a script at startup and calling the save operator */
-	if (G.background || scene == NULL || scene->camera == NULL)
+	if (G.background || scene == NULL)
 		return NULL;
 
+	if ((scene->camera == NULL) && (screen != NULL)) {
+		sa = BKE_screen_find_big_area(screen, SPACE_VIEW3D, 0);
+		ar = BKE_area_find_region_type(sa, RGN_TYPE_WINDOW);
+		if (ar) {
+			v3d = sa->spacedata.first;
+		}
+	}
+
+	if (scene->camera == NULL && v3d == NULL) {
+		return NULL;
+	}
+
 	/* gets scaled to BLEN_THUMB_SIZE */
-	ibuf = ED_view3d_draw_offscreen_imbuf_simple(scene, scene->camera,
-	                                             BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
-	                                             IB_rect, OB_SOLID, FALSE, err_out);
+	if (scene->camera) {
+		ibuf = ED_view3d_draw_offscreen_imbuf_simple(scene, scene->camera,
+		                                             BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
+		                                             IB_rect, OB_SOLID, FALSE, err_out);
+	}
+	else {
+		ibuf = ED_view3d_draw_offscreen_imbuf(scene, v3d, ar, BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
+		                                      IB_rect, FALSE, err_out);
+	}
 
 	if (ibuf) {		
 		float aspect = (scene->r.xsch * scene->r.xasp) / (scene->r.ysch * scene->r.yasp);
@@ -763,10 +791,10 @@ int WM_write_file(bContext *C, const char *target, int fileflags, ReportList *re
 	/* blend file thumbnail */
 	/* save before exit_editmode, otherwise derivedmeshes for shared data corrupt #27765) */
 	if (U.flag & USER_SAVE_PREVIEWS) {
-		ibuf_thumb = blend_file_thumb(CTX_data_scene(C), &thumb);
+		ibuf_thumb = blend_file_thumb(CTX_data_scene(C), CTX_wm_screen(C), &thumb);
 	}
 
-	BLI_exec_cb(G.main, NULL, BLI_CB_EVT_SAVE_PRE);
+	BLI_callback_exec(G.main, NULL, BLI_CB_EVT_SAVE_PRE);
 
 	/* operator now handles overwrite checks */
 
@@ -801,10 +829,11 @@ int WM_write_file(bContext *C, const char *target, int fileflags, ReportList *re
 			write_history();
 		}
 
-		BLI_exec_cb(G.main, NULL, BLI_CB_EVT_SAVE_POST);
+		BLI_callback_exec(G.main, NULL, BLI_CB_EVT_SAVE_POST);
 
 		/* run this function after because the file cant be written before the blend is */
 		if (ibuf_thumb) {
+			IMB_thumb_delete(filepath, THB_FAIL); /* without this a failed thumb overrides */
 			ibuf_thumb = IMB_thumb_create(filepath, THB_NORMAL, THB_SOURCE_BLEND, ibuf_thumb);
 			IMB_freeImBuf(ibuf_thumb);
 		}

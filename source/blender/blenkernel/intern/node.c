@@ -29,13 +29,6 @@
  *  \ingroup bke
  */
 
-
-#if 0 /* pynodes commented for now */
-#  ifdef WITH_PYTHON
-#    include <Python.h>
-#  endif
-#endif
-
 #include "MEM_guardedalloc.h"
 
 #include <stdlib.h>
@@ -135,20 +128,9 @@ void ntreeInitTypes(bNodeTree *ntree)
 	for (node= ntree->nodes.first; node; node= next) {
 		next= node->next;
 		
-		node->typeinfo= node_get_type(ntree, node->type);
-		
-		if (node->type==NODE_DYNAMIC) {
-			/* needed info if the pynode script fails now: */
-			node->storage= ntree;
-			if (node->id!=NULL) { /* not an empty script node */
-				node->custom1= 0;
-				node->custom1= BSET(node->custom1,NODE_DYNAMIC_ADDEXIST);
-			}
-//			if (node->typeinfo)
-//				node->typeinfo->initfunc(node);
-		}
+		node->typeinfo = node_get_type(ntree, node->type);
 
-		if (node->typeinfo==NULL) {
+		if (node->typeinfo == NULL) {
 			printf("Error: Node type %s doesn't exist anymore, removed\n", node->name);
 			nodeFreeNode(ntree, node);
 		}
@@ -336,11 +318,9 @@ bNode *nodeAddNode(bNodeTree *ntree, struct bNodeTemplate *ntemp)
 	node->width= ntype->width;
 	node->miniwidth= 42.0f;
 	node->height= ntype->height;
+	node->color[0] = node->color[1] = node->color[2] = 0.608;	/* default theme color */
 	
 	node_add_sockets_from_type(ntree, node, ntype);
-	
-	if (ntype->initfunc!=NULL)
-		ntype->initfunc(ntree, node, ntemp);
 	
 	/* initialize the node name with the node label */
 	BLI_strncpy(node->name, nodeLabel(node), NODE_MAXSTR);
@@ -348,29 +328,12 @@ bNode *nodeAddNode(bNodeTree *ntree, struct bNodeTemplate *ntemp)
 	
 	BLI_addtail(&ntree->nodes, node);
 	
+	if (ntype->initfunc!=NULL)
+		ntype->initfunc(ntree, node, ntemp);
+	
 	ntree->update |= NTREE_UPDATE_NODES;
 	
 	return node;
-}
-
-void nodeMakeDynamicType(bNode *node)
-{
-	/* find SH_DYNAMIC_NODE ntype */
-	bNodeType *ntype= ntreeGetType(NTREE_SHADER)->node_types.first;
-	while (ntype) {
-		if (ntype->type==NODE_DYNAMIC)
-			break;
-		ntype= ntype->next;
-	}
-
-	/* make own type struct to fill */
-	if (ntype) {
-		/*node->typeinfo= MEM_dupallocN(ntype);*/
-		bNodeType *newtype= MEM_callocN(sizeof(bNodeType), "dynamic bNodeType");
-		*newtype= *ntype;
-		BLI_strncpy(newtype->name, ntype->name, sizeof(newtype->name));
-		node->typeinfo= newtype;
-	}
 }
 
 /* keep socket listorder identical, for copying links */
@@ -591,40 +554,49 @@ void nodeInternalRelink(bNodeTree *ntree, bNode *node)
 	BLI_freelistN(&intlinks);
 }
 
-/* transforms node location to area coords */
-void nodeSpaceCoords(bNode *node, float *locx, float *locy)
+void nodeToView(bNode *node, float x, float y, float *rx, float *ry)
 {
 	if (node->parent) {
-		nodeSpaceCoords(node->parent, locx, locy);
-		*locx += node->locx;
-		*locy += node->locy;
+		nodeToView(node->parent, x + node->locx, y + node->locy, rx, ry);
 	}
 	else {
-		*locx = node->locx;
-		*locy = node->locy;
+		*rx = x + node->locx;
+		*ry = y + node->locy;
+	}
+}
+
+void nodeFromView(bNode *node, float x, float y, float *rx, float *ry)
+{
+	if (node->parent) {
+		nodeFromView(node->parent, x, y, rx, ry);
+		*rx -= node->locx;
+		*ry -= node->locy;
+	}
+	else {
+		*rx = x - node->locx;
+		*ry = y - node->locy;
 	}
 }
 
 void nodeAttachNode(bNode *node, bNode *parent)
 {
-	float parentx, parenty;
+	float locx, locy;
+	nodeToView(node, 0.0f, 0.0f, &locx, &locy);
 	
 	node->parent = parent;
 	/* transform to parent space */
-	nodeSpaceCoords(parent, &parentx, &parenty);
-	node->locx -= parentx;
-	node->locy -= parenty;
+	nodeFromView(parent, locx, locy, &node->locx, &node->locy);
 }
 
 void nodeDetachNode(struct bNode *node)
 {
-	float parentx, parenty;
+	float locx, locy;
 	
 	if (node->parent) {
-		/* transform to "global" (area) space */
-		nodeSpaceCoords(node->parent, &parentx, &parenty);
-		node->locx += parentx;
-		node->locy += parenty;
+		/* transform to view space */
+		nodeToView(node, 0.0f, 0.0f, &locx, &locy);
+		node->locx = locx;
+		node->locy = locy;
 		node->parent = NULL;
 	}
 }
@@ -643,7 +615,7 @@ bNodeTree *ntreeAddTree(const char *name, int type, int nodetype)
 		BLI_strncpy(ntree->id.name+2, name, sizeof(ntree->id.name));
 	}
 	else
-		ntree= alloc_libblock(&G.main->nodetree, ID_NT, name);
+		ntree= BKE_libblock_alloc(&G.main->nodetree, ID_NT, name);
 	
 	ntree->type= type;
 	ntree->nodetype = nodetype;
@@ -675,11 +647,11 @@ bNodeTree *ntreeCopyTree(bNodeTree *ntree)
 	for (newtree=G.main->nodetree.first; newtree; newtree= newtree->id.next)
 		if (newtree==ntree) break;
 	if (newtree) {
-		newtree= copy_libblock(&ntree->id);
+		newtree= BKE_libblock_copy(&ntree->id);
 	}
 	else {
 		newtree= MEM_dupallocN(ntree);
-		copy_libblock_data(&newtree->id, &ntree->id, TRUE); /* copy animdata and ID props */
+		BKE_libblock_copy_data(&newtree->id, &ntree->id, TRUE); /* copy animdata and ID props */
 	}
 
 	id_us_plus((ID *)newtree->gpd);
@@ -830,7 +802,7 @@ void ntreeClearPreview(bNodeTree *ntree)
 /* hack warning! this function is only used for shader previews, and 
  * since it gets called multiple times per pixel for Ztransp we only
  * add the color once. Preview gets cleared before it starts render though */
-void nodeAddToPreview(bNode *node, float *col, int x, int y, int do_manage)
+void nodeAddToPreview(bNode *node, float col[4], int x, int y, int do_manage)
 {
 	bNodePreview *preview= node->preview;
 	if (preview) {
@@ -931,7 +903,7 @@ void nodeFreeNode(bNodeTree *ntree, bNode *node)
 	ntree->update |= NTREE_UPDATE_NODES;
 }
 
-/* do not free ntree itself here, free_libblock calls this function too */
+/* do not free ntree itself here, BKE_libblock_free calls this function too */
 void ntreeFreeTree(bNodeTree *ntree)
 {
 	bNode *node, *next;
@@ -1341,6 +1313,17 @@ void nodeClearActiveID(bNodeTree *ntree, short idtype)
 			node->flag &= ~NODE_ACTIVE_ID;
 }
 
+void nodeClearActive(bNodeTree *ntree)
+{
+	bNode *node;
+
+	if (ntree==NULL) return;
+
+	for (node= ntree->nodes.first; node; node= node->next)
+		node->flag &= ~(NODE_ACTIVE | NODE_ACTIVE_ID);
+}
+
+
 /* two active flags, ID nodes have special flag for buttons display */
 void nodeSetActive(bNodeTree *ntree, bNode *node)
 {
@@ -1392,7 +1375,7 @@ static int node_get_deplist_recurs(bNode *node, bNode ***nsort)
 	bNodeSocket *sock;
 	int level = 0xFFF;
 	
-	node->done= 1;
+	node->done = TRUE;
 	
 	/* check linked nodes */
 	for (sock= node->inputs.first; sock; sock= sock->next) {
@@ -1431,7 +1414,7 @@ void ntreeGetDependencyList(struct bNodeTree *ntree, struct bNode ***deplist, in
 	
 	/* first clear data */
 	for (node= ntree->nodes.first; node; node= node->next) {
-		node->done= 0;
+		node->done = FALSE;
 		(*totnodes)++;
 	}
 	if (*totnodes==0) {
@@ -1456,7 +1439,7 @@ static void ntree_update_node_level(bNodeTree *ntree)
 	
 	/* first clear tag */
 	for (node= ntree->nodes.first; node; node= node->next) {
-		node->done= 0;
+		node->done = FALSE;
 	}
 	
 	/* recursive check */
@@ -1616,6 +1599,7 @@ int nodeUpdateID(bNodeTree *ntree, ID *id)
 		for (node= ntree->nodes.first; node; node= node->next) {
 			if (node->id==id) {
 				change = TRUE;
+				node->update |= NODE_UPDATE_ID;
 				ntreetype->update_node(ntree, node);
 				/* clear update flag */
 				node->update = 0;
@@ -1626,6 +1610,7 @@ int nodeUpdateID(bNodeTree *ntree, ID *id)
 		for (node= ntree->nodes.first; node; node= node->next) {
 			if (node->id==id) {
 				change = TRUE;
+				node->update |= NODE_UPDATE_ID;
 				if (node->typeinfo->updatefunc)
 					node->typeinfo->updatefunc(ntree, node);
 				/* clear update flag */
@@ -1848,6 +1833,7 @@ void nodeRegisterType(bNodeTreeType *ttype, bNodeType *ntype)
 static void registerCompositNodes(bNodeTreeType *ttype)
 {
 	register_node_type_frame(ttype);
+	register_node_type_reroute(ttype);
 	
 	register_node_type_cmp_group(ttype);
 //	register_node_type_cmp_forloop(ttype);
@@ -1914,6 +1900,8 @@ static void registerCompositNodes(bNodeTreeType *ttype)
 	register_node_type_cmp_color_spill(ttype);
 	register_node_type_cmp_luma_matte(ttype);
 	register_node_type_cmp_doubleedgemask(ttype);
+	register_node_type_cmp_keyingscreen(ttype);
+	register_node_type_cmp_keying(ttype);
 
 	register_node_type_cmp_translate(ttype);
 	register_node_type_cmp_rotate(ttype);
@@ -1928,11 +1916,21 @@ static void registerCompositNodes(bNodeTreeType *ttype)
 	register_node_type_cmp_transform(ttype);
 	register_node_type_cmp_stabilize2d(ttype);
 	register_node_type_cmp_moviedistortion(ttype);
+
+	register_node_type_cmp_colorcorrection(ttype);
+	register_node_type_cmp_boxmask(ttype);
+	register_node_type_cmp_ellipsemask(ttype);
+	register_node_type_cmp_bokehimage(ttype);
+	register_node_type_cmp_bokehblur(ttype);
+	register_node_type_cmp_switch(ttype);
+
+	register_node_type_cmp_mask(ttype);
 }
 
 static void registerShaderNodes(bNodeTreeType *ttype) 
 {
 	register_node_type_frame(ttype);
+	register_node_type_reroute(ttype);
 	
 	register_node_type_sh_group(ttype);
 	//register_node_type_sh_forloop(ttype);
@@ -1957,7 +1955,6 @@ static void registerShaderNodes(bNodeTreeType *ttype)
 	register_node_type_sh_math(ttype);
 	register_node_type_sh_vect_math(ttype);
 	register_node_type_sh_squeeze(ttype);
-	//register_node_type_sh_dynamic(ttype);
 	register_node_type_sh_material_ext(ttype);
 	register_node_type_sh_invert(ttype);
 	register_node_type_sh_seprgb(ttype);
@@ -1967,9 +1964,12 @@ static void registerShaderNodes(bNodeTreeType *ttype)
 	register_node_type_sh_attribute(ttype);
 	register_node_type_sh_geometry(ttype);
 	register_node_type_sh_light_path(ttype);
+	register_node_type_sh_light_falloff(ttype);
+	register_node_type_sh_object_info(ttype);
 	register_node_type_sh_fresnel(ttype);
 	register_node_type_sh_layer_weight(ttype);
 	register_node_type_sh_tex_coord(ttype);
+	register_node_type_sh_particle_info(ttype);
 
 	register_node_type_sh_background(ttype);
 	register_node_type_sh_bsdf_diffuse(ttype);
@@ -2004,6 +2004,7 @@ static void registerShaderNodes(bNodeTreeType *ttype)
 static void registerTextureNodes(bNodeTreeType *ttype)
 {
 	register_node_type_frame(ttype);
+	register_node_type_reroute(ttype);
 	
 	register_node_type_tex_group(ttype);
 //	register_node_type_tex_forloop(ttype);
@@ -2048,30 +2049,12 @@ static void registerTextureNodes(bNodeTreeType *ttype)
 	register_node_type_tex_proc_distnoise(ttype);
 }
 
-static void free_dynamic_typeinfo(bNodeType *ntype)
-{
-	if (ntype->type==NODE_DYNAMIC) {
-		if (ntype->inputs) {
-			MEM_freeN(ntype->inputs);
-		}
-		if (ntype->outputs) {
-			MEM_freeN(ntype->outputs);
-		}
-		if (ntype->name) {
-			MEM_freeN((void *)ntype->name);
-		}
-	}
-}
-
 static void free_typeinfos(ListBase *list)
 {
 	bNodeType *ntype, *next;
 	for (ntype=list->first; ntype; ntype=next) {
 		next = ntype->next;
-		
-		if (ntype->type==NODE_DYNAMIC)
-			free_dynamic_typeinfo(ntype);
-		
+
 		if (ntype->needs_free)
 			MEM_freeN(ntype);
 	}
@@ -2091,7 +2074,7 @@ void free_nodesystem(void)
 	free_typeinfos(&ntreeGetType(NTREE_TEXTURE)->node_types);
 }
 
-/* called from unlink_scene, when deleting a scene goes over all scenes
+/* called from BKE_scene_unlink, when deleting a scene goes over all scenes
  * other than the input, checks if they have render layer nodes referencing
  * the to-be-deleted scene, and resets them to NULL. */
 

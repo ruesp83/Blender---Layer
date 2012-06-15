@@ -65,6 +65,7 @@
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
 #include "BKE_idprop.h"
+#include "BKE_image.h"
 #include "BKE_library.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
@@ -83,6 +84,7 @@
 
 #include "ED_screen.h"
 #include "ED_util.h"
+#include "ED_object.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -344,7 +346,7 @@ static int wm_macro_cancel(bContext *C, wmOperator *op)
 }
 
 /* Names have to be static for now */
-wmOperatorType *WM_operatortype_append_macro(const char *idname, const char *name, int flag)
+wmOperatorType *WM_operatortype_append_macro(const char *idname, const char *name, const char *description, int flag)
 {
 	wmOperatorType *ot;
 	
@@ -358,6 +360,7 @@ wmOperatorType *WM_operatortype_append_macro(const char *idname, const char *nam
 	
 	ot->idname = idname;
 	ot->name = name;
+	ot->description = description;
 	ot->flag = OPTYPE_MACRO | flag;
 	
 	ot->exec = wm_macro_exec;
@@ -588,7 +591,8 @@ void WM_operator_properties_alloc(PointerRNA **ptr, IDProperty **properties, con
 
 void WM_operator_properties_sanitize(PointerRNA *ptr, const short no_context)
 {
-	RNA_STRUCT_BEGIN(ptr, prop) {
+	RNA_STRUCT_BEGIN(ptr, prop)
+	{
 		switch (RNA_property_type(prop)) {
 			case PROP_ENUM:
 				if (no_context)
@@ -621,7 +625,8 @@ void WM_operator_properties_reset(wmOperator *op)
 		PropertyRNA *iterprop;
 		iterprop = RNA_struct_iterator_property(op->type->srna);
 
-		RNA_PROP_BEGIN(op->ptr, itemptr, iterprop) {
+		RNA_PROP_BEGIN(op->ptr, itemptr, iterprop)
+		{
 			PropertyRNA *prop = itemptr.data;
 
 			if ((RNA_property_flag(prop) & PROP_SKIP_SAVE) == 0) {
@@ -808,6 +813,22 @@ int WM_operator_filesel(bContext *C, wmOperator *op, wmEvent *UNUSED(event))
 	}
 }
 
+int WM_operator_filesel_ensure_ext_imtype(wmOperator *op, const char imtype)
+{
+	PropertyRNA *prop;
+	char filepath[FILE_MAX];
+	/* dont NULL check prop, this can only run on ops with a 'filepath' */
+	prop = RNA_struct_find_property(op->ptr, "filepath");
+	RNA_property_string_get(op->ptr, prop, filepath);
+	if (BKE_add_image_extension(filepath, imtype)) {
+		RNA_property_string_set(op->ptr, prop, filepath);
+		/* note, we could check for and update 'filename' here,
+		 * but so far nothing needs this. */
+		return TRUE;
+	}
+	return FALSE;
+}
+
 /* default properties for fileselect */
 void WM_operator_properties_filesel(wmOperatorType *ot, int filter, short type, short action, short flag, short display)
 {
@@ -836,40 +857,40 @@ void WM_operator_properties_filesel(wmOperatorType *ot, int filter, short type, 
 
 	if (action == FILE_SAVE) {
 		prop = RNA_def_boolean(ot->srna, "check_existing", 1, "Check Existing", "Check and warn on overwriting existing files");
-		RNA_def_property_flag(prop, PROP_HIDDEN);
+		RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	}
 	
 	prop = RNA_def_boolean(ot->srna, "filter_blender", (filter & BLENDERFILE), "Filter .blend files", "");
-	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	prop = RNA_def_boolean(ot->srna, "filter_image", (filter & IMAGEFILE), "Filter image files", "");
-	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	prop = RNA_def_boolean(ot->srna, "filter_movie", (filter & MOVIEFILE), "Filter movie files", "");
-	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	prop = RNA_def_boolean(ot->srna, "filter_python", (filter & PYSCRIPTFILE), "Filter python files", "");
-	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	prop = RNA_def_boolean(ot->srna, "filter_font", (filter & FTFONTFILE), "Filter font files", "");
-	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	prop = RNA_def_boolean(ot->srna, "filter_sound", (filter & SOUNDFILE), "Filter sound files", "");
-	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	prop = RNA_def_boolean(ot->srna, "filter_text", (filter & TEXTFILE), "Filter text files", "");
-	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	prop = RNA_def_boolean(ot->srna, "filter_btx", (filter & BTXFILE), "Filter btx files", "");
-	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	prop = RNA_def_boolean(ot->srna, "filter_collada", (filter & COLLADAFILE), "Filter COLLADA files", "");
-	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	prop = RNA_def_boolean(ot->srna, "filter_folder", (filter & FOLDERFILE), "Filter folders", "");
-	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
 	prop = RNA_def_int(ot->srna, "filemode", type, FILE_LOADLIB, FILE_SPECIAL,
 	                   "File Browser Mode", "The setting for the file browser mode to load a .blend file, a library or a special file",
 	                   FILE_LOADLIB, FILE_SPECIAL);
-	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
 	if (flag & WM_FILESEL_RELPATH)
 		RNA_def_boolean(ot->srna, "relative_path", TRUE, "Relative Path", "Select the file relative to the blend file");
 
 	prop = RNA_def_enum(ot->srna, "display_type", file_display_items, display, "Display Type", "");
-	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
 void WM_operator_properties_select_all(wmOperatorType *ot)
@@ -895,6 +916,13 @@ void WM_operator_properties_gesture_border(wmOperatorType *ot, int extend)
 
 	if (extend)
 		RNA_def_boolean(ot->srna, "extend", 1, "Extend", "Extend selection instead of deselecting everything first");
+}
+
+void WM_operator_properties_mouse_select(wmOperatorType *ot)
+{
+	RNA_def_boolean(ot->srna, "extend", 0, "Extend", "Extend selection instead of deselecting everything first");
+	RNA_def_boolean(ot->srna, "deselect", 0, "Deselect", "Remove from selection");
+	RNA_def_boolean(ot->srna, "toggle", 0, "Toggle Selection", "Toggle the selection");
 }
 
 void WM_operator_properties_gesture_straightline(wmOperatorType *ot, int cursor)
@@ -952,7 +980,7 @@ static uiBlock *wm_block_create_redo(bContext *C, ARegion *ar, void *arg_op)
 	uiBlockSetFlag(block, UI_BLOCK_KEEP_OPEN | UI_BLOCK_RET_1 | UI_BLOCK_MOVEMOUSE_QUIT);
 
 	/* if register is not enabled, the operator gets freed on OPERATOR_FINISHED
-	* ui_apply_but_funcs_after calls ED_undo_operator_repeate_cb and crashes */
+	 * ui_apply_but_funcs_after calls ED_undo_operator_repeate_cb and crashes */
 	assert(op->type->flag & OPTYPE_REGISTER);
 
 	uiBlockSetHandleFunc(block, ED_undo_operator_repeat_cb_evt, arg_op);
@@ -994,8 +1022,8 @@ static void dialog_exec_cb(bContext *C, void *arg1, void *arg2)
 	WM_operator_call(C, data->op);
 
 	/* let execute handle freeing it */
-	//data->free_op= FALSE;
-	//data->op= NULL;
+	//data->free_op = FALSE;
+	//data->op = NULL;
 
 	/* in this case, wm_operator_ui_popup_cancel wont run */
 	MEM_freeN(data);
@@ -1249,7 +1277,8 @@ static uiBlock *wm_block_create_splash(bContext *C, ARegion *ar, void *UNUSED(ar
 	extern char datatoc_splash_png[];
 	extern int datatoc_splash_png_size;
 
-	ImBuf *ibuf = IMB_ibImageFromMemory((unsigned char *)datatoc_splash_png, datatoc_splash_png_size, IB_rect, "<splash screen>");
+	ImBuf *ibuf = IMB_ibImageFromMemory((unsigned char *)datatoc_splash_png,
+	                                    datatoc_splash_png_size, IB_rect, "<splash screen>");
 #else
 	ImBuf *ibuf = NULL;
 #endif
@@ -1292,7 +1321,7 @@ static uiBlock *wm_block_create_splash(bContext *C, ARegion *ar, void *UNUSED(ar
 		menu.type = mt;
 		mt->draw(C, &menu);
 
-//		wmWindowManager *wm= CTX_wm_manager(C);
+//		wmWindowManager *wm = CTX_wm_manager(C);
 //		uiItemM(layout, C, "USERPREF_MT_keyconfigs", U.keyconfigstr, ICON_NONE);
 	}
 	
@@ -1433,7 +1462,7 @@ static uiBlock *wm_block_search_menu(bContext *C, ARegion *ar, void *UNUSED(arg_
 
 static int wm_search_menu_exec(bContext *UNUSED(C), wmOperator *UNUSED(op))
 {
-	return OPERATOR_FINISHED;	
+	return OPERATOR_FINISHED;
 }
 
 static int wm_search_menu_invoke(bContext *C, wmOperator *op, wmEvent *UNUSED(event))
@@ -1467,6 +1496,7 @@ static void WM_OT_search_menu(wmOperatorType *ot)
 {
 	ot->name = "Search Menu";
 	ot->idname = "WM_OT_search_menu";
+	ot->description = "Pop-up a search menu over all available operators in current context";
 	
 	ot->invoke = wm_search_menu_invoke;
 	ot->exec = wm_search_menu_exec;
@@ -1754,7 +1784,7 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 
 	/* now we have or selected, or an indicated file */
 	if (RNA_boolean_get(op->ptr, "autoselect"))
-		scene_deselect_all(scene);
+		BKE_scene_base_deselect_all(scene);
 
 	
 	flag = wm_link_append_flag(op);
@@ -1779,7 +1809,8 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 		BLO_library_append_named_part_ex(C, mainl, &bh, name, idcode, flag);
 	}
 	else {
-		RNA_BEGIN(op->ptr, itemptr, "files") {
+		RNA_BEGIN(op->ptr, itemptr, "files")
+		{
 			RNA_string_get(&itemptr, "name", name);
 			BLO_library_append_named_part_ex(C, mainl, &bh, name, idcode, flag);
 		}
@@ -2112,7 +2143,12 @@ static int wm_collada_export_invoke(bContext *C, wmOperator *op, wmEvent *UNUSED
 {	
 	if (!RNA_struct_property_is_set(op->ptr, "filepath")) {
 		char filepath[FILE_MAX];
-		BLI_strncpy(filepath, G.main->name, sizeof(filepath));
+
+		if (G.main->name[0] == 0)
+			BLI_strncpy(filepath, "untitled", sizeof(filepath));
+		else
+			BLI_strncpy(filepath, G.main->name, sizeof(filepath));
+
 		BLI_replace_extension(filepath, sizeof(filepath), ".dae");
 		RNA_string_set(op->ptr, "filepath", filepath);
 	}
@@ -2125,23 +2161,98 @@ static int wm_collada_export_invoke(bContext *C, wmOperator *op, wmEvent *UNUSED
 /* function used for WM_OT_save_mainfile too */
 static int wm_collada_export_exec(bContext *C, wmOperator *op)
 {
-	char filename[FILE_MAX];
-	int selected, second_life;
+	char filepath[FILE_MAX];
+	int selected, second_life; 
+	int include_armatures;
+	int apply_modifiers;
+	int include_children;
+	int use_object_instantiation;
+	int sort_by_name;
 	
 	if (!RNA_struct_property_is_set(op->ptr, "filepath")) {
 		BKE_report(op->reports, RPT_ERROR, "No filename given");
 		return OPERATOR_CANCELLED;
 	}
 
-	RNA_string_get(op->ptr, "filepath", filename);
-	selected = RNA_boolean_get(op->ptr, "selected");
-	second_life = RNA_boolean_get(op->ptr, "second_life");
-	if (collada_export(CTX_data_scene(C), filename, selected, second_life)) {
+	RNA_string_get(op->ptr, "filepath", filepath);
+	BLI_ensure_extension(filepath, sizeof(filepath), ".dae");
+
+	/* Options panel */
+	selected                 = RNA_boolean_get(op->ptr, "selected");
+	apply_modifiers          = RNA_boolean_get(op->ptr, "apply_modifiers");
+	include_armatures        = RNA_boolean_get(op->ptr, "include_armatures");
+	include_children         = RNA_boolean_get(op->ptr, "include_children");
+	use_object_instantiation = RNA_boolean_get(op->ptr, "use_object_instantiation");
+	sort_by_name             = RNA_boolean_get(op->ptr, "sort_by_name");
+	second_life              = RNA_boolean_get(op->ptr, "second_life");
+
+	/* get editmode results */
+	ED_object_exit_editmode(C, 0);  /* 0 = does not exit editmode */
+
+	if (collada_export(
+	        CTX_data_scene(C),
+	        filepath,
+	        selected,
+	        apply_modifiers,
+	        include_armatures,
+	        include_children,
+	        use_object_instantiation,
+			sort_by_name,
+	        second_life)) {
 		return OPERATOR_FINISHED;
 	}
 	else {
 		return OPERATOR_CANCELLED;
 	}
+}
+
+
+void uiCollada_exportSettings(uiLayout *layout, PointerRNA *imfptr)
+{
+	ID *id = imfptr->id.data;
+
+	uiLayout *box, *row;
+
+	// Export Options:
+	box = uiLayoutBox(layout);
+	row = uiLayoutRow(box, 0);
+	uiItemL(row, IFACE_("Export Data Options:"), ICON_MESH_DATA);
+
+	row = uiLayoutRow(box, 0);
+	uiItemR(row, imfptr, "apply_modifiers", 0, NULL, ICON_NONE);
+
+	row = uiLayoutRow(box, 0);
+	uiItemR(row, imfptr, "selected", 0, NULL, ICON_NONE);
+
+	row = uiLayoutRow(box, 0);
+	uiItemR(row, imfptr, "include_armatures", 0, NULL, ICON_NONE);
+	uiLayoutSetEnabled(row, RNA_boolean_get(imfptr, "selected"));
+
+	row = uiLayoutRow(box, 0);
+	uiItemR(row, imfptr, "include_children", 0, NULL, ICON_NONE);
+	uiLayoutSetEnabled(row, RNA_boolean_get(imfptr, "selected"));
+
+
+	// Collada options:
+	box = uiLayoutBox(layout);
+	row = uiLayoutRow(box, 0);
+	uiItemL(row, IFACE_("Collada Options:"), ICON_MODIFIER);
+
+	row = uiLayoutRow(box, 0);
+	uiItemR(row, imfptr, "use_object_instantiation", 0, NULL, ICON_NONE);
+	row = uiLayoutRow(box, 0);
+	uiItemR(row, imfptr, "sort_by_name", 0, NULL, ICON_NONE);
+	row = uiLayoutRow(box, 0);
+	uiItemR(row, imfptr, "second_life", 0, NULL, ICON_NONE);
+
+}
+
+static void wm_collada_export_draw(bContext *C, wmOperator *op)
+{
+	PointerRNA ptr;
+
+	RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
+	uiCollada_exportSettings(op->layout, &ptr);
 }
 
 static void WM_OT_collada_export(wmOperatorType *ot)
@@ -2153,13 +2264,36 @@ static void WM_OT_collada_export(wmOperatorType *ot)
 	ot->invoke = wm_collada_export_invoke;
 	ot->exec = wm_collada_export_exec;
 	ot->poll = WM_operator_winactive;
+
+	ot->flag |= OPTYPE_PRESET;
+
+	ot->ui = wm_collada_export_draw;
 	
 	WM_operator_properties_filesel(ot, FOLDERFILE | COLLADAFILE, FILE_BLENDER, FILE_SAVE, WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
-	RNA_def_boolean(ot->srna, "selected", 0, "Export only selected",
+
+
+	RNA_def_boolean(ot->srna, "selected", 0, "Selection Only",
 	                "Export only selected elements");
+
+	RNA_def_boolean(ot->srna, "include_armatures", 0, "Include Armatures",
+	                "Include armature(s) even if not selected");
+
+	RNA_def_boolean(ot->srna, "include_children", 0, "Include Children",
+	                "Include all children even if not selected");
+
+	RNA_def_boolean(ot->srna, "apply_modifiers", 0, "Apply Modifiers",
+	                "Apply modifiers (Preview Resolution)");
+
+	RNA_def_boolean(ot->srna, "use_object_instantiation", 1, "Use Object Instances",
+	                "Instantiate multiple Objects from same Data");
+
+	RNA_def_boolean(ot->srna, "sort_by_name", 0, "Sort by Object name",
+	                "Sort exported data by Object name");
+
 	RNA_def_boolean(ot->srna, "second_life", 0, "Export for Second Life",
 	                "Compatibility mode for Second Life");
 }
+
 
 /* function used for WM_OT_save_mainfile too */
 static int wm_collada_import_exec(bContext *C, wmOperator *op)
@@ -2240,8 +2374,8 @@ static int wm_console_toggle_op(bContext *UNUSED(C), wmOperator *UNUSED(op))
 static void WM_OT_console_toggle(wmOperatorType *ot)
 {
 	/* XXX Have to mark these for xgettext, as under linux they do not exists...
-	 *     And even worth, have to give the context as text, as xgettext doesn’t expand macros. :( */
-	ot->name = CTX_N_("Operator"/* BLF_I18NCONTEXT_OPERATOR_DEFAULT */, "Toggle System Console");
+	 *     And even worth, have to give the context as text, as xgettext doesn't expand macros. :( */
+	ot->name = CTX_N_("Operator" /* BLF_I18NCONTEXT_OPERATOR_DEFAULT */, "Toggle System Console");
 	ot->idname = "WM_OT_console_toggle";
 	ot->description = N_("Toggle System Console");
 	
@@ -2309,10 +2443,10 @@ static int border_apply_rect(wmOperator *op)
 
 	
 	/* operator arguments and storage. */
-	RNA_int_set(op->ptr, "xmin", MIN2(rect->xmin, rect->xmax) );
-	RNA_int_set(op->ptr, "ymin", MIN2(rect->ymin, rect->ymax) );
-	RNA_int_set(op->ptr, "xmax", MAX2(rect->xmin, rect->xmax) );
-	RNA_int_set(op->ptr, "ymax", MAX2(rect->ymin, rect->ymax) );
+	RNA_int_set(op->ptr, "xmin", MIN2(rect->xmin, rect->xmax));
+	RNA_int_set(op->ptr, "ymin", MIN2(rect->ymin, rect->ymax));
+	RNA_int_set(op->ptr, "xmax", MAX2(rect->xmin, rect->xmax));
+	RNA_int_set(op->ptr, "ymax", MAX2(rect->ymin, rect->ymax));
 
 	return 1;
 }
@@ -2752,6 +2886,44 @@ int WM_gesture_lines_cancel(bContext *C, wmOperator *op)
 	return OPERATOR_CANCELLED;
 }
 
+/**
+ * helper function, we may want to add options for conversion to view space
+ *
+ * caller must free.
+ */
+int (*WM_gesture_lasso_path_to_array(bContext *UNUSED(C), wmOperator *op, int *mcords_tot))[2]
+{
+	PropertyRNA *prop = RNA_struct_find_property(op->ptr, "path");
+	int (*mcords)[2] = NULL;
+	BLI_assert(prop != NULL);
+
+	if (prop) {
+		const int len = RNA_property_collection_length(op->ptr, prop);
+
+		if (len) {
+			int i = 0;
+			mcords = MEM_mallocN(sizeof(int) * 2 * len, __func__);
+
+			RNA_PROP_BEGIN(op->ptr, itemptr, prop)
+			{
+				float loc[2];
+
+				RNA_float_get_array(&itemptr, "loc", loc);
+				mcords[i][0] = (int)loc[0];
+				mcords[i][1] = (int)loc[1];
+				i++;
+			}
+			RNA_PROP_END;
+		}
+		*mcords_tot = len;
+	}
+	else {
+		*mcords_tot = 0;
+	}
+
+	return mcords;
+}
+
 #if 0
 /* template to copy from */
 
@@ -2957,7 +3129,7 @@ static void radial_control_set_tex(RadialControl *rc)
 
 	switch (RNA_type_to_ID_code(rc->image_id_ptr.type)) {
 		case ID_BR:
-			if ((ibuf = brush_gen_radial_control_imbuf(rc->image_id_ptr.data))) {
+			if ((ibuf = BKE_brush_gen_radial_control_imbuf(rc->image_id_ptr.data))) {
 				glGenTextures(1, &rc->gltex);
 				glBindTexture(GL_TEXTURE_2D, rc->gltex);
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, ibuf->x, ibuf->y, 0,
@@ -3140,7 +3312,8 @@ static int radial_control_get_path(PointerRNA *ctx_ptr, wmOperator *op,
 		PropertyType prop_type = RNA_property_type(*r_prop);
 
 		if (((flags & RC_PROP_REQUIRE_BOOL) && (prop_type != PROP_BOOLEAN)) ||
-		    ((flags & RC_PROP_REQUIRE_FLOAT) && prop_type != PROP_FLOAT)) {
+		    ((flags & RC_PROP_REQUIRE_FLOAT) && prop_type != PROP_FLOAT))
+		{
 			MEM_freeN(str);
 			BKE_reportf(op->reports, RPT_ERROR,
 			            "Property from path %s is not a float", name);
@@ -3183,9 +3356,12 @@ static int radial_control_get_properties(bContext *C, wmOperator *op)
 	else {
 		if (use_secondary_prop &&
 		    RNA_property_boolean_get(&use_secondary_ptr, use_secondary_prop))
+		{
 			data_path = "data_path_secondary";
-		else
+		}
+		else {
 			data_path = "data_path_primary";
+		}
 	}
 
 	if (!radial_control_get_path(&ctx_ptr, op, data_path, &rc->ptr, &rc->prop, 0, 0))
@@ -3208,7 +3384,9 @@ static int radial_control_get_properties(bContext *C, wmOperator *op)
 	if (!radial_control_get_path(&ctx_ptr, op, "zoom_path",
 	                             &rc->zoom_ptr, &rc->zoom_prop, 2,
 	                             RC_PROP_REQUIRE_FLOAT | RC_PROP_ALLOW_MISSING))
+	{
 		return 0;
+	}
 	
 	if (!radial_control_get_path(&ctx_ptr, op, "image_id", &rc->image_id_ptr, NULL, 0, 0))
 		return 0;
@@ -3395,6 +3573,7 @@ static void WM_OT_radial_control(wmOperatorType *ot)
 {
 	ot->name = "Radial Control";
 	ot->idname = "WM_OT_radial_control";
+	ot->description = "Set some size property (like e.g. brush size) with mouse wheel";
 
 	ot->invoke = radial_control_invoke;
 	ot->modal = radial_control_modal;
@@ -3498,7 +3677,7 @@ static int redraw_timer_exec(bContext *C, wmOperator *op)
 			
 			if (a & 1) scene->r.cfra--;
 			else scene->r.cfra++;
-			scene_update_for_newframe(bmain, scene, scene->lay);
+			BKE_scene_update_for_newframe(bmain, scene, scene->lay);
 		}
 		else if (type == 5) {
 
@@ -3513,7 +3692,7 @@ static int redraw_timer_exec(bContext *C, wmOperator *op)
 				if (scene->r.cfra > scene->r.efra)
 					scene->r.cfra = scene->r.sfra;
 
-				scene_update_for_newframe(bmain, scene, scene->lay);
+				BKE_scene_update_for_newframe(bmain, scene, scene->lay);
 				redraw_timer_window_swap(C);
 			}
 		}
@@ -3659,7 +3838,7 @@ void wm_operatortype_free(void)
 /* called on initialize WM_init() */
 void wm_operatortype_init(void)
 {
-	global_ops_hash = BLI_ghash_new(BLI_ghashutil_strhash, BLI_ghashutil_strcmp, "wm_operatortype_init gh");
+	global_ops_hash = BLI_ghash_str_new("wm_operatortype_init gh");
 
 	WM_operatortype_append(WM_OT_window_duplicate);
 	WM_operatortype_append(WM_OT_read_homefile);
@@ -3706,12 +3885,13 @@ static void gesture_circle_modal_keymap(wmKeyConfig *keyconf)
 		{GESTURE_MODAL_DESELECT, "DESELECT", 0, "DeSelect", ""},
 		{GESTURE_MODAL_NOP, "NOP", 0, "No Operation", ""},
 
-		{0, NULL, 0, NULL, NULL}};
+		{0, NULL, 0, NULL, NULL}
+	};
 
 	wmKeyMap *keymap = WM_modalkeymap_get(keyconf, "View3D Gesture Circle");
 
 	/* this function is called for each spacetype, only needs to add map once */
-	if (keymap) return;
+	if (keymap && keymap->modal_items) return;
 
 	keymap = WM_modalkeymap_add(keyconf, "View3D Gesture Circle", modal_items);
 
@@ -3743,6 +3923,7 @@ static void gesture_circle_modal_keymap(wmKeyConfig *keyconf)
 	WM_modalkeymap_assign(keymap, "VIEW3D_OT_select_circle");
 	WM_modalkeymap_assign(keymap, "UV_OT_circle_select");
 	WM_modalkeymap_assign(keymap, "CLIP_OT_select_circle");
+	WM_modalkeymap_assign(keymap, "MASK_OT_select_circle");
 
 }
 
@@ -3753,12 +3934,13 @@ static void gesture_straightline_modal_keymap(wmKeyConfig *keyconf)
 		{GESTURE_MODAL_CANCEL,  "CANCEL", 0, "Cancel", ""},
 		{GESTURE_MODAL_SELECT,  "SELECT", 0, "Select", ""},
 		{GESTURE_MODAL_BEGIN,   "BEGIN", 0, "Begin", ""},
-		{0, NULL, 0, NULL, NULL}};
+		{0, NULL, 0, NULL, NULL}
+	};
 	
 	wmKeyMap *keymap = WM_modalkeymap_get(keyconf, "Gesture Straight Line");
 	
 	/* this function is called for each spacetype, only needs to add map once */
-	if (keymap) return;
+	if (keymap && keymap->modal_items) return;
 	
 	keymap = WM_modalkeymap_add(keyconf, "Gesture Straight Line", modal_items);
 	
@@ -3782,12 +3964,13 @@ static void gesture_border_modal_keymap(wmKeyConfig *keyconf)
 		{GESTURE_MODAL_SELECT,  "SELECT", 0, "Select", ""},
 		{GESTURE_MODAL_DESELECT, "DESELECT", 0, "DeSelect", ""},
 		{GESTURE_MODAL_BEGIN,   "BEGIN", 0, "Begin", ""},
-		{0, NULL, 0, NULL, NULL}};
+		{0, NULL, 0, NULL, NULL}
+	};
 
 	wmKeyMap *keymap = WM_modalkeymap_get(keyconf, "Gesture Border");
 
 	/* this function is called for each spacetype, only needs to add map once */
-	if (keymap) return;
+	if (keymap && keymap->modal_items) return;
 
 	keymap = WM_modalkeymap_add(keyconf, "Gesture Border", modal_items);
 
@@ -3826,6 +4009,7 @@ static void gesture_border_modal_keymap(wmKeyConfig *keyconf)
 	WM_modalkeymap_assign(keymap, "UV_OT_select_border");
 	WM_modalkeymap_assign(keymap, "CLIP_OT_select_border");
 	WM_modalkeymap_assign(keymap, "CLIP_OT_graph_select_border");
+	WM_modalkeymap_assign(keymap, "MASK_OT_select_border");
 	WM_modalkeymap_assign(keymap, "VIEW2D_OT_zoom_border");
 	WM_modalkeymap_assign(keymap, "VIEW3D_OT_clip_border");
 	WM_modalkeymap_assign(keymap, "VIEW3D_OT_render_border");
@@ -3841,12 +4025,13 @@ static void gesture_zoom_border_modal_keymap(wmKeyConfig *keyconf)
 		{GESTURE_MODAL_IN,  "IN", 0, "In", ""},
 		{GESTURE_MODAL_OUT, "OUT", 0, "Out", ""},
 		{GESTURE_MODAL_BEGIN, "BEGIN", 0, "Begin", ""},
-		{0, NULL, 0, NULL, NULL}};
+		{0, NULL, 0, NULL, NULL}
+	};
 
 	wmKeyMap *keymap = WM_modalkeymap_get(keyconf, "Gesture Zoom Border");
 
 	/* this function is called for each spacetype, only needs to add map once */
-	if (keymap) return;
+	if (keymap && keymap->modal_items) return;
 
 	keymap = WM_modalkeymap_add(keyconf, "Gesture Zoom Border", modal_items);
 
@@ -3993,7 +4178,7 @@ static EnumPropertyItem *rna_id_itemf(bContext *UNUSED(C), PointerRNA *UNUSED(pt
 	}
 
 	RNA_enum_item_end(&item, &totitem);
-	*do_free = 1;
+	*do_free = TRUE;
 
 	return item;
 }
@@ -4003,10 +4188,12 @@ EnumPropertyItem *RNA_action_itemf(bContext *C, PointerRNA *ptr, PropertyRNA *UN
 {
 	return rna_id_itemf(C, ptr, do_free, C ? (ID *)CTX_data_main(C)->action.first : NULL, FALSE);
 }
+#if 0 /* UNUSED */
 EnumPropertyItem *RNA_action_local_itemf(bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), int *do_free)
 {
 	return rna_id_itemf(C, ptr, do_free, C ? (ID *)CTX_data_main(C)->action.first : NULL, TRUE);
 }
+#endif
 
 EnumPropertyItem *RNA_group_itemf(bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), int *do_free)
 {
@@ -4043,3 +4230,13 @@ EnumPropertyItem *RNA_movieclip_local_itemf(bContext *C, PointerRNA *ptr, Proper
 {
 	return rna_id_itemf(C, ptr, do_free, C ? (ID *)CTX_data_main(C)->movieclip.first : NULL, TRUE);
 }
+
+EnumPropertyItem *RNA_mask_itemf(bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), int *do_free)
+{
+	return rna_id_itemf(C, ptr, do_free, C ? (ID *)CTX_data_main(C)->mask.first : NULL, FALSE);
+}
+EnumPropertyItem *RNA_mask_local_itemf(bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), int *do_free)
+{
+	return rna_id_itemf(C, ptr, do_free, C ? (ID *)CTX_data_main(C)->mask.first : NULL, TRUE);
+}
+

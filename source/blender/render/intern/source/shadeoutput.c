@@ -77,7 +77,7 @@ ListBase *get_lights(ShadeInput *shi)
 }
 
 #if 0
-static void fogcolor(float *colf, float *rco, float *view)
+static void fogcolor(const float colf[3], float *rco, float *view)
 {
 	float alpha, stepsize, startdist, dist, hor[4], zen[3], vec[3], dview[3];
 	float div=0.0f, distfac;
@@ -161,7 +161,7 @@ static void spothalo(struct LampRen *lar, ShadeInput *shi, float *intens)
 	double a, b, c, disc, nray[3], npos[3];
 	double t0, t1 = 0.0f, t2= 0.0f, t3;
 	float p1[3], p2[3], ladist, maxz = 0.0f, maxy = 0.0f, haint;
-	int snijp, doclip=1, use_yco=0;
+	int snijp, do_clip = TRUE, use_yco = FALSE;
 
 	*intens= 0.0f;
 	haint= lar->haint;
@@ -196,7 +196,9 @@ static void spothalo(struct LampRen *lar, ShadeInput *shi, float *intens)
 
 
 	/* rotate maxz */
-	if (shi->co[2]==0.0f) doclip= 0;	/* for when halo at sky */
+	if (shi->co[2]==0.0f) {
+		do_clip = FALSE;  /* for when halo at sky */
+	}
 	else {
 		p1[0]= shi->co[0]-lar->co[0];
 		p1[1]= shi->co[1]-lar->co[1];
@@ -206,7 +208,9 @@ static void spothalo(struct LampRen *lar, ShadeInput *shi, float *intens)
 		maxz*= lar->sh_zfac;
 		maxy= lar->imat[0][1]*p1[0]+lar->imat[1][1]*p1[1]+lar->imat[2][1]*p1[2];
 
-		if ( fabs(nray[2]) < FLT_EPSILON ) use_yco= 1;
+		if (fabsf(nray[2]) < FLT_EPSILON) {
+			use_yco = TRUE;
+		}
 	}
 	
 	/* scale z to make sure volume is normalized */	
@@ -261,7 +265,7 @@ static void spothalo(struct LampRen *lar, ShadeInput *shi, float *intens)
 		if (ok1==0 && ok2==0) return;
 		
 		/* intersction point with -ladist, the bottom of the cone */
-		if (use_yco==0) {
+		if (use_yco == FALSE) {
 			t3= ((double)(-ladist)-npos[2])/nray[2];
 				
 			/* de we have to replace one of the intersection points? */
@@ -294,12 +298,12 @@ static void spothalo(struct LampRen *lar, ShadeInput *shi, float *intens)
 		}
 		
 		/* calculate t0: is the maximum visible z (when halo is intersected by face) */ 
-		if (doclip) {
-			if (use_yco==0) t0= (maxz-npos[2])/nray[2];
-			else t0= (maxy-npos[1])/nray[1];
+		if (do_clip) {
+			if (use_yco == FALSE) t0 = (maxz - npos[2]) / nray[2];
+			else t0 = (maxy - npos[1]) / nray[1];
 
-			if (t0<t1) return;
-			if (t0<t2) t2= t0;
+			if (t0 < t1) return;
+			if (t0 < t2) t2= t0;
 		}
 
 		/* calc points */
@@ -404,13 +408,13 @@ static double Normalize_d(double *n)
 }
 
 /* mix of 'real' fresnel and allowing control. grad defines blending gradient */
-float fresnel_fac(float *view, float *vn, float grad, float fac)
+float fresnel_fac(const float view[3], const float vn[3], float grad, float fac)
 {
 	float t1, t2;
 	
 	if (fac==0.0f) return 1.0f;
 	
-	t1= (view[0]*vn[0] + view[1]*vn[1] + view[2]*vn[2]);
+	t1 = dot_v3v3(view, vn);
 	if (t1>0.0f)  t2= 1.0f+t1;
 	else t2= 1.0f-t1;
 	
@@ -429,7 +433,7 @@ static double saacos_d(double fac)
 }
 
 /* Stoke's form factor. Need doubles here for extreme small area sizes */
-static float area_lamp_energy(float (*area)[3], float *co, float *vn)
+static float area_lamp_energy(float (*area)[3], const float co[3], const float vn[3])
 {
 	double fac;
 	double vec[4][3];	/* vectors of rendered co to vertices lamp */
@@ -447,10 +451,18 @@ static float area_lamp_energy(float (*area)[3], float *co, float *vn)
 	Normalize_d(vec[3]);
 
 	/* cross product */
+#define CROSS(dest, a, b) \
+	{ dest[0]= a[1] * b[2] - a[2] * b[1]; \
+	  dest[1]= a[2] * b[0] - a[0] * b[2]; \
+	  dest[2]= a[0] * b[1] - a[1] * b[0]; \
+	} (void)0
+
 	CROSS(cross[0], vec[0], vec[1]);
 	CROSS(cross[1], vec[1], vec[2]);
 	CROSS(cross[2], vec[2], vec[3]);
 	CROSS(cross[3], vec[3], vec[0]);
+
+#undef CROSS
 
 	Normalize_d(cross[0]);
 	Normalize_d(cross[1]);
@@ -478,7 +490,7 @@ static float area_lamp_energy(float (*area)[3], float *co, float *vn)
 	return fac;
 }
 
-static float area_lamp_energy_multisample(LampRen *lar, float *co, float *vn)
+static float area_lamp_energy_multisample(LampRen *lar, const float co[3], float *vn)
 {
 	/* corner vectors are moved around according lamp jitter */
 	float *jitlamp= lar->jitter, vec[3];
@@ -550,7 +562,7 @@ static float spec(float inp, int hard)
 	return inp;
 }
 
-static float Phong_Spec( float *n, float *l, float *v, int hard, int tangent )
+static float Phong_Spec(const float n[3], const float l[3], const float v[3], int hard, int tangent )
 {
 	float h[3];
 	float rslt;
@@ -571,7 +583,7 @@ static float Phong_Spec( float *n, float *l, float *v, int hard, int tangent )
 
 
 /* reduced cook torrance spec (for off-specular peak) */
-static float CookTorr_Spec(float *n, float *l, float *v, int hard, int tangent)
+static float CookTorr_Spec(const float n[3], const float l[3], const float v[3], int hard, int tangent)
 {
 	float i, nh, nv, h[3];
 
@@ -595,7 +607,7 @@ static float CookTorr_Spec(float *n, float *l, float *v, int hard, int tangent)
 }
 
 /* Blinn spec */
-static float Blinn_Spec(float *n, float *l, float *v, float refrac, float spec_power, int tangent)
+static float Blinn_Spec(const float n[3], const float l[3], const float v[3], float refrac, float spec_power, int tangent)
 {
 	float i, nh, nv, nl, vh, h[3];
 	float a, b, c, g=0.0f, p, f, ang;
@@ -638,7 +650,7 @@ static float Blinn_Spec(float *n, float *l, float *v, float refrac, float spec_p
 	else if ( b < a && b < c ) g = b;
 	else if ( c < a && c < b ) g = c;
 
-	p = sqrt( (double)((refrac * refrac)+(vh*vh)-1.0f) );
+	p = sqrt((double)((refrac * refrac)+(vh * vh) - 1.0f));
 	f = (((p-vh)*(p-vh))/((p+vh)*(p+vh)))*(1+((((vh*(p+vh))-1.0f)*((vh*(p+vh))-1.0f))/(((vh*(p-vh))+1.0f)*((vh*(p-vh))+1.0f))));
 	ang = saacos(nh);
 
@@ -649,7 +661,7 @@ static float Blinn_Spec(float *n, float *l, float *v, float refrac, float spec_p
 }
 
 /* cartoon render spec */
-static float Toon_Spec( float *n, float *l, float *v, float size, float smooth, int tangent)
+static float Toon_Spec(const float n[3], const float l[3], const float v[3], float size, float smooth, int tangent)
 {
 	float h[3];
 	float ang;
@@ -673,7 +685,7 @@ static float Toon_Spec( float *n, float *l, float *v, float size, float smooth, 
 }
 
 /* Ward isotropic gaussian spec */
-static float WardIso_Spec( float *n, float *l, float *v, float rms, int tangent)
+static float WardIso_Spec(const float n[3], const float l[3], const float v[3], float rms, int tangent)
 {
 	float i, nh, nv, nl, h[3], angle, alpha;
 
@@ -705,7 +717,7 @@ static float WardIso_Spec( float *n, float *l, float *v, float rms, int tangent)
 }
 
 /* cartoon render diffuse */
-static float Toon_Diff( float *n, float *l, float *UNUSED(v), float size, float smooth )
+static float Toon_Diff(const float n[3], const float l[3], const float UNUSED(v[3]), float size, float smooth)
 {
 	float rslt, ang;
 
@@ -724,7 +736,7 @@ static float Toon_Diff( float *n, float *l, float *UNUSED(v), float size, float 
 
 /* 'nl' is either dot product, or return value of area light */
 /* in latter case, only last multiplication uses 'nl' */
-static float OrenNayar_Diff(float nl, float *n, float *l, float *v, float rough )
+static float OrenNayar_Diff(float nl, const float n[3], const float l[3], const float v[3], float rough )
 {
 	float i/*, nh*/, nv /*, vh */, realnl, h[3];
 	float a, b, t, A, B;
@@ -754,12 +766,12 @@ static float OrenNayar_Diff(float nl, float *n, float *l, float *v, float rough 
 	Lit_B[0] = l[0] - (realnl * n[0]);
 	Lit_B[1] = l[1] - (realnl * n[1]);
 	Lit_B[2] = l[2] - (realnl * n[2]);
-	normalize_v3( Lit_B );
+	normalize_v3(Lit_B);
 	
 	View_B[0] = v[0] - (nv * n[0]);
 	View_B[1] = v[1] - (nv * n[1]);
 	View_B[2] = v[2] - (nv * n[2]);
-	normalize_v3( View_B );
+	normalize_v3(View_B);
 	
 	t = Lit_B[0]*View_B[0] + Lit_B[1]*View_B[1] + Lit_B[2]*View_B[2];
 	if ( t < 0 ) t = 0;
@@ -784,7 +796,7 @@ static float OrenNayar_Diff(float nl, float *n, float *l, float *v, float rough 
 }
 
 /* Minnaert diffuse */
-static float Minnaert_Diff(float nl, float *n, float *v, float darkness)
+static float Minnaert_Diff(float nl, const float n[3], const float v[3], float darkness)
 {
 
 	float i, nv;
@@ -931,7 +943,7 @@ static void add_to_diffuse(float *diff, ShadeInput *shi, float is, float r, floa
 			float fac;
 
 			/* input */
-			switch(ma->rampin_col) {
+			switch (ma->rampin_col) {
 			case MA_RAMP_IN_ENERGY:
 				/* should use 'rgb_to_grayscale' but we only have a vector version */
 				fac= 0.3f*r + 0.58f*g + 0.12f*b;
@@ -1003,7 +1015,7 @@ static void do_specular_ramp(ShadeInput *shi, float is, float t, float spec[3])
 		float col[4];
 
 		/* input */
-		switch(ma->rampin_spec) {
+		switch (ma->rampin_spec) {
 		case MA_RAMP_IN_ENERGY:
 			fac= t;
 			break;
@@ -1152,14 +1164,13 @@ float lamp_get_visibility(LampRen *lar, const float co[3], float lv[3], float *d
 		/* area type has no quad or sphere option */
 		if (lar->type==LA_AREA) {
 			/* area is single sided */
-			//if(dot_v3v3(lv, lar->vec) > 0.0f)
+			//if (dot_v3v3(lv, lar->vec) > 0.0f)
 			//	visifac= 1.0f;
 			//else
 			//	visifac= 0.0f;
 		}
 		else {
-			switch(lar->falloff_type)
-			{
+			switch (lar->falloff_type) {
 				case LA_FALLOFF_CONSTANT:
 					visifac = 1.0f;
 					break;
@@ -1731,8 +1742,9 @@ void shade_lamp_loop(ShadeInput *shi, ShadeResult *shr)
 	
 	/* AO pass */
 	if (R.wrld.mode & (WO_AMB_OCC|WO_ENV_LIGHT|WO_INDIRECT_LIGHT)) {
-		if (((passflag & SCE_PASS_COMBINED) && (shi->combinedflag & (SCE_PASS_AO|SCE_PASS_ENVIRONMENT|SCE_PASS_INDIRECT)))
-			|| (passflag & (SCE_PASS_AO|SCE_PASS_ENVIRONMENT|SCE_PASS_INDIRECT))) {
+		if (((passflag & SCE_PASS_COMBINED) && (shi->combinedflag & (SCE_PASS_AO|SCE_PASS_ENVIRONMENT|SCE_PASS_INDIRECT))) ||
+		    (passflag & (SCE_PASS_AO|SCE_PASS_ENVIRONMENT|SCE_PASS_INDIRECT)))
+		{
 			if (R.r.mode & R_SHADOW) {
 				/* AO was calculated for scanline already */
 				if (shi->depth || shi->volume_depth)
@@ -1803,7 +1815,7 @@ void shade_lamp_loop(ShadeInput *shi, ShadeResult *shr)
 				shr->diff[1]= sss[1]*col[1];
 				shr->diff[2]= sss[2]*col[2];
 
-				if (shi->combinedflag & SCE_PASS_SHADOW)	{
+				if (shi->combinedflag & SCE_PASS_SHADOW) {
 					shr->shad[0]= shr->diff[0];
 					shr->shad[1]= shr->diff[1];
 					shr->shad[2]= shr->diff[2];

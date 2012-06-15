@@ -176,6 +176,8 @@ struct IK_Scene
 	KDL::JntArray		jointArray;	// buffer for storing temporary joint array
 	iTaSC::Solver*		solver;
 	Object*				blArmature;
+	float				blScale;	// scale of the Armature object (assume uniform scaling)
+	float				blInvScale;	// inverse of Armature object scale
 	struct bConstraint*	polarConstraint;
 	std::vector<IK_Target*>		targets;
 
@@ -188,6 +190,7 @@ struct IK_Scene
 		scene = NULL;
 		base = NULL;
 		solver = NULL;
+		blScale = blInvScale = 1.0f;
 		blArmature = NULL;
 		numchan = 0;
 		numjoint = 0;
@@ -418,22 +421,22 @@ static IK_Data* get_ikdata(bPose *pose)
 	// here init ikdata if needed
 	// now that we have scene, make sure the default param are initialized
 	if (!DefIKParam.iksolver)
-		init_pose_itasc(&DefIKParam);
+		BKE_pose_itasc_init(&DefIKParam);
 
 	return (IK_Data*)pose->ikdata;
 }
 static double EulerAngleFromMatrix(const KDL::Rotation& R, int axis)
 {
-	double t = KDL::sqrt(R(0,0)*R(0,0) + R(0,1)*R(0,1));
+	double t = KDL::sqrt(R(0, 0)*R(0, 0) + R(0, 1)*R(0, 1));
 
 	if (t > 16.0*KDL::epsilon) {
-		if (axis == 0) return -KDL::atan2(R(1,2), R(2,2));
-		else if (axis == 1) return KDL::atan2(-R(0,2), t);
-		else return -KDL::atan2(R(0,1), R(0,0));
+		if (axis == 0) return -KDL::atan2(R(1, 2), R(2, 2));
+		else if (axis == 1) return KDL::atan2(-R(0, 2), t);
+		else return -KDL::atan2(R(0, 1), R(0, 0));
 	}
 	else {
-		if (axis == 0) return -KDL::atan2(-R(2,1), R(1,1));
-		else if (axis == 1) return KDL::atan2(-R(0,2), t);
+		if (axis == 0) return -KDL::atan2(-R(2, 1), R(1, 1));
+		else if (axis == 1) return KDL::atan2(-R(0, 2), t);
 		else return 0.0f;
 	}
 }
@@ -441,8 +444,8 @@ static double EulerAngleFromMatrix(const KDL::Rotation& R, int axis)
 static double ComputeTwist(const KDL::Rotation& R)
 {
 	// qy and qw are the y and w components of the quaternion from R
-	double qy = R(0,2) - R(2,0);
-	double qw = R(0,0) + R(1,1) + R(2,2) + 1;
+	double qy = R(0, 2) - R(2, 0);
+	double qw = R(0, 0) + R(1, 1) + R(2, 2) + 1;
 
 	double tau = 2*KDL::atan2(qy, qw);
 
@@ -471,39 +474,38 @@ static void RemoveEulerAngleFromMatrix(KDL::Rotation& R, double angle, int axis)
 }
 
 #if 0
-static void GetEulerXZY(const KDL::Rotation& R, double& X,double& Z,double& Y)
+static void GetEulerXZY(const KDL::Rotation& R, double& X, double& Z, double& Y)
 {
-	if (fabs(R(0,1)) > 1.0 - KDL::epsilon ) {
-		X = -KDL::sign(R(0,1)) * KDL::atan2(R(1,2), R(1,0));
-		Z = -KDL::sign(R(0,1)) * KDL::PI / 2;
+	if (fabs(R(0, 1)) > 1.0 - KDL::epsilon ) {
+		X = -KDL::sign(R(0, 1)) * KDL::atan2(R(1, 2), R(1, 0));
+		Z = -KDL::sign(R(0, 1)) * KDL::PI / 2;
 		Y = 0.0;
 	}
 	else {
-		X = KDL::atan2(R(2,1), R(1,1));
-		Z = KDL::atan2(-R(0,1), KDL::sqrt( KDL::sqr(R(0,0)) + KDL::sqr(R(0,2))));
-		Y = KDL::atan2(R(0,2), R(0,0));
+		X = KDL::atan2(R(2, 1), R(1, 1));
+		Z = KDL::atan2(-R(0, 1), KDL::sqrt( KDL::sqr(R(0, 0)) + KDL::sqr(R(0, 2))));
+		Y = KDL::atan2(R(0, 2), R(0, 0));
 	}
 }
 
-static void GetEulerXYZ(const KDL::Rotation& R, double& X,double& Y,double& Z)
+static void GetEulerXYZ(const KDL::Rotation& R, double& X, double& Y, double& Z)
 {
-	if (fabs(R(0,2)) > 1.0 - KDL::epsilon ) {
-		X = KDL::sign(R(0,2)) * KDL::atan2(-R(1,0), R(1,1));
-		Y = KDL::sign(R(0,2)) * KDL::PI / 2;
+	if (fabs(R(0, 2)) > 1.0 - KDL::epsilon ) {
+		X = KDL::sign(R(0, 2)) * KDL::atan2(-R(1, 0), R(1, 1));
+		Y = KDL::sign(R(0, 2)) * KDL::PI / 2;
 		Z = 0.0;
 	}
 	else {
-		X = KDL::atan2(-R(1,2), R(2,2));
-		Y = KDL::atan2(R(0,2), KDL::sqrt( KDL::sqr(R(0,0)) + KDL::sqr(R(0,1))));
-		Z = KDL::atan2(-R(0,1), R(0,0));
+		X = KDL::atan2(-R(1, 2), R(2, 2));
+		Y = KDL::atan2(R(0, 2), KDL::sqrt( KDL::sqr(R(0, 0)) + KDL::sqr(R(0, 1))));
+		Z = KDL::atan2(-R(0, 1), R(0, 0));
 	}
 }
 #endif
 
 static void GetJointRotation(KDL::Rotation& boneRot, int type, double* rot)
 {
-	switch (type & ~IK_TRANSY)
-	{
+	switch (type & ~IK_TRANSY) {
 	default:
 		// fixed bone, no joint
 		break;
@@ -595,9 +597,10 @@ static bool base_callback(const iTaSC::Timestamp& timestamp, const iTaSC::Frame&
 		float chanmat[4][4];
 		copy_m4_m4(chanmat, pchan->pose_mat);
 		copy_v3_v3(chanmat[3], pchan->pose_tail);
-		// save the base as a frame too so that we can compute deformation
-		// after simulation
+		// save the base as a frame too so that we can compute deformation after simulation
 		ikscene->baseFrame.setValue(&chanmat[0][0]);
+		// iTaSC armature is scaled to object scale, scale the base frame too
+		ikscene->baseFrame.p *= ikscene->blScale;
 		mult_m4_m4m4(rootmat, ikscene->blArmature->obmat, chanmat);
 	} 
 	else {
@@ -805,16 +808,16 @@ static bool joint_callback(const iTaSC::Timestamp& timestamp, iTaSC::ConstraintV
 
 		if (chan->rotmode > 0) {
 			/* euler rotations (will cause gimble lock, but this can be alleviated a bit with rotation orders) */
-			eulO_to_mat3( rmat,chan->eul, chan->rotmode);
+			eulO_to_mat3( rmat, chan->eul, chan->rotmode);
 		}
 		else if (chan->rotmode == ROT_MODE_AXISANGLE) {
 			/* axis-angle - stored in quaternion data, but not really that great for 3D-changing orientations */
-			axis_angle_to_mat3( rmat,&chan->quat[1], chan->quat[0]);
+			axis_angle_to_mat3( rmat, &chan->quat[1], chan->quat[0]);
 		}
 		else {
 			/* quats are normalised before use to eliminate scaling issues */
 			normalize_qt(chan->quat);
-			quat_to_mat3( rmat,chan->quat);
+			quat_to_mat3(rmat, chan->quat);
 		}
 		KDL::Rotation jointRot(
 			rmat[0][0], rmat[1][0], rmat[2][0],
@@ -825,8 +828,7 @@ static bool joint_callback(const iTaSC::Timestamp& timestamp, iTaSC::ConstraintV
 	}
 	// determine which part of jointValue is used for this joint
 	// closely related to the way the joints are defined
-	switch (ikchan->jointType & ~IK_TRANSY)
-	{
+	switch (ikchan->jointType & ~IK_TRANSY) {
 	case IK_XDOF:
 	case IK_YDOF:
 	case IK_ZDOF:
@@ -881,15 +883,21 @@ static int convert_channels(IK_Scene *ikscene, PoseTree *tree)
 		
 		/* set DoF flag */
 		flag = 0;
-		if (!(pchan->ikflag & BONE_IK_NO_XDOF) && !(pchan->ikflag & BONE_IK_NO_XDOF_TEMP) && 
-			(!(pchan->ikflag & BONE_IK_XLIMIT) || pchan->limitmin[0]<0.f || pchan->limitmax[0]>0.f))
+		if (!(pchan->ikflag & BONE_IK_NO_XDOF) && !(pchan->ikflag & BONE_IK_NO_XDOF_TEMP) &&
+		    (!(pchan->ikflag & BONE_IK_XLIMIT) || pchan->limitmin[0]<0.f || pchan->limitmax[0]>0.f))
+		{
 			flag |= IK_XDOF;
+		}
 		if (!(pchan->ikflag & BONE_IK_NO_YDOF) && !(pchan->ikflag & BONE_IK_NO_YDOF_TEMP) &&
-			(!(pchan->ikflag & BONE_IK_YLIMIT) || pchan->limitmin[1]<0.f || pchan->limitmax[1]>0.f))
+		    (!(pchan->ikflag & BONE_IK_YLIMIT) || pchan->limitmin[1]<0.f || pchan->limitmax[1]>0.f))
+		{
 			flag |= IK_YDOF;
+		}
 		if (!(pchan->ikflag & BONE_IK_NO_ZDOF) && !(pchan->ikflag & BONE_IK_NO_ZDOF_TEMP) &&
-			(!(pchan->ikflag & BONE_IK_ZLIMIT) || pchan->limitmin[2]<0.f || pchan->limitmax[2]>0.f))
+		    (!(pchan->ikflag & BONE_IK_ZLIMIT) || pchan->limitmin[2]<0.f || pchan->limitmax[2]>0.f))
+		{
 			flag |= IK_ZDOF;
+		}
 		
 		if (tree->stretch && (pchan->ikstretch > 0.0)) {
 			flag |= IK_TRANSY;
@@ -921,8 +929,7 @@ static int convert_channels(IK_Scene *ikscene, PoseTree *tree)
 		 * bone length is computed from bone->length multiplied by the scaling factor of
 		 * the armature. Non-uniform scaling will give bad result!
 		 */
-		switch (flag & (IK_XDOF|IK_YDOF|IK_ZDOF))
-		{
+		switch (flag & (IK_XDOF|IK_YDOF|IK_ZDOF)) {
 		default:
 			ikchan->jointType = 0;
 			ikchan->ndof = 0;
@@ -993,7 +1000,7 @@ static void convert_pose(IK_Scene *ikscene)
 
 	// assume uniform scaling and take Y scale as general scale for the armature
 	scale = len_v3(ikscene->blArmature->obmat[1]);
-	rot = &ikscene->jointArray(0);
+	rot = ikscene->jointArray(0);
 	for (joint=a=0, ikchan = ikscene->channels; a<ikscene->numchan && joint<ikscene->numjoint; ++a, ++ikchan) {
 		pchan= ikchan->pchan;
 		bone= pchan->bone;
@@ -1020,7 +1027,7 @@ static void convert_pose(IK_Scene *ikscene)
 }
 
 // compute array of joint value corresponding to current pose
-static void rest_pose(IK_Scene *ikscene)
+static void BKE_pose_rest(IK_Scene *ikscene)
 {
 	bPoseChannel *pchan;
 	IK_Channel *ikchan;
@@ -1034,7 +1041,7 @@ static void rest_pose(IK_Scene *ikscene)
 	// rest pose is 0 
 	SetToZero(ikscene->jointArray);
 	// except for transY joints
-	rot = &ikscene->jointArray(0);
+	rot = ikscene->jointArray(0);
 	for (joint=a=0, ikchan = ikscene->channels; a<ikscene->numchan && joint<ikscene->numjoint; ++a, ++ikchan) {
 		pchan= ikchan->pchan;
 		bone= pchan->bone;
@@ -1113,14 +1120,15 @@ static IK_Scene* convert_tree(Scene *blscene, Object *ob, bPoseChannel *pchan)
 		return NULL;
 	}
 	ikscene->blArmature = ob;
+	// assume uniform scaling and take Y scale as general scale for the armature
+	ikscene->blScale = len_v3(ob->obmat[1]);
+	ikscene->blInvScale = (ikscene->blScale < KDL::epsilon) ? 0.0f : 1.0f/ikscene->blScale;
 
 	std::string  joint;
 	std::string  root("root");
 	std::string  parent;
 	std::vector<double> weights;
 	double weight[3];
-	// assume uniform scaling and take Y scale as general scale for the armature
-	float scale = len_v3(ob->obmat[1]);
 	// build the array of joints corresponding to the IK chain
 	convert_channels(ikscene, tree);
 	if (ingame) {
@@ -1130,9 +1138,9 @@ static IK_Scene* convert_tree(Scene *blscene, Object *ob, bPoseChannel *pchan)
 	}
 	else {
 		// in Blender, the rest pose is always 0 for joints
-		rest_pose(ikscene);
+		BKE_pose_rest(ikscene);
 	}
-	rot = &ikscene->jointArray(0);
+	rot = ikscene->jointArray(0);
 	for (a=0, ikchan = ikscene->channels; a<tree->totchannel; ++a, ++ikchan) {
 		pchan= ikchan->pchan;
 		bone= pchan->bone;
@@ -1144,11 +1152,11 @@ static IK_Scene* convert_tree(Scene *blscene, Object *ob, bPoseChannel *pchan)
 						   fl[0][1], fl[1][1], fl[2][1],
 						   fl[0][2], fl[1][2], fl[2][2]);
 		KDL::Vector bpos(bone->head[0], bone->head[1], bone->head[2]);
-		bpos = bpos*scale;
+		bpos *= ikscene->blScale;
 		KDL::Frame head(brot, bpos);
 		
 		// rest pose length of the bone taking scaling into account
-		length= bone->length*scale;
+		length= bone->length*ikscene->blScale;
 		parent = (a > 0) ? ikscene->channels[tree->parent[a]].tail : root;
 		// first the fixed segment to the bone head
 		if (head.p.Norm() > KDL::epsilon || head.M.GetRot().Norm() > KDL::epsilon) {
@@ -1165,8 +1173,7 @@ static IK_Scene* convert_tree(Scene *blscene, Object *ob, bPoseChannel *pchan)
 		weight[0] = (1.0-pchan->stiffness[0]);
 		weight[1] = (1.0-pchan->stiffness[1]);
 		weight[2] = (1.0-pchan->stiffness[2]);
-		switch (ikchan->jointType & ~IK_TRANSY)
-		{
+		switch (ikchan->jointType & ~IK_TRANSY) {
 		case 0:
 			// fixed bone
 			if (!(ikchan->jointType & IK_TRANSY)) {
@@ -1386,7 +1393,7 @@ static IK_Scene* convert_tree(Scene *blscene, Object *ob, bPoseChannel *pchan)
 	e_matrix& Wq = arm->getWq();
 	assert(Wq.cols() == (int)weights.size());
 	for (int q=0; q<Wq.cols(); q++)
-		Wq(q,q)=weights[q];
+		Wq(q, q)=weights[q];
 	// get the inverse rest pose frame of the base to compute relative rest pose of end effectors
 	// this is needed to handle the enforce parameter
 	// ikscene->pchan[0] is the root channel of the tree
@@ -1418,7 +1425,7 @@ static IK_Scene* convert_tree(Scene *blscene, Object *ob, bPoseChannel *pchan)
 		// add the end effector
 		// estimate the average bone length, used to clamp feedback error
 		for (bonecnt=0, bonelen=0.f, a=iktarget->channel; a>=0; a=tree->parent[a], bonecnt++)
-			bonelen += scale*tree->pchan[a]->bone->length;
+			bonelen += ikscene->blScale*tree->pchan[a]->bone->length;
 		bonelen /= bonecnt;		
 
 		// store the rest pose of the end effector to compute enforce target
@@ -1512,7 +1519,7 @@ static void create_scene(Scene *scene, Object *ob)
 				ikdata->first = ikscene;
 			}
 			// delete the trees once we are done
-			while(tree) {
+			while (tree) {
 				BLI_remlink(&pchan->iktree, tree);
 				BLI_freelistN(&tree->targets);
 				if (tree->pchan) MEM_freeN(tree->pchan);
@@ -1525,15 +1532,23 @@ static void create_scene(Scene *scene, Object *ob)
 	}
 }
 
-static void init_scene(Object *ob)
+/* returns 1 if scaling has changed and tree must be reinitialized */
+static int init_scene(Object *ob)
 {
+	// check also if scaling has changed
+	float scale = len_v3(ob->obmat[1]);
+	IK_Scene* scene;
+
 	if (ob->pose->ikdata) {
-		for (IK_Scene* scene = ((IK_Data*)ob->pose->ikdata)->first;
+		for (scene = ((IK_Data*)ob->pose->ikdata)->first;
 			scene != NULL;
 			scene = scene->next) {
+			if (fabs(scene->blScale - scale) > KDL::epsilon)
+				return 1;
 			scene->channels[0].pchan->flag |= POSE_IKTREE;
 		}
 	}
+	return 0;
 }
 
 static void execute_scene(Scene* blscene, IK_Scene* ikscene, bItasc* ikparam, float ctime, float frtime)
@@ -1543,7 +1558,7 @@ static void execute_scene(Scene* blscene, IK_Scene* ikscene, bItasc* ikparam, fl
 	if (ikparam->flag & ITASC_SIMULATION) {
 		for (i=0, ikchan=ikscene->channels; i<ikscene->numchan; i++, ++ikchan) {
 			// In simulation mode we don't allow external contraint to change our bones, mark the channel done
-			// also tell Blender that this channel is part of IK tree (cleared on each where_is_pose()
+			// also tell Blender that this channel is part of IK tree (cleared on each BKE_pose_where_is()
 			ikchan->pchan->flag |= (POSE_DONE|POSE_CHAIN);
 			ikchan->jointValid = 0;
 		}
@@ -1552,8 +1567,8 @@ static void execute_scene(Scene* blscene, IK_Scene* ikscene, bItasc* ikparam, fl
 		// in animation mode, we must get the bone position from action and constraints
 		for (i=0, ikchan=ikscene->channels; i<ikscene->numchan; i++, ++ikchan) {
 			if (!(ikchan->pchan->flag & POSE_DONE))
-				where_is_pose_bone(blscene, ikscene->blArmature, ikchan->pchan, ctime, 1);
-			// tell blender that this channel was controlled by IK, it's cleared on each where_is_pose()
+				BKE_pose_where_is_bone(blscene, ikscene->blArmature, ikchan->pchan, ctime, 1);
+			// tell blender that this channel was controlled by IK, it's cleared on each BKE_pose_where_is()
 			ikchan->pchan->flag |= (POSE_DONE|POSE_CHAIN);
 			ikchan->jointValid = 0;
 		}
@@ -1610,10 +1625,12 @@ static void execute_scene(Scene* blscene, IK_Scene* ikscene, bItasc* ikparam, fl
 	ikscene->scene->update(timestamp, timestep, numstep, false, !reiterate, simulation);
 	if (reiterate) {
 		// how many times do we reiterate?
-		for (i=0; i<ikparam->numiter; i++) {
+		for (i = 0; i<ikparam->numiter; i++) {
 			if (ikscene->armature->getMaxJointChange() < ikparam->precision ||
-				ikscene->armature->getMaxEndEffectorChange() < ikparam->precision)
+			    ikscene->armature->getMaxEndEffectorChange() < ikparam->precision)
+			{
 				break;
+			}
 			ikscene->scene->update(timestamp, timestep, numstep, true, false, simulation);
 		}
 		if (simulation) {
@@ -1678,6 +1695,10 @@ static void execute_scene(Scene* blscene, IK_Scene* ikscene, bItasc* ikparam, fl
 		pchan = ikchan->pchan;
 		// tail mat
 		ikchan->frame.getValue(&pchan->pose_mat[0][0]);
+		// the scale of the object was included in the ik scene, take it out now
+		// because the pose channels are relative to the object
+		mul_v3_fl(pchan->pose_mat[3], ikscene->blInvScale);
+		length *= ikscene->blInvScale;
 		copy_v3_v3(pchan->pose_tail, pchan->pose_mat[3]);
 		// shift to head
 		copy_v3_v3(yaxis, pchan->pose_mat[1]);
@@ -1704,8 +1725,8 @@ void itasc_initialize_tree(struct Scene *scene, Object *ob, float ctime)
 	int count = 0;
 
 	if (ob->pose->ikdata != NULL && !(ob->pose->flag & POSE_WAS_REBUILT)) {
-		init_scene(ob);
-		return;
+		if (!init_scene(ob))
+			return;
 	}
 	// first remove old scene
 	itasc_clear_data(ob->pose);

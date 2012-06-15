@@ -43,6 +43,7 @@
 
 #include "BKE_colortools.h"
 #include "BKE_texture.h"
+#include "BKE_tracking.h"
 
 
 #include "IMB_imbuf.h"
@@ -79,7 +80,7 @@ int uiGetRoundBox(void)
 void uiDrawBox(int mode, float minx, float miny, float maxx, float maxy, float rad)
 {
 	float vec[7][2] = {{0.195, 0.02}, {0.383, 0.067}, {0.55, 0.169}, {0.707, 0.293},
-					   {0.831, 0.45}, {0.924, 0.617}, {0.98, 0.805}};
+	                   {0.831, 0.45}, {0.924, 0.617}, {0.98, 0.805}};
 	int a;
 	
 	/* mult */
@@ -147,7 +148,7 @@ static void round_box_shade_col(const float col1[3], float const col2[3], const 
 void uiDrawBoxShade(int mode, float minx, float miny, float maxx, float maxy, float rad, float shadetop, float shadedown)
 {
 	float vec[7][2] = {{0.195, 0.02}, {0.383, 0.067}, {0.55, 0.169}, {0.707, 0.293},
-					   {0.831, 0.45}, {0.924, 0.617}, {0.98, 0.805}};
+	                   {0.831, 0.45}, {0.924, 0.617}, {0.98, 0.805}};
 	const float div = maxy - miny;
 	const float idiv = 1.0f / div;
 	float coltop[3], coldown[3], color[4];
@@ -252,10 +253,11 @@ void uiDrawBoxShade(int mode, float minx, float miny, float maxx, float maxy, fl
 
 /* linear vertical shade within button or in outline */
 /* view2d scrollers use it */
-void uiDrawBoxVerticalShade(int mode, float minx, float miny, float maxx, float maxy, float rad, float shadeLeft, float shadeRight)
+void uiDrawBoxVerticalShade(int mode, float minx, float miny, float maxx, float maxy,
+                            float rad, float shadeLeft, float shadeRight)
 {
 	float vec[7][2] = {{0.195, 0.02}, {0.383, 0.067}, {0.55, 0.169}, {0.707, 0.293},
-					   {0.831, 0.45}, {0.924, 0.617}, {0.98, 0.805}};
+	                   {0.831, 0.45}, {0.924, 0.617}, {0.98, 0.805}};
 	const float div = maxx - minx;
 	const float idiv = 1.0f / div;
 	float colLeft[3], colRight[3], color[4];
@@ -656,37 +658,60 @@ static void draw_scope_end(rctf *rect, GLint *scissor)
 	uiDrawBox(GL_LINE_LOOP, rect->xmin - 1, rect->ymin, rect->xmax + 1, rect->ymax + 1, 3.0f);
 }
 
-static void histogram_draw_one(float r, float g, float b, float alpha, float x, float y, float w, float h, float *data, int res)
+static void histogram_draw_one(float r, float g, float b, float alpha,
+                               float x, float y, float w, float h, float *data, int res, const short is_line)
 {
 	int i;
 	
-	/* under the curve */
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-	glColor4f(r, g, b, alpha);
-	
-	glShadeModel(GL_FLAT);
-	glBegin(GL_QUAD_STRIP);
-	glVertex2f(x, y);
-	glVertex2f(x, y + (data[0] * h));
-	for (i = 1; i < res; i++) {
-		float x2 = x + i * (w / (float)res);
-		glVertex2f(x2, y + (data[i] * h));
-		glVertex2f(x2, y);
+	if (is_line) {
+
+		glLineWidth(1.5);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+		glColor4f(r, g, b, alpha);
+
+		/* curve outline */
+
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+		glEnable(GL_LINE_SMOOTH);
+		glBegin(GL_LINE_STRIP);
+		for (i = 0; i < res; i++) {
+			float x2 = x + i * (w / (float)res);
+			glVertex2f(x2, y + (data[i] * h));
+		}
+		glEnd();
+		glDisable(GL_LINE_SMOOTH);
+
+		glLineWidth(1.0);
 	}
-	glEnd();
-	
-	/* curve outline */
-	glColor4f(0.f, 0.f, 0.f, 0.25f);
-	
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_LINE_SMOOTH);
-	glBegin(GL_LINE_STRIP);
-	for (i = 0; i < res; i++) {
-		float x2 = x + i * (w / (float)res);
-		glVertex2f(x2, y + (data[i] * h));
+	else {
+		/* under the curve */
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+		glColor4f(r, g, b, alpha);
+
+		glShadeModel(GL_FLAT);
+		glBegin(GL_QUAD_STRIP);
+		glVertex2f(x, y);
+		glVertex2f(x, y + (data[0] * h));
+		for (i = 1; i < res; i++) {
+			float x2 = x + i * (w / (float)res);
+			glVertex2f(x2, y + (data[i] * h));
+			glVertex2f(x2, y);
+		}
+		glEnd();
+
+		/* curve outline */
+		glColor4f(0.f, 0.f, 0.f, 0.25f);
+
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glEnable(GL_LINE_SMOOTH);
+		glBegin(GL_LINE_STRIP);
+		for (i = 0; i < res; i++) {
+			float x2 = x + i * (w / (float)res);
+			glVertex2f(x2, y + (data[i] * h));
+		}
+		glEnd();
+		glDisable(GL_LINE_SMOOTH);
 	}
-	glEnd();
-	glDisable(GL_LINE_SMOOTH);
 }
 
 void ui_draw_but_HISTOGRAM(ARegion *ar, uiBut *but, uiWidgetColors *UNUSED(wcol), rcti *recti)
@@ -696,6 +721,7 @@ void ui_draw_but_HISTOGRAM(ARegion *ar, uiBut *but, uiWidgetColors *UNUSED(wcol)
 	rctf rect;
 	int i;
 	float w, h;
+	const short is_line = (hist->flag & HISTO_FLAG_LINE) != 0;
 	//float alpha;
 	GLint scissor[4];
 	
@@ -716,7 +742,10 @@ void ui_draw_but_HISTOGRAM(ARegion *ar, uiBut *but, uiWidgetColors *UNUSED(wcol)
 
 	/* need scissor test, histogram can draw outside of boundary */
 	glGetIntegerv(GL_VIEWPORT, scissor);
-	glScissor(ar->winrct.xmin + (rect.xmin - 1), ar->winrct.ymin + (rect.ymin - 1), (rect.xmax + 1) - (rect.xmin - 1), (rect.ymax + 1) - (rect.ymin - 1));
+	glScissor(ar->winrct.xmin + (rect.xmin - 1),
+	          ar->winrct.ymin + (rect.ymin - 1),
+	          (rect.xmax + 1) - (rect.xmin - 1),
+	          (rect.ymax + 1) - (rect.ymin - 1));
 
 	glColor4f(1.f, 1.f, 1.f, 0.08f);
 	/* draw grid lines here */
@@ -725,15 +754,19 @@ void ui_draw_but_HISTOGRAM(ARegion *ar, uiBut *but, uiWidgetColors *UNUSED(wcol)
 		fdrawline(rect.xmin + (i / 4.f) * w, rect.ymin, rect.xmin + (i / 4.f) * w, rect.ymax);
 	}
 	
-	if (hist->mode == HISTO_MODE_LUMA)
-		histogram_draw_one(1.0, 1.0, 1.0, 0.75, rect.xmin, rect.ymin, w, h, hist->data_luma, res);
+	if (hist->mode == HISTO_MODE_LUMA) {
+		histogram_draw_one(1.0, 1.0, 1.0, 0.75, rect.xmin, rect.ymin, w, h, hist->data_luma, res, is_line);
+	}
+	else if (hist->mode == HISTO_MODE_ALPHA) {
+		histogram_draw_one(1.0, 1.0, 1.0, 0.75, rect.xmin, rect.ymin, w, h, hist->data_a, res, is_line);
+	}
 	else {
 		if (hist->mode == HISTO_MODE_RGB || hist->mode == HISTO_MODE_R)
-			histogram_draw_one(1.0, 0.0, 0.0, 0.75, rect.xmin, rect.ymin, w, h, hist->data_r, res);
+			histogram_draw_one(1.0, 0.0, 0.0, 0.75, rect.xmin, rect.ymin, w, h, hist->data_r, res, is_line);
 		if (hist->mode == HISTO_MODE_RGB || hist->mode == HISTO_MODE_G)
-			histogram_draw_one(0.0, 1.0, 0.0, 0.75, rect.xmin, rect.ymin, w, h, hist->data_g, res);
+			histogram_draw_one(0.0, 1.0, 0.0, 0.75, rect.xmin, rect.ymin, w, h, hist->data_g, res, is_line);
 		if (hist->mode == HISTO_MODE_RGB || hist->mode == HISTO_MODE_B)
-			histogram_draw_one(0.0, 0.0, 1.0, 0.75, rect.xmin, rect.ymin, w, h, hist->data_b, res);
+			histogram_draw_one(0.0, 0.0, 1.0, 0.75, rect.xmin, rect.ymin, w, h, hist->data_b, res, is_line);
 	}
 	
 	/* outline, scale gripper */
@@ -786,7 +819,10 @@ void ui_draw_but_WAVEFORM(ARegion *ar, uiBut *but, uiWidgetColors *UNUSED(wcol),
 
 	/* need scissor test, waveform can draw outside of boundary */
 	glGetIntegerv(GL_VIEWPORT, scissor);
-	glScissor(ar->winrct.xmin + (rect.xmin - 1), ar->winrct.ymin + (rect.ymin - 1), (rect.xmax + 1) - (rect.xmin - 1), (rect.ymax + 1) - (rect.ymin - 1));
+	glScissor(ar->winrct.xmin + (rect.xmin - 1),
+	          ar->winrct.ymin + (rect.ymin - 1),
+	          (rect.xmax + 1) - (rect.xmin - 1),
+	          (rect.ymax + 1) - (rect.ymin - 1));
 
 	glColor4f(1.f, 1.f, 1.f, 0.08f);
 	/* draw grid lines here */
@@ -851,7 +887,12 @@ void ui_draw_but_WAVEFORM(ARegion *ar, uiBut *but, uiWidgetColors *UNUSED(wcol),
 		}
 
 		/* RGB / YCC (3 channels) */
-		else if (ELEM4(scopes->wavefrm_mode, SCOPES_WAVEFRM_RGB, SCOPES_WAVEFRM_YCC_601, SCOPES_WAVEFRM_YCC_709, SCOPES_WAVEFRM_YCC_JPEG)) {
+		else if (ELEM4(scopes->wavefrm_mode,
+		               SCOPES_WAVEFRM_RGB,
+		               SCOPES_WAVEFRM_YCC_601,
+		               SCOPES_WAVEFRM_YCC_709,
+		               SCOPES_WAVEFRM_YCC_JPEG))
+		{
 			int rgb = (scopes->wavefrm_mode == SCOPES_WAVEFRM_RGB);
 			
 			glBlendFunc(GL_ONE, GL_ONE);
@@ -996,7 +1037,10 @@ void ui_draw_but_VECTORSCOPE(ARegion *ar, uiBut *but, uiWidgetColors *UNUSED(wco
 
 	/* need scissor test, hvectorscope can draw outside of boundary */
 	glGetIntegerv(GL_VIEWPORT, scissor);
-	glScissor(ar->winrct.xmin + (rect.xmin - 1), ar->winrct.ymin + (rect.ymin - 1), (rect.xmax + 1) - (rect.xmin - 1), (rect.ymax + 1) - (rect.ymin - 1));
+	glScissor(ar->winrct.xmin + (rect.xmin - 1),
+	          ar->winrct.ymin + (rect.ymin - 1),
+	          (rect.xmax + 1) - (rect.xmin - 1),
+	          (rect.ymax + 1) - (rect.ymin - 1));
 	
 	glColor4f(1.f, 1.f, 1.f, 0.08f);
 	/* draw grid elements */
@@ -1196,7 +1240,7 @@ void ui_draw_but_NORMAL(uiBut *but, uiWidgetColors *wcol, rcti *rect)
 	
 	ui_get_but_vectorf(but, dir);
 
-	dir[3] = 0.0f;   /* glLight needs 4 args, 0.0 is sun */
+	dir[3] = 0.0f;   /* glLightfv needs 4 args, 0.0 is sun */
 	glLightfv(GL_LIGHT7, GL_POSITION, dir); 
 	glLightfv(GL_LIGHT7, GL_DIFFUSE, diffn); 
 	glLightfv(GL_LIGHT7, GL_SPECULAR, vec0); 
@@ -1281,7 +1325,7 @@ static void ui_draw_but_curve_grid(rcti *rect, float zoomx, float zoomy, float o
 	
 }
 
-static void glColor3ubvShade(unsigned char *col, int shade)
+static void gl_shaded_color(unsigned char *col, int shade)
 {
 	glColor3ub(col[0] - shade > 0 ? col[0] - shade : 0,
 	           col[1] - shade > 0 ? col[1] - shade : 0,
@@ -1318,7 +1362,7 @@ void ui_draw_but_CURVE(ARegion *ar, uiBut *but, uiWidgetColors *wcol, rcti *rect
 	
 	/* backdrop */
 	if (cumap->flag & CUMA_DO_CLIP) {
-		glColor3ubvShade((unsigned char *)wcol->inner, -20);
+		gl_shaded_color((unsigned char *)wcol->inner, -20);
 		glRectf(rect->xmin, rect->ymin, rect->xmax, rect->ymax);
 		glColor3ubv((unsigned char *)wcol->inner);
 		glRectf(rect->xmin + zoomx * (cumap->clipr.xmin - offsx),
@@ -1332,13 +1376,13 @@ void ui_draw_but_CURVE(ARegion *ar, uiBut *but, uiWidgetColors *wcol, rcti *rect
 	}
 		
 	/* grid, every .25 step */
-	glColor3ubvShade((unsigned char *)wcol->inner, -16);
+	gl_shaded_color((unsigned char *)wcol->inner, -16);
 	ui_draw_but_curve_grid(rect, zoomx, zoomy, offsx, offsy, 0.25f);
 	/* grid, every 1.0 step */
-	glColor3ubvShade((unsigned char *)wcol->inner, -24);
+	gl_shaded_color((unsigned char *)wcol->inner, -24);
 	ui_draw_but_curve_grid(rect, zoomx, zoomy, offsx, offsy, 1.0f);
 	/* axes */
-	glColor3ubvShade((unsigned char *)wcol->inner, -50);
+	gl_shaded_color((unsigned char *)wcol->inner, -50);
 	glBegin(GL_LINES);
 	glVertex2f(rect->xmin, rect->ymin + zoomy * (-offsy));
 	glVertex2f(rect->xmax, rect->ymin + zoomy * (-offsy));
@@ -1464,33 +1508,10 @@ void ui_draw_but_CURVE(ARegion *ar, uiBut *but, uiWidgetColors *wcol, rcti *rect
 	fdrawbox(rect->xmin, rect->ymin, rect->xmax, rect->ymax);
 }
 
-static ImBuf *scale_trackpreview_ibuf(ImBuf *ibuf, float track_pos[2], int width, float height, int margin)
-{
-	ImBuf *scaleibuf;
-	const float scalex = ((float)ibuf->x - 2 * margin) / width;
-	const float scaley = ((float)ibuf->y - 2 * margin) / height;
-	float off_x = (int)track_pos[0] - track_pos[0] + 0.5f;
-	float off_y = (int)track_pos[1] - track_pos[1] + 0.5f;
-	int x, y;
-
-	scaleibuf = IMB_allocImBuf(width, height, 32, IB_rect);
-
-	for (y = 0; y < height; y++) {
-		for (x = 0; x < width; x++) {
-			float src_x = scalex * (x) + margin - off_x;
-			float src_y = scaley * (y) + margin - off_y;
-
-			bicubic_interpolation(ibuf, scaleibuf, src_x, src_y, x, y);
-		}
-	}
-
-	return scaleibuf;
-}
-
 void ui_draw_but_TRACKPREVIEW(ARegion *ar, uiBut *but, uiWidgetColors *UNUSED(wcol), rcti *recti)
 {
 	rctf rect;
-	int ok = 0;
+	int ok = 0, width, height;
 	GLint scissor[4];
 	MovieClipScopes *scopes = (MovieClipScopes *)but->poin;
 
@@ -1499,12 +1520,18 @@ void ui_draw_but_TRACKPREVIEW(ARegion *ar, uiBut *but, uiWidgetColors *UNUSED(wc
 	rect.ymin = (float)recti->ymin + SCOPE_RESIZE_PAD + 2;
 	rect.ymax = (float)recti->ymax - 1;
 
+	width = rect.xmax - rect.xmin + 1;
+	height = rect.ymax - rect.ymin;
+
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	/* need scissor test, preview image can draw outside of boundary */
 	glGetIntegerv(GL_VIEWPORT, scissor);
-	glScissor(ar->winrct.xmin + (rect.xmin - 1), ar->winrct.ymin + (rect.ymin - 1), (rect.xmax + 1) - (rect.xmin - 1), (rect.ymax + 1) - (rect.ymin - 1));
+	glScissor(ar->winrct.xmin + (rect.xmin - 1),
+	          ar->winrct.ymin + (rect.ymin - 1),
+	          (rect.xmax + 1) - (rect.xmin - 1),
+	          (rect.ymax + 1) - (rect.ymin - 1));
 
 	if (scopes->track_disabled) {
 		glColor4f(0.7f, 0.3f, 0.3f, 0.3f);
@@ -1513,41 +1540,64 @@ void ui_draw_but_TRACKPREVIEW(ARegion *ar, uiBut *but, uiWidgetColors *UNUSED(wc
 
 		ok = 1;
 	}
-	else if (scopes->track_preview) {
-		/* additional margin around image */
-		/* NOTE: should be kept in sync with value from BKE_movieclip_update_scopes */
-		const int margin = 3;
-		float zoomx, zoomy, track_pos[2], off_x, off_y;
-		int a, width, height;
+	else if ((scopes->track_search) &&
+	         ((!scopes->track_preview) ||
+	          (scopes->track_preview->x != width || scopes->track_preview->y != height)))
+	{
+		ImBuf *tmpibuf;
+
+		if (scopes->track_preview)
+			IMB_freeImBuf(scopes->track_preview);
+
+		tmpibuf = BKE_tracking_sample_pattern(scopes->frame_width, scopes->frame_height,
+		                                            scopes->track_search, scopes->track,
+		                                            &scopes->undist_marker, scopes->use_track_mask,
+		                                            width, height, scopes->track_pos);
+
+		if (tmpibuf->rect_float)
+			IMB_rect_from_float(tmpibuf);
+
+		// XXX: for debug only
+		// tmpibuf->ftype = PNG;
+		// IMB_saveiff(tmpibuf, "sample.png", IB_rect);
+
+		if (tmpibuf->rect)
+			scopes->track_preview = tmpibuf;
+		else
+			IMB_freeImBuf(tmpibuf);
+	}
+
+	if (!ok && scopes->track_preview) {
+		float track_pos[2];
+		int a;
 		ImBuf *drawibuf;
 
 		glPushMatrix();
 
-		track_pos[0] = scopes->track_pos[0] - margin;
-		track_pos[1] = scopes->track_pos[1] - margin;
+		track_pos[0] = scopes->track_pos[0];
+		track_pos[1] = scopes->track_pos[1];
 
 		/* draw content of pattern area */
 		glScissor(ar->winrct.xmin + rect.xmin, ar->winrct.ymin + rect.ymin, scissor[2], scissor[3]);
 
-		width = rect.xmax - rect.xmin + 1;
-		height = rect.ymax - rect.ymin;
-
 		if (width > 0 && height > 0) {
-			zoomx = (float)width / (scopes->track_preview->x - 2 * margin);
-			zoomy = (float)height / (scopes->track_preview->y - 2 * margin);
+			drawibuf = scopes->track_preview;
 
-			off_x = ((int)track_pos[0] - track_pos[0] + 0.5f) * zoomx;
-			off_y = ((int)track_pos[1] - track_pos[1] + 0.5f) * zoomy;
-
-			drawibuf = scale_trackpreview_ibuf(scopes->track_preview, track_pos, width, height, margin);
+			if (scopes->use_track_mask) {
+				glColor4f(0.0f, 0.0f, 0.0f, 0.3f);
+				uiSetRoundBox(15);
+				uiDrawBox(GL_POLYGON, rect.xmin - 1, rect.ymin, rect.xmax + 1, rect.ymax + 1, 3.0f);
+			}
 
 			glaDrawPixelsSafe(rect.xmin, rect.ymin + 1, drawibuf->x, drawibuf->y,
 			                  drawibuf->x, GL_RGBA, GL_UNSIGNED_BYTE, drawibuf->rect);
-			IMB_freeImBuf(drawibuf);
 
 			/* draw cross for pizel position */
-			glTranslatef(off_x + rect.xmin + track_pos[0] * zoomx, off_y + rect.ymin + track_pos[1] * zoomy, 0.f);
-			glScissor(ar->winrct.xmin + rect.xmin, ar->winrct.ymin + rect.ymin, rect.xmax - rect.xmin, rect.ymax - rect.ymin);
+			glTranslatef(rect.xmin + track_pos[0], rect.ymin + track_pos[1], 0.f);
+			glScissor(ar->winrct.xmin + rect.xmin,
+			          ar->winrct.ymin + rect.ymin,
+			          rect.xmax - rect.xmin,
+			          rect.ymax - rect.ymin);
 
 			for (a = 0; a < 2; a++) {
 				if (a == 1) {
@@ -1638,12 +1688,12 @@ void uiDrawBoxShadow(unsigned char alpha, float minx, float miny, float maxx, fl
 }
 
 
-void ui_dropshadow(rctf *rct, float radius, float aspect, int UNUSED(select))
+void ui_dropshadow(rctf *rct, float radius, float aspect, float alpha, int UNUSED(select))
 {
 	int i;
 	float rad;
 	float a;
-	char alpha = 2;
+	float dalpha = alpha * 2.0f / 255.0f, calpha;
 	
 	glEnable(GL_BLEND);
 	
@@ -1663,10 +1713,11 @@ void ui_dropshadow(rctf *rct, float radius, float aspect, int UNUSED(select))
 		a = i * aspect;
 	}
 
+	calpha = dalpha;
 	for (; i--; a -= aspect) {
 		/* alpha ranges from 2 to 20 or so */
-		glColor4ub(0, 0, 0, alpha);
-		alpha += 2;
+		glColor4f(0.0f, 0.0f, 0.0f, calpha);
+		calpha += dalpha;
 		
 		uiDrawBox(GL_POLYGON, rct->xmin - a, rct->ymin - a, rct->xmax + a, rct->ymax - 10.0f + a, rad + a);
 	}

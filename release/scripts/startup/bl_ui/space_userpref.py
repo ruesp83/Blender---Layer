@@ -96,6 +96,7 @@ class USERPREF_HT_header(Header):
             layout.menu("USERPREF_MT_addons_dev_guides")
         elif userpref.active_section == 'THEMES':
             layout.operator("ui.reset_default_theme")
+            layout.operator("wm.theme_install")
 
 
 class USERPREF_PT_tabs(Panel):
@@ -433,6 +434,7 @@ class USERPREF_PT_system(Panel):
         col.label(text="OpenGL:")
         col.prop(system, "gl_clip_alpha", slider=True)
         col.prop(system, "use_mipmaps")
+        col.prop(system, "use_gpu_mipmap")
         col.prop(system, "use_16bit_textures")
         col.label(text="Anisotropic Filtering")
         col.prop(system, "anisotropic_filter", text="")
@@ -452,7 +454,7 @@ class USERPREF_PT_system(Panel):
         col.separator()
         col.separator()
 
-        col.label(text="Sequencer:")
+        col.label(text="Sequencer / Clip Editor:")
         col.prop(system, "prefetch_frames")
         col.prop(system, "memory_cache_limit")
 
@@ -637,10 +639,6 @@ class USERPREF_PT_theme(Panel):
             col.label(text="Tooltip:")
             ui_items_general(col, ui)
 
-            ui = theme.user_interface.wcol_tooltip
-            col.label(text="Tooltip:")
-            ui_items_general(col, ui)
-
             ui = theme.user_interface.wcol_menu_item
             col.label(text="Menu Item:")
             ui_items_general(col, ui)
@@ -785,8 +783,6 @@ class USERPREF_PT_file(Panel):
         sub = col1.column()
         sub.label(text="Fonts:")
         sub.label(text="Textures:")
-        sub.label(text="Texture Plugins:")
-        sub.label(text="Sequence Plugins:")
         sub.label(text="Render Output:")
         sub.label(text="Scripts:")
         sub.label(text="Sounds:")
@@ -797,8 +793,6 @@ class USERPREF_PT_file(Panel):
         sub = col1.column()
         sub.prop(paths, "font_directory", text="")
         sub.prop(paths, "texture_directory", text="")
-        sub.prop(paths, "texture_plugin_directory", text="")
-        sub.prop(paths, "sequence_plugin_directory", text="")
         sub.prop(paths, "render_output_directory", text="")
         sub.prop(paths, "script_directory", text="")
         sub.prop(paths, "sound_directory", text="")

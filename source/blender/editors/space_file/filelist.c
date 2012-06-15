@@ -102,8 +102,7 @@ typedef struct ThumbnailJob {
 	ReportList reports;
 } ThumbnailJob;
 
-typedef struct FileList
-{
+typedef struct FileList {
 	struct direntry *filelist;
 	int *fidx;
 	int numfiles;
@@ -124,8 +123,7 @@ typedef struct FileList
 
 } FileList;
 
-typedef struct FolderList
-{
+typedef struct FolderList {
 	struct FolderList *next, *prev;
 	char *foldername;
 } FolderList;
@@ -179,7 +177,7 @@ static int compare_name(const void *a1, const void *a2)
 	if ( strcmp(entry1->relname, "..")==0 ) return (-1);
 	if ( strcmp(entry2->relname, "..")==0 ) return (1);
 	
-	return (BLI_natstrcmp(entry1->relname,entry2->relname));
+	return (BLI_natstrcmp(entry1->relname, entry2->relname));
 }
 
 static int compare_date(const void *a1, const void *a2)	
@@ -212,7 +210,7 @@ static int compare_date(const void *a1, const void *a2)
 	if ( entry1->s.st_mtime < entry2->s.st_mtime) return 1;
 	if ( entry1->s.st_mtime > entry2->s.st_mtime) return -1;
 	
-	else return BLI_natstrcmp(entry1->relname,entry2->relname);
+	else return BLI_natstrcmp(entry1->relname, entry2->relname);
 }
 
 static int compare_size(const void *a1, const void *a2)	
@@ -244,7 +242,7 @@ static int compare_size(const void *a1, const void *a2)
 	
 	if ( entry1->s.st_size < entry2->s.st_size) return 1;
 	if ( entry1->s.st_size > entry2->s.st_size) return -1;
-	else return BLI_natstrcmp(entry1->relname,entry2->relname);
+	else return BLI_natstrcmp(entry1->relname, entry2->relname);
 }
 
 static int compare_extension(const void *a1, const void *a2)
@@ -419,7 +417,7 @@ void filelist_free_icons(void)
 //-----------------FOLDERLIST (previous/next) --------------//
 struct ListBase* folderlist_new(void)
 {
-	ListBase* p = MEM_callocN( sizeof(ListBase), "folderlist" );
+	ListBase* p = MEM_callocN(sizeof(ListBase), "folderlist" );
 	return p;
 }
 
@@ -456,7 +454,7 @@ void folderlist_pushdir(ListBase* folderlist, const char *dir)
 	}
 
 	// create next folder element
-	folder = (FolderList*)MEM_mallocN(sizeof(FolderList),"FolderList");
+	folder = (FolderList*)MEM_mallocN(sizeof(FolderList), "FolderList");
 	folder->foldername = (char*)MEM_mallocN(sizeof(char)*(strlen(dir)+1), "foldername");
 	folder->foldername[0] = '\0';
 
@@ -519,8 +517,8 @@ static void filelist_read_dir(struct FileList* filelist);
 //------------------FILELIST------------------------//
 struct FileList*	filelist_new(short type)
 {
-	FileList* p = MEM_callocN( sizeof(FileList), "filelist" );
-	switch(type) {
+	FileList* p = MEM_callocN(sizeof(FileList), "filelist" );
+	switch (type) {
 		case FILE_MAIN:
 			p->readf = filelist_read_main;
 			p->filterf = is_filtered_main;
@@ -641,7 +639,7 @@ struct ImBuf * filelist_geticon(struct FileList* filelist, int index)
 		if ( strcmp(filelist->filelist[fidx].relname, "..") == 0) {
 			ibuf = gSpecialFileImages[SPECIAL_IMG_PARENT];
 		}
-		else if  ( strcmp(filelist->filelist[fidx].relname, ".") == 0) {
+		else if (strcmp(filelist->filelist[fidx].relname, ".") == 0) {
 			ibuf = gSpecialFileImages[SPECIAL_IMG_REFRESH];
 		}
 		else {
@@ -767,16 +765,18 @@ static int file_extension_type(const char *relname)
 	else if (BLI_testextensie(relname, ".py")) {
 		return PYSCRIPTFILE;
 	}
-	else if (BLI_testextensie(relname, ".txt")
-			  || BLI_testextensie(relname, ".glsl")
-			  || BLI_testextensie(relname, ".data")) {
+	else if (BLI_testextensie(relname, ".txt")  ||
+	         BLI_testextensie(relname, ".glsl") ||
+	         BLI_testextensie(relname, ".data"))
+	{
 		return TEXTFILE;
 	}
-	else if ( BLI_testextensie(relname, ".ttf")
-			  || BLI_testextensie(relname, ".ttc")
-			  || BLI_testextensie(relname, ".pfb")
-			  || BLI_testextensie(relname, ".otf")
-			  || BLI_testextensie(relname, ".otc")) {
+	else if (BLI_testextensie(relname, ".ttf") ||
+	         BLI_testextensie(relname, ".ttc") ||
+	         BLI_testextensie(relname, ".pfb") ||
+	         BLI_testextensie(relname, ".otf") ||
+	         BLI_testextensie(relname, ".otc"))
+	{
 		return FTFONTFILE;			
 	}
 	else if (BLI_testextensie(relname, ".btx")) {
@@ -785,8 +785,9 @@ static int file_extension_type(const char *relname)
 	else if (BLI_testextensie(relname, ".dae")) {
 		return COLLADAFILE;
 	}
-	else if (BLI_testextensie_array(relname, imb_ext_image)
-			  || (G.have_quicktime && BLI_testextensie_array(relname, imb_ext_image_qt))) {
+	else if (BLI_testextensie_array(relname, imb_ext_image) ||
+	         (G.have_quicktime && BLI_testextensie_array(relname, imb_ext_image_qt)))
+	{
 		return IMAGEFILE;			
 	}
 	else if (BLI_testextensie_array(relname, imb_ext_movie)) {
@@ -838,8 +839,9 @@ static void filelist_setfiletypes(struct FileList* filelist)
 		}
 		file->flags = file_extension_type(file->relname);
 		
-		if (filelist->filter_glob
-		   && BLI_testextensie_glob(file->relname, filelist->filter_glob)) {
+		if (filelist->filter_glob &&
+		    BLI_testextensie_glob(file->relname, filelist->filter_glob))
+		{
 			file->flags= OPERATORFILE;
 		}
 		
@@ -978,7 +980,7 @@ int	filelist_is_selected(struct FileList* filelist, int index, FileCheckType che
 
 void filelist_sort(struct FileList* filelist, short sort)
 {
-	switch(sort) {
+	switch (sort) {
 	case FILE_SORT_ALPHA:
 		qsort(filelist->filelist, filelist->numfiles, sizeof(struct direntry), compare_name);	
 		break;
@@ -1140,7 +1142,7 @@ void filelist_from_main(struct FileList *filelist)
 		filelist->filelist= (struct direntry *)malloc(filelist->numfiles * sizeof(struct direntry));
 		
 		for (a=0; a<filelist->numfiles; a++) {
-			memset( &(filelist->filelist[a]), 0 , sizeof(struct direntry));
+			memset(&(filelist->filelist[a]), 0, sizeof(struct direntry));
 			filelist->filelist[a].type |= S_IFDIR;
 		}
 		
@@ -1194,7 +1196,7 @@ void filelist_from_main(struct FileList *filelist)
 		files = filelist->filelist;
 		
 		if (!filelist->hide_parent) {
-			memset( &(filelist->filelist[0]), 0 , sizeof(struct direntry));
+			memset(&(filelist->filelist[0]), 0, sizeof(struct direntry));
 			filelist->filelist[0].relname= BLI_strdup("..");
 			filelist->filelist[0].type |= S_IFDIR;
 		
@@ -1208,7 +1210,7 @@ void filelist_from_main(struct FileList *filelist)
 			ok = 1;
 			if (ok) {
 				if (!filelist->hide_dot || id->name[2] != '.') {
-					memset( files, 0 , sizeof(struct direntry));
+					memset(files, 0, sizeof(struct direntry));
 					if (id->lib==NULL)
 						files->relname= BLI_strdup(id->name+2);
 					else {
@@ -1295,7 +1297,7 @@ static void thumbnails_startjob(void *tjv, short *stop, short *do_update, float 
 					limg->flags |= MOVIEFILE_ICON;
 				}
 		}
-		*do_update = 1;
+		*do_update = TRUE;
 		PIL_sleep_ms(10);
 		limg = limg->next;
 	}
@@ -1315,7 +1317,7 @@ static void thumbnails_update(void *tjv)
 					tj->filelist->filelist[limg->index].flags &= ~MOVIEFILE;
 					tj->filelist->filelist[limg->index].flags |= MOVIEFILE_ICON;
 				}
-				limg->done=1;
+				limg->done = TRUE;
 			}
 			limg = limg->next;
 		}

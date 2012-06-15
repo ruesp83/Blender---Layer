@@ -76,8 +76,7 @@ public :
 
 	virtual 
 	~SG_ParentRelation(
-	){
-	};
+	) {};
 
 	/** 
 	 * You must provide a way of duplicating an
@@ -136,7 +135,7 @@ public:
 	void *operator new(size_t num_bytes) { return MEM_mallocN(num_bytes, "GE:SG_ParentRelation"); }
 	void operator delete( void *mem ) { MEM_freeN(mem); }
 #endif
-};	
+};
 
 #endif
 

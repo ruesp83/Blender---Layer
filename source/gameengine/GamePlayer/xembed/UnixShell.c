@@ -28,8 +28,6 @@
 
 #define MOZ_X11 1
 
-/* -*- Mode: C; tab-width: 8; c-set-style: bsd -*- */
-
 /* UnixShell.c was adapted from the template in the Netscape API. */
 
 /* System: */     
@@ -495,7 +493,7 @@ execute_blenderplayer(BlenderPluginInstance* instance)
 	strcpy(instance->temp_mail_file_name, file_name);
 
 	instance->pID = fork();
-	//XSelectInput(This->display , This->window, SubstructureNotifyMask);
+	//XSelectInput(This->display, This->window, SubstructureNotifyMask);
 	//XSync(This->display, FALSE);
 	
 

@@ -133,9 +133,8 @@ typedef struct Library {
 							 * some cases its useful to access the absolute one,
 							 * This is set on file read.
 							 * Use BKE_library_filepath_set() rather than
-							 * setting 'name' directly and it will be kepk in
+							 * setting 'name' directly and it will be kept in
 							 * sync - campbell */
-	int tot, pad;			/* tot, idblock and filedata are only fo read and write */
 	struct Library *parent;	/* set for indirectly linked libs, used in the outliner and while reading */
 } Library;
 
@@ -151,7 +150,7 @@ typedef struct PreviewImage {
 	unsigned int h[2];
 	short changed[2];
 	short changed_timestamp[2];
-	unsigned int * rect[2];
+	unsigned int *rect[2];
 } PreviewImage;
 
 /**
@@ -207,6 +206,7 @@ typedef struct PreviewImage {
 #define ID_GD		MAKE_ID2('G', 'D') /* GreasePencil */
 #define ID_WM		MAKE_ID2('W', 'M') /* WindowManager */
 #define ID_MC		MAKE_ID2('M', 'C') /* MovieClip */
+#define ID_MSK		MAKE_ID2('M', 'S') /* Mask */
 
 	/* NOTE! Fake IDs, needed for g.sipo->blocktype or outliner */
 #define ID_SEQ		MAKE_ID2('S', 'Q')
@@ -226,9 +226,13 @@ typedef struct PreviewImage {
 #define ID_BLEND_PATH(_bmain, _id) ((_id)->lib ? (_id)->lib->filepath : (_bmain)->name)
 
 #ifdef GS
-#undef GS
+#  undef GS
 #endif
 #define GS(a)	(*((short *)(a)))
+
+#define ID_NEW(a)		if (      (a) && (a)->id.newid ) (a) = (void *)(a)->id.newid
+#define ID_NEW_US(a)	if (      (a)->id.newid)       { (a) = (void *)(a)->id.newid;       (a)->id.us++; }
+#define ID_NEW_US2(a)	if (((ID *)a)->newid)          { (a) = ((ID  *)a)->newid;     ((ID *)a)->us++;    }
 
 /* id->flag: set frist 8 bits always at zero while reading */
 #define LIB_LOCAL		0
@@ -255,4 +259,3 @@ typedef struct PreviewImage {
 #endif
 
 #endif
-

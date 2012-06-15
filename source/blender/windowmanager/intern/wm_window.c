@@ -238,8 +238,8 @@ wmWindow *wm_window_copy(bContext *C, wmWindow *winorig)
 	BLI_strncpy(win->screenname, win->screen->id.name + 2, sizeof(win->screenname));
 	win->screen->winid = win->winid;
 
-	win->screen->do_refresh = 1;
-	win->screen->do_draw = 1;
+	win->screen->do_refresh = TRUE;
+	win->screen->do_draw = TRUE;
 
 	win->drawmethod = -1;
 	win->drawdata = NULL;
@@ -282,7 +282,7 @@ void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win)
 	/* if temp screen, delete it after window free (it stops jobs that can access it) */
 	if (screen->temp) {
 		Main *bmain = CTX_data_main(C);
-		free_libblock(&bmain->screen, screen);
+		BKE_libblock_free(&bmain->screen, screen);
 	}
 	
 	/* check remaining windows */
@@ -477,7 +477,7 @@ wmWindow *WM_window_open(bContext *C, rcti *rect)
 
 /* uses screen->temp tag to define what to do, currently it limits
  * to only one "temp" window for render out, preferences, filewindow, etc */
-/* type is #define in WM_api.h */
+/* type is defined in WM_api.h */
 
 void WM_window_open_temp(bContext *C, rcti *position, int type)
 {
@@ -577,12 +577,11 @@ int wm_window_fullscreen_toggle_exec(bContext *C, wmOperator *UNUSED(op))
 
 /* ************ events *************** */
 
-typedef enum
-{
-	SHIFT = 's',
-	CONTROL = 'c',
-	ALT = 'a',
-	OS = 'C'
+typedef enum {
+	SHIFT    = 's',
+	CONTROL  = 'c',
+	ALT      = 'a',
+	OS       = 'C'
 } modifierKeyType;
 
 /* check if specified modifier key type is pressed */
@@ -622,7 +621,7 @@ void wm_window_make_drawable(bContext *C, wmWindow *win)
 	wmWindowManager *wm = CTX_wm_manager(C);
 
 	if (win != wm->windrawable && win->ghostwin) {
-//		win->lmbut= 0;	/* keeps hanging when mousepressed while other window opened */
+//		win->lmbut = 0;	/* keeps hanging when mousepressed while other window opened */
 		
 		wm->windrawable = win;
 		if (G.debug & G_DEBUG_EVENTS) {
@@ -672,6 +671,7 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr private)
 			case GHOST_kEventWindowActivate: 
 			{
 				GHOST_TEventKeyData kdata;
+				wmEvent event;
 				int cx, cy, wx, wy;
 				
 				wm->winactive = win; /* no context change! c->wm->windrawable is drawable, or for area queues */
@@ -711,6 +711,23 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr private)
 				win->addmousemove = 1;   /* enables highlighted buttons */
 				
 				wm_window_make_drawable(C, win);
+
+				/* window might be focused by mouse click in configuration of window manager
+				 * when focus is not following mouse
+				 * click could have been done on a button and depending on window manager settings
+				 * click would be passed to blender or not, but in any case button under cursor
+				 * should be activated, so at max next click on button without moving mouse
+				 * would trigger it's handle function
+				 * currently it seems to be common practice to generate new event for, but probably
+				 * we'll need utility function for this? (sergey)
+				 */
+				event = *(win->eventstate);
+				event.type = MOUSEMOVE;
+				event.prevx = event.x;
+				event.prevy = event.y;
+
+				wm_event_add(win, &event);
+
 				break;
 			}
 			case GHOST_kEventWindowClose: {
@@ -914,7 +931,7 @@ static int wm_window_timer(const bContext *C)
 		wtnext = wt->next; /* in case timer gets removed */
 		win = wt->win;
 
-		if (wt->sleep== 0) {
+		if (wt->sleep == 0) {
 			if (time > wt->ntime) {
 				wt->delta = time - wt->ltime;
 				wt->duration += wt->delta;

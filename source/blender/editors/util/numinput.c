@@ -207,8 +207,7 @@ char handleNumInput(NumInput *n, wmEvent *event)
 				if (n->flag & NUM_NO_FRACTION)
 					return 0;
 
-				switch (n->ctrl[idx])
-				{
+				switch (n->ctrl[idx]) {
 					case 0:
 					case 1:
 						n->ctrl[idx] = 10;
@@ -222,7 +221,7 @@ char handleNumInput(NumInput *n, wmEvent *event)
 					break;
 			case MINUSKEY:
 				if (n->flag & NUM_NO_NEGATIVE)
-					break;
+					return 0;
 
 				if (n->ctrl[idx]) {
 					n->ctrl[idx] *= -1;

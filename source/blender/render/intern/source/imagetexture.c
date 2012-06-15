@@ -1,6 +1,4 @@
 /*
- *
- *
  * ***** BEGIN GPL LICENSE BLOCK *****
  *
  * This program is free software; you can redistribute it and/or
@@ -28,9 +26,6 @@
 /** \file blender/render/intern/source/imagetexture.c
  *  \ingroup render
  */
-
-
-
 
 #include <stdio.h>
 #include <string.h>
@@ -81,7 +76,7 @@ static void boxsample(ImBuf *ibuf, float minx, float miny, float maxx, float max
 
 
 /* x and y have to be checked for image size */
-static void ibuf_get_color(float *col, struct ImBuf *ibuf, int x, int y)
+static void ibuf_get_color(float col[4], struct ImBuf *ibuf, int x, int y)
 {
 	int ofs = y * ibuf->x + x;
 	
@@ -642,7 +637,7 @@ enum {TXC_XMIR=1, TXC_YMIR, TXC_REPT, TXC_EXTD};
 
 // similar to ibuf_get_color() but clips/wraps coords according to repeat/extend flags
 // returns true if out of range in clipmode
-static int ibuf_get_color_clip(float *col, ImBuf *ibuf, int x, int y, int extflag)
+static int ibuf_get_color_clip(float col[4], ImBuf *ibuf, int x, int y, int extflag)
 {
 	int clip = 0;
 	switch (extflag) {
@@ -700,7 +695,7 @@ static int ibuf_get_color_clip(float *col, ImBuf *ibuf, int x, int y, int extfla
 }
 
 // as above + bilerp
-static int ibuf_get_color_clip_bilerp(float *col, ImBuf *ibuf, float u, float v, int intpol, int extflag)
+static int ibuf_get_color_clip_bilerp(float col[4], ImBuf *ibuf, float u, float v, int intpol, int extflag)
 {
 	if (intpol) {
 		float c00[4], c01[4], c10[4], c11[4];
@@ -1482,10 +1477,10 @@ int imagewraposa(Tex *tex, Image *ima, ImBuf *ibuf, const float texvec[3], const
 	
 	/* pixel coordinates */
 
-	minx= MIN3(dxt[0],dyt[0],dxt[0]+dyt[0] );
-	maxx= MAX3(dxt[0],dyt[0],dxt[0]+dyt[0] );
-	miny= MIN3(dxt[1],dyt[1],dxt[1]+dyt[1] );
-	maxy= MAX3(dxt[1],dyt[1],dxt[1]+dyt[1] );
+	minx = MIN3(dxt[0], dyt[0], dxt[0] + dyt[0]);
+	maxx = MAX3(dxt[0], dyt[0], dxt[0] + dyt[0]);
+	miny = MIN3(dxt[1], dyt[1], dxt[1] + dyt[1]);
+	maxy = MAX3(dxt[1], dyt[1], dxt[1] + dyt[1]);
 
 	/* tex_sharper has been removed */
 	minx= (maxx-minx)/2.0f;

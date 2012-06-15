@@ -113,7 +113,7 @@ void fly_modal_keymap(wmKeyConfig *keyconf)
 	wmKeyMap *keymap = WM_modalkeymap_get(keyconf, "View3D Fly Modal");
 
 	/* this function is called for each spacetype, only needs to add map once */
-	if (keymap)
+	if (keymap && keymap->modal_items)
 		return;
 
 	keymap = WM_modalkeymap_add(keyconf, "View3D Fly Modal", modal_items);
@@ -174,7 +174,7 @@ typedef struct FlyInfo {
 	unsigned char use_freelook;
 
 	int mval[2]; /* latest 2D mouse values */
-	wmNDOFMotionData*ndof;  /* latest 3D mouse values */
+	wmNDOFMotionData *ndof;  /* latest 3D mouse values */
 
 	/* fly state state */
 	float speed; /* the speed the view is moving per redraw */
@@ -366,9 +366,9 @@ static int initFlyInfo(bContext *C, FlyInfo *fly, wmOperator *op, wmEvent *event
 		/* store the original camera loc and rot */
 		/* TODO. axis angle etc */
 
-		fly->obtfm = object_tfm_backup(ob_back);
+		fly->obtfm = BKE_object_tfm_backup(ob_back);
 
-		where_is_object(fly->scene, fly->v3d->camera);
+		BKE_object_where_is_calc(fly->scene, fly->v3d->camera);
 		negate_v3_v3(fly->rv3d->ofs, fly->v3d->camera->obmat[3]);
 
 		fly->rv3d->dist = 0.0;
@@ -429,7 +429,7 @@ static int flyEnd(bContext *C, FlyInfo *fly)
 			ob_back = (fly->root_parent) ? fly->root_parent : fly->v3d->camera;
 
 			/* store the original camera loc and rot */
-			object_tfm_restore(ob_back, fly->obtfm);
+			BKE_object_tfm_restore(ob_back, fly->obtfm);
 
 			DAG_id_tag_update(&ob_back->id, OB_RECALC_OB);
 		}
@@ -547,7 +547,7 @@ static void flyEvent(FlyInfo *fly, wmEvent *event)
 				time_currwheel = PIL_check_seconds_timer();
 				time_wheel = (float)(time_currwheel - fly->time_lastwheel);
 				fly->time_lastwheel = time_currwheel;
-				/* Mouse wheel delays range from 0.5==slow to 0.01==fast */
+				/* Mouse wheel delays range from (0.5 == slow) to (0.01 == fast) */
 				time_wheel = 1.0f + (10.0f - (20.0f * MIN2(time_wheel, 0.5f))); /* 0-0.5 -> 0-5.0 */
 
 				if (fly->speed < 0.0f) {
@@ -580,7 +580,7 @@ static void flyEvent(FlyInfo *fly, wmEvent *event)
 				fly->pan_view = TRUE;
 				break;
 			case FLY_MODAL_PAN_DISABLE:
-//XXX2.5		warp_pointer(cent_orig[0], cent_orig[1]);
+//XXX2.5				WM_cursor_warp(CTX_wm_window(C), cent_orig[0], cent_orig[1]);
 				fly->pan_view = FALSE;
 				break;
 
@@ -690,7 +690,7 @@ static void move_camera(bContext *C, RegionView3D *rv3d, FlyInfo *fly, int orien
 {
 	/* we are in camera view so apply the view ofs and quat to the view matrix and set the camera to the view */
 
-	View3D*v3d = fly->v3d;
+	View3D *v3d = fly->v3d;
 	Scene *scene = fly->scene;
 	ID *id_key;
 
@@ -709,9 +709,9 @@ static void move_camera(bContext *C, RegionView3D *rv3d, FlyInfo *fly, int orien
 		ED_view3d_to_m4(view_mat, rv3d->ofs, rv3d->viewquat, rv3d->dist);
 		mult_m4_m4m4(diff_mat, view_mat, prev_view_imat);
 		mult_m4_m4m4(parent_mat, diff_mat, fly->root_parent->obmat);
-		object_apply_mat4(fly->root_parent, parent_mat, TRUE, FALSE);
+		BKE_object_apply_mat4(fly->root_parent, parent_mat, TRUE, FALSE);
 
-		// where_is_object(scene, fly->root_parent);
+		// BKE_object_where_is_calc(scene, fly->root_parent);
 
 		ob_update = v3d->camera->parent;
 		while (ob_update) {
@@ -724,7 +724,7 @@ static void move_camera(bContext *C, RegionView3D *rv3d, FlyInfo *fly, int orien
 	else {
 		float view_mat[4][4];
 		ED_view3d_to_m4(view_mat, rv3d->ofs, rv3d->viewquat, rv3d->dist);
-		object_apply_mat4(v3d->camera, view_mat, TRUE, FALSE);
+		BKE_object_apply_mat4(v3d->camera, view_mat, TRUE, FALSE);
 		id_key = &v3d->camera->id;
 	}
 
@@ -1031,7 +1031,7 @@ static int flyApply_ndof(bContext *C, FlyInfo *fly)
 	/* shorthand for oft-used variables */
 	wmNDOFMotionData *ndof = fly->ndof;
 	const float dt = ndof->dt;
-	RegionView3D*rv3d = fly->rv3d;
+	RegionView3D *rv3d = fly->rv3d;
 	const int flag = U.ndof_flag;
 
 #if 0

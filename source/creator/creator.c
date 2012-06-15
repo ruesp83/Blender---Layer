@@ -31,18 +31,18 @@
 
 
 #if defined(__linux__) && defined(__GNUC__)
-#define _GNU_SOURCE
-#include <fenv.h>
+#  define _GNU_SOURCE
+#  include <fenv.h>
 #endif
 
 #if (defined(__APPLE__) && (defined(__i386__) || defined(__x86_64__)))
-#define OSX_SSE_FPE
-#include <xmmintrin.h>
+#  define OSX_SSE_FPE
+#  include <xmmintrin.h>
 #endif
 
 #ifdef WIN32
-#include <Windows.h>
-#include "utfconv.h"
+#  include <Windows.h>
+#  include "utfconv.h"
 #endif
 
 #include <stdlib.h>
@@ -105,30 +105,30 @@
 #include "BLI_scanfill.h" /* for BLI_setErrorCallBack, TODO, move elsewhere */
 
 #ifdef WITH_BUILDINFO_HEADER
-#define BUILD_DATE
+#  define BUILD_DATE
 #endif
 
 /* for passing information between creator and gameengine */
 #ifdef WITH_GAMEENGINE
-#include "BL_System.h"
+#  include "BL_System.h"
 #else /* dummy */
-#define SYS_SystemHandle int
+#  define SYS_SystemHandle int
 #endif
 
 #include <signal.h>
 
 #ifdef __FreeBSD__
-# include <sys/types.h>
-# include <floatingpoint.h>
-# include <sys/rtprio.h>
+#  include <sys/types.h>
+#  include <floatingpoint.h>
+#  include <sys/rtprio.h>
 #endif
 
 #ifdef WITH_BINRELOC
-#include "binreloc.h"
+#  include "binreloc.h"
 #endif
 
 #ifdef WITH_LIBMV
-#include "libmv-capi.h"
+#  include "libmv-capi.h"
 #endif
 
 /* from buildinfo.c */
@@ -149,8 +149,6 @@ static int print_help(int argc, const char **argv, void *data);
 static int print_version(int argc, const char **argv, void *data);
 
 /* for the callbacks: */
-
-extern int pluginapi_force_ref(void);  /* from blenpluginapi:pluginapi.c */
 
 #define BLEND_VERSION_STRING_FMT                                              \
 	"Blender %d.%02d (sub %d)\n",                                             \
@@ -263,7 +261,6 @@ static int print_help(int UNUSED(argc), const char **UNUSED(argv), void *data)
 	BLI_argsPrintArgDoc(ba, "--env-system-config");
 	BLI_argsPrintArgDoc(ba, "--env-system-datafiles");
 	BLI_argsPrintArgDoc(ba, "--env-system-scripts");
-	BLI_argsPrintArgDoc(ba, "--env-system-plugins");
 	BLI_argsPrintArgDoc(ba, "--env-system-python");
 	printf("\n");
 	BLI_argsPrintArgDoc(ba, "-nojoystick");
@@ -603,7 +600,7 @@ static int set_engine(int argc, const char **argv, void *data)
 static int set_image_type(int argc, const char **argv, void *data)
 {
 	bContext *C = data;
-	if (argc >= 1) {
+	if (argc > 1) {
 		const char *imtype = argv[1];
 		Scene *scene = CTX_data_scene(C);
 		if (scene) {
@@ -629,7 +626,7 @@ static int set_image_type(int argc, const char **argv, void *data)
 
 static int set_threads(int argc, const char **argv, void *UNUSED(data))
 {
-	if (argc >= 1) {
+	if (argc > 1) {
 		if (G.background) {
 			RE_set_max_threads(atoi(argv[1]));
 		}
@@ -640,6 +637,25 @@ static int set_threads(int argc, const char **argv, void *UNUSED(data))
 	}
 	else {
 		printf("\nError: you must specify a number of threads between 0 and 8 '-t  / --threads'.\n");
+		return 0;
+	}
+}
+
+static int set_verbosity(int argc, const char **argv, void *UNUSED(data))
+{
+	if (argc > 1) {
+		int level = atoi(argv[1]);
+
+#ifdef WITH_LIBMV
+		libmv_setLoggingVerbosity(level);
+#else
+		(void)level;
+#endif
+
+		return 1;
+	}
+	else {
+		printf("\nError: you must specify a verbosity level.\n");
 		return 0;
 	}
 }
@@ -795,7 +811,7 @@ static int set_scene(int argc, const char **argv, void *data)
 {
 	if (argc > 1) {
 		bContext *C = data;
-		Scene *scene = set_scene_name(CTX_data_main(C), argv[1]);
+		Scene *scene = BKE_scene_set_name(CTX_data_main(C), argv[1]);
 		if (scene) {
 			CTX_data_scene_set(C, scene);
 		}
@@ -1088,7 +1104,7 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 #endif
 
 	BLI_argsAdd(ba, 1, "-y", "--enable-autoexec", "\n\tEnable automatic python script execution" PY_ENABLE_AUTO, enable_python, NULL);
-	BLI_argsAdd(ba, 1, "-Y", "--disable-autoexec", "\n\tDisable automatic python script execution (pydrivers, pyconstraints, pynodes)" PY_DISABLE_AUTO, disable_python, NULL);
+	BLI_argsAdd(ba, 1, "-Y", "--disable-autoexec", "\n\tDisable automatic python script execution (pydrivers & startup scripts)" PY_DISABLE_AUTO, disable_python, NULL);
 
 #undef PY_ENABLE_AUTO
 #undef PY_DISABLE_AUTO
@@ -1101,7 +1117,7 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 #ifdef WITH_FFMPEG
 	BLI_argsAdd(ba, 1, NULL, "--debug-ffmpeg", "\n\tEnable debug messages from FFmpeg library", debug_mode_generic, (void *)G_DEBUG_FFMPEG);
 #endif
-	BLI_argsAdd(ba, 1, NULL, "--debug-python", "\n\tEnable debug messages for python", debug_mode_generic, (void *)G_DEBUG_FFMPEG);
+	BLI_argsAdd(ba, 1, NULL, "--debug-python", "\n\tEnable debug messages for python", debug_mode_generic, (void *)G_DEBUG_PYTHON);
 	BLI_argsAdd(ba, 1, NULL, "--debug-events", "\n\tEnable debug messages for the event system", debug_mode_generic, (void *)G_DEBUG_EVENTS);
 	BLI_argsAdd(ba, 1, NULL, "--debug-wm",     "\n\tEnable debug messages for the window manager", debug_mode_generic, (void *)G_DEBUG_WM);
 	BLI_argsAdd(ba, 1, NULL, "--debug-all",    "\n\tEnable all debug messages (excludes libmv)", debug_mode_generic, (void *)G_DEBUG_ALL);
@@ -1112,12 +1128,13 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 	BLI_argsAdd(ba, 1, NULL, "--debug-libmv", "\n\tEnable debug messages from libmv library", debug_mode_libmv, NULL);
 #endif
 
+	BLI_argsAdd(ba, 1, NULL, "--verbose", "<verbose>\n\tSet logging verbosity level.", set_verbosity, NULL);
+
 	BLI_argsAdd(ba, 1, NULL, "--factory-startup", "\n\tSkip reading the "STRINGIFY (BLENDER_STARTUP_FILE)" in the users home directory", set_factory_startup, NULL);
 
 	/* TODO, add user env vars? */
 	BLI_argsAdd(ba, 1, NULL, "--env-system-datafiles",  "\n\tSet the "STRINGIFY_ARG (BLENDER_SYSTEM_DATAFILES)" environment variable", set_env, NULL);
 	BLI_argsAdd(ba, 1, NULL, "--env-system-scripts",    "\n\tSet the "STRINGIFY_ARG (BLENDER_SYSTEM_SCRIPTS)" environment variable", set_env, NULL);
-	BLI_argsAdd(ba, 1, NULL, "--env-system-plugins",    "\n\tSet the "STRINGIFY_ARG (BLENDER_SYSTEM_PLUGINS)" environment variable", set_env, NULL);
 	BLI_argsAdd(ba, 1, NULL, "--env-system-python",     "\n\tSet the "STRINGIFY_ARG (BLENDER_SYSTEM_PYTHON)" environment variable", set_env, NULL);
 
 	/* second pass: custom window stuff */
@@ -1157,15 +1174,14 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 
 #ifdef WITH_PYTHON_MODULE
 /* allow python module to call main */
-#define main main_python_enter
+#  define main main_python_enter
 static void *evil_C = NULL;
 
-#ifdef __APPLE__
-/* environ is not available in mac shared libraries */
-#include <crt_externs.h>
+#  ifdef __APPLE__
+     /* environ is not available in mac shared libraries */
+#    include <crt_externs.h>
 char **environ = NULL;
-#endif
-
+#  endif
 #endif
 
 
@@ -1187,7 +1203,7 @@ int main(int argc, const char **argv)
 		argv[argci] = alloc_utf_8_from_16(argv_16[argci], 0);
 	}
 	LocalFree(argv_16);
-#endif	
+#endif
 
 #ifdef WITH_PYTHON_MODULE
 #ifdef __APPLE__
@@ -1237,18 +1253,13 @@ int main(int argc, const char **argv)
 	RNA_init();
 	RE_engines_init();
 
-	/* Hack - force inclusion of the plugin api functions,
-	 * see blenpluginapi:pluginapi.c
-	 */
-	pluginapi_force_ref();
-
 	init_nodesystem();
 	
 	initglobals();  /* blender.c */
 
 	IMB_init();
 
-	BLI_cb_init();
+	BLI_callback_global_init();
 
 #ifdef WITH_GAMEENGINE
 	syshandle = SYS_GetSystem();
@@ -1270,7 +1281,7 @@ int main(int argc, const char **argv)
 #endif
 
 	/* background render uses this font too */
-	BKE_font_register_builtin(datatoc_Bfont, datatoc_Bfont_size);
+	BKE_vfont_builtin_register(datatoc_Bfont, datatoc_Bfont_size);
 
 	/* Initialize ffmpeg if built in, also needed for bg mode if videos are
 	 * rendered via ffmpeg */
@@ -1322,8 +1333,7 @@ int main(int argc, const char **argv)
 	BLI_argsFree(ba);
 
 #ifdef WIN32
-	while (argci)
-	{
+	while (argci) {
 		free(argv[--argci]);
 	}
 	MEM_freeN(argv);

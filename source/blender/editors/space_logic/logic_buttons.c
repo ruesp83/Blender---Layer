@@ -104,12 +104,14 @@ static int cut_links_exec(bContext *C, wmOperator *op)
 	float mcoords[256][2];
 	int i= 0;
 	
-	RNA_BEGIN(op->ptr, itemptr, "path") {
+	RNA_BEGIN (op->ptr, itemptr, "path")
+	{
 		float loc[2];
 		
 		RNA_float_get_array(&itemptr, "loc", loc);
-		UI_view2d_region_to_view(&ar->v2d, (short)loc[0], (short)loc[1], 
-								 &mcoords[i][0], &mcoords[i][1]);
+		UI_view2d_region_to_view(&ar->v2d,
+		                         (int)loc[0], (int)loc[1],
+		                         &mcoords[i][0], &mcoords[i][1]);
 		i++;
 		if (i>= 256) break;
 	}
@@ -119,8 +121,7 @@ static int cut_links_exec(bContext *C, wmOperator *op)
 		uiBlock *block;
 		uiLinkLine *line, *nline;
 		uiBut *but;
-		for (block= ar->uiblocks.first; block; block= block->next)
-		{
+		for (block= ar->uiblocks.first; block; block= block->next) {
 			but= block->buttons.first;
 			while (but) {
 				if (but->type==LINK && but->link) {

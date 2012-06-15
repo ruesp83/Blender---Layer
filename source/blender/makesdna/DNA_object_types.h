@@ -142,7 +142,7 @@ typedef struct Object {
 	
 	/* rot en drot have to be together! (transform('r' en 's')) */
 	float loc[3], dloc[3], orig[3];
-	float size[3];              /* scale infact */
+	float size[3];              /* scale in fact */
 	float dsize[3] DNA_DEPRECATED ; /* DEPRECATED, 2.60 and older only */
 	float dscale[3];            /* ack!, changing */
 	float rot[3], drot[3];		/* euler rotation */
@@ -153,6 +153,9 @@ typedef struct Object {
 	float parentinv[4][4]; /* inverse result of parent, so that object doesn't 'stick' to parent */
 	float constinv[4][4]; /* inverse result of constraints. doesn't include effect of parent or object local transform */
 	float imat[4][4];	/* inverse matrix of 'obmat' for any other use than rendering! */
+	                    /* note: this isn't assured to be valid as with 'obmat',
+	                     *       before using this value you should do...
+	                     *       invert_m4_m4(ob->imat, ob->obmat); */
 	
 	/* Previously 'imat' was used at render time, but as other places use it too
 	 * the interactive ui of 2.5 creates problems. So now only 'imat_ren' should
@@ -198,9 +201,15 @@ typedef struct Object {
 	float rdamping, sizefac;
 	float margin;
 	float max_vel; /* clamp the maximum velocity 0.0 is disabled */
-	float min_vel; /* clamp the maximum velocity 0.0 is disabled */
+	float min_vel; /* clamp the minimum velocity 0.0 is disabled */
 	float m_contactProcessingThreshold;
 	float obstacleRad;
+	
+	/* "Character" physics properties */
+	float step_height;
+	float jump_speed;
+	float fall_speed;
+	char pad1[4];
 
 	short rotmode;		/* rotation mode - uses defines set out in DNA_action_types.h for PoseChannel rotations... */
 
@@ -292,6 +301,15 @@ typedef struct DupliObject {
 
 	short type; /* from Object.transflag */
 	char no_draw, animated;
+
+	/* Lowest-level particle index.
+	 * Note: This is needed for particle info in shaders.
+	 * Otherwise dupli groups in particle systems would override the
+	 * index value from higher dupli levels. Would be nice to have full generic access
+	 * to all dupli levels somehow, but for now this should cover most use-cases.
+	 */
+	int particle_index;
+	int pad;
 } DupliObject;
 
 /* **************** OBJECT ********************* */
@@ -319,8 +337,12 @@ typedef struct DupliObject {
 #define	OB_ARMATURE		25
 
 /* check if the object type supports materials */
-#define OB_TYPE_SUPPORT_MATERIAL(_type) ((_type)  >= OB_MESH && (_type) <= OB_MBALL)
-#define OB_TYPE_SUPPORT_VGROUP(_type)   (ELEM(_type, OB_MESH, OB_LATTICE))
+#define OB_TYPE_SUPPORT_MATERIAL(_type) \
+	((_type)  >= OB_MESH && (_type) <= OB_MBALL)
+#define OB_TYPE_SUPPORT_VGROUP(_type) \
+	(ELEM(_type, OB_MESH, OB_LATTICE))
+#define OB_TYPE_SUPPORT_EDITMODE(_type) \
+	(ELEM7(_type, OB_MESH, OB_FONT, OB_CURVE, OB_SURF, OB_MBALL, OB_LATTICE, OB_ARMATURE))
 
 /* partype: first 4 bits: type */
 #define PARTYPE			15
@@ -476,6 +498,7 @@ typedef struct DupliObject {
 #define OB_SENSOR		0x80000
 #define OB_NAVMESH		0x100000
 #define OB_HASOBSTACLE	0x200000
+#define OB_CHARACTER		0x400000
 
 /* ob->gameflag2 */
 #define OB_NEVER_DO_ACTIVITY_CULLING	1
@@ -497,6 +520,7 @@ typedef struct DupliObject {
 #define OB_BODY_TYPE_OCCLUDER		5
 #define OB_BODY_TYPE_SENSOR			6
 #define OB_BODY_TYPE_NAVMESH		7
+#define OB_BODY_TYPE_CHARACTER			8
 
 /* ob->scavisflag */
 #define OB_VIS_SENS		1

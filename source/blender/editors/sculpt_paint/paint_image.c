@@ -1,8 +1,4 @@
 /*
- * imagepaint.c
- *
- * Functions to paint images in 2D and 3D.
- * 
  * ***** BEGIN GPL LICENSE BLOCK *****
  *
  * This program is free software; you can redistribute it and/or
@@ -30,8 +26,8 @@
 
 /** \file blender/editors/sculpt_paint/paint_image.c
  *  \ingroup edsculpt
+ *  \brief Functions to paint images in 2D and 3D.
  */
-
 
 #include <float.h>
 #include <string.h>
@@ -118,24 +114,24 @@
 	(c)[0]= FTOCHAR((f)[0]);                                                  \
 	(c)[1]= FTOCHAR((f)[1]);                                                  \
 	(c)[2]= FTOCHAR((f)[2]);                                                  \
-}
+} (void)0
 #define IMAPAINT_FLOAT_RGBA_TO_CHAR(c, f)  {                                  \
 	(c)[0]= FTOCHAR((f)[0]);                                                  \
 	(c)[1]= FTOCHAR((f)[1]);                                                  \
 	(c)[2]= FTOCHAR((f)[2]);                                                  \
 	(c)[3]= FTOCHAR((f)[3]);                                                  \
-}
+} (void)0
 #define IMAPAINT_CHAR_RGB_TO_FLOAT(f, c)  {                                   \
 	(f)[0]= IMAPAINT_CHAR_TO_FLOAT((c)[0]);                                   \
 	(f)[1]= IMAPAINT_CHAR_TO_FLOAT((c)[1]);                                   \
 	(f)[2]= IMAPAINT_CHAR_TO_FLOAT((c)[2]);                                   \
-}
+} (void)0
 #define IMAPAINT_CHAR_RGBA_TO_FLOAT(f, c)  {                                  \
 	(f)[0]= IMAPAINT_CHAR_TO_FLOAT((c)[0]);                                   \
 	(f)[1]= IMAPAINT_CHAR_TO_FLOAT((c)[1]);                                   \
 	(f)[2]= IMAPAINT_CHAR_TO_FLOAT((c)[2]);                                   \
 	(f)[3]= IMAPAINT_CHAR_TO_FLOAT((c)[3]);                                   \
-}
+} (void)0
 
 #define IMAPAINT_FLOAT_RGB_COPY(a, b) copy_v3_v3(a, b)
 
@@ -314,7 +310,7 @@ typedef struct ProjPaintState {
 	short do_occlude;               /* Use raytraced occlusion? - ortherwise will paint right through to the back*/
 	short do_backfacecull;          /* ignore faces with normals pointing away, skips a lot of raycasts if your normals are correctly flipped */
 	short do_mask_normal;           /* mask out pixels based on their normals */
-	short do_new_shading_nodes;     /* cache scene_use_new_shading_nodes value */
+	short do_new_shading_nodes;     /* cache BKE_scene_use_new_shading_nodes value */
 	float normal_angle;             /* what angle to mask at*/
 	float normal_angle_inner;
 	float normal_angle_range;       /* difference between normal_angle and normal_angle_inner, for easy access */
@@ -530,7 +526,7 @@ static Image *imapaint_face_image(const ImagePaintState *s, int face_index)
 {
 	Image *ima;
 
-	if (scene_use_new_shading_nodes(s->scene)) {
+	if (BKE_scene_use_new_shading_nodes(s->scene)) {
 		MFace *mf = &s->dm_mface[face_index];
 		ED_object_get_active_image(s->ob, mf->mat_nr + 1, &ima, NULL, NULL);
 	}
@@ -546,7 +542,7 @@ static Image *project_paint_face_image(const ProjPaintState *ps, MTFace *dm_mtfa
 {
 	Image *ima;
 
-	if (ps->do_new_shading_nodes) { /* cached scene_use_new_shading_nodes result */
+	if (ps->do_new_shading_nodes) { /* cached BKE_scene_use_new_shading_nodes result */
 		MFace *mf = ps->dm_mface + face_index;
 		ED_object_get_active_image(ps->ob, mf->mat_nr + 1, &ima, NULL, NULL);
 	}
@@ -1461,7 +1457,7 @@ static float project_paint_uvpixel_mask(
 	
 	// This only works when the opacity dosnt change while painting, stylus pressure messes with this
 	// so don't use it.
-	// if (ps->is_airbrush==0) mask *= brush_alpha(ps->brush);
+	// if (ps->is_airbrush==0) mask *= BKE_brush_alpha_get(ps->brush);
 	
 	return mask;
 }
@@ -1551,7 +1547,7 @@ static ProjPixel *project_paint_uvpixel_init(
 					if (ibuf_other->rect_float) { /* float to char */
 						float rgba[4];
 						project_face_pixel(tf_other, ibuf_other, w, side, NULL, rgba);
-						IMAPAINT_FLOAT_RGBA_TO_CHAR(((ProjPixelClone *)projPixel)->clonepx.ch, rgba)
+						IMAPAINT_FLOAT_RGBA_TO_CHAR(((ProjPixelClone *)projPixel)->clonepx.ch, rgba);
 					}
 					else { /* char to char */
 						project_face_pixel(tf_other, ibuf_other, w, side, ((ProjPixelClone *)projPixel)->clonepx.ch, NULL);
@@ -2135,7 +2131,9 @@ static void project_bucket_clip_face(
 		
 		/* remove doubles */
 		/* first/last check */
-		if (fabsf(isectVCosSS[0][0] - isectVCosSS[(*tot) - 1][0]) < PROJ_GEOM_TOLERANCE &&  fabsf(isectVCosSS[0][1] - isectVCosSS[(*tot) - 1][1]) < PROJ_GEOM_TOLERANCE) {
+		if (fabsf(isectVCosSS[0][0] - isectVCosSS[(*tot) - 1][0]) < PROJ_GEOM_TOLERANCE &&
+		    fabsf(isectVCosSS[0][1] - isectVCosSS[(*tot) - 1][1]) < PROJ_GEOM_TOLERANCE)
+		{
 			(*tot)--;
 		}
 		
@@ -2244,11 +2242,11 @@ static void project_bucket_clip_face(
  *         
  *         i = l
  *         while i < len(me.verts):
- *             ii = i+1
- *             if ii==len(me.verts):
+ *             ii = i + 1
+ *             if ii == len(me.verts):
  *                 ii = l
  *             me.edges.extend([i, ii])
- *             i+=1
+ *             i += 1
  * 
  * if __name__ == '__main__':
  *     main()
@@ -2344,7 +2342,7 @@ static void project_paint_face_init(const ProjPaintState *ps, const int thread_i
 	
 	
 	/* Use tf_uv_pxoffset instead of tf->uv so we can offset the UV half a pixel
-	 * this is done so we can avoid offseting all the pixels by 0.5 which causes
+	 * this is done so we can avoid offsetting all the pixels by 0.5 which causes
 	 * problems when wrapping negative coords */
 	xhalfpx = (0.5f +   (PROJ_GEOM_TOLERANCE / 3.0f)   ) / ibuf_xf;
 	yhalfpx = (0.5f +   (PROJ_GEOM_TOLERANCE / 4.0f)   ) / ibuf_yf;
@@ -2437,8 +2435,8 @@ static void project_paint_face_init(const ProjPaintState *ps, const int thread_i
 					
 					/* Note about IsectPoly2Df_twoside, checking the face or uv flipping doesnt work,
 					 * could check the poly direction but better to do this */
-					if ((do_backfacecull          && IsectPoly2Df(uv, uv_clip, uv_clip_tot)) ||
-					    (do_backfacecull == 0     && IsectPoly2Df_twoside(uv, uv_clip, uv_clip_tot)))
+					if ((do_backfacecull == TRUE  && IsectPoly2Df(uv, uv_clip, uv_clip_tot)) ||
+					    (do_backfacecull == FALSE && IsectPoly2Df_twoside(uv, uv_clip, uv_clip_tot)))
 					{
 						
 						has_x_isect = has_isect = 1;
@@ -2457,7 +2455,9 @@ static void project_paint_face_init(const ProjPaintState *ps, const int thread_i
 						/* Is this UV visible from the view? - raytrace */
 						/* project_paint_PickFace is less complex, use for testing */
 						//if (project_paint_PickFace(ps, pixelScreenCo, w, &side) == face_index) {
-						if (ps->do_occlude == 0 || !project_bucket_point_occluded(ps, bucketFaceNodes, face_index, pixelScreenCo)) {
+						if ((ps->do_occlude == FALSE) ||
+						    !project_bucket_point_occluded(ps, bucketFaceNodes, face_index, pixelScreenCo))
+						{
 							
 							mask = project_paint_uvpixel_mask(ps, face_index, side, w);
 							
@@ -2621,7 +2621,7 @@ static void project_paint_face_init(const ProjPaintState *ps, const int thread_i
 										//fac = line_point_factor_v2(uv, uv_seam_quad[0], uv_seam_quad[1]);
 										
 										fac = line_point_factor_v2(uv, seam_subsection[0], seam_subsection[1]);
-										if (fac < 0.0f)      { copy_v3_v3(pixelScreenCo, edge_verts_inset_clip[0]); }
+										if      (fac < 0.0f) { copy_v3_v3(pixelScreenCo, edge_verts_inset_clip[0]); }
 										else if (fac > 1.0f) { copy_v3_v3(pixelScreenCo, edge_verts_inset_clip[1]); }
 										else                 { interp_v3_v3v3(pixelScreenCo, edge_verts_inset_clip[0], edge_verts_inset_clip[1], fac); }
 										
@@ -2633,8 +2633,9 @@ static void project_paint_face_init(const ProjPaintState *ps, const int thread_i
 											pixelScreenCo[2] = pixelScreenCo[2] / pixelScreenCo[3]; /* Use the depth for bucket point occlusion */
 										}
 										
-										if (ps->do_occlude == 0 || !project_bucket_point_occluded(ps, bucketFaceNodes, face_index, pixelScreenCo)) {
-											
+										if ((ps->do_occlude == FALSE) ||
+										    !project_bucket_point_occluded(ps, bucketFaceNodes, face_index, pixelScreenCo))
+										{
 											/* Only bother calculating the weights if we intersect */
 											if (ps->do_mask_normal || ps->dm_mtface_clone) {
 #if 1
@@ -2957,7 +2958,7 @@ static void project_paint_begin(ProjPaintState *ps)
 	
 	MemArena *arena; /* at the moment this is just ps->arena_mt[0], but use this to show were not multithreading */
 
-	const int diameter = 2 * brush_size(ps->scene, ps->brush);
+	const int diameter = 2 * BKE_brush_size_get(ps->scene, ps->brush);
 	
 	/* ---- end defines ---- */
 	
@@ -3001,7 +3002,7 @@ static void project_paint_begin(ProjPaintState *ps)
 	
 	
 	/* Note, use the original mesh for getting the clone and mask layer index
-	* this avoids re-generating the derived mesh just to get the new index */
+	 * this avoids re-generating the derived mesh just to get the new index */
 	if (ps->do_layer_clone) {
 		//int layer_num = CustomData_get_clone_layer(&ps->dm->faceData, CD_MTFACE);
 		int layer_num = CustomData_get_clone_layer(&((Mesh *)ps->ob->data)->fdata, CD_MTFACE);
@@ -3009,7 +3010,7 @@ static void project_paint_begin(ProjPaintState *ps)
 			ps->dm_mtface_clone = CustomData_get_layer_n(&ps->dm->faceData, CD_MTFACE, layer_num);
 		
 		if (ps->dm_mtface_clone == NULL || ps->dm_mtface_clone == ps->dm_mtface) {
-			ps->do_layer_clone = 0;
+			ps->do_layer_clone = FALSE;
 			ps->dm_mtface_clone = NULL;
 			printf("ACK!\n");
 		}
@@ -3022,7 +3023,7 @@ static void project_paint_begin(ProjPaintState *ps)
 			ps->dm_mtface_stencil = CustomData_get_layer_n(&ps->dm->faceData, CD_MTFACE, layer_num);
 		
 		if (ps->dm_mtface_stencil == NULL || ps->dm_mtface_stencil == ps->dm_mtface) {
-			ps->do_layer_stencil = 0;
+			ps->do_layer_stencil = FALSE;
 			ps->dm_mtface_stencil = NULL;
 		}
 	}
@@ -3095,10 +3096,10 @@ static void project_paint_begin(ProjPaintState *ps)
 				invert_m4_m4(viewmat, viewinv);
 
 				/* window matrix, clipping and ortho */
-				camera_params_init(&params);
-				camera_params_from_object(&params, cam_ob);
-				camera_params_compute_viewplane(&params, ps->winx, ps->winy, 1.0f, 1.0f);
-				camera_params_compute_matrix(&params);
+				BKE_camera_params_init(&params);
+				BKE_camera_params_from_object(&params, cam_ob);
+				BKE_camera_params_compute_viewplane(&params, ps->winx, ps->winy, 1.0f, 1.0f);
+				BKE_camera_params_compute_matrix(&params);
 
 				copy_m4_m4(winmat, params.winmat);
 				ps->clipsta = params.clipsta;
@@ -3601,7 +3602,7 @@ static int project_bucket_iter_init(ProjPaintState *ps, const float mval_f[2])
 {
 	if (ps->source == PROJ_SRC_VIEW) {
 		float min_brush[2], max_brush[2];
-		const float radius = (float)brush_size(ps->scene, ps->brush);
+		const float radius = (float)BKE_brush_size_get(ps->scene, ps->brush);
 
 		/* so we don't have a bucket bounds that is way too small to paint into */
 		// if (radius < 1.0f) radius = 1.0f; // this doesn't work yet :/
@@ -3639,7 +3640,7 @@ static int project_bucket_iter_init(ProjPaintState *ps, const float mval_f[2])
 
 static int project_bucket_iter_next(ProjPaintState *ps, int *bucket_index, rctf *bucket_bounds, const float mval[2])
 {
-	const int diameter = 2 * brush_size(ps->scene, ps->brush);
+	const int diameter = 2 * BKE_brush_size_get(ps->scene, ps->brush);
 
 	if (ps->thread_tot > 1)
 		BLI_lock_thread(LOCK_CUSTOM1);
@@ -3773,7 +3774,7 @@ static void do_projectpaint_smear_f(ProjPaintState *ps, ProjPixel *projPixel, fl
 	BLI_linklist_prepend_arena(smearPixels_f, (void *)projPixel, smearArena);
 }
 
-static void do_projectpaint_draw(ProjPaintState *ps, ProjPixel *projPixel, float *rgba, float alpha, float mask)
+static void do_projectpaint_draw(ProjPaintState *ps, ProjPixel *projPixel, const float rgba[4], float alpha, float mask)
 {
 	unsigned char rgba_ub[4];
 	
@@ -3797,7 +3798,7 @@ static void do_projectpaint_draw(ProjPaintState *ps, ProjPixel *projPixel, float
 	}
 }
 
-static void do_projectpaint_draw_f(ProjPaintState *ps, ProjPixel *projPixel, float *rgba, float alpha, float mask, int use_color_correction)
+static void do_projectpaint_draw_f(ProjPaintState *ps, ProjPixel *projPixel, float rgba[4], float alpha, float mask, int use_color_correction)
 {
 	if (ps->is_texbrush) {
 		/* rgba already holds a texture result here from higher level function */
@@ -3854,7 +3855,7 @@ static void *do_projectpaint_thread(void *ph_v)
 	float falloff;
 	int bucket_index;
 	int is_floatbuf = 0;
-	int use_color_correction = 0;
+	int use_color_correction = FALSE;
 	const short tool =  ps->tool;
 	rctf bucket_bounds;
 	
@@ -3863,7 +3864,7 @@ static void *do_projectpaint_thread(void *ph_v)
 	float co[2];
 	float mask = 1.0f; /* airbrush wont use mask */
 	unsigned short mask_short;
-	const float radius = (float)brush_size(ps->scene, ps->brush);
+	const float radius = (float)BKE_brush_size_get(ps->scene, ps->brush);
 	const float radius_squared = radius * radius; /* avoid a square root with every dist comparison */
 	
 	short lock_alpha = ELEM(ps->brush->blend, IMB_BLEND_ERASE_ALPHA, IMB_BLEND_ADD_ALPHA) ? 0 : ps->brush->flag & BRUSH_LOCK_ALPHA;
@@ -3917,12 +3918,12 @@ static void *do_projectpaint_thread(void *ph_v)
 				if (dist_nosqrt <= radius_squared) {
 					dist = sqrtf(dist_nosqrt);
 
-					falloff = brush_curve_strength_clamp(ps->brush, dist, radius);
+					falloff = BKE_brush_curve_strength_clamp(ps->brush, dist, radius);
 
 					if (falloff > 0.0f) {
 						if (ps->is_texbrush) {
 							/* note, for clone and smear, we only use the alpha, could be a special function */
-							brush_sample_tex(ps->scene, ps->brush, projPixel->projCoSS, rgba, thread_index);
+							BKE_brush_sample_tex(ps->scene, ps->brush, projPixel->projCoSS, rgba, thread_index);
 							alpha = rgba[3];
 						}
 						else {
@@ -3931,7 +3932,7 @@ static void *do_projectpaint_thread(void *ph_v)
 						
 						if (ps->is_airbrush) {
 							/* for an aurbrush there is no real mask, so just multiply the alpha by it */
-							alpha *= falloff * brush_alpha(ps->scene, ps->brush);
+							alpha *= falloff * BKE_brush_alpha_get(ps->scene, ps->brush);
 							mask = ((float)projPixel->mask) / 65535.0f;
 						}
 						else {
@@ -3939,7 +3940,7 @@ static void *do_projectpaint_thread(void *ph_v)
 							falloff = 1.0f - falloff;
 							falloff = 1.0f - (falloff * falloff);
 							
-							mask_short = (unsigned short)(projPixel->mask * (brush_alpha(ps->scene, ps->brush) * falloff));
+							mask_short = (unsigned short)(projPixel->mask * (BKE_brush_alpha_get(ps->scene, ps->brush) * falloff));
 							if (mask_short > projPixel->mask_max) {
 								mask = ((float)mask_short) / 65535.0f;
 								projPixel->mask_max = mask_short;
@@ -4105,9 +4106,9 @@ static int project_paint_sub_stroke(ProjPaintState *ps, BrushPainter *painter, c
 	pos[1] = (float)(mval_i[1]);
 	
 	// we may want to use this later 
-	// brush_painter_require_imbuf(painter, ((ibuf->rect_float)? 1: 0), 0, 0);
+	// BKE_brush_painter_require_imbuf(painter, ((ibuf->rect_float)? 1: 0), 0, 0);
 	
-	if (brush_painter_paint(painter, project_paint_op, pos, time, pressure, ps, 0)) {
+	if (BKE_brush_painter_paint(painter, project_paint_op, pos, time, pressure, ps, 0)) {
 		return 1;
 	}
 	else return 0;
@@ -4194,9 +4195,10 @@ static void imapaint_image_update(SpaceImage *sima, Image *image, ImBuf *ibuf, s
 
 /* Image Paint Operations */
 
-static void imapaint_ibuf_get_set_rgb(ImBuf *ibuf, int x, int y, short torus, short set, float *rgb)
+/* keep these functions in sync */
+static void imapaint_ibuf_rgb_get(ImBuf *ibuf, int x, int y, const short is_torus, float r_rgb[3])
 {
-	if (torus) {
+	if (is_torus) {
 		x %= ibuf->x;
 		if (x < 0) x += ibuf->x;
 		y %= ibuf->y;
@@ -4205,23 +4207,29 @@ static void imapaint_ibuf_get_set_rgb(ImBuf *ibuf, int x, int y, short torus, sh
 
 	if (ibuf->rect_float) {
 		float *rrgbf = ibuf->rect_float + (ibuf->x * y + x) * 4;
-
-		if (set) {
-			IMAPAINT_FLOAT_RGB_COPY(rrgbf, rgb);
-		}
-		else {
-			IMAPAINT_FLOAT_RGB_COPY(rgb, rrgbf);
-		}
+		IMAPAINT_FLOAT_RGB_COPY(r_rgb, rrgbf);
 	}
 	else {
 		char *rrgb = (char *)ibuf->rect + (ibuf->x * y + x) * 4;
+		IMAPAINT_CHAR_RGB_TO_FLOAT(r_rgb, rrgb);
+	}
+}
+static void imapaint_ibuf_rgb_set(ImBuf *ibuf, int x, int y, const short is_torus, const float rgb[3])
+{
+	if (is_torus) {
+		x %= ibuf->x;
+		if (x < 0) x += ibuf->x;
+		y %= ibuf->y;
+		if (y < 0) y += ibuf->y;
+	}
 
-		if (set) {
-			IMAPAINT_FLOAT_RGB_TO_CHAR(rrgb, rgb)
-		}
-		else {
-			IMAPAINT_CHAR_RGB_TO_FLOAT(rgb, rrgb)
-		}
+	if (ibuf->rect_float) {
+		float *rrgbf = ibuf->rect_float + (ibuf->x * y + x) * 4;
+		IMAPAINT_FLOAT_RGB_COPY(rrgbf, rgb);
+	}
+	else {
+		char *rrgb = (char *)ibuf->rect + (ibuf->x * y + x) * 4;
+		IMAPAINT_FLOAT_RGB_TO_CHAR(rrgb, rgb);
 	}
 }
 
@@ -4231,10 +4239,12 @@ static int imapaint_ibuf_add_if(ImBuf *ibuf, unsigned int x, unsigned int y, flo
 
 	// XXX: signed unsigned mismatch
 	if ((x >= (unsigned int)(ibuf->x)) || (y >= (unsigned int)(ibuf->y))) {
-		if (torus) imapaint_ibuf_get_set_rgb(ibuf, x, y, 1, 0, inrgb);
+		if (torus) imapaint_ibuf_rgb_get(ibuf, x, y, 1, inrgb);
 		else return 0;
 	}
-	else imapaint_ibuf_get_set_rgb(ibuf, x, y, 0, 0, inrgb);
+	else {
+		imapaint_ibuf_rgb_get(ibuf, x, y, 0, inrgb);
+	}
 
 	outrgb[0] += inrgb[0];
 	outrgb[1] += inrgb[1];
@@ -4243,7 +4253,7 @@ static int imapaint_ibuf_add_if(ImBuf *ibuf, unsigned int x, unsigned int y, flo
 	return 1;
 }
 
-static void imapaint_lift_soften(ImBuf *ibuf, ImBuf *ibufb, int *pos, short torus)
+static void imapaint_lift_soften(ImBuf *ibuf, ImBuf *ibufb, int *pos, const short is_torus)
 {
 	int x, y, count, xi, yi, xo, yo;
 	int out_off[2], in_off[2], dim[2];
@@ -4255,7 +4265,7 @@ static void imapaint_lift_soften(ImBuf *ibuf, ImBuf *ibufb, int *pos, short toru
 	in_off[1] = pos[1];
 	out_off[0] = out_off[1] = 0;
 
-	if (!torus) {
+	if (!is_torus) {
 		IMB_rectclip(ibuf, ibufb, &in_off[0], &in_off[1], &out_off[0],
 		             &out_off[1], &dim[0], &dim[1]);
 
@@ -4270,27 +4280,25 @@ static void imapaint_lift_soften(ImBuf *ibuf, ImBuf *ibufb, int *pos, short toru
 			yi = in_off[1] + y;
 
 			count = 1;
-			imapaint_ibuf_get_set_rgb(ibuf, xi, yi, torus, 0, outrgb);
+			imapaint_ibuf_rgb_get(ibuf, xi, yi, is_torus, outrgb);
 
-			count += imapaint_ibuf_add_if(ibuf, xi - 1, yi - 1, outrgb, torus);
-			count += imapaint_ibuf_add_if(ibuf, xi - 1, yi, outrgb, torus);
-			count += imapaint_ibuf_add_if(ibuf, xi - 1, yi + 1, outrgb, torus);
+			count += imapaint_ibuf_add_if(ibuf, xi - 1, yi - 1, outrgb, is_torus);
+			count += imapaint_ibuf_add_if(ibuf, xi - 1, yi, outrgb, is_torus);
+			count += imapaint_ibuf_add_if(ibuf, xi - 1, yi + 1, outrgb, is_torus);
 
-			count += imapaint_ibuf_add_if(ibuf, xi, yi - 1, outrgb, torus);
-			count += imapaint_ibuf_add_if(ibuf, xi, yi + 1, outrgb, torus);
+			count += imapaint_ibuf_add_if(ibuf, xi, yi - 1, outrgb, is_torus);
+			count += imapaint_ibuf_add_if(ibuf, xi, yi + 1, outrgb, is_torus);
 
-			count += imapaint_ibuf_add_if(ibuf, xi + 1, yi - 1, outrgb, torus);
-			count += imapaint_ibuf_add_if(ibuf, xi + 1, yi, outrgb, torus);
-			count += imapaint_ibuf_add_if(ibuf, xi + 1, yi + 1, outrgb, torus);
+			count += imapaint_ibuf_add_if(ibuf, xi + 1, yi - 1, outrgb, is_torus);
+			count += imapaint_ibuf_add_if(ibuf, xi + 1, yi, outrgb, is_torus);
+			count += imapaint_ibuf_add_if(ibuf, xi + 1, yi + 1, outrgb, is_torus);
 
-			outrgb[0] /= count;
-			outrgb[1] /= count;
-			outrgb[2] /= count;
+			mul_v3_fl(outrgb, 1.0f / (float)count);
 
 			/* write into brush buffer */
 			xo = out_off[0] + x;
 			yo = out_off[1] + y;
-			imapaint_ibuf_get_set_rgb(ibufb, xo, yo, 0, 1, outrgb);
+			imapaint_ibuf_rgb_set(ibufb, xo, yo, 0, outrgb);
 		}
 	}
 }
@@ -4529,9 +4537,9 @@ static int imapaint_paint_sub_stroke(ImagePaintState *s, BrushPainter *painter, 
 	pos[0] = uv[0] * ibuf->x;
 	pos[1] = uv[1] * ibuf->y;
 
-	brush_painter_require_imbuf(painter, ((ibuf->rect_float) ? 1 : 0), 0, 0);
+	BKE_brush_painter_require_imbuf(painter, ((ibuf->rect_float) ? 1 : 0), 0, 0);
 
-	if (brush_painter_paint(painter, imapaint_paint_op, pos, time, pressure, s, ibuf->profile == IB_PROFILE_LINEAR_RGB)) {
+	if (BKE_brush_painter_paint(painter, imapaint_paint_op, pos, time, pressure, s, ibuf->profile == IB_PROFILE_LINEAR_RGB)) {
 		if (update)
 			imapaint_image_update(s->sima, image, ibuf, texpaint);
 		return 1;
@@ -4584,7 +4592,7 @@ static int imapaint_paint_stroke(ViewContext *vc, ImagePaintState *s, BrushPaint
 			redraw |= imapaint_paint_sub_stroke(s, painter, s->image, texpaint,
 			                                    fwuv, time, 1, pressure);
 			imapaint_clear_partial_redraw();
-			brush_painter_break_stroke(painter);
+			BKE_brush_painter_break_stroke(painter);
 		}
 
 		/* set new canvas */
@@ -4779,7 +4787,7 @@ static void project_state_init(bContext *C, Object *ob, ProjPaintState *ps)
 	ps->do_backfacecull = (settings->imapaint.flag & IMAGEPAINT_PROJECT_BACKFACE) ? 0 : 1;
 	ps->do_occlude = (settings->imapaint.flag & IMAGEPAINT_PROJECT_XRAY) ? 0 : 1;
 	ps->do_mask_normal = (settings->imapaint.flag & IMAGEPAINT_PROJECT_FLAT) ? 0 : 1;
-	ps->do_new_shading_nodes = scene_use_new_shading_nodes(scene); /* only cache the value */
+	ps->do_new_shading_nodes = BKE_scene_use_new_shading_nodes(scene); /* only cache the value */
 
 	if (ps->tool == PAINT_TOOL_CLONE)
 		ps->do_layer_clone = (settings->imapaint.flag & IMAGEPAINT_PROJECT_LAYER_CLONE);
@@ -4805,7 +4813,7 @@ static void project_state_init(bContext *C, Object *ob, ProjPaintState *ps)
 	ps->normal_angle_range = ps->normal_angle - ps->normal_angle_inner;
 
 	if (ps->normal_angle_range <= 0.0f)
-		ps->do_mask_normal = 0;  /* no need to do blending */
+		ps->do_mask_normal = FALSE;  /* no need to do blending */
 }
 
 static void paint_brush_init_tex(Brush *brush)
@@ -4858,11 +4866,11 @@ static int texture_paint_init(bContext *C, wmOperator *op)
 	if (pop->mode == PAINT_MODE_3D && (pop->s.tool == PAINT_TOOL_CLONE))
 		pop->s.tool = PAINT_TOOL_DRAW;
 	pop->s.blend = brush->blend;
-	pop->orig_brush_size = brush_size(scene, brush);
+	pop->orig_brush_size = BKE_brush_size_get(scene, brush);
 
 	if (pop->mode != PAINT_MODE_2D) {
 		Object *ob = OBACT;
-		Mesh *me = get_mesh(ob);
+		Mesh *me = BKE_mesh_from_object(ob);
 
 		if (!me) {
 			return 0;
@@ -4924,8 +4932,8 @@ static int texture_paint_init(bContext *C, wmOperator *op)
 			return 0;
 
 		/* Don't allow brush size below 2 */
-		if (brush_size(scene, brush) < 2)
-			brush_set_size(scene, brush, 2);
+		if (BKE_brush_size_get(scene, brush) < 2)
+			BKE_brush_size_set(scene, brush, 2);
 
 		/* allocate and initialize spacial data structures */
 		project_paint_begin(&pop->ps);
@@ -4939,7 +4947,7 @@ static int texture_paint_init(bContext *C, wmOperator *op)
 	                      image_undo_restore, image_undo_free);
 
 	/* create painter */
-	pop->painter = brush_painter_new(scene, pop->s.brush);
+	pop->painter = BKE_brush_painter_new(scene, pop->s.brush);
 
 	return 1;
 }
@@ -5006,10 +5014,10 @@ static void paint_exit(bContext *C, wmOperator *op)
 	
 	settings->imapaint.flag &= ~IMAGEPAINT_DRAWING;
 	imapaint_canvas_free(&pop->s);
-	brush_painter_free(pop->painter);
+	BKE_brush_painter_free(pop->painter);
 
 	if (pop->mode == PAINT_MODE_3D_PROJECT) {
-		brush_set_size(scene, pop->ps.brush, pop->orig_brush_size);
+		BKE_brush_size_set(scene, pop->ps.brush, pop->orig_brush_size);
 		paint_brush_exit_tex(pop->ps.brush);
 		
 		project_paint_end(&pop->ps);
@@ -5038,7 +5046,8 @@ static int paint_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	RNA_BEGIN(op->ptr, itemptr, "stroke") {
+	RNA_BEGIN (op->ptr, itemptr, "stroke")
+	{
 		paint_apply(C, op, &itemptr);
 	}
 	RNA_END;
@@ -5082,13 +5091,13 @@ static void paint_apply_event(bContext *C, wmOperator *op, wmEvent *event)
 
 		/* special exception here for too high pressure values on first touch in
 		 * windows for some tablets, then we just skip first touch ..  */
-		if (tablet && (pressure >= 0.99f) && ((pop->s.brush->flag & BRUSH_SPACING_PRESSURE) || brush_use_alpha_pressure(scene, pop->s.brush) || brush_use_size_pressure(scene, pop->s.brush)))
+		if (tablet && (pressure >= 0.99f) && ((pop->s.brush->flag & BRUSH_SPACING_PRESSURE) || BKE_brush_use_alpha_pressure(scene, pop->s.brush) || BKE_brush_use_size_pressure(scene, pop->s.brush)))
 			return;
 
 		/* This can be removed once fixed properly in
-		 * brush_painter_paint(BrushPainter *painter, BrushFunc func, float *pos, double time, float pressure, void *user) 
+		 * BKE_brush_painter_paint(BrushPainter *painter, BrushFunc func, float *pos, double time, float pressure, void *user) 
 		 * at zero pressure we should do nothing 1/2^12 is .0002 which is the sensitivity of the most sensitive pen tablet available */
-		if (tablet && (pressure < .0002f) && ((pop->s.brush->flag & BRUSH_SPACING_PRESSURE) || brush_use_alpha_pressure(scene, pop->s.brush) || brush_use_size_pressure(scene, pop->s.brush)))
+		if (tablet && (pressure < .0002f) && ((pop->s.brush->flag & BRUSH_SPACING_PRESSURE) || BKE_brush_use_alpha_pressure(scene, pop->s.brush) || BKE_brush_use_size_pressure(scene, pop->s.brush)))
 			return;
 	
 	}
@@ -5163,6 +5172,7 @@ void PAINT_OT_image_paint(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Image Paint";
 	ot->idname = "PAINT_OT_image_paint";
+	ot->description = "Paint a stroke into the image";
 	
 	/* api callbacks */
 	ot->exec = paint_exec;
@@ -5205,20 +5215,20 @@ static void brush_drawcursor(bContext *C, int x, int y, void *UNUSED(customdata)
 
 	Scene *scene = CTX_data_scene(C);
 	//Brush *brush= image_paint_brush(C);
-	Paint *paint = paint_get_active(scene);
+	Paint *paint = paint_get_active_from_context(C);
 	Brush *brush = paint_brush(paint);
 
 	if (paint && brush && paint->flags & PAINT_SHOW_BRUSH) {
 		ToolSettings *ts;
 		float zoomx, zoomy;
-		const float size = (float)brush_size(scene, brush);
+		const float size = (float)BKE_brush_size_get(scene, brush);
 		short use_zoom;
 		float pixel_size;
 		float alpha = 0.5f;
 
 		ts = scene->toolsettings;
-		use_zoom = get_imapaint_zoom(C, &zoomx, &zoomy)
-		           && !(ts->use_uv_sculpt && (scene->basact->object->mode == OB_MODE_EDIT));
+		use_zoom = get_imapaint_zoom(C, &zoomx, &zoomy) &&
+		           !(ts->use_uv_sculpt && (scene->basact->object->mode == OB_MODE_EDIT));
 
 		if (use_zoom) {
 			pixel_size = MAX2(size * zoomx, size * zoomy);
@@ -5390,6 +5400,7 @@ void PAINT_OT_grab_clone(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Grab Clone";
 	ot->idname = "PAINT_OT_grab_clone";
+	ot->description = "Move the clone source image";
 	
 	/* api callbacks */
 	ot->exec = grab_clone_exec;
@@ -5409,13 +5420,12 @@ void PAINT_OT_grab_clone(wmOperatorType *ot)
 
 static int sample_color_exec(bContext *C, wmOperator *op)
 {
-	Scene *scene = CTX_data_scene(C);
 	Brush *brush = image_paint_brush(C);
 	ARegion *ar = CTX_wm_region(C);
 	int location[2];
 
 	RNA_int_get_array(op->ptr, "location", location);
-	paint_sample_color(scene, ar, location[0], location[1]);
+	paint_sample_color(C, ar, location[0], location[1]);
 
 	WM_event_add_notifier(C, NC_BRUSH | NA_EDITED, brush);
 	
@@ -5454,7 +5464,7 @@ static int image_paint_sample_color_poll(bContext *C)
 		if (CTX_wm_view3d(C)) {
 			Object *obact = CTX_data_active_object(C);
 			if (obact && obact->mode & OB_MODE_TEXTURE_PAINT) {
-				Mesh *me = get_mesh(obact);
+				Mesh *me = BKE_mesh_from_object(obact);
 				if (me) {
 					return !(me->editflag & ME_EDIT_PAINT_MASK);
 				}
@@ -5472,6 +5482,7 @@ void PAINT_OT_sample_color(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Sample Color";
 	ot->idname = "PAINT_OT_sample_color";
+	ot->description = "Use the mouse to sample a color in the image";
 	
 	/* api callbacks */
 	ot->exec = sample_color_exec;
@@ -5523,6 +5534,7 @@ void PAINT_OT_clone_cursor_set(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Set Clone Cursor";
 	ot->idname = "PAINT_OT_clone_cursor_set";
+	ot->description = "Set the location of the clone cursor";
 	
 	/* api callbacks */
 	ot->exec = set_clone_cursor_exec;
@@ -5557,12 +5569,12 @@ static int texture_paint_toggle_exec(bContext *C, wmOperator *op)
 	if (ob == NULL)
 		return OPERATOR_CANCELLED;
 	
-	if (object_data_is_libdata(ob)) {
+	if (BKE_object_obdata_is_libdata(ob)) {
 		BKE_report(op->reports, RPT_ERROR, "Can't edit external libdata");
 		return OPERATOR_CANCELLED;
 	}
 
-	me = get_mesh(ob);
+	me = BKE_mesh_from_object(ob);
 
 	if (!(ob->mode & OB_MODE_TEXTURE_PAINT) && !me) {
 		BKE_report(op->reports, RPT_ERROR, "Can only enter texture paint mode for mesh objects");
@@ -5605,6 +5617,7 @@ void PAINT_OT_texture_paint_toggle(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Texture Paint Toggle";
 	ot->idname = "PAINT_OT_texture_paint_toggle";
+	ot->description = "Toggle texture paint mode in 3D view";
 	
 	/* api callbacks */
 	ot->exec = texture_paint_toggle_exec;
@@ -5705,8 +5718,8 @@ static int texture_paint_camera_project_exec(bContext *C, wmOperator *op)
 	/* override */
 	ps.is_texbrush = 0;
 	ps.is_airbrush = 1;
-	orig_brush_size = brush_size(scene, ps.brush);
-	brush_set_size(scene, ps.brush, 32); /* cover the whole image */
+	orig_brush_size = BKE_brush_size_get(scene, ps.brush);
+	BKE_brush_size_set(scene, ps.brush, 32); /* cover the whole image */
 
 	ps.tool = PAINT_TOOL_DRAW; /* so pixels are initialized with minimal info */
 
@@ -5719,7 +5732,7 @@ static int texture_paint_camera_project_exec(bContext *C, wmOperator *op)
 	project_paint_begin(&ps);
 
 	if (ps.dm == NULL) {
-		brush_set_size(scene, ps.brush, orig_brush_size);
+		BKE_brush_size_set(scene, ps.brush, orig_brush_size);
 		return OPERATOR_CANCELLED;
 	}
 	else {
@@ -5743,7 +5756,7 @@ static int texture_paint_camera_project_exec(bContext *C, wmOperator *op)
 	project_paint_end(&ps);
 
 	scene->toolsettings->imapaint.flag &= ~IMAGEPAINT_DRAWING;
-	brush_set_size(scene, ps.brush, orig_brush_size);
+	BKE_brush_size_set(scene, ps.brush, orig_brush_size);
 
 	return OPERATOR_FINISHED;
 }
@@ -5797,7 +5810,7 @@ static int texture_paint_image_from_view_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	image = BKE_add_image_imbuf(ibuf);
+	image = BKE_image_add_from_imbuf(ibuf);
 
 	if (image) {
 		/* now for the trickyness. store the view projection here!

@@ -15,6 +15,8 @@
 #include "solver_relax.h"
 // for geo init FGI_ defines
 #include "elbeem.h"
+#include "globals.h"
+
 
 // helper for 2d init
 #define SWAPYZ(vec) { \
@@ -296,9 +298,6 @@
 #endif  // LBMDIM==2
 
 
-// required globals
-extern bool glob_mpactive;
-extern int glob_mpnum, glob_mpindex;
 
 
 /******************************************************************************
@@ -1453,9 +1452,7 @@ void LbmFsgrSolver::initMovingObstacles(bool staticInit) {
 			//errMsg("GEOACTT"," obj "<<obj->getName()<<" a:"<<active<<","<<wasActive<<"  s"<<sourceTime<<" t"<<targetTime <<" v"<<mObjectSpeeds[OId] );
 			// skip inactive in/out flows
 			if(ntype==CFInvalid){ errMsg("LbmFsgrSolver::initMovingObstacles","Invalid obj type "<<obj->getGeoInitType()); continue; }
-			/* DG: only inflows/outlfows could be activated/deactivated, test new code that everything can be activated
-			if((!active) && (otype&(CFMbndOutflow|CFMbndInflow)) ) continue; */
-			if((!active) /* && (otype&(CFMbndOutflow|CFMbndInflow)) */ ) continue;
+			if((!active) && (otype&(CFMbndOutflow|CFMbndInflow)) ) continue;
 
 			// copied from  recalculateObjectSpeeds
 			mObjectSpeeds[OId] = vec2L(mpParam->calculateLattVelocityFromRw( vec2P( (*mpGiObjects)[OId]->getInitialVelocity(mSimulationTime) )));

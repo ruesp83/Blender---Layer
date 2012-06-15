@@ -78,7 +78,7 @@
 int slurph_opt = 1;
 
 
-void free_key(Key *key)
+void BKE_key_free(Key *key)
 {
 	KeyBlock *kb;
 	
@@ -126,7 +126,7 @@ Key *add_key(ID *id)    /* common function */
 	Key *key;
 	char *el;
 	
-	key = alloc_libblock(&G.main->key, ID_KE, "Key");
+	key = BKE_libblock_alloc(&G.main->key, ID_KE, "Key");
 	
 	key->type = KEY_NORMAL;
 	key->from = id;
@@ -170,14 +170,14 @@ Key *add_key(ID *id)    /* common function */
 	return key;
 }
 
-Key *copy_key(Key *key)
+Key *BKE_key_copy(Key *key)
 {
 	Key *keyn;
 	KeyBlock *kbn, *kb;
 	
 	if (key == NULL) return NULL;
 	
-	keyn = copy_libblock(&key->id);
+	keyn = BKE_libblock_copy(&key->id);
 	
 	BLI_duplicatelist(&keyn->block, &key->block);
 	
@@ -223,7 +223,7 @@ Key *copy_key_nolib(Key *key)
 	return keyn;
 }
 
-void make_local_key(Key *key)
+void BKE_key_make_local(Key *key)
 {
 
 	/* - only lib users: do nothing
@@ -271,7 +271,7 @@ void sort_keys(Key *key)
 
 /**************** do the key ****************/
 
-void key_curve_position_weights(float t, float *data, int type)
+void key_curve_position_weights(float t, float data[4], int type)
 {
 	float t2, t3, fc;
 	
@@ -303,7 +303,7 @@ void key_curve_position_weights(float t, float *data, int type)
 }
 
 /* first derivative */
-void key_curve_tangent_weights(float t, float *data, int type)
+void key_curve_tangent_weights(float t, float data[4], int type)
 {
 	float t2, fc;
 	
@@ -333,7 +333,7 @@ void key_curve_tangent_weights(float t, float *data, int type)
 }
 
 /* second derivative */
-void key_curve_normal_weights(float t, float *data, int type)
+void key_curve_normal_weights(float t, float data[4], int type)
 {
 	float fc;
 	
@@ -359,11 +359,11 @@ void key_curve_normal_weights(float t, float *data, int type)
 	}
 }
 
-static int setkeys(float fac, ListBase *lb, KeyBlock *k[], float *t, int cycl)
+static int setkeys(float fac, ListBase *lb, KeyBlock *k[], float t[4], int cycl)
 {
 	/* return 1 means k[2] is the position, return 0 means interpolate */
 	KeyBlock *k1, *firstkey;
-	float d, dpos, ofs = 0, lastpos, temp, fval[4];
+	float d, dpos, ofs = 0, lastpos;
 	short bsplinetype;
 
 	firstkey = lb->first;
@@ -467,17 +467,12 @@ static int setkeys(float fac, ListBase *lb, KeyBlock *k[], float *t, int cycl)
 	}
 
 	/* interpolation */
-	
 	key_curve_position_weights(d, t, k[1]->type);
 
 	if (k[1]->type != k[2]->type) {
-		key_curve_position_weights(d, fval, k[2]->type);
-		
-		temp = 1.0f - d;
-		t[0] = temp * t[0] + d * fval[0];
-		t[1] = temp * t[1] + d * fval[1];
-		t[2] = temp * t[2] + d * fval[2];
-		t[3] = temp * t[3] + d * fval[3];
+		float t_other[4];
+		key_curve_position_weights(d, t_other, k[2]->type);
+		interp_v4_v4v4(t, t, t_other, d);
 	}
 
 	return 0;
@@ -520,7 +515,7 @@ static char *key_block_get_data(Key *key, KeyBlock *actkb, KeyBlock *kb, char **
 				a = 0;
 				co = MEM_callocN(sizeof(float) * 3 * me->edit_btmesh->bm->totvert, "key_block_get_data");
 
-				BM_ITER(eve, &iter, me->edit_btmesh->bm, BM_VERTS_OF_MESH, NULL) {
+				BM_ITER_MESH (eve, &iter, me->edit_btmesh->bm, BM_VERTS_OF_MESH) {
 					copy_v3_v3(co[a], eve->co);
 					a++;
 				}
@@ -721,7 +716,6 @@ void do_rel_key(const int start, int end, const int tot, char *basispoin, Key *k
 	KeyBlock *kb;
 	int *ofsp, ofs[3], elemsize, b;
 	char *cp, *poin, *reffrom, *from, elemstr[8];
-	char *freefrom, *freereffrom;
 	int poinsize;
 
 	/* currently always 0, in future key_pointer_size may assign */
@@ -754,6 +748,7 @@ void do_rel_key(const int start, int end, const int tot, char *basispoin, Key *k
 			if (!(kb->flag & KEYBLOCK_MUTE) && icuval != 0.0f && kb->totelem == tot) {
 				KeyBlock *refb;
 				float weight, *weights = kb->weights;
+				char *freefrom = NULL, *freereffrom = NULL;
 
 				/* reference now can be any block */
 				refb = BLI_findlink(&key->block, kb->relative);
@@ -1055,8 +1050,7 @@ static float *get_weights_array(Object *ob, char *vgroup)
 		weights = MEM_callocN(totvert * sizeof(float), "weights");
 
 		if (em) {
-			eve = BM_iter_new(&iter, em->bm, BM_VERTS_OF_MESH, NULL);
-			for (i = 0; eve; eve = BM_iter_step(&iter), i++) {
+			BM_ITER_MESH_INDEX (eve, &iter, em->bm, BM_VERTS_OF_MESH, i) {
 				dvert = CustomData_bmesh_get(&em->bm->vdata, eve->head.data, CD_MDEFORMVERT);
 
 				if (dvert) {
@@ -1261,7 +1255,7 @@ static void do_latt_key(Scene *scene, Object *ob, Key *key, char *out, const int
 	float t[4];
 	int flag;
 	
-	if (key->slurph  && key->type != KEY_RELATIVE) {
+	if (key->slurph && key->type != KEY_RELATIVE) {
 		const float ctime_scaled = key->ctime / 100.0f;
 		float delta = (float)key->slurph / tot;
 		float cfra = (float)scene->r.cfra;
@@ -1594,7 +1588,7 @@ void curve_to_key(Curve *cu, KeyBlock *kb, ListBase *nurb)
 	int a, tot;
 
 	/* count */
-	tot = count_curveverts(nurb);
+	tot = BKE_nurbList_verts_count(nurb);
 	if (tot == 0) return;
 
 	if (kb->data) MEM_freeN(kb->data);
@@ -1647,7 +1641,7 @@ void key_to_curve(KeyBlock *kb, Curve *UNUSED(cu), ListBase *nurb)
 	nu = nurb->first;
 	fp = kb->data;
 
-	tot = count_curveverts(nurb);
+	tot = BKE_nurbList_verts_count(nurb);
 
 	tot = MIN2(kb->totelem, tot);
 
@@ -1742,7 +1736,7 @@ float (*key_to_vertcos(Object * ob, KeyBlock * kb))[3]
 	}
 	else if (ELEM(ob->type, OB_CURVE, OB_SURF)) {
 		Curve *cu = (Curve *)ob->data;
-		tot = count_curveverts(&cu->nurb);
+		tot = BKE_nurbList_verts_count(&cu->nurb);
 	}
 
 	if (tot == 0) return NULL;
@@ -1822,7 +1816,7 @@ void vertcos_to_key(Object *ob, KeyBlock *kb, float (*vertCos)[3])
 	else if (ELEM(ob->type, OB_CURVE, OB_SURF)) {
 		Curve *cu = (Curve *)ob->data;
 		elemsize = cu->key->elemsize;
-		tot = count_curveverts(&cu->nurb);
+		tot = BKE_nurbList_verts_count(&cu->nurb);
 	}
 
 	if (tot == 0) {

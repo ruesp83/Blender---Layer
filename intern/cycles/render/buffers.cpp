@@ -117,8 +117,8 @@ void RenderBuffers::reset(Device *device, BufferParams& params_)
 	uint *init_state = rng_state.resize(params.width, params.height);
 	int x, y, width = params.width, height = params.height;
 	
-	for(x=0; x<width; x++)
-		for(y=0; y<height; y++)
+	for(x = 0; x < width; x++)
+		for(y = 0; y < height; y++)
 			init_state[x + y*width] = hash_int_2d(params.full_x+x, params.full_y+y);
 
 	device->mem_alloc(rng_state, MEM_READ_WRITE);
@@ -221,6 +221,28 @@ bool RenderBuffers::get_pass(PassType type, float exposure, int sample, int comp
 					pixels[3] = 1.0f;
 				}
 			}
+			else if(type == PASS_MOTION) {
+				/* need to normalize by number of samples accumulated for motion */
+				pass_offset = 0;
+				foreach(Pass& color_pass, params.passes) {
+					if(color_pass.type == PASS_MOTION_WEIGHT)
+						break;
+					pass_offset += color_pass.components;
+				}
+
+				float *in_weight = (float*)buffer.data_pointer + pass_offset;
+
+				for(int i = 0; i < size; i++, in += pass_stride, in_weight += pass_stride, pixels += 4) {
+					float4 f = make_float4(in[0], in[1], in[2], in[3]);
+					float w = in_weight[0];
+					float invw = (w > 0.0f)? 1.0f/w: 0.0f;
+
+					pixels[0] = f.x*invw;
+					pixels[1] = f.y*invw;
+					pixels[2] = f.z*invw;
+					pixels[3] = f.w*invw;
+				}
+			}
 			else {
 				for(int i = 0; i < size; i++, in += pass_stride, pixels += 4) {
 					float4 f = make_float4(in[0], in[1], in[2], in[3]);
@@ -289,8 +311,14 @@ void DisplayBuffer::draw_set(int width, int height)
 
 void DisplayBuffer::draw(Device *device)
 {
-	if(draw_width != 0 && draw_height != 0)
+	if(draw_width != 0 && draw_height != 0) {
+		glPushMatrix();
+		glTranslatef(params.full_x, params.full_y, 0.0f);
+
 		device->draw_pixels(rgba, 0, draw_width, draw_height, 0, params.width, params.height, transparent);
+
+		glPopMatrix();
+	}
 }
 
 bool DisplayBuffer::draw_ready()

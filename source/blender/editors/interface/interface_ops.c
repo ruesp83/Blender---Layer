@@ -40,6 +40,7 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_math_color.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_context.h"
@@ -69,22 +70,42 @@
 /* ********************************************************** */
 
 typedef struct Eyedropper {
+	short do_color_management;
+
 	PointerRNA ptr;
 	PropertyRNA *prop;
 	int index;
+
+	int   accum_start; /* has mouse been presed */
+	float accum_col[3];
+	int   accum_tot;
 } Eyedropper;
 
 static int eyedropper_init(bContext *C, wmOperator *op)
 {
+	Scene *scene = CTX_data_scene(C);
+	const int color_manage = scene->r.color_mgt_flag & R_COLOR_MANAGEMENT;
+
 	Eyedropper *eye;
 	
 	op->customdata = eye = MEM_callocN(sizeof(Eyedropper), "Eyedropper");
 	
 	uiContextActiveProperty(C, &eye->ptr, &eye->prop, &eye->index);
-	
-	return (eye->ptr.data && eye->prop && RNA_property_editable(&eye->ptr, eye->prop));
+
+	if ((eye->ptr.data == NULL) ||
+	    (eye->prop == NULL) ||
+	    (RNA_property_editable(&eye->ptr, eye->prop) == FALSE) ||
+	    (RNA_property_array_length(&eye->ptr, eye->prop) < 3) ||
+	    (RNA_property_type(eye->prop) != PROP_FLOAT))
+	{
+		return FALSE;
+	}
+
+	eye->do_color_management = (color_manage && RNA_property_subtype(eye->prop) == PROP_COLOR);
+
+	return TRUE;
 }
- 
+
 static void eyedropper_exit(bContext *C, wmOperator *op)
 {
 	WM_cursor_restore(CTX_wm_window(C));
@@ -100,29 +121,60 @@ static int eyedropper_cancel(bContext *C, wmOperator *op)
 	return OPERATOR_CANCELLED;
 }
 
-static void eyedropper_sample(bContext *C, Eyedropper *eye, int mx, int my)
-{
-	if (RNA_property_type(eye->prop) == PROP_FLOAT) {
-		Scene *scene = CTX_data_scene(C);
-		const int color_manage = scene->r.color_mgt_flag & R_COLOR_MANAGEMENT;
-		float col[4];
-	
-		RNA_property_float_get_array(&eye->ptr, eye->prop, col);
-		
-		glReadBuffer(GL_FRONT);
-		glReadPixels(mx, my, 1, 1, GL_RGB, GL_FLOAT, col);
-		glReadBuffer(GL_BACK);
-	
-		if (RNA_property_array_length(&eye->ptr, eye->prop) < 3) return;
+/* *** eyedropper_color_ helper functions *** */
 
-		/* convert from screen (srgb) space to linear rgb space */
-		if (color_manage && RNA_property_subtype(eye->prop) == PROP_COLOR)
-			srgb_to_linearrgb_v3_v3(col, col);
-		
-		RNA_property_float_set_array(&eye->ptr, eye->prop, col);
-		
-		RNA_property_update(C, &eye->ptr, eye->prop);
+/* simply get the color from the screen */
+static void eyedropper_color_sample_fl(Eyedropper *UNUSED(eye), int mx, int my, float r_col[3])
+{
+	glReadBuffer(GL_FRONT);
+	glReadPixels(mx, my, 1, 1, GL_RGB, GL_FLOAT, r_col);
+	glReadBuffer(GL_BACK);
+}
+
+/* sets the sample color RGB, maintaining A */
+static void eyedropper_color_set(bContext *C, Eyedropper *eye, const float col[3])
+{
+	float col_conv[4];
+
+	/* to maintain alpha */
+	RNA_property_float_get_array(&eye->ptr, eye->prop, col_conv);
+
+	/* convert from screen (srgb) space to linear rgb space */
+	if (eye->do_color_management) {
+		srgb_to_linearrgb_v3_v3(col_conv, col);
 	}
+	else {
+		copy_v3_v3(col_conv, col);
+	}
+
+	RNA_property_float_set_array(&eye->ptr, eye->prop, col_conv);
+
+	RNA_property_update(C, &eye->ptr, eye->prop);
+}
+
+/* set sample from accumulated values */
+static void eyedropper_color_set_accum(bContext *C, Eyedropper *eye)
+{
+	float col[4];
+	mul_v3_v3fl(col, eye->accum_col, 1.0f / (float)eye->accum_tot);
+	eyedropper_color_set(C, eye, col);
+}
+
+/* single point sample & set */
+static void eyedropper_color_sample(bContext *C, Eyedropper *eye, int mx, int my)
+{
+	float col[3];
+	eyedropper_color_sample_fl(eye, mx, my, col);
+	eyedropper_color_set(C, eye, col);
+}
+
+static void eyedropper_color_sample_accum(Eyedropper *eye, int mx, int my)
+{
+	float col[3];
+	eyedropper_color_sample_fl(eye, mx, my, col);
+	/* delay linear conversion */
+	add_v3_v3(eye->accum_col, col);
+	eye->accum_tot++;
 }
 
 /* main modal status check */
@@ -136,9 +188,34 @@ static int eyedropper_modal(bContext *C, wmOperator *op, wmEvent *event)
 			return eyedropper_cancel(C, op);
 		case LEFTMOUSE:
 			if (event->val == KM_RELEASE) {
-				eyedropper_sample(C, eye, event->x, event->y);
+				if (eye->accum_tot == 0) {
+					eyedropper_color_sample(C, eye, event->x, event->y);
+				}
+				else {
+					eyedropper_color_set_accum(C, eye);
+				}
 				eyedropper_exit(C, op);
 				return OPERATOR_FINISHED;
+			}
+			else if (event->val == KM_PRESS) {
+				/* enable accum and make first sample */
+				eye->accum_start = TRUE;
+				eyedropper_color_sample_accum(eye, event->x, event->y);
+			}
+			break;
+		case MOUSEMOVE:
+			if (eye->accum_start) {
+				/* button is pressed so keep sampling */
+				eyedropper_color_sample_accum(eye, event->x, event->y);
+				eyedropper_color_set_accum(C, eye);
+			}
+			break;
+		case SPACEKEY:
+			if (event->val == KM_RELEASE) {
+				eye->accum_tot = 0;
+				zero_v3(eye->accum_col);
+				eyedropper_color_sample_accum(eye, event->x, event->y);
+				eyedropper_color_set_accum(C, eye);
 			}
 			break;
 	}
@@ -234,12 +311,32 @@ static void UI_OT_reset_default_theme(wmOperatorType *ot)
 
 /* Copy Data Path Operator ------------------------ */
 
+static int copy_data_path_button_poll(bContext *C)
+{
+	PointerRNA ptr;
+	PropertyRNA *prop;
+	char *path;
+	int index;
+
+	uiContextActiveProperty(C, &ptr, &prop, &index);
+
+	if (ptr.id.data && ptr.data && prop) {
+		path = RNA_path_from_ID_to_property(&ptr, prop);
+		
+		if (path) {
+			MEM_freeN(path);
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
 static int copy_data_path_button_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	PointerRNA ptr;
 	PropertyRNA *prop;
 	char *path;
-	int success = 0;
 	int index;
 
 	/* try to create driver using property retrieved from UI */
@@ -251,11 +348,11 @@ static int copy_data_path_button_exec(bContext *C, wmOperator *UNUSED(op))
 		if (path) {
 			WM_clipboard_text_set(path, FALSE);
 			MEM_freeN(path);
+			return OPERATOR_FINISHED;
 		}
 	}
 
-	/* since we're just copying, we don't really need to do anything else...*/
-	return (success) ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
+	return OPERATOR_CANCELLED;
 }
 
 static void UI_OT_copy_data_path_button(wmOperatorType *ot)
@@ -267,7 +364,7 @@ static void UI_OT_copy_data_path_button(wmOperatorType *ot)
 
 	/* callbacks */
 	ot->exec = copy_data_path_button_exec;
-	//op->poll= ??? // TODO: need to have some valid property before this can be done
+	ot->poll = copy_data_path_button_poll;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER;
@@ -346,8 +443,10 @@ static void UI_OT_reset_default_button(wmOperatorType *ot)
 
 /* Copy To Selected Operator ------------------------ */
 
-static int copy_to_selected_list(bContext *C, PointerRNA *ptr, ListBase *lb)
+static int copy_to_selected_list(bContext *C, PointerRNA *ptr, ListBase *lb, int *use_path)
 {
+	*use_path = FALSE;
+
 	if (RNA_struct_is_a(ptr->type, &RNA_EditBone))
 		*lb = CTX_data_collection_get(C, "selected_editable_bones");
 	else if (RNA_struct_is_a(ptr->type, &RNA_PoseBone))
@@ -357,8 +456,10 @@ static int copy_to_selected_list(bContext *C, PointerRNA *ptr, ListBase *lb)
 	else {
 		ID *id = ptr->id.data;
 
-		if(id && GS(id->name) == ID_OB)
+		if (id && GS(id->name) == ID_OB) {
 			*lb = CTX_data_collection_get(C, "selected_editable_objects");
+			*use_path = TRUE;
+		}
 		else
 			return 0;
 	}
@@ -375,26 +476,39 @@ static int copy_to_selected_button_poll(bContext *C)
 	uiContextActiveProperty(C, &ptr, &prop, &index);
 
 	if (ptr.data && prop) {
-		char *path = RNA_path_from_ID_to_property(&ptr, prop);
+		char *path = NULL;
+		int use_path;
 		CollectionPointerLink *link;
 		ListBase lb;
 
-		if (path && copy_to_selected_list(C, &ptr, &lb)) {
+		if (!copy_to_selected_list(C, &ptr, &lb, &use_path))
+			return success;
+
+		if (!use_path || (path = RNA_path_from_ID_to_property(&ptr, prop))) {
 			for (link = lb.first; link; link = link->next) {
 				if (link->ptr.data != ptr.data) {
-					RNA_id_pointer_create(link->ptr.id.data, &idptr);
+					if (use_path) {
+						lprop = NULL;
+						RNA_id_pointer_create(link->ptr.id.data, &idptr);
+						RNA_path_resolve(&idptr, path, &lptr, &lprop);
+					}
+					else {
+						lptr = link->ptr;
+						lprop = prop;
+					}
 
-					if (RNA_path_resolve(&idptr, path, &lptr, &lprop) && lprop == prop) {
+					if (lprop == prop) {
 						if (RNA_property_editable(&lptr, prop))
 							success = 1;
 					}
 				}
 			}
 
-			BLI_freelistN(&lb);
+			if (path)
+				MEM_freeN(path);
 		}
 
-		MEM_freeN(path);
+		BLI_freelistN(&lb);
 	}
 
 	return success;
@@ -412,16 +526,29 @@ static int copy_to_selected_button_exec(bContext *C, wmOperator *op)
 	
 	/* if there is a valid property that is editable... */
 	if (ptr.data && prop) {
-		char *path = RNA_path_from_ID_to_property(&ptr, prop);
+		char *path = NULL;
+		int use_path;
 		CollectionPointerLink *link;
 		ListBase lb;
 
-		if (path && copy_to_selected_list(C, &ptr, &lb)) {
+		if (!copy_to_selected_list(C, &ptr, &lb, &use_path))
+			return success;
+
+		if (!use_path || (path = RNA_path_from_ID_to_property(&ptr, prop))) {
 			for (link = lb.first; link; link = link->next) {
 				if (link->ptr.data != ptr.data) {
-					RNA_id_pointer_create(link->ptr.id.data, &idptr);
-					if (RNA_path_resolve(&idptr, path, &lptr, &lprop) && lprop == prop) {
-						if(RNA_property_editable(&lptr, lprop)) {
+					if (use_path) {
+						lprop = NULL;
+						RNA_id_pointer_create(link->ptr.id.data, &idptr);
+						RNA_path_resolve(&idptr, path, &lptr, &lprop);
+					}
+					else {
+						lptr = link->ptr;
+						lprop = prop;
+					}
+
+					if (lprop == prop) {
+						if (RNA_property_editable(&lptr, lprop)) {
 							if (RNA_property_copy(&lptr, &ptr, prop, (all) ? -1 : index)) {
 								RNA_property_update(C, &lptr, prop);
 								success = 1;
@@ -431,10 +558,11 @@ static int copy_to_selected_button_exec(bContext *C, wmOperator *op)
 				}
 			}
 
-			BLI_freelistN(&lb);
+			if (path)
+				MEM_freeN(path);
 		}
 
-		MEM_freeN(path);
+		BLI_freelistN(&lb);
 	}
 	
 	return (success) ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
@@ -476,7 +604,7 @@ static int reports_to_text_exec(bContext *C, wmOperator *UNUSED(op))
 	char *str;
 	
 	/* create new text-block to write to */
-	txt = add_empty_text("Recent Reports");
+	txt = BKE_text_add("Recent Reports");
 	
 	/* convert entire list to a display string, and add this to the text-block
 	 *	- if commandline debug option enabled, show debug reports too
@@ -485,7 +613,7 @@ static int reports_to_text_exec(bContext *C, wmOperator *UNUSED(op))
 	str = BKE_reports_string(reports, (G.debug & G_DEBUG) ? RPT_DEBUG : RPT_INFO);
 
 	if (str) {
-		write_text(txt, str);
+		BKE_text_write(txt, str);
 		MEM_freeN(str);
 
 		return OPERATOR_FINISHED;
@@ -538,9 +666,7 @@ static void ui_editsource_active_but_set(uiBut *but)
 	ui_editsource_info = MEM_callocN(sizeof(uiEditSourceStore), __func__);
 	memcpy(&ui_editsource_info->but_orig, but, sizeof(uiBut));
 
-	ui_editsource_info->hash = BLI_ghash_new(BLI_ghashutil_ptrhash,
-	                                         BLI_ghashutil_ptrcmp,
-	                                         __func__);
+	ui_editsource_info->hash = BLI_ghash_ptr_new(__func__);
 }
 
 static void ui_editsource_active_but_clear(void)
@@ -621,7 +747,7 @@ static int editsource_text_edit(bContext *C, wmOperator *op,
 	}
 
 	if (text == NULL) {
-		text = add_text(filepath, bmain->name);
+		text = BKE_text_load(filepath, bmain->name);
 	}
 
 	if (text == NULL) {

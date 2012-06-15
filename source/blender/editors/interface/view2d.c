@@ -159,7 +159,7 @@ static void view2d_masks(View2D *v2d)
 
 /* Initialize all relevant View2D data (including view rects if first time) and/or refresh mask sizes after view resize
  *	- for some of these presets, it is expected that the region will have defined some
- *    additional settings necessary for the customisation of the 2D viewport to its requirements
+ *    additional settings necessary for the customization of the 2D viewport to its requirements
  *	- this function should only be called from region init() callbacks, where it is expected that
  *	  this is called before UI_view2d_size_update(), as this one checks that the rects are properly initialized. 
  */
@@ -272,7 +272,7 @@ void UI_view2d_region_reinit(View2D *v2d, short type, int winx, int winy)
 				v2d->keepzoom = (V2D_KEEPASPECT | V2D_LIMITZOOM | V2D_KEEPZOOM);
 				v2d->minzoom = 0.5f;
 				v2d->maxzoom = 2.0f;
-				//tot_changed= 1;
+				//tot_changed = 1;
 				
 				v2d->align = (V2D_ALIGN_NO_NEG_X | V2D_ALIGN_NO_POS_Y);
 				v2d->keeptot = V2D_KEEPTOT_BOUNDS;
@@ -419,30 +419,30 @@ void UI_view2d_curRect_validate_resize(View2D *v2d, int resize)
 	
 	/* check if we should restore aspect ratio (if view size changed) */
 	if (v2d->keepzoom & V2D_KEEPASPECT) {
-		short do_x = 0, do_y = 0, do_cur /* , do_win */ /* UNUSED */;
+		short do_x = FALSE, do_y = FALSE, do_cur /* , do_win */ /* UNUSED */;
 		float /* curRatio, */ /* UNUSED */ winRatio;
 		
 		/* when a window edge changes, the aspect ratio can't be used to
 		 * find which is the best new 'cur' rect. thats why it stores 'old' 
 		 */
-		if (winx != v2d->oldwinx) do_x = 1;
-		if (winy != v2d->oldwiny) do_y = 1;
+		if (winx != v2d->oldwinx) do_x = TRUE;
+		if (winy != v2d->oldwiny) do_y = TRUE;
 		
-		/* curRatio= height / width; */ /* UNUSED */
+		/* curRatio = height / width; */ /* UNUSED */
 		winRatio = winy / winx;
 		
 		/* both sizes change (area/region maximised)  */
 		if (do_x == do_y) {
 			if (do_x && do_y) {
 				/* here is 1,1 case, so all others must be 0,0 */
-				if (ABS(winx - v2d->oldwinx) > ABS(winy - v2d->oldwiny)) do_y = 0;
-				else do_x = 0;
+				if (ABS(winx - v2d->oldwinx) > ABS(winy - v2d->oldwiny)) do_y = FALSE;
+				else do_x = FALSE;
 			}
-			else if (winRatio > 1.0f) do_x = 0;
-			else do_x = 1;
+			else if (winRatio > 1.0f) do_x = FALSE;
+			else do_x = TRUE;
 		}
 		do_cur = do_x;
-		/* do_win= do_y; */ /* UNUSED */
+		/* do_win = do_y; */ /* UNUSED */
 		
 		if (do_cur) {
 			if ((v2d->keeptot == V2D_KEEPTOT_STRICT) && (winx != v2d->oldwinx)) {
@@ -806,7 +806,7 @@ void UI_view2d_curRect_reset(View2D *v2d)
 		v2d->cur.xmax = (float)width;
 	}
 	else {
-		/* width is centered around x==0 */
+		/* width is centered around (x == 0) */
 		const float dx = (float)width / 2.0f;
 		
 		v2d->cur.xmin = -dx;
@@ -825,7 +825,7 @@ void UI_view2d_curRect_reset(View2D *v2d)
 		v2d->cur.ymax = (float)height;
 	}
 	else {
-		/* height is centered around y==0 */
+		/* height is centered around (y == 0) */
 		const float dy = (float)height / 2.0f;
 		
 		v2d->cur.ymin = -dy;
@@ -869,7 +869,7 @@ void UI_view2d_totRect_set_resize(View2D *v2d, int width, int height, int resize
 		v2d->tot.xmax = (float)width;
 	}
 	else {
-		/* width is centered around x==0 */
+		/* width is centered around (x == 0) */
 		const float dx = (float)width / 2.0f;
 		
 		v2d->tot.xmin = -dx;
@@ -888,7 +888,7 @@ void UI_view2d_totRect_set_resize(View2D *v2d, int width, int height, int resize
 		v2d->tot.ymax = (float)height;
 	}
 	else {
-		/* height is centered around y==0 */
+		/* height is centered around (y == 0) */
 		const float dy = (float)height / 2.0f;
 		
 		v2d->tot.ymin = -dy;
@@ -1442,7 +1442,7 @@ View2DScrollers *UI_view2d_scrollers_calc(const bContext *C, View2D *v2d, short 
 				v2d->scroll |= V2D_SCROLL_HORIZONTAL_FULLR;
 				scrollers->horfull = 1;
 			}
-			else	
+			else
 				v2d->scroll &= ~V2D_SCROLL_HORIZONTAL_FULLR;
 		}
 	}
@@ -1484,7 +1484,7 @@ View2DScrollers *UI_view2d_scrollers_calc(const bContext *C, View2D *v2d, short 
 				v2d->scroll |= V2D_SCROLL_VERTICAL_FULLR;
 				scrollers->vertfull = 1;
 			}
-			else	
+			else
 				v2d->scroll &= ~V2D_SCROLL_VERTICAL_FULLR;
 		}
 	}

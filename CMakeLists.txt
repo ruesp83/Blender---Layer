@@ -1,4 +1,3 @@
-# -*- mode: cmake; indent-tabs-mode: t; -*-
 # ***** BEGIN GPL LICENSE BLOCK *****
 #
 # This program is free software; you can redistribute it and/or
@@ -103,8 +102,8 @@ enable_testing()
 #-----------------------------------------------------------------------------
 # Redirect output files
 
-set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin CACHE INTERNAL "" FORCE )
-set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib CACHE INTERNAL "" FORCE )
+set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin CACHE INTERNAL "" FORCE)
+set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib CACHE INTERNAL "" FORCE)
 
 #-----------------------------------------------------------------------------
 # Set default config options
@@ -161,8 +160,6 @@ if(UNIX AND NOT APPLE)
 	option(WITH_X11_XINPUT "Enable X11 Xinput (tablet support and unicode input)"	ON)
 	option(WITH_X11_XF86VMODE "Enable X11 video mode switching"	ON)
 	option(WITH_BUILTIN_GLEW "Use GLEW OpenGL wrapper library bundled with blender" ON)
-	option(WITH_XDG_USER_DIRS    "Build with XDG Base Directory Specification (only config and documents for now)" OFF)
-	mark_as_advanced(WITH_XDG_USER_DIRS)
 
 	# freebsd doesn't seems to support XDND
 	if(NOT ${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
@@ -194,13 +191,7 @@ option(WITH_IMAGE_REDCODE       "Enable RedCode Image Support" OFF)
 option(WITH_IMAGE_FRAMESERVER   "Enable image FrameServer Support for rendering" ON)
 
 # Audio/Video format support
-if(MINGW)
-	set(PLATFORM_DEFAULT ON)
-else()
-	set(PLATFORM_DEFAULT OFF)
-endif()
-option(WITH_CODEC_FFMPEG        "Enable FFMPeg Support (http://ffmpeg.org)" ${PLATFORM_DEFAULT})
-unset(PLATFORM_DEFAULT)
+option(WITH_CODEC_FFMPEG        "Enable FFMPeg Support (http://ffmpeg.org)" OFF)
 
 option(WITH_CODEC_SNDFILE       "Enable libsndfile Support (http://www.mega-nerd.com/libsndfile)" OFF)
 if(APPLE OR (WIN32 AND NOT UNIX))
@@ -233,13 +224,23 @@ if(UNIX AND NOT APPLE)
 	option(WITH_INSTALL_PORTABLE "Install redistributeable runtime, otherwise install into CMAKE_INSTALL_PREFIX" ON)
 endif()
 option(WITH_PYTHON_INSTALL       "Copy system python into the blender install folder" ON)
+option(WITH_PYTHON_INSTALL_NUMPY "Copy system numpy into the blender install folder"  ON)
+set(PYTHON_NUMPY_PATH            "" CACHE PATH "Python to python site-packages or dist-packages containing 'numpy' module")
+mark_as_advanced(PYTHON_NUMPY_PATH)
+
+if(MINGW)
+	option(WITH_MINGW64                   "Use the 64-bit version of MinGW" OFF)
+	mark_as_advanced(WITH_MINGW64)
+endif()
 
 # Cycles
 option(WITH_CYCLES					"Enable cycles Render Engine" ON)
 option(WITH_CYCLES_TEST				"Build cycles test application" OFF)
+option(WITH_CYCLES_OSL				"Build Cycles with OSL support" OFF)
 option(WITH_CYCLES_CUDA_BINARIES	"Build cycles CUDA binaries" OFF)
-set(CYCLES_CUDA_BINARIES_ARCH		sm_13 sm_20 sm_21 CACHE STRING "CUDA architectures to build binaries for")
+set(CYCLES_CUDA_BINARIES_ARCH sm_13 sm_20 sm_21 CACHE STRING "CUDA architectures to build binaries for")
 mark_as_advanced(CYCLES_CUDA_BINARIES_ARCH)
+unset(PLATFORM_DEFAULT)
 
 # disable for now, but plan to support on all platforms eventually
 option(WITH_MEM_JEMALLOC   "Enable malloc replacement (http://www.canonware.com/jemalloc)" OFF)
@@ -291,8 +292,9 @@ if(APPLE)
 			message(STATUS "Setting compiler to: " ${CMAKE_XCODE_ATTRIBUTE_GCC_VERSION})
 		endif()
 	else() # unix makefile generator does not fill XCODE_VERSION var, so we get it with a command
-		execute_process(COMMAND xcodebuild -version OUTPUT_VARIABLE XCODE_VERS_BUILDNR )
-		STRING(SUBSTRING ${XCODE_VERS_BUILDNR} 6 3 XCODE_VERSION) # truncate away build-nr
+		execute_process(COMMAND xcodebuild -version OUTPUT_VARIABLE XCODE_VERS_BUILD_NR)
+		string(SUBSTRING "${XCODE_VERS_BUILD_NR}" 6 3 XCODE_VERSION) # truncate away build-nr
+		unset(XCODE_VERS_BUILD_NR)
 	endif()
 	
 	message(STATUS "Detected Xcode-version: " ${XCODE_VERSION})
@@ -306,7 +308,7 @@ endif()
 #-----------------------------------------------------------------------------
 # Check for conflicting/unsupported configurations
 
-if(NOT WITH_BLENDER AND NOT WITH_PLAYER)
+if(NOT WITH_BLENDER AND NOT WITH_PLAYER AND NOT WITH_CYCLES_TEST)
 	message(FATAL_ERROR "At least one of WITH_BLENDER or WITH_PLAYER must be enabled, nothing to do!")
 endif()
 
@@ -369,11 +371,6 @@ if(MINGW)
 		message(FATAL_ERROR "MINGW requires WITH_CODEC_QUICKTIME to be OFF "
 		                    "because it is currently unsupported, remove this "
 		                    "line if youre a developer who wants to add support.")
-	endif()
-
-	if((NOT WITH_CODEC_FFMPEG) AND (WITH_CYCLES OR WITH_IMAGE_OPENEXR OR WITH_IMAGE_TIFF))
-		message(FATAL_ERROR "MINGW has a problem with: WITH_CYCLES/WITH_IMAGE_OPENEXR/WITH_IMAGE_TIFF "
-		                    "when WITH_CODEC_FFMPEG is disabled, enable FFMPEG or disable CYCLES/EXR/TIFF.")
 	endif()
 endif()
 
@@ -557,7 +554,7 @@ if(UNIX AND NOT APPLE)
 		endif()
 
 		mark_as_advanced(FFMPEG)
-		set(FFMPEG_INCLUDE_DIRS ${FFMPEG}/include)
+		set(FFMPEG_INCLUDE_DIRS ${FFMPEG}/include ${FFMPEG}/include/ffmpeg)
 		mark_as_advanced(FFMPEG_LIBRARIES)
 		set(FFMPEG_LIBPATH ${FFMPEG}/lib)
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_CONSTANT_MACROS")
@@ -650,9 +647,16 @@ if(UNIX AND NOT APPLE)
 
 		find_package(OpenImageIO)
 
-		set(OPENIMAGEIO_LIBRARIES ${OPENIMAGEIO_LIBRARIES} ${PNG_LIBRARIES} ${JPEG_LIBRARIES} ${TIFF_LIBRARY} ${OPENEXR_LIBRARIES} ${ZLIB_LIBRARIES} ${BOOST_LIBRARIES})
+		set(OPENIMAGEIO_LIBRARIES ${OPENIMAGEIO_LIBRARIES} ${PNG_LIBRARIES} ${JPEG_LIBRARIES} ${ZLIB_LIBRARIES} ${BOOST_LIBRARIES})
 		set(OPENIMAGEIO_LIBPATH)  # TODO, remove and reference the absolute path everywhere
 		set(OPENIMAGEIO_DEFINITIONS)
+
+		if(WITH_IMAGE_TIFF)
+			list(APPEND OPENIMAGEIO_LIBRARIES "${TIFF_LIBRARY}")
+		endif()
+		if(WITH_IMAGE_OPENEXR)
+			list(APPEND OPENIMAGEIO_LIBRARIES "${OPENEXR_LIBRARIES}")
+		endif()
 
 		if(NOT OPENIMAGEIO_FOUND)
 			set(WITH_OPENIMAGEIO OFF)
@@ -740,14 +744,24 @@ elseif(WIN32)
 	# this file is included anyway when building under Windows with cl.exe
 	#  include(${CMAKE_ROOT}/Modules/Platform/Windows-cl.cmake)
 
-	set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/windows)
+	if(CMAKE_COMPILER_IS_GNUCC)
+		set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/mingw32)
 
-	# Setup 64bit and 64bit windows systems
-	if(CMAKE_CL_64)
-		message("64 bit compiler detected.")
-		set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/win64)
+		# Setup 64bit and 64bit windows systems		
+		if(WITH_MINGW64)
+			message("Set 64 bit compiler for MinGW.")
+			set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/mingw64)
+		endif()
+	else()
+		set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/windows)
+
+		# Setup 64bit and 64bit windows systems
+		if(CMAKE_CL_64)
+			message("64 bit compiler detected.")
+			set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/win64)
+		endif()
 	endif()
-
+		
 	add_definitions(-DWIN32)
 
 	if(WITH_INTERNATIONAL)
@@ -796,39 +810,52 @@ elseif(WIN32)
 	endif()
 
 	if(MSVC)
-		if(CMAKE_CL_64)
-			set(PLATFORM_LINKLIBS ws2_32 vfw32 winmm kernel32 user32 gdi32 comdlg32 advapi32 shfolder shell32 ole32 oleaut32 uuid)
-		else()
-			set(PLATFORM_LINKLIBS ws2_32 vfw32 winmm kernel32 user32 gdi32 comdlg32 advapi32 shfolder shell32 ole32 oleaut32 uuid)
-		endif()
+		set(PLATFORM_LINKLIBS ws2_32 vfw32 winmm kernel32 user32 gdi32 comdlg32 advapi32 shfolder shell32 ole32 oleaut32 uuid)
 
 		add_definitions(/D_CRT_NONSTDC_NO_DEPRECATE /D_CRT_SECURE_NO_DEPRECATE /D_SCL_SECURE_NO_DEPRECATE /D_CONSOLE /D_LIB)
 
-		set(CMAKE_CXX_FLAGS "/nologo /J /W1 /Gd /wd4018 /wd4244 /wd4305 /wd4800 /wd4065 /wd4267 /we4013" CACHE STRING "MSVC MT C++ flags " FORCE)
-		set(CMAKE_C_FLAGS   "/nologo /J /W1 /Gd /wd4018 /wd4244 /wd4305 /wd4800 /wd4065 /wd4267 /we4013 /EHsc" CACHE STRING "MSVC MT C++ flags " FORCE)
+		set(CMAKE_CXX_FLAGS "/nologo /J /Gd /EHsc" CACHE STRING "MSVC MT C++ flags " FORCE)
+		set(CMAKE_C_FLAGS   "/nologo /J /Gd"       CACHE STRING "MSVC MT C++ flags " FORCE)
 
 		if(CMAKE_CL_64)
-			set(CMAKE_CXX_FLAGS_DEBUG "/Od /Gm /EHsc /RTC1 /MTd /W3 /nologo /Zi /J" CACHE STRING "MSVC MT flags " FORCE)
+			set(CMAKE_CXX_FLAGS_DEBUG "/Od /Gm /RTC1 /MTd /Zi" CACHE STRING "MSVC MT flags " FORCE)
 		else()
-			set(CMAKE_CXX_FLAGS_DEBUG "/Od /Gm /EHsc /RTC1 /MTd /W3 /nologo /ZI /J" CACHE STRING "MSVC MT flags " FORCE)
+			set(CMAKE_CXX_FLAGS_DEBUG "/Od /Gm /RTC1 /MTd /ZI" CACHE STRING "MSVC MT flags " FORCE)
 		endif()
-		set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Ob2 /EHsc /MT /W3 /nologo /J" CACHE STRING "MSVC MT flags " FORCE)
-		set(CMAKE_CXX_FLAGS_MINSIZEREL "/O1 /Ob1 /EHsc /MT /W3 /nologo /J" CACHE STRING "MSVC MT flags " FORCE)
-		set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "/O2 /Ob1 /EHsc /MT /W3 /nologo /Zi /J" CACHE STRING "MSVC MT flags " FORCE)
+		set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Ob2 /MT" CACHE STRING "MSVC MT flags " FORCE)
+		set(CMAKE_CXX_FLAGS_MINSIZEREL "/O1 /Ob1 /MT" CACHE STRING "MSVC MT flags " FORCE)
+		set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "/O2 /Ob1 /MT /Zi" CACHE STRING "MSVC MT flags " FORCE)
 		if(CMAKE_CL_64)
-			set(CMAKE_C_FLAGS_DEBUG "/Od /Gm /EHsc /RTC1 /MTd /W3 /nologo /Zi /J" CACHE STRING "MSVC MT flags " FORCE)
+			set(CMAKE_C_FLAGS_DEBUG "/Od /Gm /RTC1 /MTd /Zi" CACHE STRING "MSVC MT flags " FORCE)
 		else()
-			set(CMAKE_C_FLAGS_DEBUG "/Od /Gm /EHsc /RTC1 /MTd /W3 /nologo /ZI /J" CACHE STRING "MSVC MT flags " FORCE)
+			set(CMAKE_C_FLAGS_DEBUG "/Od /Gm /RTC1 /MTd /ZI" CACHE STRING "MSVC MT flags " FORCE)
 		endif()
-		set(CMAKE_C_FLAGS_RELEASE "/O2 /Ob2 /EHsc /MT /W3 /nologo /J" CACHE STRING "MSVC MT flags " FORCE)
-		set(CMAKE_C_FLAGS_MINSIZEREL "/O1 /Ob1 /EHsc /MT /W3 /nologo /J" CACHE STRING "MSVC MT flags " FORCE)
-		set(CMAKE_C_FLAGS_RELWITHDEBINFO "/O2 /Ob1 /EHsc /MT /W3 /nologo /Zi /J" CACHE STRING "MSVC MT flags " FORCE)
+		set(CMAKE_C_FLAGS_RELEASE "/O2 /Ob2 /MT" CACHE STRING "MSVC MT flags " FORCE)
+		set(CMAKE_C_FLAGS_MINSIZEREL "/O1 /Ob1 /MT" CACHE STRING "MSVC MT flags " FORCE)
+		set(CMAKE_C_FLAGS_RELWITHDEBINFO "/O2 /Ob1 /MT /Zi" CACHE STRING "MSVC MT flags " FORCE)
+
+		# most msvc warnings are C & C++
+		set(_WARNINGS "/W3 /wd4018 /wd4244 /wd4305 /wd4800 /wd4181 /wd4065 /wd4267 /we4013 /wd4200")
+		set(C_WARNINGS "${_WARNINGS}")
+		set(CXX_WARNINGS "${_WARNINGS}")
+		unset(_WARNINGS)
 
 		if(WITH_INTERNATIONAL)
 			set(GETTEXT ${LIBDIR}/gettext)
 			set(GETTEXT_INCLUDE_DIRS ${GETTEXT}/include)
 			set(GETTEXT_LIBPATH ${GETTEXT}/lib)
 			set(GETTEXT_LIBRARIES gnu_gettext)
+		endif()
+		
+		if(WITH_MOD_CLOTH_ELTOPO)
+			set(LAPACK ${LIBDIR}/lapack)
+			# set(LAPACK_INCLUDE_DIR ${LAPACK}/include)
+			set_lib_path(LAPACK_LIBPATH ${LAPACK}/lib)	
+			set(LAPACK_LIBRARIES
+				${LIBDIR}/lapack/lib/libf2c.lib
+				${LIBDIR}/lapack/lib/clapack_nowrap.lib
+				${LIBDIR}/lapack/lib/BLAS_nowrap.lib
+			)
 		endif()
 
 		set(PNG_LIBRARIES libpng)
@@ -995,29 +1022,46 @@ elseif(WIN32)
 
 		set(PLATFORM_LINKFLAGS_DEBUG "/NODEFAULTLIB:libcmt.lib /NODEFAULTLIB:libc.lib")
 
-	else()
-		# keep GCC specific stuff here
-		if(CMAKE_COMPILER_IS_GNUCC)
-			set(PLATFORM_LINKLIBS "-lshell32 -lshfolder -lgdi32 -lmsvcrt -lwinmm -lmingw32 -lm -lws2_32 -lz -lstdc++ -lole32 -luuid -lwsock32 -lpsapi")
-			set(PLATFORM_CFLAGS "-pipe -funsigned-char -fno-strict-aliasing")
+		# used in many places so include globally, like OpenGL
+		blender_include_dirs("${PTHREADS_INCLUDE_DIRS}")
 
-			add_definitions(-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE)
+	elseif(CMAKE_COMPILER_IS_GNUCC)
+	# keep GCC specific stuff here		
+		set(PLATFORM_LINKLIBS "-lshell32 -lshfolder -lgdi32 -lmsvcrt -lwinmm -lmingw32 -lm -lws2_32 -lz -lstdc++ -lole32 -luuid -lwsock32 -lpsapi")
+		set(PLATFORM_CFLAGS "-pipe -funsigned-char -fno-strict-aliasing")
+
+		if(WITH_MINGW64)
+			#We need to take care though not to have these on debug builds because they may play funky with gdb
+			if(CMAKE_BUILD_TYPE MATCHES "Release")
+				set(PLATFORM_CFLAGS "${PLATFORM_CFLAGS} -mmmx -ftree-vectorize")
+			endif()
+			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive")
+			set(PLATFORM_LINKLIBS "${PLATFORM_LINKLIBS} -lpthread")
+			
+			add_definitions(-DFREE_WINDOWS64 -DMS_WIN64)
 		endif()
+
+		add_definitions(-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE)
+
 
 		add_definitions(-DFREE_WINDOWS)
 
 		if(WITH_INTERNATIONAL)
-			set(GETTEXT ${LIBDIR}/gcc/gettext)
+			set(GETTEXT ${LIBDIR}/gettext)
 			set(GETTEXT_INCLUDE_DIRS ${GETTEXT}/include)
 			set(GETTEXT_LIBPATH ${GETTEXT}/lib)
 			set(GETTEXT_LIBRARIES intl)
 		endif()
 		
-		set(PNG "${LIBDIR}/gcc/png")
+		set(PNG "${LIBDIR}/png")
 		set(PNG_INCLUDE_DIR "${PNG}/include")
 		set(PNG_LIBPATH ${PNG}/lib) # not cmake defined
 
-		set(JPEG_LIBRARIES libjpeg)
+		if(WITH_MINGW64)
+			set(JPEG_LIBRARIES jpeg)
+		else()
+			set(JPEG_LIBRARIES libjpeg)
+		endif()
 		set(PNG_LIBRARIES png)
 
 		set(ZLIB ${LIBDIR}/zlib)
@@ -1025,53 +1069,64 @@ elseif(WIN32)
 		set(ZLIB_LIBPATH ${ZLIB}/lib)
 		set(ZLIB_LIBRARIES z)
 
-		set(PTHREADS ${LIBDIR}/pthreads)
-		set(PTHREADS_INCLUDE_DIRS ${PTHREADS}/include)
-		set(PTHREADS_LIBPATH ${PTHREADS}/lib)
-		set(PTHREADS_LIBRARIES pthreadGC2)
-
-		set(FREETYPE ${LIBDIR}/gcc/freetype)
+		#comes with own pthread library
+		if(NOT WITH_MINGW64)
+			set(PTHREADS ${LIBDIR}/pthreads)
+			set(PTHREADS_INCLUDE_DIRS ${PTHREADS}/include)
+			set(PTHREADS_LIBPATH ${PTHREADS}/lib)
+			set(PTHREADS_LIBRARIES pthreadGC2)
+		endif()
+		
+		set(FREETYPE ${LIBDIR}/freetype)
 		set(FREETYPE_INCLUDE_DIRS ${FREETYPE}/include ${FREETYPE}/include/freetype2)
 		set(FREETYPE_LIBPATH ${FREETYPE}/lib)
 		set(FREETYPE_LIBRARY freetype)
 
 		if(WITH_FFTW3)
-			set(FFTW3 ${LIBDIR}/gcc/fftw3)
+			set(FFTW3 ${LIBDIR}/fftw3)
 			set(FFTW3_LIBRARIES fftw3)
 			set(FFTW3_INCLUDE_DIRS ${FFTW3}/include)
 			set(FFTW3_LIBPATH ${FFTW3}/lib)
 		endif()
 
 		if(WITH_OPENCOLLADA)
-			set(OPENCOLLADA ${LIBDIR}/gcc/opencollada)
+			set(OPENCOLLADA ${LIBDIR}/opencollada)
 			set(OPENCOLLADA_INCLUDE_DIRS
-				${LIBDIR}/gcc/opencollada/include/COLLADAStreamWriter/include
-				${LIBDIR}/gcc/opencollada/include/COLLADABaseUtils/include
-				${LIBDIR}/gcc/opencollada/include/COLLADAFramework/include
-				${LIBDIR}/gcc/opencollada/include/COLLADASaxFrameworkLoader/include
-				${LIBDIR}/gcc/opencollada/include/GeneratedSaxParser/include
+				${LIBDIR}/opencollada/include/COLLADAStreamWriter/include
+				${LIBDIR}/opencollada/include/COLLADABaseUtils/include
+				${LIBDIR}/opencollada/include/COLLADAFramework/include
+				${LIBDIR}/opencollada/include/COLLADASaxFrameworkLoader/include
+				${LIBDIR}/opencollada/include/GeneratedSaxParser/include
 			)
 			set(OPENCOLLADA_LIBPATH ${OPENCOLLADA}/lib ${OPENCOLLADA}/lib)
-			set(OPENCOLLADA_LIBRARIES OpenCOLLADAStreamWriter OpenCOLLADASaxFrameworkLoader OpenCOLLADAFramework OpenCOLLADABaseUtils GeneratedSaxParser UTF MathMLSolver expat pcre buffer ftoa)
+			if(WITH_MINGW64)
+				set(OPENCOLLADA_LIBRARIES OpenCOLLADAStreamWriter OpenCOLLADASaxFrameworkLoader OpenCOLLADAFramework OpenCOLLADABaseUtils GeneratedSaxParser UTF MathMLSolver pcre buffer ftoa xml)
+			else()
+				set(OPENCOLLADA_LIBRARIES OpenCOLLADAStreamWriter OpenCOLLADASaxFrameworkLoader OpenCOLLADAFramework OpenCOLLADABaseUtils GeneratedSaxParser UTF MathMLSolver expat pcre buffer ftoa)
+			endif()
 			set(PCRE_LIBRARIES pcre)
 		endif()
 
 		if(WITH_CODEC_FFMPEG)
 			set(FFMPEG ${LIBDIR}/ffmpeg)
-			set(FFMPEG_INCLUDE_DIRS ${FFMPEG}/include ${FFMPEG}/include)
-			set(FFMPEG_LIBRARIES avcodec-53 avformat-53 avdevice-53 avutil-51 swscale-2)
+			set(FFMPEG_INCLUDE_DIRS ${FFMPEG}/include)
+			if(WITH_MINGW64)
+				set(FFMPEG_LIBRARIES avcodec.dll avformat.dll avdevice.dll avutil.dll swscale.dll swresample.dll)
+			else()
+				set(FFMPEG_LIBRARIES avcodec-53 avformat-53 avdevice-53 avutil-51 swscale-2)
+			endif()
 			set(FFMPEG_LIBPATH ${FFMPEG}/lib)
 		endif()
 
 		if(WITH_IMAGE_OPENEXR)
-			set(OPENEXR ${LIBDIR}/gcc/openexr)
+			set(OPENEXR ${LIBDIR}/openexr)
 			set(OPENEXR_INCLUDE_DIRS ${OPENEXR}/include/OpenEXR)
 			set(OPENEXR_LIBRARIES Half IlmImf Imath IlmThread Iex)
 			set(OPENEXR_LIBPATH ${OPENEXR}/lib)
 		endif()
 
 		if(WITH_IMAGE_TIFF)
-			set(TIFF ${LIBDIR}/gcc/tiff)
+			set(TIFF ${LIBDIR}/tiff)
 			set(TIFF_LIBRARY tiff)
 			set(TIFF_INCLUDE_DIR ${TIFF}/include)
 			set(TIFF_LIBPATH ${TIFF}/lib)
@@ -1101,19 +1156,24 @@ elseif(WIN32)
 		if(WITH_BOOST)
 			set(BOOST ${LIBDIR}/boost)
 			set(BOOST_INCLUDE_DIR ${BOOST}/include)
-			set(BOOST_POSTFIX "mgw46-mt-s-1_47")
-			set(BOOST_DEBUG_POSTFIX "mgw46-mt-sd-1_47")
+			if(WITH_MINGW64)
+				set(BOOST_POSTFIX "mgw47-mt-s-1_49")
+				set(BOOST_DEBUG_POSTFIX "mgw47-mt-sd-1_49")
+			else()
+				set(BOOST_POSTFIX "mgw46-mt-s-1_47")
+				set(BOOST_DEBUG_POSTFIX "mgw46-mt-sd-1_47")
+			endif()		
 			set(BOOST_LIBRARIES
 				optimized boost_date_time-${BOOST_POSTFIX} boost_filesystem-${BOOST_POSTFIX}
 				boost_regex-${BOOST_POSTFIX} boost_system-${BOOST_POSTFIX} boost_thread-${BOOST_POSTFIX}
 				debug boost_date_time-${BOOST_DEBUG_POSTFIX} boost_filesystem-${BOOST_DEBUG_POSTFIX}
 				boost_regex-${BOOST_DEBUG_POSTFIX} boost_system-${BOOST_DEBUG_POSTFIX} boost_thread-${BOOST_DEBUG_POSTFIX})
-			set(BOOST_LIBPATH ${BOOST}/lib/gcc)
+			set(BOOST_LIBPATH ${BOOST}/lib)
 			set(BOOST_DEFINITIONS "-DBOOST_ALL_NO_LIB -DBOOST_THREAD_USE_LIB ")
 		endif()
 			
 		if(WITH_OPENIMAGEIO)
-			set(OPENIMAGEIO ${LIBDIR}/gcc/openimageio)
+			set(OPENIMAGEIO ${LIBDIR}/openimageio)
 			set(OPENIMAGEIO_INCLUDE_DIRS ${OPENIMAGEIO}/include)
 			set(OPENIMAGEIO_LIBRARIES OpenImageIO)
 			set(OPENIMAGEIO_LIBPATH ${OPENIMAGEIO}/lib)
@@ -1128,23 +1188,20 @@ elseif(WIN32)
 
 	endif()
 
-	# used in many places so include globally, like OpenGL
-	blender_include_dirs("${PTHREADS_INCLUDE_DIRS}")
-
 elseif(APPLE)
 
 	if(${CMAKE_OSX_DEPLOYMENT_TARGET} STREQUAL "10.5" OR ${CMAKE_OSX_DEPLOYMENT_TARGET} STRGREATER "10.5")
 		set(WITH_LIBS10.5 ON CACHE BOOL "Use 10.5 libs" FORCE) # valid also for 10.6/10.7
 	endif()
 
-	if(${XCODE_VERSION} LESS 4.3)
-		SET(CMAKE_OSX_SYSROOT /Developer/SDKs/MacOSX${OSX_SYSTEM}.sdk CACHE PATH "" FORCE ) # use guaranteed existing sdk
+	if(${XCODE_VERSION} VERSION_LESS 4.3)
+		set(CMAKE_OSX_SYSROOT /Developer/SDKs/MacOSX${OSX_SYSTEM}.sdk CACHE PATH "" FORCE)  # use guaranteed existing sdk
 	else()
 		# note: i don't use xcode-select path on purpose, cause also /Applications/Xcode.app would be allowed
 		# absolute pathes are more foolproof here !
-		SET(OSX_SYSROOT_PREFIX /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform)
-		SET(OSX_DEVELOPER_PREFIX /Developer/SDKs/MacOSX${OSX_SYSTEM}.sdk) # use guaranteed existing sdk
-		SET(CMAKE_OSX_SYSROOT ${OSX_SYSROOT_PREFIX}/${OSX_DEVELOPER_PREFIX} CACHE PATH "" FORCE)
+		set(OSX_SYSROOT_PREFIX /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform)
+		set(OSX_DEVELOPER_PREFIX /Developer/SDKs/MacOSX${OSX_SYSTEM}.sdk) # use guaranteed existing sdk
+		set(CMAKE_OSX_SYSROOT ${OSX_SYSROOT_PREFIX}/${OSX_DEVELOPER_PREFIX} CACHE PATH "" FORCE)
 	endif()	
 	
 	if(WITH_LIBS10.5)
@@ -1316,7 +1373,7 @@ elseif(APPLE)
 		)
 
 		set(OPENCOLLADA_LIBPATH ${OPENCOLLADA}/lib)
-		set(OPENCOLLADA_LIBRARIES "OpenCOLLADASaxFrameworkLoader -lOpenCOLLADAFramework -lOpenCOLLADABaseUtils -lOpenCOLLADAStreamWriter -lMathMLSolver -lGeneratedSaxParser -lUTF -lxml2 -lbuffer -lftoa" )
+		set(OPENCOLLADA_LIBRARIES "OpenCOLLADASaxFrameworkLoader -lOpenCOLLADAFramework -lOpenCOLLADABaseUtils -lOpenCOLLADAStreamWriter -lMathMLSolver -lGeneratedSaxParser -lUTF -lxml2 -lbuffer -lftoa")
 		#pcre is bundled with openCollada
 		#set(PCRE ${LIBDIR}/pcre)
 		#set(PCRE_LIBPATH ${PCRE}/lib)
@@ -1548,6 +1605,20 @@ if(CMAKE_COMPILER_IS_GNUCC)
 		ADD_CHECK_C_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS C_WARN_NO_ERROR_UNUSED_BUT_SET_VARIABLE -Wno-error=unused-but-set-variable)
 	endif()
 
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+
+	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_ALL -Wall)
+	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_NO_AUTOLOGICAL_COMPARE -Wno-tautological-compare)
+	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_NO_UNKNOWN_PRAGMAS -Wno-unknown-pragmas)
+	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_NO_CHAR_SUBSCRIPTS -Wno-char-subscripts)
+
+	ADD_CHECK_C_COMPILER_FLAG(CXX_WARNINGS C_WARN_ALL -Wall)
+	ADD_CHECK_C_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_AUTOLOGICAL_COMPARE -Wno-tautological-compare)
+	ADD_CHECK_C_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_UNKNOWN_PRAGMAS -Wno-unknown-pragmas)
+	ADD_CHECK_C_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_CHAR_SUBSCRIPTS -Wno-char-subscripts)
+	ADD_CHECK_C_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_OVERLOADED_VIRTUAL -Wno-overloaded-virtual)  # we get a lot of these, if its a problem a dev needs to look into it.
+	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_INVALID_OFFSETOF -Wno-invalid-offsetof)
+
 elseif(CMAKE_C_COMPILER_ID MATCHES "Intel")
 
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_ALL -Wall)
@@ -1583,6 +1654,50 @@ if(WITH_PYTHON)
 							"Set the cache entry 'PYTHON_INCLUDE_DIR' to point "
 							"to a valid python include path. Containing "
 							"Python.h for python version \"${PYTHON_VERSION}\"")
+	endif()
+
+	if(WITH_PYTHON_INSTALL AND WITH_PYTHON_INSTALL_NUMPY)
+		# set but invalid
+		if(NOT ${PYTHON_NUMPY_PATH} STREQUAL "")
+			if(NOT EXISTS "${PYTHON_NUMPY_PATH}/numpy")
+				message(WARNING "PYTHON_NUMPY_PATH is invalid, numpy not found in '${PYTHON_NUMPY_PATH}' "
+				                "WITH_PYTHON_INSTALL_NUMPY option will be ignored when installing python")
+				set(WITH_PYTHON_INSTALL_NUMPY OFF)
+			endif()
+		# not set, so initialize
+		else()
+			string(REPLACE "." ";" _PY_VER_SPLIT "${PYTHON_VERSION}")
+			list(GET _PY_VER_SPLIT 0 _PY_VER_MAJOR)
+
+			# re-cache
+			unset(PYTHON_NUMPY_PATH CACHE)
+			find_path(PYTHON_NUMPY_PATH
+			  NAMES
+			    numpy
+			  HINTS
+			    "${PYTHON_LIBPATH}/python${PYTHON_VERSION}/"
+			    "${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/"
+			  PATH_SUFFIXES
+			    site-packages
+			    dist-packages
+			   NO_DEFAULT_PATH
+			)
+
+			if(NOT EXISTS "${PYTHON_NUMPY_PATH}")
+				message(WARNING "'numpy' path could not be found in:\n"
+				                "'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/site-packages/numpy', "
+				                "'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/site-packages/numpy', "
+				                "'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/dist-packages/numpy', "
+				                "'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/dist-packages/numpy', "
+				                "WITH_PYTHON_INSTALL_NUMPY option will be ignored when installing python")
+				set(WITH_PYTHON_INSTALL_NUMPY OFF)
+			else()
+				message(STATUS "numpy found at '${PYTHON_NUMPY_PATH}'")
+			endif()
+
+			unset(_PY_VER_SPLIT)
+			unset(_PY_VER_MAJOR)
+		endif()
 	endif()
 endif()
 
@@ -1640,7 +1755,7 @@ if(FIRST_RUN)
 		_setting)
 		set(_msg "   * ${_setting}")
 		string(LENGTH "${_msg}" _len)
-		while("28" GREATER "${_len}")
+		while("32" GREATER "${_len}")
 			set(_msg "${_msg} ")
 			 math(EXPR _len "${_len} + 1")
 		endwhile()
@@ -1700,6 +1815,7 @@ if(FIRST_RUN)
 
 	info_cfg_text("Python:")
 	info_cfg_option(WITH_PYTHON_INSTALL)
+	info_cfg_option(WITH_PYTHON_INSTALL_NUMPY)
 	info_cfg_option(WITH_PYTHON_MODULE)
 	info_cfg_option(WITH_PYTHON_SAFETY)
 

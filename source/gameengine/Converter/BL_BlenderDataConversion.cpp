@@ -188,7 +188,7 @@ extern "C" {
 #endif
 //XXX #include "BSE_headerbuttons.h"
 //XXX void update_for_newframe();
-//void scene_update_for_newframe(struct Scene *sce, unsigned int lay);
+//void BKE_scene_update_for_newframe(struct Scene *sce, unsigned int lay);
 //#include "BKE_ipo.h"
 //void do_all_data_ipos(void);
 #ifdef __cplusplus
@@ -488,11 +488,10 @@ static void GetRGB(short type,
 	}
 }
 
-typedef struct MTF_localLayer
-{
+typedef struct MTF_localLayer {
 	MTFace *face;
 	const char *name;
-}MTF_localLayer;
+} MTF_localLayer;
 
 // ------------------------------------
 bool ConvertMaterial(
@@ -1000,9 +999,9 @@ RAS_MeshObject* BL_ConvertMesh(Mesh* mesh, Object* blenderobj, KX_Scene* scene, 
 			float fno[3];
 
 			if (mface->v4)
-				normal_quad_v3( fno,mvert[mface->v1].co, mvert[mface->v2].co, mvert[mface->v3].co, mvert[mface->v4].co);
+				normal_quad_v3(fno,mvert[mface->v1].co, mvert[mface->v2].co, mvert[mface->v3].co, mvert[mface->v4].co);
 			else
-				normal_tri_v3( fno,mvert[mface->v1].co, mvert[mface->v2].co, mvert[mface->v3].co);
+				normal_tri_v3(fno,mvert[mface->v1].co, mvert[mface->v2].co, mvert[mface->v3].co);
 
 			no0 = no1 = no2 = no3 = MT_Vector3(fno);
 		}
@@ -1193,7 +1192,7 @@ RAS_MeshObject* BL_ConvertMesh(Mesh* mesh, Object* blenderobj, KX_Scene* scene, 
 				twoside = ((ma->game.flag  & GEMAT_BACKCULL)==0);
 				collider = ((ma->game.flag & GEMAT_NOPHYSICS)==0);
 			}
-			else{
+			else {
 				visible = true;
 				twoside = false;
 				collider = true;
@@ -1346,6 +1345,11 @@ static PHY_ShapeProps *CreateShapePropsFromBlenderObject(struct Object* blendero
 	shapeProps->m_clamp_vel_min = blenderobject->min_vel;
 	shapeProps->m_clamp_vel_max = blenderobject->max_vel;
 	
+//  Character physics properties
+	shapeProps->m_step_height = blenderobject->step_height;
+	shapeProps->m_jump_speed = blenderobject->jump_speed;
+	shapeProps->m_fall_speed = blenderobject->fall_speed;
+	
 	return shapeProps;
 }
 
@@ -1375,16 +1379,17 @@ static float my_boundbox_mesh(Mesh *me, float *loc, float *size)
 	if (!size) size= msize;
 	
 	mvert= me->mvert;
-	for (a=0; a<me->totvert; a++, mvert++) {
-		co= mvert->co;
+	for (a = 0; a<me->totvert; a++, mvert++) {
+		co = mvert->co;
 		
 		/* bounds */
-		DO_MINMAX(co, min, max);
+		minmax_v3v3_v3(min, max, co);
 		
 		/* radius */
-		vert_radius= co[0]*co[0] + co[1]*co[1] + co[2]*co[2];
+
+		vert_radius = len_squared_v3(co);
 		if (vert_radius > radius)
-			radius= vert_radius;
+			radius = vert_radius;
 	}
 		
 	if (me->totvert) {
@@ -1432,8 +1437,8 @@ static void my_tex_space_mesh(Mesh *me)
 				INIT_MINMAX(min, max);
 
 				fp= (float *)kb->data;
-				for (a=0; a<kb->totelem; a++, fp+=3) {
-					DO_MINMAX(fp, min, max);
+				for (a=0; a<kb->totelem; a++, fp += 3) {
+					minmax_v3v3_v3(min, max, fp);
 				}
 				if (kb->totelem) {
 					loc[0]= (min[0]+max[0])/2.0f; loc[1]= (min[1]+max[1])/2.0f; loc[2]= (min[2]+max[2])/2.0f;
@@ -1637,6 +1642,7 @@ void BL_CreatePhysicsObjectNew(KX_GameObject* gameobj,
 	objprop.m_dyna = (blenderobject->gameflag & OB_DYNAMIC) != 0;
 	objprop.m_softbody = (blenderobject->gameflag & OB_SOFT_BODY) != 0;
 	objprop.m_angular_rigidbody = (blenderobject->gameflag & OB_RIGID_BODY) != 0;
+	objprop.m_character = (blenderobject->gameflag & OB_CHARACTER) != 0;
 	
 	///contact processing threshold is only for rigid bodies and static geometry, not 'dynamic'
 	if (objprop.m_angular_rigidbody || !objprop.m_dyna )
@@ -1753,6 +1759,11 @@ void BL_CreatePhysicsObjectNew(KX_GameObject* gameobj,
 		objprop.m_boundclass = KX_BOUNDMESH;
 	}
 
+	if ((blenderobject->gameflag & OB_CHARACTER) && !(blenderobject->gameflag & OB_BOUNDS))
+	{
+		objprop.m_boundclass = KX_BOUNDSPHERE;
+	}
+
 	KX_BoxBounds bb;
 	DerivedMesh* dm = NULL;
 	if (gameobj->GetDeformer())
@@ -1839,10 +1850,6 @@ void BL_CreatePhysicsObjectNew(KX_GameObject* gameobj,
 			break;
 
 #endif
-		case UseDynamo:
-			//KX_ConvertDynamoObject(gameobj,meshobj,kxscene,shapeprops,	smmaterial,	&objprop);
-			break;
-			
 		case UseNone:
 		default:
 			break;
@@ -2617,7 +2624,7 @@ void BL_ConvertBlenderObjects(struct Main* maggie,
 			case PARBONE:
 			{
 				// parent this to a bone
-				Bone *parent_bone = get_named_bone( (bArmature *)(blenderchild->parent)->data, blenderchild->parsubstr);
+				Bone *parent_bone = BKE_armature_find_bone_name( (bArmature *)(blenderchild->parent)->data, blenderchild->parsubstr);
 
 				if (parent_bone) {
 					KX_BoneParentRelation *bone_parent_relation = KX_BoneParentRelation::New(parent_bone);
@@ -2757,7 +2764,7 @@ void BL_ConvertBlenderObjects(struct Main* maggie,
 
 					bRigidBodyJointConstraint *dat=(bRigidBodyJointConstraint *)curcon->data;
 
-					if (!dat->child) {
+					if (!dat->child && !(curcon->flag & CONSTRAINT_OFF)) {
 
 						PHY_IPhysicsController* physctr2 = 0;
 

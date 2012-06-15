@@ -429,23 +429,23 @@ int isect_line_sphere_v3(const float l1[3], const float l2[3],
 	 */
 
 	const float ldir[3] = {
-	    l2[0] - l1[0],
-	    l2[1] - l1[1],
-	    l2[2] - l1[2]
+		l2[0] - l1[0],
+		l2[1] - l1[1],
+		l2[2] - l1[2]
 	};
 
 	const float a = dot_v3v3(ldir, ldir);
 
 	const float b = 2.0f *
-	        (ldir[0] * (l1[0] - sp[0]) +
-	         ldir[1] * (l1[1] - sp[1]) +
-	         ldir[2] * (l1[2] - sp[2]));
+	                (ldir[0] * (l1[0] - sp[0]) +
+	                 ldir[1] * (l1[1] - sp[1]) +
+	                 ldir[2] * (l1[2] - sp[2]));
 
 	const float c =
-	        dot_v3v3(sp, sp) +
-	        dot_v3v3(l1, l1) -
-	        (2.0f * dot_v3v3(sp, l1)) -
-	        (r * r);
+	    dot_v3v3(sp, sp) +
+	    dot_v3v3(l1, l1) -
+	    (2.0f * dot_v3v3(sp, l1)) -
+	    (r * r);
 
 	const float i = b * b - 4.0f * a * c;
 
@@ -490,14 +490,14 @@ int isect_line_sphere_v2(const float l1[2], const float l2[2],
 	const float a = dot_v2v2(ldir, ldir);
 
 	const float b = 2.0f *
-	        (ldir[0] * (l1[0] - sp[0]) +
-	         ldir[1] * (l1[1] - sp[1]));
+	                (ldir[0] * (l1[0] - sp[0]) +
+	                 ldir[1] * (l1[1] - sp[1]));
 
 	const float c =
-	        dot_v2v2(sp, sp) +
-	        dot_v2v2(l1, l1) -
-	        (2.0f * dot_v2v2(sp, l1)) -
-	        (r * r);
+	    dot_v2v2(sp, sp) +
+	    dot_v2v2(l1, l1) -
+	    (2.0f * dot_v2v2(sp, l1)) -
+	    (r * r);
 
 	const float i = b * b - 4.0f * a * c;
 
@@ -1126,10 +1126,10 @@ int isect_axial_line_tri_v3(const int axis, const float p1[3], const float p2[3]
 	//return isect_line_tri_v3(p1,p2,v0,v1,v2,lambda);
 
 	///* first a simple bounding box test */
-	//if(MIN3(v0[a1],v1[a1],v2[a1]) > p1[a1]) return 0;
-	//if(MIN3(v0[a2],v1[a2],v2[a2]) > p1[a2]) return 0;
-	//if(MAX3(v0[a1],v1[a1],v2[a1]) < p1[a1]) return 0;
-	//if(MAX3(v0[a2],v1[a2],v2[a2]) < p1[a2]) return 0;
+	//if (MIN3(v0[a1],v1[a1],v2[a1]) > p1[a1]) return 0;
+	//if (MIN3(v0[a2],v1[a2],v2[a2]) > p1[a2]) return 0;
+	//if (MAX3(v0[a1],v1[a1],v2[a1]) < p1[a1]) return 0;
+	//if (MAX3(v0[a2],v1[a2],v2[a2]) < p1[a2]) return 0;
 
 	///* then a full intersection test */
 
@@ -1738,9 +1738,9 @@ void axis_dominant_v3(int *axis_a, int *axis_b, const float axis[3])
 	const float yn = fabsf(axis[1]);
 	const float zn = fabsf(axis[2]);
 
-	if      (zn >= xn && zn >= yn) { *axis_a= 0; *axis_b = 1; }
-	else if (yn >= xn && yn >= zn) { *axis_a= 0; *axis_b = 2; }
-	else                           { *axis_a= 1; *axis_b = 2; }
+	if      (zn >= xn && zn >= yn) { *axis_a = 0; *axis_b = 1; }
+	else if (yn >= xn && yn >= zn) { *axis_a = 0; *axis_b = 2; }
+	else                           { *axis_a = 1; *axis_b = 2; }
 }
 
 static float tri_signed_area(const float v1[3], const float v2[3], const float v3[3], const int i, const int j)
@@ -1823,6 +1823,45 @@ void interp_weights_face_v3(float w[4], const float v1[3], const float v2[3], co
 		else
 			barycentric_weights(v1, v2, v3, co, n, w);
 	}
+}
+
+/* return 1 of point is inside triangle, 2 if it's on the edge, 0 if point is outside of triangle */
+int barycentric_inside_triangle_v2(const float w[3])
+{
+	if (IN_RANGE(w[0], 0.0f, 1.0f) &&
+	    IN_RANGE(w[1], 0.0f, 1.0f) &&
+	    IN_RANGE(w[2], 0.0f, 1.0f))
+	{
+		return 1;
+	}
+	else if (IN_RANGE_INCL(w[0], 0.0f, 1.0f) &&
+	         IN_RANGE_INCL(w[1], 0.0f, 1.0f) &&
+	         IN_RANGE_INCL(w[2], 0.0f, 1.0f))
+	{
+		return 2;
+	}
+
+	return 0;
+}
+
+/* returns 0 for degenerated triangles */
+int barycentric_coords_v2(const float v1[2], const float v2[2], const float v3[2], const float co[2], float w[3])
+{
+	float x = co[0], y = co[1];
+	float x1 = v1[0], y1 = v1[1];
+	float x2 = v2[0], y2 = v2[1];
+	float x3 = v3[0], y3 = v3[1];
+	float det = (y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3);
+
+	if (fabsf(det) > FLT_EPSILON) {
+		w[0] = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / det;
+		w[1] = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / det;
+		w[2] = 1.0f - w[0] - w[1];
+
+	return 1;
+	}
+
+	return 0;
 }
 
 /* used by projection painting
@@ -2323,7 +2362,7 @@ void box_minmax_bounds_m4(float min[3], float max[3], float boundbox[2][3], floa
 		vec[2] = (a & 4) ? boundbox[0][2] : boundbox[1][2];
 
 		mul_m4_v3(mat, vec);
-		DO_MINMAX(vec, mn, mx);
+		minmax_v3v3_v3(mn, mx, vec);
 	}
 
 	copy_v3_v3(min, mn);
@@ -2973,8 +3012,8 @@ static float ff_quad_form_factor(float *p, float *n, float *q0, float *q1, float
 static __m128 sse_approx_acos(__m128 x)
 {
 	/* needs a better approximation than taylor expansion of acos, since that
-	* gives big erros for near 1.0 values, sqrt(2 * x) * acos(1 - x) should work
-	* better, see http://www.tom.womack.net/projects/sse-fast-arctrig.html */
+	 * gives big erros for near 1.0 values, sqrt(2 * x) * acos(1 - x) should work
+	 * better, see http://www.tom.womack.net/projects/sse-fast-arctrig.html */
 
 	return _mm_set_ps1(1.0f);
 }

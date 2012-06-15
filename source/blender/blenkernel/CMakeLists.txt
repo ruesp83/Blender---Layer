@@ -43,6 +43,7 @@ set(INC
 	../../../intern/memutil
 	../../../intern/mikktspace
 	../../../intern/opennl/extern
+	../../../intern/raskter
 
 	# XXX - BAD LEVEL CALL WM_api.h
 	../windowmanager
@@ -100,6 +101,7 @@ set(SRC
 	intern/lamp.c
 	intern/lattice.c
 	intern/library.c
+	intern/mask.c
 	intern/material.c
 	intern/mball.c
 	intern/mesh.c
@@ -157,6 +159,7 @@ set(SRC
 	BKE_bullet.h
 	BKE_bvhutils.h
 	BKE_camera.h
+	BKE_ccg.h
 	BKE_cdderivedmesh.h
 	BKE_cloth.h
 	BKE_collision.h
@@ -186,6 +189,7 @@ set(SRC
 	BKE_lamp.h
 	BKE_lattice.h
 	BKE_library.h
+	BKE_mask.h
 	BKE_main.h
 	BKE_material.h
 	BKE_mball.h
@@ -200,7 +204,6 @@ set(SRC
 	BKE_packedFile.h
 	BKE_paint.h
 	BKE_particle.h
-	BKE_plugin_types.h
 	BKE_pointcache.h
 	BKE_property.h
 	BKE_report.h

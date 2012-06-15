@@ -32,9 +32,11 @@
  *  \ingroup bke
  */
 
+struct bContext;
 struct Brush;
 struct MDisps;
 struct MeshElemMap;
+struct GridPaintMask;
 struct MFace;
 struct MultireModifierData;
 struct MVert;
@@ -54,6 +56,7 @@ void free_paint(struct Paint *p);
 void copy_paint(struct Paint *src, struct Paint *tar);
 
 struct Paint *paint_get_active(struct Scene *sce);
+struct Paint *paint_get_active_from_context(const struct bContext *C);
 struct Brush *paint_brush(struct Paint *paint);
 void paint_brush_set(struct Paint *paint, struct Brush *br);
 
@@ -66,7 +69,11 @@ int paint_vertsel_test(struct Object *ob);
 /* partial visibility */
 int paint_is_face_hidden(const struct MFace *f, const struct MVert *mvert);
 int paint_is_grid_face_hidden(const unsigned int *grid_hidden,
-							  int gridsize, int x, int y);
+                              int gridsize, int x, int y);
+
+/* paint masks */
+float paint_grid_paint_mask(const struct GridPaintMask *gpm, unsigned level,
+                            unsigned x, unsigned y);
 
 /* Session data (mode-specific) */
 
@@ -79,6 +86,7 @@ typedef struct SculptSession {
 	int totvert, totpoly;
 	float *face_normals;
 	struct KeyBlock *kb;
+	float *vmask;
 	
 	/* Mesh connectivity */
 	const struct MeshElemMap *pmap;
@@ -103,6 +111,10 @@ typedef struct SculptSession {
 
 	struct SculptStroke *stroke;
 	struct StrokeCache *cache;
+
+	/* last paint/sculpt stroke location */
+	int last_stroke_valid;
+	float last_stroke[3];
 } SculptSession;
 
 void free_sculptsession(struct Object *ob);

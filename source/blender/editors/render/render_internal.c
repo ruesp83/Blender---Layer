@@ -170,7 +170,7 @@ static void screen_render_scene_layer_set(wmOperator *op, Main *mainp, Scene **s
 		if (scn) {
 			/* camera switch wont have updated */
 			scn->r.cfra = (*scene)->r.cfra;
-			scene_camera_switch_update(scn);
+			BKE_scene_camera_switch_update(scn);
 
 			*scene = scn;
 		}
@@ -221,9 +221,9 @@ static int screen_render_exec(bContext *C, wmOperator *op)
 	BKE_image_backup_render(scene, ima);
 
 	/* cleanup sequencer caches before starting user triggered render.
-	* otherwise, invalidated cache entries can make their way into
-	* the output rendering. We can't put that into RE_BlenderFrame,
-	* since sequence rendering can call that recursively... (peter) */
+	 * otherwise, invalidated cache entries can make their way into
+	 * the output rendering. We can't put that into RE_BlenderFrame,
+	 * since sequence rendering can call that recursively... (peter) */
 	seq_stripelem_cache_cleanup();
 
 	RE_SetReports(re, op->reports);
@@ -236,7 +236,7 @@ static int screen_render_exec(bContext *C, wmOperator *op)
 	RE_SetReports(re, NULL);
 
 	// no redraw needed, we leave state as we entered it
-	ED_update_for_newframe(mainp, scene, CTX_wm_screen(C), 1);
+	ED_update_for_newframe(mainp, scene, 1);
 
 	WM_event_add_notifier(C, NC_SCENE | ND_RENDER_RESULT, scene);
 
@@ -288,11 +288,12 @@ static void make_renderinfo_string(RenderStats *rs, Scene *scene, char *str)
 	else if (scene->r.scemode & R_SINGLE_LAYER)
 		spos += sprintf(spos, "Single Layer | ");
 
+	spos += sprintf(spos, "Frame:%d ", (scene->r.cfra));
+
 	if (rs->statstr) {
-		spos += sprintf(spos, "%s ", rs->statstr);
+		spos += sprintf(spos, "| %s ", rs->statstr);
 	}
 	else {
-		spos += sprintf(spos, "Fra:%d  ", (scene->r.cfra));
 		if (rs->totvert) spos += sprintf(spos, "Ve:%d ", rs->totvert);
 		if (rs->totface) spos += sprintf(spos, "Fa:%d ", rs->totface);
 		if (rs->tothalo) spos += sprintf(spos, "Ha:%d ", rs->tothalo);
@@ -340,7 +341,7 @@ static void image_renderinfo_cb(void *rjv, RenderStats *rs)
 	RE_ReleaseResult(rj->re);
 
 	/* make jobs timer to send notifier */
-	*(rj->do_update) = 1;
+	*(rj->do_update) = TRUE;
 
 }
 
@@ -352,7 +353,7 @@ static void render_progress_update(void *rjv, float progress)
 		*rj->progress = progress;
 
 		/* make jobs timer to send notifier */
-		*(rj->do_update) = 1;
+		*(rj->do_update) = TRUE;
 	}
 }
 
@@ -372,7 +373,7 @@ static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrec
 		image_buffer_rect_update(rj->scene, rr, ibuf, renrect);
 
 		/* make jobs timer to send notifier */
-		*(rj->do_update) = 1;
+		*(rj->do_update) = TRUE;
 	}
 	BKE_image_release_ibuf(ima, lock);
 }
@@ -407,8 +408,12 @@ static void render_endjob(void *rjv)
 		free_main(rj->main);
 
 	/* else the frame will not update for the original value */
-	if (!(rj->scene->r.scemode & R_NO_FRAME_UPDATE))
-		ED_update_for_newframe(G.main, rj->scene, rj->win->screen, 1);
+	if (!(rj->scene->r.scemode & R_NO_FRAME_UPDATE)) {
+		/* possible this fails of loading new file while rendering */
+		if (G.main->wm.first) {
+			ED_update_for_newframe(G.main, rj->scene, 1);
+		}
+	}
 	
 	/* XXX above function sets all tags in nodes */
 	ntreeCompositClearTags(rj->scene->nodetree);
@@ -470,7 +475,6 @@ static int screen_render_invoke(bContext *C, wmOperator *op, wmEvent *event)
 	Main *mainp;
 	Scene *scene = CTX_data_scene(C);
 	SceneRenderLayer *srl = NULL;
-	bScreen *screen = CTX_wm_screen(C);
 	View3D *v3d = CTX_wm_view3d(C);
 	Render *re;
 	wmJob *steve;
@@ -507,7 +511,7 @@ static int screen_render_invoke(bContext *C, wmOperator *op, wmEvent *event)
 		mainp = CTX_data_main(C);
 
 	/* cancel animation playback */
-	if (screen->animtimer)
+	if (ED_screen_animation_playing(CTX_wm_manager(C)))
 		ED_screen_animation_play(C, 0, 0);
 	
 	/* handle UI stuff */
@@ -517,9 +521,9 @@ static int screen_render_invoke(bContext *C, wmOperator *op, wmEvent *event)
 	multires_force_render_update(CTX_data_active_object(C));
 
 	/* cleanup sequencer caches before starting user triggered render.
-	* otherwise, invalidated cache entries can make their way into
-	* the output rendering. We can't put that into RE_BlenderFrame,
-	* since sequence rendering can call that recursively... (peter) */
+	 * otherwise, invalidated cache entries can make their way into
+	 * the output rendering. We can't put that into RE_BlenderFrame,
+	 * since sequence rendering can call that recursively... (peter) */
 	seq_stripelem_cache_cleanup();
 
 	/* get editmode results */

@@ -34,12 +34,12 @@
 
 /* ************ qdn: Defocus node ****************** */
 static bNodeSocketTemplate cmp_node_defocus_in[]= {
-	{	SOCK_RGBA, 1, "Image",			1.0f, 1.0f, 1.0f, 1.0f},
-	{	SOCK_FLOAT, 1, "Z",			1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, PROP_FACTOR},
+	{	SOCK_RGBA, 1, N_("Image"),			1.0f, 1.0f, 1.0f, 1.0f},
+	{	SOCK_FLOAT, 1, N_("Z"),			1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, PROP_FACTOR},
 	{	-1, 0, ""	}
 };
 static bNodeSocketTemplate cmp_node_defocus_out[]= {
-	{	SOCK_RGBA, 0, "Image"},
+	{	SOCK_RGBA, 0, N_("Image")},
 	{	-1, 0, ""	}
 };
 
@@ -249,7 +249,7 @@ static void defocus_blur(bNode *node, CompBuf *new, CompBuf *img, CompBuf *zbuf,
 	float bkh_b[4] = {0};	// shape 2D bound
 	float cam_fdist=1, cam_invfdist=1, cam_lens=35;
 	float dof_sp, maxfgc, bk_hn_theta=0, inradsq=0;
-	int y, len_bkh=0, ydone=0;
+	int y, len_bkh=0, ydone = FALSE;
 	float aspect, aperture;
 	int minsz;
 	//float bcrad, nmaxc, scf;
@@ -261,7 +261,7 @@ static void defocus_blur(bNode *node, CompBuf *new, CompBuf *img, CompBuf *zbuf,
 	if (camob && camob->type==OB_CAMERA) {
 		Camera* cam = (Camera*)camob->data;
 		cam_lens = cam->lens;
-		cam_fdist = object_camera_dof_distance(camob);
+		cam_fdist = BKE_camera_object_dof_distance(camob);
 		if (cam_fdist==0.0f) cam_fdist = 1e10f; /* if the dof is 0.0 then set it be be far away */
 		cam_invfdist = 1.f/cam_fdist;
 	}
@@ -748,7 +748,7 @@ static void defocus_blur(bNode *node, CompBuf *new, CompBuf *img, CompBuf *zbuf,
 					p4 = p * new->type;
 					if (nqd->bktype==0)	// Disk
 						lwt = ((u*u + v*v)<=cR2) ? wcor : 0.f;
-					else	// AA not needed here
+					else  /* AA not needed here */
 						lwt = wcor * getWeight(BKH, len_bkh, u, v, ct_crad, inradsq);
 					// prevent background bleeding onto in-focus pixels, user-option
 					if (ct_crad > nqd->bthresh) {  // if center blur > threshold
@@ -868,7 +868,7 @@ static void node_composit_init_defocus(bNodeTree *UNUSED(ntree), bNode* node, bN
 	nbd->gamco = 0;
 	nbd->samples = 16;
 	nbd->fstop = 128.f;
-	nbd->maxblur = 0;
+	nbd->maxblur = 16;
 	nbd->bthresh = 1.f;
 	nbd->scale = 1.f;
 	nbd->no_zbuf = 1;

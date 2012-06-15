@@ -35,14 +35,14 @@
 
 /* **************** SEPARATE HSVA ******************** */
 static bNodeSocketTemplate cmp_node_sephsva_in[]= {
-	{	SOCK_RGBA, 1, "Image",			1.0f, 1.0f, 1.0f, 1.0f},
+	{	SOCK_RGBA, 1, N_("Image"),			1.0f, 1.0f, 1.0f, 1.0f},
 	{	-1, 0, ""	}
 };
 static bNodeSocketTemplate cmp_node_sephsva_out[]= {
-	{	SOCK_FLOAT, 0, "H"},
-	{	SOCK_FLOAT, 0, "S"},
-	{	SOCK_FLOAT, 0, "V"},
-	{	SOCK_FLOAT, 0, "A"},
+	{	SOCK_FLOAT, 0, N_("H")},
+	{	SOCK_FLOAT, 0, N_("S")},
+	{	SOCK_FLOAT, 0, N_("V")},
+	{	SOCK_FLOAT, 0, N_("A")},
 	{	-1, 0, ""	}
 };
 
@@ -113,21 +113,21 @@ void register_node_type_cmp_sephsva(bNodeTreeType *ttype)
 
 
 /* **************** COMBINE HSVA ******************** */
-static bNodeSocketTemplate cmp_node_combhsva_in[]= {
-   {	SOCK_FLOAT, 1, "H",			0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
-   {	SOCK_FLOAT, 1, "S",			0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
-   {	SOCK_FLOAT, 1, "V",			0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
-   {	SOCK_FLOAT, 1, "A",			1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
-   {	-1, 0, ""	}
+static bNodeSocketTemplate cmp_node_combhsva_in[] = {
+	{	SOCK_FLOAT, 1, N_("H"),			0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
+	{	SOCK_FLOAT, 1, N_("S"),			0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
+	{	SOCK_FLOAT, 1, N_("V"),			0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
+	{	SOCK_FLOAT, 1, N_("A"),			1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
+	{	-1, 0, ""	}
 };
 static bNodeSocketTemplate cmp_node_combhsva_out[]= {
-   {	SOCK_RGBA, 0, "Image"},
-   {	-1, 0, ""	}
+	{	SOCK_RGBA, 0, N_("Image")},
+	{	-1, 0, ""	}
 };
 
 static void do_comb_hsva(bNode *UNUSED(node), float *out, float *in1, float *in2, float *in3, float *in4)
 {
-	float r,g,b;
+	float r, g, b;
 	hsv_to_rgb(in1[0], in2[0], in3[0], &r, &g, &b);
 
 	out[0] = r;

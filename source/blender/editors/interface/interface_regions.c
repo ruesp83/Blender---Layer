@@ -339,13 +339,13 @@ static void rgb_tint(float col[3],
 	float col_hsv_from[3];
 	float col_hsv_to[3];
 
-	rgb_to_hsv(col[0], col[1], col[2],    col_hsv_from + 0, col_hsv_from + 1, col_hsv_from + 2);
+	rgb_to_hsv_v(col, col_hsv_from);
 
 	col_hsv_to[0] = h;
 	col_hsv_to[1] = h_strength;
 	col_hsv_to[2] = (col_hsv_from[2] * (1.0f - v_strength)) + (v * v_strength);
 
-	hsv_to_rgb(col_hsv_to[0], col_hsv_to[1], col_hsv_to[2], col + 0, col + 1, col + 2);
+	hsv_to_rgb_v(col_hsv_to, col);
 }
 
 static void ui_tooltip_region_draw_cb(const bContext *UNUSED(C), ARegion *ar)
@@ -429,7 +429,8 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 	/* create tooltip data */
 	data = MEM_callocN(sizeof(uiTooltipData), "uiTooltipData");
 
-	/* special case, enum rna buttons only have enum item description, use general enum description too before the specific one */
+	/* special case, enum rna buttons only have enum item description,
+	 * use general enum description too before the specific one */
 	if (but->rnaprop && RNA_property_type(but->rnaprop) == PROP_ENUM) {
 		const char *descr = RNA_property_description(but->rnaprop);
 		if (descr && descr[0]) {
@@ -441,14 +442,15 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 		if (ELEM(but->type, ROW, MENU)) {
 			EnumPropertyItem *item;
 			int i, totitem, free;
-			int value = (but->type == ROW) ? but->hardmax : ui_get_but_val(but);
+			int value = (but->type == ROW) ? (int)but->hardmax : (int)ui_get_but_val(but);
 
 			RNA_property_enum_items_gettexted(C, &but->rnapoin, but->rnaprop, &item, &totitem, &free);
 
 			for (i = 0; i < totitem; i++) {
 				if (item[i].identifier[0] && item[i].value == value) {
 					if (item[i].description && item[i].description[0]) {
-						BLI_snprintf(data->lines[data->totline], sizeof(data->lines[0]), "%s: %s", item[i].name, item[i].description);
+						BLI_snprintf(data->lines[data->totline], sizeof(data->lines[0]), "%s: %s",
+						             item[i].name, item[i].description);
 						data->color_id[data->totline] = UI_TIP_LC_SUBMENU;
 						data->totline++;
 					}
@@ -496,7 +498,9 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 		
 		if (unit_type == PROP_UNIT_ROTATION) {
 			if (RNA_property_type(but->rnaprop) == PROP_FLOAT) {
-				float value = RNA_property_array_check(but->rnaprop) ? RNA_property_float_get_index(&but->rnapoin, but->rnaprop, but->rnaindex) : RNA_property_float_get(&but->rnapoin, but->rnaprop);
+				float value = RNA_property_array_check(but->rnaprop) ?
+				                  RNA_property_float_get_index(&but->rnapoin, but->rnaprop, but->rnaindex) :
+				                  RNA_property_float_get(&but->rnapoin, but->rnaprop);
 				BLI_snprintf(data->lines[data->totline], sizeof(data->lines[0]), TIP_("Radians: %f"), value);
 				data->color_id[data->totline] = UI_TIP_LC_NORMAL;
 				data->totline++;
@@ -514,7 +518,8 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 
 		/* rna info */
 		if ((U.flag & USER_TOOLTIPS_PYTHON) == 0) {
-			BLI_snprintf(data->lines[data->totline], sizeof(data->lines[0]), TIP_("Python: %s.%s"), RNA_struct_identifier(but->rnapoin.type), RNA_property_identifier(but->rnaprop));
+			BLI_snprintf(data->lines[data->totline], sizeof(data->lines[0]), TIP_("Python: %s.%s"),
+			             RNA_struct_identifier(but->rnapoin.type), RNA_property_identifier(but->rnaprop));
 			data->color_id[data->totline] = UI_TIP_LC_PYTHON;
 			data->totline++;
 		}
@@ -1299,16 +1304,16 @@ static void ui_block_position(wmWindow *window, ARegion *butregion, uiBut *but, 
 		}
 	}
 	
-	/*aspect= (float)(block->maxx - block->minx + 4);*/ /*UNUSED*/
+	/* aspect = (float)(block->maxx - block->minx + 4);*/ /*UNUSED*/
 	ui_block_to_window_fl(butregion, but->block, &block->minx, &block->miny);
 	ui_block_to_window_fl(butregion, but->block, &block->maxx, &block->maxy);
 
-	//block->minx-= 2.0; block->miny-= 2.0;
-	//block->maxx+= 2.0; block->maxy+= 2.0;
+	//block->minx -= 2.0; block->miny -= 2.0;
+	//block->maxx += 2.0; block->maxy += 2.0;
 	
 	xsize = block->maxx - block->minx + 4; // 4 for shadow
 	ysize = block->maxy - block->miny + 4;
-	/*aspect/= (float)xsize;*/ /*UNUSED*/
+	/* aspect /= (float)xsize;*/ /*UNUSED*/
 
 	{
 		int left = 0, right = 0, top = 0, down = 0;
@@ -1553,7 +1558,9 @@ void ui_popup_block_scrolltest(uiBlock *block)
 	}
 }
 
-uiPopupBlockHandle *ui_popup_block_create(bContext *C, ARegion *butregion, uiBut *but, uiBlockCreateFunc create_func, uiBlockHandleCreateFunc handle_create_func, void *arg)
+uiPopupBlockHandle *ui_popup_block_create(bContext *C, ARegion *butregion, uiBut *but,
+                                          uiBlockCreateFunc create_func, uiBlockHandleCreateFunc handle_create_func,
+                                          void *arg)
 {
 	wmWindow *window = CTX_wm_window(C);
 	static ARegionType type;
@@ -1840,7 +1847,7 @@ void ui_set_but_hsv(uiBut *but)
 	float col[3];
 	float *hsv = ui_block_hsv_get(but->block);
 	
-	hsv_to_rgb(hsv[0], hsv[1], hsv[2], col, col + 1, col + 2);
+	hsv_to_rgb_v(hsv, col);
 	ui_set_but_vectorf(but, col);
 }
 
@@ -1853,7 +1860,7 @@ static void ui_update_block_buts_rgb(uiBlock *block, const float rgb[3])
 	/* this is to keep the H and S value when V is equal to zero
 	 * and we are working in HSV mode, of course!
 	 */
-	rgb_to_hsv_compat(rgb[0], rgb[1], rgb[2], hsv, hsv + 1, hsv + 2);
+	rgb_to_hsv_compat_v(rgb, hsv);
 	
 	// this updates button strings, is hackish... but button pointers are on stack of caller function
 	for (bt = block->buttons.first; bt; bt = bt->next) {
@@ -1881,7 +1888,8 @@ static void ui_update_block_buts_rgb(uiBlock *block, const float rgb[3])
 			if (rgb_gamma[1] > 1.0f) rgb_gamma[1] = modf(rgb_gamma[1], &intpart);
 			if (rgb_gamma[2] > 1.0f) rgb_gamma[2] = modf(rgb_gamma[2], &intpart);
 
-			BLI_snprintf(col, sizeof(col), "%02X%02X%02X", FTOCHAR(rgb_gamma[0]), FTOCHAR(rgb_gamma[1]), FTOCHAR(rgb_gamma[2]));
+			BLI_snprintf(col, sizeof(col), "%02X%02X%02X",
+			             FTOCHAR(rgb_gamma[0]), FTOCHAR(rgb_gamma[1]), FTOCHAR(rgb_gamma[2]));
 			
 			strcpy(bt->poin, col);
 		}
@@ -1934,7 +1942,7 @@ static void do_hsv_rna_cb(bContext *UNUSED(C), void *bt1, void *UNUSED(arg))
 	float rgb[3];
 	float *hsv = ui_block_hsv_get(but->block);
 	
-	hsv_to_rgb(hsv[0], hsv[1], hsv[2], rgb, rgb + 1, rgb + 2);
+	hsv_to_rgb_v(hsv, rgb);
 	
 	ui_update_block_buts_rgb(but->block, rgb);
 	
@@ -2149,7 +2157,7 @@ static void uiBlockPicker(uiBlock *block, float rgba[4], PointerRNA *ptr, Proper
 	uiButSetFunc(bt, do_hex_rna_cb, bt, hexcol);
 	uiDefBut(block, LABEL, 0, IFACE_("(Gamma Corrected)"), 0, -80, butwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
 
-	rgb_to_hsv(rgba[0], rgba[1], rgba[2], hsv, hsv + 1, hsv + 2);
+	rgb_to_hsv_v(rgba, hsv);
 
 	picker_new_hide_reveal(block, colormode);
 }
@@ -2170,18 +2178,18 @@ static int ui_picker_small_wheel_cb(const bContext *UNUSED(C), uiBlock *block, w
 		for (but = block->buttons.first; but; but = but->next) {
 			if (but->type == HSVCUBE && but->active == NULL) {
 				uiPopupBlockHandle *popup = block->handle;
-				float col[3];
+				float rgb[3];
 				float *hsv = ui_block_hsv_get(block);
 				
-				ui_get_but_vectorf(but, col);
+				ui_get_but_vectorf(but, rgb);
 				
-				rgb_to_hsv_compat(col[0], col[1], col[2], hsv, hsv + 1, hsv + 2);
+				rgb_to_hsv_compat_v(rgb, hsv);
 				hsv[2] = CLAMPIS(hsv[2] + add, 0.0f, 1.0f);
-				hsv_to_rgb(hsv[0], hsv[1], hsv[2], col, col + 1, col + 2);
+				hsv_to_rgb_v(hsv, rgb);
 
-				ui_set_but_vectorf(but, col);
+				ui_set_but_vectorf(but, rgb);
 				
-				ui_update_block_buts_rgb(block, col);
+				ui_update_block_buts_rgb(block, rgb);
 				if (popup)
 					popup->menuretval = UI_RETURN_UPDATE;
 				
@@ -2382,7 +2390,8 @@ static uiBlock *ui_block_func_POPUP(bContext *C, uiPopupBlockHandle *handle, voi
 	return pup->block;
 }
 
-uiPopupBlockHandle *ui_popup_menu_create(bContext *C, ARegion *butregion, uiBut *but, uiMenuCreateFunc menu_func, void *arg, char *str)
+uiPopupBlockHandle *ui_popup_menu_create(bContext *C, ARegion *butregion, uiBut *but,
+                                         uiMenuCreateFunc menu_func, void *arg, char *str)
 {
 	wmWindow *window = CTX_wm_window(C);
 	uiStyle *style = UI_GetStyle();
@@ -2697,7 +2706,7 @@ void uiPupBlockEx(bContext *C, uiBlockCreateFunc func, uiBlockHandleFunc popup_f
 	handle->popup_arg = arg;
 	handle->popup_func = popup_func;
 	handle->cancel_func = cancel_func;
-	// handle->opcontext= opcontext;
+	// handle->opcontext = opcontext;
 	
 	UI_add_popup_handlers(C, &window->modalhandlers, handle);
 	WM_event_add_mousemove(C);

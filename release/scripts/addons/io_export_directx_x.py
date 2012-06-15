@@ -529,7 +529,7 @@ def WriteMeshUVCoordinates(Config, Mesh):
     Config.File.write("{}MeshTextureCoords {{ //{} UV Coordinates\n".format("  " * Config.Whitespace, LegalName(Mesh.name)))
     Config.Whitespace += 1
 
-    UVCoordinates = Mesh.uv_loop_layers.active.data
+    UVCoordinates = Mesh.uv_layers.active.data
 
     Index = 0
     VertexCount = GetMeshVertexCount(Mesh)
@@ -1269,7 +1269,7 @@ class DirectXExporter(bpy.types.Operator):
                                          Verbose=self.Verbose)
 
         ExportDirectX(Config)
-        return {"FINISHED"}
+        return {'FINISHED'}
 
     def invoke(self, context, event):
         if not self.filepath:

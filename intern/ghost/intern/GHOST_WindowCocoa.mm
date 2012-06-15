@@ -482,7 +482,7 @@ GHOST_WindowCocoa::GHOST_WindowCocoa(
 	i=0;
 	pixelFormatAttrsWindow[i++] = NSOpenGLPFADoubleBuffer;
 	
-	// Guarantees the back buffer contents to be valid after a call to NSOpenGLContext object’s flushBuffer
+	// Guarantees the back buffer contents to be valid after a call to NSOpenGLContext object's flushBuffer
 	// needed for 'Draw Overlap' drawing method
 	pixelFormatAttrsWindow[i++] = NSOpenGLPFABackingStore; 
 	
@@ -525,7 +525,7 @@ GHOST_WindowCocoa::GHOST_WindowCocoa(
 		i=0;
 		pixelFormatAttrsWindow[i++] = NSOpenGLPFADoubleBuffer;
 		
-		// Guarantees the back buffer contents to be valid after a call to NSOpenGLContext object’s flushBuffer
+		// Guarantees the back buffer contents to be valid after a call to NSOpenGLContext object's flushBuffer
 		// needed for 'Draw Overlap' drawing method
 		pixelFormatAttrsWindow[i++] = NSOpenGLPFABackingStore;
 		
@@ -1441,7 +1441,7 @@ static GHOST_TUns16 uns16ReverseBits(GHOST_TUns16 shrt)
 }
 
 GHOST_TSuccess GHOST_WindowCocoa::setWindowCustomCursorShape(GHOST_TUns8 *bitmap, GHOST_TUns8 *mask,
-					int sizex, int sizey, int hotX, int hotY, int fg_color, int bg_color)
+                                                             int sizex, int sizey, int hotX, int hotY, int fg_color, int bg_color)
 {
 	int y,nbUns16;
 	NSPoint hotSpotPoint;
@@ -1509,7 +1509,7 @@ GHOST_TSuccess GHOST_WindowCocoa::setWindowCustomCursorShape(GHOST_TUns8 *bitmap
 }
 
 GHOST_TSuccess GHOST_WindowCocoa::setWindowCustomCursorShape(GHOST_TUns8 bitmap[16][2], 
-												GHOST_TUns8 mask[16][2], int hotX, int hotY)
+                                                             GHOST_TUns8 mask[16][2], int hotX, int hotY)
 {
 	return setWindowCustomCursorShape((GHOST_TUns8*)bitmap, (GHOST_TUns8*) mask, 16, 16, hotX, hotY, 0, 1);
 }

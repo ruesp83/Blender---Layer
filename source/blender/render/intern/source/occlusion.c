@@ -1,5 +1,4 @@
-/* 
- *
+/*
  * ***** BEGIN GPL LICENSE BLOCK *****
  *
  * This program is free software; you can redistribute it and/or
@@ -29,7 +28,6 @@
 /** \file blender/render/intern/source/occlusion.c
  *  \ingroup render
  */
-
 
 #include <math.h>
 #include <stdio.h>
@@ -64,7 +62,7 @@
 /* ------------------------- Declarations --------------------------- */
 
 #define INVALID_INDEX ((int)(~0))
-#define INVPI 0.31830988618379069f
+#define INVPI ((float)M_1_PI)
 #define TOTCHILD 8
 #define CACHE_STEP 3
 
@@ -404,7 +402,7 @@ static int occ_find_bbox_axis(OcclusionTree *tree, int begin, int end, float *mi
 	INIT_MINMAX(min, max);
 
 	for (a = begin; a < end; a++) {
-		DO_MINMAX(tree->co[a], min, max);
+		minmax_v3v3_v3(min, max, tree->co[a]);
 	}
 
 	for (a=0; a<3; a++) {
@@ -1199,7 +1197,8 @@ static float occ_form_factor(OccFace *face, float *p, float *n)
 	return contrib;
 }
 
-static void occ_lookup(OcclusionTree *tree, int thread, OccFace *exclude, float *pp, float *pn, float *occ, float rad[3], float bentn[3])
+static void occ_lookup(OcclusionTree *tree, int thread, OccFace *exclude,
+                       const float pp[3], const float pn[3], float *occ, float rad[3], float bentn[3])
 {
 	OccNode *node, **stack;
 	OccFace *face;
@@ -1393,7 +1392,9 @@ static void occ_compute_passes(Render *re, OcclusionTree *tree, int totpass)
 	MEM_freeN(occ);
 }
 
-static void sample_occ_tree(Render *re, OcclusionTree *tree, OccFace *exclude, float *co, float *n, int thread, int onlyshadow, float *ao, float *env, float *indirect)
+static void sample_occ_tree(Render *re, OcclusionTree *tree, OccFace *exclude,
+                            const float co[3], const float n[3], int thread, int onlyshadow,
+                            float *ao, float *env, float *indirect)
 {
 	float nn[3], bn[3], fac, occ, occlusion, correction, rad[3];
 	int envcolor;
@@ -1417,9 +1418,9 @@ static void sample_occ_tree(Render *re, OcclusionTree *tree, OccFace *exclude, f
 		/* sky shading using bent normal */
 		if (ELEM(envcolor, WO_AOSKYCOL, WO_AOSKYTEX)) {
 			fac= 0.5f * (1.0f + dot_v3v3(bn, re->grvec));
-			env[0]= (1.0f-fac)*re->wrld.horr + fac*re->wrld.zenr;
-			env[1]= (1.0f-fac)*re->wrld.horg + fac*re->wrld.zeng;
-			env[2]= (1.0f-fac)*re->wrld.horb + fac*re->wrld.zenb;
+			env[0] = (1.0f - fac) * re->wrld.horr + fac * re->wrld.zenr;
+			env[1] = (1.0f - fac) * re->wrld.horg + fac * re->wrld.zeng;
+			env[2] = (1.0f - fac) * re->wrld.horb + fac * re->wrld.zenb;
 
 			mul_v3_fl(env, occlusion);
 		}
@@ -1627,11 +1628,11 @@ static void *exec_strandsurface_sample(void *data)
 			co4= mesh->co[face[3]];
 
 			mid_v3_v3v3(co, co1, co3);
-			normal_quad_v3( n,co1, co2, co3, co4);
+			normal_quad_v3(n, co1, co2, co3, co4);
 		}
 		else {
 			cent_tri_v3(co, co1, co2, co3);
-			normal_tri_v3( n,co1, co2, co3);
+			normal_tri_v3(n, co1, co2, co3);
 		}
 		negate_v3(n);
 

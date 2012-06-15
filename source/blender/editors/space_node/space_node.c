@@ -172,7 +172,7 @@ static void node_area_listener(ScrArea *sa, wmNotifier *wmn)
 	short shader_type = snode->shaderfrom;
 	
 	/* preview renders */
-	switch(wmn->category) {
+	switch (wmn->category) {
 		case NC_SCENE:
 			switch (wmn->data) {
 				case ND_NODES:
@@ -226,11 +226,6 @@ static void node_area_listener(ScrArea *sa, wmNotifier *wmn)
 					ED_area_tag_refresh(sa);
 			}
 			break;
-		case NC_TEXT:
-			/* pynodes */
-			if (wmn->data==ND_SHADING)
-				ED_area_tag_refresh(sa);
-			break;
 		case NC_SPACE:
 			if (wmn->data==ND_SPACE_NODE)
 				ED_area_tag_refresh(sa);
@@ -244,10 +239,17 @@ static void node_area_listener(ScrArea *sa, wmNotifier *wmn)
 				ED_area_tag_redraw(sa);
 			break;
 		case NC_SCREEN:
-			switch(wmn->data) {
+			switch (wmn->data) {
 				case ND_ANIMPLAY:
 					ED_area_tag_refresh(sa);
 					break;
+			}
+			break;
+		case NC_MASK:
+			if (wmn->action == NA_EDITED) {
+				if (type==NTREE_COMPOSIT) {
+					ED_area_tag_refresh(sa);
+				}
 			}
 			break;
 
@@ -337,6 +339,17 @@ static void node_buttons_area_init(wmWindowManager *wm, ARegion *ar)
 static void node_buttons_area_draw(const bContext *C, ARegion *ar)
 {
 	ED_region_panels(C, ar, 1, NULL, -1);
+}
+
+static void node_cursor(wmWindow *win, ScrArea *sa, ARegion *ar)
+{
+	SpaceNode *snode= sa->spacedata.first;
+	
+	/* convert mouse coordinates to v2d space */
+	UI_view2d_region_to_view(&ar->v2d, win->eventstate->x - ar->winrct.xmin, win->eventstate->y - ar->winrct.ymin,
+	                         &snode->mx, &snode->my);
+	
+	node_set_cursor(win, snode);
 }
 
 /* Initialize main area, setting handlers. */
@@ -429,7 +442,7 @@ static void node_header_area_draw(const bContext *C, ARegion *ar)
 static void node_region_listener(ARegion *ar, wmNotifier *wmn)
 {
 	/* context changes */
-	switch(wmn->category) {
+	switch (wmn->category) {
 		case NC_SPACE:
 			if (wmn->data==ND_SPACE_NODE)
 				ED_region_tag_redraw(ar);
@@ -455,7 +468,7 @@ static void node_region_listener(ARegion *ar, wmNotifier *wmn)
 	}
 }
 
-const char *node_context_dir[] = {"selected_nodes", NULL};
+const char *node_context_dir[] = {"selected_nodes", "active_node", NULL};
 
 static int node_context(const bContext *C, const char *member, bContextDataResult *result)
 {
@@ -479,16 +492,11 @@ static int node_context(const bContext *C, const char *member, bContextDataResul
 		return 1;
 	}
 	else if (CTX_data_equals(member, "active_node")) {
-		bNode *node;
-		
 		if (snode->edittree) {
-			for (node=snode->edittree->nodes.last; node; node=node->prev) {
-				if (node->flag & NODE_ACTIVE) {
-					CTX_data_pointer_set(result, &snode->edittree->id, &RNA_Node, node);
-					break;
-				}
-			}
+			bNode *node = nodeGetActive(snode->edittree);
+			CTX_data_pointer_set(result, &snode->edittree->id, &RNA_Node, node);
 		}
+
 		CTX_data_type_set(result, CTX_DATA_TYPE_POINTER);
 		return 1;
 	}
@@ -522,6 +530,8 @@ void ED_spacetype_node(void)
 	art->init= node_main_area_init;
 	art->draw= node_main_area_draw;
 	art->listener= node_region_listener;
+	art->cursor = node_cursor;
+	art->event_cursor = TRUE;
 	art->keymapflag= ED_KEYMAP_UI|ED_KEYMAP_VIEW2D|ED_KEYMAP_FRAMES|ED_KEYMAP_GPENCIL;
 
 	BLI_addhead(&st->regiontypes, art);

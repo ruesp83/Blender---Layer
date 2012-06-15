@@ -1,3 +1,25 @@
+/*
+ * ***** BEGIN GPL LICENSE BLOCK *****
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ * Contributor(s):
+ *
+ * ***** END GPL LICENSE BLOCK *****
+ */
+
 /** \file blender/editors/uvedit/uvedit_parametrizer.c
  *  \ingroup eduv
  */
@@ -24,10 +46,6 @@
 #include <string.h>
 
 #include "BLO_sys_types.h" // for intptr_t support
-
-#if defined(_WIN32)
-#define M_PI 3.14159265358979323846
-#endif
 
 /* Utils */
 
@@ -426,7 +444,7 @@ static float p_edge_uv_length(PEdge *e)
 	return sqrt(d[0] * d[0] + d[1] * d[1]);
 }
 
-static void p_chart_uv_bbox(PChart *chart, float *minv, float *maxv)
+static void p_chart_uv_bbox(PChart *chart, float minv[2], float maxv[2])
 {
 	PVert *v;
 
@@ -688,7 +706,7 @@ static void p_face_restore_uvs(PFace *f)
 
 /* Construction (use only during construction, relies on u.key being set */
 
-static PVert *p_vert_add(PHandle *handle, PHashKey key, float *co, PEdge *e)
+static PVert *p_vert_add(PHandle *handle, PHashKey key, const float co[3], PEdge *e)
 {
 	PVert *v = (PVert *)BLI_memarena_alloc(handle->arena, sizeof *v);
 	copy_v3_v3(v->co, co);
@@ -701,7 +719,7 @@ static PVert *p_vert_add(PHandle *handle, PHashKey key, float *co, PEdge *e)
 	return v;
 }
 
-static PVert *p_vert_lookup(PHandle *handle, PHashKey key, float *co, PEdge *e)
+static PVert *p_vert_lookup(PHandle *handle, PHashKey key, const float co[3], PEdge *e)
 {
 	PVert *v = (PVert *)phash_lookup(handle->hash_verts, key);
 
@@ -3578,7 +3596,7 @@ typedef struct SmoothNode {
 	int axis, ntri;
 } SmoothNode;
 
-static void p_barycentric_2d(float *v1, float *v2, float *v3, float *p, float *b)
+static void p_barycentric_2d(const float v1[2], const float v2[2], const float v3[2], const float p[2], float b[3])
 {
 	float a[2], c[2], h[2], div;
 
@@ -3606,7 +3624,7 @@ static void p_barycentric_2d(float *v1, float *v2, float *v3, float *p, float *b
 	}
 }
 
-static PBool p_triangle_inside(SmoothTriangle *t, float *co)
+static PBool p_triangle_inside(SmoothTriangle *t, float co[2])
 {
 	float b[3];
 
@@ -3688,7 +3706,7 @@ static void p_node_delete(SmoothNode *node)
 		MEM_freeN(node->tri);
 }
 
-static PBool p_node_intersect(SmoothNode *node, float *co)
+static PBool p_node_intersect(SmoothNode *node, float co[2])
 {
 	int i;
 
@@ -3708,7 +3726,7 @@ static PBool p_node_intersect(SmoothNode *node, float *co)
 
 }
 
-/* smooothing */
+/* smoothing */
 
 static int p_compare_float(const void *a, const void *b)
 {
@@ -4131,8 +4149,9 @@ void param_face_add(ParamHandle *handle, ParamKey key, int nverts,
 			p_face_add_construct(phandle, key, vkeys, co, uv, 1, 2, 3, pin, select);
 		}
 	}
-	else if(!p_face_exists(phandle, vkeys, 0, 1, 2))
+	else if (!p_face_exists(phandle, vkeys, 0, 1, 2)) {
 		p_face_add_construct(phandle, key, vkeys, co, uv, 0, 1, 2, pin, select);
+	}
 }
 
 void param_edge_set_seam(ParamHandle *handle, ParamKey *vkeys)
@@ -4333,7 +4352,7 @@ void param_smooth_area(ParamHandle *handle)
 void param_pack(ParamHandle *handle, float margin)
 {	
 	/* box packing variables */
-	boxPack *boxarray, *box;
+	BoxPack *boxarray, *box;
 	float tot_width, tot_height, scale;
 	 
 	PChart *chart;
@@ -4350,7 +4369,7 @@ void param_pack(ParamHandle *handle, float margin)
 		param_scale(handle, 1.0f / phandle->aspx, 1.0f / phandle->aspy);
 	
 	/* we may not use all these boxes */
-	boxarray = MEM_mallocN(phandle->ncharts * sizeof(boxPack), "boxPack box");
+	boxarray = MEM_mallocN(phandle->ncharts * sizeof(BoxPack), "BoxPack box");
 	
 	
 	for (i = 0; i < phandle->ncharts; i++) {
@@ -4401,7 +4420,7 @@ void param_pack(ParamHandle *handle, float margin)
 		}
 	}
 	
-	boxPack2D(boxarray, phandle->ncharts - unpacked, &tot_width, &tot_height);
+	BLI_box_pack_2D(boxarray, phandle->ncharts - unpacked, &tot_width, &tot_height);
 	
 	if (tot_height > tot_width)
 		scale = 1.0f / tot_height;
@@ -4438,6 +4457,9 @@ void param_average(ParamHandle *handle)
 	for (i = 0; i < phandle->ncharts; i++) {
 		PFace *f;
 		chart = phandle->charts[i];
+
+		if (chart->flag & PCHART_NOPACK)
+			continue;
 		
 		chart->u.pack.area = 0.0f; /* 3d area */
 		chart->u.pack.rescale = 0.0f; /* UV area, abusing rescale for tmp storage, oh well :/ */
@@ -4460,6 +4482,10 @@ void param_average(ParamHandle *handle)
 	
 	for (i = 0; i < phandle->ncharts; i++) {
 		chart = phandle->charts[i];
+
+		if (chart->flag & PCHART_NOPACK)
+			continue;
+	
 		if (chart->u.pack.area != 0.0f && chart->u.pack.rescale != 0.0f) {
 			fac = chart->u.pack.area / chart->u.pack.rescale;
 			

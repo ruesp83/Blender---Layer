@@ -1,5 +1,4 @@
 /*
- *
  * ***** BEGIN GPL LICENSE BLOCK *****
  *
  * This program is free software; you can redistribute it and/or
@@ -29,7 +28,6 @@
 /** \file blender/render/intern/source/sss.c
  *  \ingroup render
  */
-
 
 /* Possible Improvements:
  * - add fresnel terms
@@ -176,7 +174,7 @@ static float compute_reduced_albedo(ScatterSettings *ss)
 {
 	const float tolerance= 1e-8;
 	const int max_iteration_count= 20;
-	float d, fsub, xn_1= 0.0f , xn= 1.0f, fxn, fxn_1;
+	float d, fsub, xn_1= 0.0f, xn= 1.0f, fxn, fxn_1;
 	int i;
 
 	/* use secant method to compute reduced albedo using Rd function inverse
@@ -285,12 +283,12 @@ static void build_Rd_table(ScatterSettings *ss)
 
 	for (i= 0; i < size; i++) {
 		r= i*(RD_TABLE_RANGE/RD_TABLE_SIZE);
-		/*if(r < ss->invsigma_t_*ss->invsigma_t_)
+		/*if (r < ss->invsigma_t_*ss->invsigma_t_)
 			r= ss->invsigma_t_*ss->invsigma_t_;*/
 		ss->tableRd[i]= Rd(ss, sqrt(r));
 
 		r= i*(RD_TABLE_RANGE_2/RD_TABLE_SIZE);
-		/*if(r < ss->invsigma_t_)
+		/*if (r < ss->invsigma_t_)
 			r= ss->invsigma_t_;*/
 		ss->tableRd2[i]= Rd(ss, r);
 	}
@@ -654,7 +652,7 @@ static void create_octree_node(ScatterTree *tree, ScatterNode *node, float *mid,
 {
 	ScatterNode *subnode;
 	ScatterPoint **subrefpoints, **tmppoints= tree->tmppoints;
-	int index, nsize[8], noffset[8], i, subco, usednodes, usedi;
+	int index, nsize[8], noffset[8], i, subco, used_nodes, usedi;
 	float submid[3], subsize[3];
 
 	/* stopping condition */
@@ -686,16 +684,16 @@ static void create_octree_node(ScatterTree *tree, ScatterNode *node, float *mid,
 	/* here we check if only one subnode is used. if this is the case, we don't
 	 * create a new node, but rather call this function again, with different
 	 * size and middle position for the same node. */
-	for (usedi=0, usednodes=0, i=0; i<8; i++) {
+	for (usedi=0, used_nodes=0, i=0; i<8; i++) {
 		if (nsize[i]) {
-			usednodes++;
+			used_nodes++;
 			usedi = i;
 		}
 		if (i != 0)
 			noffset[i]= noffset[i-1]+nsize[i-1];
 	}
 	
-	if (usednodes<=1) {
+	if (used_nodes <= 1) {
 		subnode_middle(usedi, mid, subsize, submid);
 		create_octree_node(tree, node, submid, subsize, refpoints, depth+1);
 		return;
@@ -764,8 +762,8 @@ ScatterTree *scatter_tree_new(ScatterSettings *ss[3], float scale, float error,
 		points[i].area= fabsf(area[i])/(tree->scale*tree->scale);
 		points[i].back= (area[i] < 0.0f);
 
-		mul_v3_fl(points[i].co, 1.0f/tree->scale);
-		DO_MINMAX(points[i].co, tree->min, tree->max);
+		mul_v3_fl(points[i].co, 1.0f / tree->scale);
+		minmax_v3v3_v3(tree->min, tree->max, points[i].co);
 
 		refpoints[i]= points + i;
 	}
@@ -812,12 +810,12 @@ void scatter_tree_build(ScatterTree *tree)
 	sum_radiance(tree, tree->root);
 }
 
-void scatter_tree_sample(ScatterTree *tree, float *co, float *color)
+void scatter_tree_sample(ScatterTree *tree, const float co[3], float color[3])
 {
 	float sco[3];
 
 	copy_v3_v3(sco, co);
-	mul_v3_fl(sco, 1.0f/tree->scale);
+	mul_v3_fl(sco, 1.0f / tree->scale);
 
 	compute_radiance(tree, sco, color);
 }
@@ -876,7 +874,7 @@ static void sss_create_tree_mat(Render *re, Material *mat)
 	re->r.mode &= ~R_OSA;
 	re->sss_points= &points;
 	re->sss_mat= mat;
-	re->i.partsdone= 0;
+	re->i.partsdone = FALSE;
 
 	if (!(re->r.scemode & R_PREVIEWBUTS))
 		re->result= NULL;
@@ -992,7 +990,7 @@ void make_sss_tree(Render *re)
 {
 	Material *mat;
 	
-	re->sss_hash= BLI_ghash_new(BLI_ghashutil_ptrhash, BLI_ghashutil_ptrcmp, "make_sss_tree gh");
+	re->sss_hash= BLI_ghash_ptr_new("make_sss_tree gh");
 
 	re->i.infostr= "SSS preprocessing";
 	re->stats_draw(re->sdh, &re->i);
@@ -1027,7 +1025,7 @@ void free_sss(Render *re)
 	}
 }
 
-int sample_sss(Render *re, Material *mat, float *co, float *color)
+int sample_sss(Render *re, Material *mat, const float co[3], float color[3])
 {
 	if (re->sss_hash) {
 		SSSData *sss= BLI_ghash_lookup(re->sss_hash, mat);

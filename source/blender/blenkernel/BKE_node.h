@@ -123,7 +123,7 @@ typedef struct bNodeTemplate {
  * implementing the node behavior.
  */
 typedef struct bNodeType {
-	void *next,*prev;
+	void *next, *prev;
 	short needs_free;		/* set for allocated types that need to be freed */
 	
 	int type;
@@ -145,10 +145,21 @@ typedef struct bNodeType {
 	void (*uifunc)(struct uiLayout *, struct bContext *C, struct PointerRNA *ptr);
 	/// Additional parameters in the side panel.
 	void (*uifuncbut)(struct uiLayout *, struct bContext *C, struct PointerRNA *ptr);
+	/// Additional drawing on backdrop.
+	void (*uibackdropfunc)(struct SpaceNode* snode, struct ImBuf* backdrop, struct bNode* node, int x, int y);
+
+	/// Draw a node socket. Default draws the input value button.
+	NodeSocketButtonFunction drawinputfunc;
+	NodeSocketButtonFunction drawoutputfunc;
+
 	/// Optional custom label function for the node header.
 	const char *(*labelfunc)(struct bNode *);
 	/// Optional custom resize handle polling.
 	int (*resize_area_func)(struct bNode *node, int x, int y);
+	/// Optional selection area polling.
+	int (*select_area_func)(struct bNode *node, int x, int y);
+	/// Optional tweak area polling (for grabbing).
+	int (*tweak_area_func)(struct bNode *node, int x, int y);
 	
 	/// Called when the node is updated in the editor.
 	void (*updatefunc)(struct bNodeTree *ntree, struct bNode *node);
@@ -222,7 +233,7 @@ typedef struct bNodeType {
 #define NODE_CLASS_CONVERTOR		8
 #define NODE_CLASS_MATTE			9
 #define NODE_CLASS_DISTORT			10
-#define NODE_CLASS_OP_DYNAMIC		11
+#define NODE_CLASS_OP_DYNAMIC		11 /* deprecated */
 #define NODE_CLASS_PATTERN			12
 #define NODE_CLASS_TEXTURE			13
 #define NODE_CLASS_EXECUTION		14
@@ -241,6 +252,12 @@ typedef struct bNodeType {
 #define NODE_OLD_SHADING	1
 #define NODE_NEW_SHADING	2
 
+/* node resize directions */
+#define NODE_RESIZE_TOP		1
+#define NODE_RESIZE_BOTTOM	2
+#define NODE_RESIZE_RIGHT	4
+#define NODE_RESIZE_LEFT	8
+
 /* enum values for input/output */
 #define SOCK_IN		1
 #define SOCK_OUT	2
@@ -249,8 +266,7 @@ struct bNodeTreeExec;
 
 typedef void (*bNodeTreeCallback)(void *calldata, struct ID *owner_id, struct bNodeTree *ntree);
 typedef void (*bNodeClassCallback)(void *calldata, int nclass, const char *name);
-typedef struct bNodeTreeType
-{
+typedef struct bNodeTreeType {
 	int type;						/* type identifier */
 	char idname[64];				/* id name for RNA identification */
 	
@@ -323,7 +339,7 @@ struct bNodeSocket *nodeInsertSocket(struct bNodeTree *ntree, struct bNode *node
 void nodeRemoveSocket(struct bNodeTree *ntree, struct bNode *node, struct bNodeSocket *sock);
 void nodeRemoveAllSockets(struct bNodeTree *ntree, struct bNode *node);
 
-void			nodeAddToPreview(struct bNode *, float *, int, int, int);
+void			nodeAddToPreview(struct bNode *node, float col[4], int x, int y, int do_manage);
 
 struct bNode	*nodeAddNode(struct bNodeTree *ntree, struct bNodeTemplate *ntemp);
 void			nodeUnlinkNode(struct bNodeTree *ntree, struct bNode *node);
@@ -341,7 +357,8 @@ void			nodeRemLink(struct bNodeTree *ntree, struct bNodeLink *link);
 void			nodeRemSocketLinks(struct bNodeTree *ntree, struct bNodeSocket *sock);
 void			nodeInternalRelink(struct bNodeTree *ntree, struct bNode *node);
 
-void			nodeSpaceCoords(struct bNode *node, float *locx, float *locy);
+void			nodeToView(struct bNode *node, float x, float y, float *rx, float *ry);
+void			nodeFromView(struct bNode *node, float x, float y, float *rx, float *ry);
 void			nodeAttachNode(struct bNode *node, struct bNode *parent);
 void			nodeDetachNode(struct bNode *node);
 
@@ -355,6 +372,7 @@ void			nodeSetActive(struct bNodeTree *ntree, struct bNode *node);
 struct bNode	*nodeGetActive(struct bNodeTree *ntree);
 struct bNode	*nodeGetActiveID(struct bNodeTree *ntree, short idtype);
 int				nodeSetActiveID(struct bNodeTree *ntree, short idtype, struct ID *id);
+void			nodeClearActive(struct bNodeTree *ntree);
 void			nodeClearActiveID(struct bNodeTree *ntree, short idtype);
 struct bNode	*nodeGetActiveTexture(struct bNodeTree *ntree);
 
@@ -420,8 +438,7 @@ void			node_type_compatibility(struct bNodeType *ntype, short compatibility);
 #define NODE_FORLOOP	3
 #define NODE_WHILELOOP	4
 #define NODE_FRAME		5
-#define NODE_GROUP_MENU		10000
-#define NODE_DYNAMIC_MENU	20000
+#define NODE_REROUTE	6
 
 /* look up a socket on a group node by the internal group socket */
 struct bNodeSocket *node_group_find_input(struct bNode *gnode, struct bNodeSocket *gsock);
@@ -431,12 +448,11 @@ struct bNodeSocket *node_group_add_socket(struct bNodeTree *ngroup, const char *
 struct bNodeSocket *node_group_expose_socket(struct bNodeTree *ngroup, struct bNodeSocket *sock, int in_out);
 void node_group_expose_all_sockets(struct bNodeTree *ngroup);
 void node_group_remove_socket(struct bNodeTree *ngroup, struct bNodeSocket *gsock, int in_out);
-
-struct bNode	*node_group_make_from_selected(struct bNodeTree *ntree);
-int				node_group_ungroup(struct bNodeTree *ntree, struct bNode *gnode);
+struct bNodeSocket *node_group_add_extern_socket(struct bNodeTree *ntree, ListBase *lb, int in_out, struct bNodeSocket *gsock);
 
 /* in node_common.c */
 void register_node_type_frame(struct bNodeTreeType *ttype);
+void register_node_type_reroute(struct bNodeTreeType *ttype);
 
 /* ************** SHADER NODES *************** */
 
@@ -505,9 +521,12 @@ struct ShadeResult;
 #define SH_NODE_LAYER_WEIGHT			160
 #define SH_NODE_VOLUME_TRANSPARENT		161
 #define SH_NODE_VOLUME_ISOTROPIC		162
-#define SH_NODE_GAMMA				163
-#define SH_NODE_TEX_CHECKER			164
+#define SH_NODE_GAMMA					163
+#define SH_NODE_TEX_CHECKER				164
 #define SH_NODE_BRIGHTCONTRAST			165
+#define SH_NODE_LIGHT_FALLOFF			166
+#define SH_NODE_OBJECT_INFO				167
+#define SH_NODE_PARTICLE_INFO           168
 
 /* custom defines options for Material node */
 #define SH_NODE_MAT_DIFF   1
@@ -638,10 +657,20 @@ void			ntreeGPUMaterialNodes(struct bNodeTree *ntree, struct GPUMaterial *mat);
 #define CMP_NODE_MOVIEDISTORTION	265
 #define CMP_NODE_DOUBLEEDGEMASK    266
 #define CMP_NODE_OUTPUT_MULTI_FILE__DEPRECATED	267	/* DEPRECATED multi file node has been merged into regular CMP_NODE_OUTPUT_FILE */
+#define CMP_NODE_MASK		268
+#define CMP_NODE_KEYINGSCREEN		269
+#define CMP_NODE_KEYING			270
 
 #define CMP_NODE_GLARE		301
 #define CMP_NODE_TONEMAP	302
 #define CMP_NODE_LENSDIST	303
+
+#define CMP_NODE_COLORCORRECTION 312
+#define CMP_NODE_MASK_BOX       313
+#define CMP_NODE_MASK_ELLIPSE   314
+#define CMP_NODE_BOKEHIMAGE     315
+#define CMP_NODE_BOKEHBLUR      316
+#define CMP_NODE_SWITCH         317
 
 /* channel toggles */
 #define CMP_CHAN_RGB		1
@@ -664,13 +693,16 @@ void			ntreeGPUMaterialNodes(struct bNodeTree *ntree, struct GPUMaterial *mat);
 #define CMP_SCALE_ABSOLUTE		1
 #define CMP_SCALE_SCENEPERCENT	2
 #define CMP_SCALE_RENDERPERCENT 3
+/* custom2 */
+#define CMP_SCALE_RENDERSIZE_FRAME_ASPECT  (1 << 0)
+#define CMP_SCALE_RENDERSIZE_FRAME_CROP    (1 << 1)
 
 
 /* API */
 struct CompBuf;
 struct bNodeTreeExec *ntreeCompositBeginExecTree(struct bNodeTree *ntree, int use_tree_data);
 void ntreeCompositEndExecTree(struct bNodeTreeExec *exec, int use_tree_data);
-void ntreeCompositExecTree(struct bNodeTree *ntree, struct RenderData *rd, int do_previews);
+void ntreeCompositExecTree(struct bNodeTree *ntree, struct RenderData *rd, int rendering, int do_previews);
 void ntreeCompositTagRender(struct Scene *sce);
 int ntreeCompositTagAnimated(struct bNodeTree *ntree);
 void ntreeCompositTagGenerators(struct bNodeTree *ntree);
@@ -680,6 +712,11 @@ void ntreeCompositClearTags(struct bNodeTree *ntree);
 struct bNodeSocket *ntreeCompositOutputFileAddSocket(struct bNodeTree *ntree, struct bNode *node,
                                                      const char *name, struct ImageFormatData *im_format);
 int ntreeCompositOutputFileRemoveActiveSocket(struct bNodeTree *ntree, struct bNode *node);
+void ntreeCompositOutputFileSetPath(struct bNode *node, struct bNodeSocket *sock, const char *name);
+void ntreeCompositOutputFileSetLayer(struct bNode *node, struct bNodeSocket *sock, const char *name);
+/* needed in do_versions */
+void ntreeCompositOutputFileUniquePath(struct ListBase *list, struct bNodeSocket *sock, const char defname[], char delim);
+void ntreeCompositOutputFileUniqueLayer(struct ListBase *list, struct bNodeSocket *sock, const char defname[], char delim);
 
 /* ************** TEXTURE NODES *************** */
 

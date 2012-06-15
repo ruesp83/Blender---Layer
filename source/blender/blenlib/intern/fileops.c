@@ -74,7 +74,7 @@ int BLI_file_gzip(const char *from, const char *to)
 	char buffer[10240];
 	int file;
 	int readsize = 0;
-	int rval= 0, err;
+	int rval = 0, err;
 	gzFile gzfile;
 
 	/* level 1 is very close to 3 (the default) in terms of file size,
@@ -82,7 +82,7 @@ int BLI_file_gzip(const char *from, const char *to)
 	gzfile = BLI_gzopen(to, "wb1");
 	if (gzfile == NULL)
 		return -1;
-	file = BLI_open(from, O_BINARY|O_RDONLY,0);
+	file = BLI_open(from, O_BINARY | O_RDONLY, 0);
 	if (file < 0)
 		return -2;
 
@@ -90,15 +90,15 @@ int BLI_file_gzip(const char *from, const char *to)
 		readsize = read(file, buffer, sizeof(buffer));
 
 		if (readsize < 0) {
-			rval= -2; /* error happened in reading */
+			rval = -2; /* error happened in reading */
 			fprintf(stderr, "Error reading file %s: %s.\n", from, strerror(errno));
 			break;
 		}
 		else if (readsize == 0)
-			break; /* done reading */
+			break;  /* done reading */
 		
 		if (gzwrite(gzfile, buffer, readsize) <= 0) {
-			rval= -1; /* error happened in writing */
+			rval = -1; /* error happened in writing */
 			fprintf(stderr, "Error writing gz file %s: %s.\n", to, gzerror(gzfile, &err));
 			break;
 		}
@@ -116,38 +116,38 @@ int BLI_file_gzip(const char *from, const char *to)
 char *BLI_file_ungzip_to_mem(const char *from_file, int *size_r)
 {
 	gzFile gzfile;
-	int readsize, size, alloc_size=0;
-	char *mem= NULL;
-	const int chunk_size= 512*1024;
+	int readsize, size, alloc_size = 0;
+	char *mem = NULL;
+	const int chunk_size = 512 * 1024;
 
-	size= 0;
+	size = 0;
 
-	gzfile = BLI_gzopen( from_file, "rb" );
-	for (;;) {
-		if (mem==NULL) {
-			mem= MEM_callocN(chunk_size, "BLI_ungzip_to_mem");
-			alloc_size= chunk_size;
+	gzfile = BLI_gzopen(from_file, "rb");
+	for (;; ) {
+		if (mem == NULL) {
+			mem = MEM_callocN(chunk_size, "BLI_ungzip_to_mem");
+			alloc_size = chunk_size;
 		}
 		else {
-			mem= MEM_reallocN(mem, size+chunk_size);
-			alloc_size+= chunk_size;
+			mem = MEM_reallocN(mem, size + chunk_size);
+			alloc_size += chunk_size;
 		}
 
-		readsize= gzread(gzfile, mem+size, chunk_size);
-		if (readsize>0) {
-			size+= readsize;
+		readsize = gzread(gzfile, mem + size, chunk_size);
+		if (readsize > 0) {
+			size += readsize;
 		}
 		else break;
 	}
 
-	if (size==0) {
+	if (size == 0) {
 		MEM_freeN(mem);
-		mem= NULL;
+		mem = NULL;
 	}
-	else if (alloc_size!=size)
-		mem= MEM_reallocN(mem, size);
+	else if (alloc_size != size)
+		mem = MEM_reallocN(mem, size);
 
-	*size_r= size;
+	*size_r = size;
 
 	return mem;
 }
@@ -209,7 +209,7 @@ FILE *BLI_fopen(const char *filename, const char *mode)
 	return ufopen(filename, mode);
 }
 
-gzFile BLI_gzopen(const char *filename, const char *mode)
+void *BLI_gzopen(const char *filename, const char *mode)
 {
 	gzFile gzfile;
 
@@ -222,18 +222,18 @@ gzFile BLI_gzopen(const char *filename, const char *mode)
 		int i = 0;
 
 		/* xxx Creates file before transcribing the path */
-		if(mode[0] == 'w')
-			fclose(ufopen(filename,"a"));
+		if (mode[0] == 'w')
+			fclose(ufopen(filename, "a"));
 
 		UTF16_ENCODE(filename);
 
-		GetShortPathNameW(filename_16,short_name_16, 256);
+		GetShortPathNameW(filename_16, short_name_16, 256);
 
 		for (i = 0; i < 256; i++) {
-			short_name[i] = short_name_16[i];
+			short_name[i] = (char)short_name_16[i];
 		}
 
-		gzfile = gzopen(short_name,mode);
+		gzfile = gzopen(short_name, mode);
 
 		UTF16_UN_ENCODE(filename);
 	}
@@ -254,14 +254,14 @@ int BLI_delete(const char *file, int dir, int recursive)
 
 	if (recursive) {
 		callLocalErrorCallBack("Recursive delete is unsupported on Windows");
-		err= 1;
+		err = 1;
 	}
 	else if (dir) {
-		err= !RemoveDirectoryW(file_16);
-		if (err) printf ("Unable to remove directory");
+		err = !RemoveDirectoryW(file_16);
+		if (err) printf("Unable to remove directory");
 	}
 	else {
-		err= !DeleteFileW(file_16);
+		err = !DeleteFileW(file_16);
 		if (err) callLocalErrorCallBack("Unable to delete file");
 	}
 
@@ -288,7 +288,7 @@ int BLI_move(const char *file, const char *to)
 	
 	UTF16_ENCODE(file);
 	UTF16_ENCODE(str);
-	err= !MoveFileW(file_16, str_16);
+	err = !MoveFileW(file_16, str_16);
 	UTF16_UN_ENCODE(str);
 	UTF16_UN_ENCODE(file);
 
@@ -350,7 +350,7 @@ void BLI_dir_create_recursive(const char *dirname)
 	 * blah1/blah2 (without slash) */
 
 	BLI_strncpy(tmp, dirname, sizeof(tmp));
-	lslash= BLI_last_slash(tmp);
+	lslash = BLI_last_slash(tmp);
 	
 	if (lslash == tmp + strlen(tmp) - 1) {
 		*lslash = 0;
@@ -358,7 +358,7 @@ void BLI_dir_create_recursive(const char *dirname)
 	
 	if (BLI_exists(tmp)) return;
 
-	lslash= BLI_last_slash(tmp);
+	lslash = BLI_last_slash(tmp);
 	if (lslash) {
 		/* Split about the last slash and recurse */
 		*lslash = 0;
@@ -366,8 +366,8 @@ void BLI_dir_create_recursive(const char *dirname)
 	}
 	
 	if (dirname[0]) /* patch, this recursive loop tries to create a nameless directory */
-		if (umkdir(dirname)==-1)
-			printf("Unable to create directory %s\n",dirname);
+		if (umkdir(dirname) == -1)
+			printf("Unable to create directory %s\n", dirname);
 }
 
 int BLI_rename(const char *from, const char *to)
@@ -385,16 +385,16 @@ int BLI_rename(const char *from, const char *to)
 
 enum {
 	/* operation succeeded succeeded */
-	recursiveOp_Callback_OK = 0,
+	RecursiveOp_Callback_OK = 0,
 
 	/* operation requested not to perform recursive digging for current path */
-	recursiveOp_Callback_StopRecurs = 1,
+	RecursiveOp_Callback_StopRecurs = 1,
 
 	/* error occured in callback and recursive walking should stop immediately */
-	recursiveOp_Callback_Error = 2
+	RecursiveOp_Callback_Error = 2
 } recuresiveOp_Callback_Result;
 
-typedef int (*recursiveOp_Callback) (const char *from, const char *to);
+typedef int (*RecursiveOp_Callback)(const char *from, const char *to);
 
 /* appending of filename to dir (ensures for buffer size before appending) */
 static void join_dirfile_alloc(char **dst, size_t *alloc_len, const char *dir, const char *file)
@@ -419,8 +419,8 @@ static char *strip_last_slash(const char *dir)
 	return result;
 }
 
-static int recursive_operation(const char *startfrom, const char *startto, recursiveOp_Callback callback_dir_pre,
-                               recursiveOp_Callback callback_file, recursiveOp_Callback callback_dir_post)
+static int recursive_operation(const char *startfrom, const char *startto, RecursiveOp_Callback callback_dir_pre,
+                               RecursiveOp_Callback callback_file, RecursiveOp_Callback callback_dir_post)
 {
 	struct dirent **dirlist;
 	struct stat st;
@@ -446,7 +446,7 @@ static int recursive_operation(const char *startfrom, const char *startto, recur
 		if (callback_file) {
 			ret = callback_file(from, to);
 
-			if (ret != recursiveOp_Callback_OK)
+			if (ret != RecursiveOp_Callback_OK)
 				ret = -1;
 		}
 
@@ -472,11 +472,11 @@ static int recursive_operation(const char *startfrom, const char *startto, recur
 		/* call pre-recursive walking directory callback */
 		ret = callback_dir_pre(from, to);
 
-		if (ret != recursiveOp_Callback_OK) {
+		if (ret != RecursiveOp_Callback_OK) {
 			MEM_freeN(from);
 			if (to) free(to);
 
-			if (ret == recursiveOp_Callback_StopRecurs) {
+			if (ret == RecursiveOp_Callback_StopRecurs) {
 				/* callback requested not to perform recursive walking, not an error */
 				return 0;
 			}
@@ -505,7 +505,7 @@ static int recursive_operation(const char *startfrom, const char *startto, recur
 		else if (callback_file) {
 			/* call file callback for current path */
 			ret = callback_file(from_path, to_path);
-			if (ret != recursiveOp_Callback_OK)
+			if (ret != RecursiveOp_Callback_OK)
 				ret = -1;
 		}
 
@@ -522,7 +522,7 @@ static int recursive_operation(const char *startfrom, const char *startto, recur
 		if (callback_dir_post) {
 			/* call post-recursive directory callback */
 			ret = callback_dir_post(from, to);
-			if (ret != recursiveOp_Callback_OK)
+			if (ret != RecursiveOp_Callback_OK)
 				ret = -1;
 		}
 	}
@@ -541,10 +541,10 @@ static int delete_callback_post(const char *from, const char *UNUSED(to))
 	if (rmdir(from)) {
 		perror("rmdir");
 
-		return recursiveOp_Callback_Error;
+		return RecursiveOp_Callback_Error;
 	}
 
-	return recursiveOp_Callback_OK;
+	return RecursiveOp_Callback_OK;
 }
 
 static int delete_single_file(const char *from, const char *UNUSED(to))
@@ -552,10 +552,10 @@ static int delete_single_file(const char *from, const char *UNUSED(to))
 	if (unlink(from)) {
 		perror("unlink");
 
-		return recursiveOp_Callback_Error;
+		return RecursiveOp_Callback_Error;
 	}
 
-	return recursiveOp_Callback_OK;
+	return RecursiveOp_Callback_OK;
 }
 
 FILE *BLI_fopen(const char *filename, const char *mode)
@@ -628,27 +628,27 @@ static int copy_callback_pre(const char *from, const char *to)
 
 	if (check_the_same(from, to)) {
 		fprintf(stderr, "%s: '%s' is the same as '%s'\n", __func__, from, to);
-		return recursiveOp_Callback_Error;
+		return RecursiveOp_Callback_Error;
 	}
 
 	if (lstat(from, &st)) {
 		perror("stat");
-		return recursiveOp_Callback_Error;
+		return RecursiveOp_Callback_Error;
 	}
 
 	/* create a directory */
 	if (mkdir(to, st.st_mode)) {
 		perror("mkdir");
-		return recursiveOp_Callback_Error;
+		return RecursiveOp_Callback_Error;
 	}
 
 	/* set proper owner and group on new directory */
 	if (chown(to, st.st_uid, st.st_gid)) {
 		perror("chown");
-		return recursiveOp_Callback_Error;
+		return RecursiveOp_Callback_Error;
 	}
 
-	return recursiveOp_Callback_OK;
+	return RecursiveOp_Callback_OK;
 }
 
 static int copy_single_file(const char *from, const char *to)
@@ -660,12 +660,12 @@ static int copy_single_file(const char *from, const char *to)
 
 	if (check_the_same(from, to)) {
 		fprintf(stderr, "%s: '%s' is the same as '%s'\n", __func__, from, to);
-		return recursiveOp_Callback_Error;
+		return RecursiveOp_Callback_Error;
 	}
 
 	if (lstat(from, &st)) {
 		perror("lstat");
-		return recursiveOp_Callback_Error;
+		return RecursiveOp_Callback_Error;
 	}
 
 	if (S_ISLNK(st.st_mode)) {
@@ -680,17 +680,17 @@ static int copy_single_file(const char *from, const char *to)
 			need_free = 0;
 		}
 		else {
-			link_buffer = MEM_callocN(st.st_size+2, "copy_single_file link_buffer");
+			link_buffer = MEM_callocN(st.st_size + 2, "copy_single_file link_buffer");
 			need_free = 1;
 		}
 
-		link_len = readlink(from, link_buffer, st.st_size+1);
+		link_len = readlink(from, link_buffer, st.st_size + 1);
 		if (link_len < 0) {
 			perror("readlink");
 
 			if (need_free) MEM_freeN(link_buffer);
 
-			return recursiveOp_Callback_Error;
+			return RecursiveOp_Callback_Error;
 		}
 
 		link_buffer[link_len] = 0;
@@ -698,46 +698,46 @@ static int copy_single_file(const char *from, const char *to)
 		if (symlink(link_buffer, to)) {
 			perror("symlink");
 			if (need_free) MEM_freeN(link_buffer);
-			return recursiveOp_Callback_Error;
+			return RecursiveOp_Callback_Error;
 		}
 
 		if (need_free)
 			MEM_freeN(link_buffer);
 
-		return recursiveOp_Callback_OK;
+		return RecursiveOp_Callback_OK;
 	}
-	else if (S_ISCHR (st.st_mode) ||
-	        S_ISBLK (st.st_mode) ||
-	        S_ISFIFO (st.st_mode) ||
-	        S_ISSOCK (st.st_mode))
+	else if (S_ISCHR(st.st_mode) ||
+	         S_ISBLK(st.st_mode) ||
+	         S_ISFIFO(st.st_mode) ||
+	         S_ISSOCK(st.st_mode))
 	{
 		/* copy special type of file */
 		if (mknod(to, st.st_mode, st.st_rdev)) {
 			perror("mknod");
-			return recursiveOp_Callback_Error;
+			return RecursiveOp_Callback_Error;
 		}
 
 		if (set_permissions(to, &st))
-			return recursiveOp_Callback_Error;
+			return RecursiveOp_Callback_Error;
 
-		return recursiveOp_Callback_OK;
+		return RecursiveOp_Callback_OK;
 	}
 	else if (!S_ISREG(st.st_mode)) {
 		fprintf(stderr, "Copying of this kind of files isn't supported yet\n");
-		return recursiveOp_Callback_Error;
+		return RecursiveOp_Callback_Error;
 	}
 
 	from_stream = fopen(from, "rb");
 	if (!from_stream) {
 		perror("fopen");
-		return recursiveOp_Callback_Error;
+		return RecursiveOp_Callback_Error;
 	}
 
 	to_stream = fopen(to, "wb");
 	if (!to_stream) {
 		perror("fopen");
 		fclose(from_stream);
-		return recursiveOp_Callback_Error;
+		return RecursiveOp_Callback_Error;
 	}
 
 	while ((len = fread(buf, 1, sizeof(buf), from_stream)) > 0) {
@@ -748,9 +748,9 @@ static int copy_single_file(const char *from, const char *to)
 	fclose(from_stream);
 
 	if (set_permissions(to, &st))
-		return recursiveOp_Callback_Error;
+		return RecursiveOp_Callback_Error;
 
-	return recursiveOp_Callback_OK;
+	return RecursiveOp_Callback_OK;
 }
 
 static int move_callback_pre(const char *from, const char *to)
@@ -760,7 +760,7 @@ static int move_callback_pre(const char *from, const char *to)
 	if (ret)
 		return copy_callback_pre(from, to);
 
-	return recursiveOp_Callback_StopRecurs;
+	return RecursiveOp_Callback_StopRecurs;
 }
 
 static int move_single_file(const char *from, const char *to)
@@ -770,7 +770,7 @@ static int move_single_file(const char *from, const char *to)
 	if (ret)
 		return copy_single_file(from, to);
 
-	return recursiveOp_Callback_OK;
+	return RecursiveOp_Callback_OK;
 }
 
 int BLI_move(const char *file, const char *to)
@@ -798,7 +798,7 @@ static char *check_destination(const char *file, const char *to)
 
 			if (!filename) {
 				MEM_freeN(str);
-				return (char*)to;
+				return (char *)to;
 			}
 
 			/* skip slash */
@@ -814,7 +814,7 @@ static char *check_destination(const char *file, const char *to)
 		}
 	}
 
-	return (char*)to;
+	return (char *)to;
 }
 
 int BLI_copy(const char *file, const char *to)
@@ -824,7 +824,7 @@ int BLI_copy(const char *file, const char *to)
 
 	ret = recursive_operation(file, actual_to, copy_callback_pre, copy_single_file, NULL);
 
-	if (actual_to!=to)
+	if (actual_to != to)
 		MEM_freeN(actual_to);
 
 	return ret;
@@ -852,16 +852,16 @@ void BLI_dir_create_recursive(const char *dirname)
 	tmp = static_buf;
 	needs_free = 0;
 #else
-	size = strlen(dirname)+1;
+	size = strlen(dirname) + 1;
 	tmp = MEM_callocN(size, "BLI_dir_create_recursive tmp");
 	needs_free = 1;
 #endif
 
 	BLI_strncpy(tmp, dirname, size);
 		
-	lslash= BLI_last_slash(tmp);
+	lslash = BLI_last_slash(tmp);
 	if (lslash) {
-			/* Split about the last slash and recurse */	
+		/* Split about the last slash and recurse */
 		*lslash = 0;
 		BLI_dir_create_recursive(tmp);
 	}

@@ -68,7 +68,7 @@ public:
 	void operator ()(Object *ob)
 	{
 		int a;
-		for(a = 0; a < ob->totcol; a++) {
+		for (a = 0; a < ob->totcol; a++) {
 
 			Material *ma = give_current_material(ob, a+1);
 
@@ -89,11 +89,11 @@ struct MaterialFunctor {
 	// f should have
 	// void operator()(Material* ma)
 	template<class Functor>
-	void forEachMaterialInScene(Scene *sce, Functor &f, bool export_selected)
+	void forEachMaterialInExportSet(Scene *sce, Functor &f, LinkNode *export_set)
 	{
 		ForEachMaterialFunctor<Functor> matfunc(&f);
 		GeometryFunctor gf;
-		gf.forEachMeshObjectInScene<ForEachMaterialFunctor<Functor> >(sce, matfunc, export_selected);
+		gf.forEachMeshObjectInExportSet<ForEachMaterialFunctor<Functor> >(sce, matfunc, export_set);
 	}
 };
 

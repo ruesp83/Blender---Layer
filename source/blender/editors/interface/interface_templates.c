@@ -350,7 +350,7 @@ static void template_ID(bContext *C, uiLayout *layout, TemplateID *template, Str
 	idptr = RNA_property_pointer_get(&template->ptr, template->prop);
 	id = idptr.data;
 	idfrom = template->ptr.id.data;
-	// lb= template->idlb;
+	// lb = template->idlb;
 
 	block = uiLayoutGetBlock(layout);
 	uiBlockBeginAlign(block);
@@ -376,6 +376,9 @@ static void template_ID(bContext *C, uiLayout *layout, TemplateID *template, Str
 	else if (flag & UI_ID_BROWSE) {
 		but = uiDefBlockButN(block, id_search_menu, MEM_dupallocN(template), "", 0, 0, UI_UNIT_X * 1.6, UI_UNIT_Y,
 		                     TIP_(template_id_browse_tip(type)));
+
+		uiButSetDrawFlag(but, UI_BUT_DRAW_ENUM_ARROWS);
+
 		if (type) {
 			but->icon = RNA_struct_ui_icon(type);
 			/* default dragging of icon for id browse buttons */
@@ -576,8 +579,10 @@ void uiTemplateAnyID(uiLayout *layout, PointerRNA *ptr, const char *propname, co
 	row = uiLayoutRow(layout, 1);
 	
 	/* Label - either use the provided text, or will become "ID-Block:" */
-	if (text)
-		uiItemL(row, text, ICON_NONE);
+	if (text) {
+		if (text[0])
+			uiItemL(row, text, ICON_NONE);
+	}
 	else
 		uiItemL(row, "ID-Block:", ICON_NONE);
 	
@@ -763,8 +768,8 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 		/* mode enabling buttons */
 		uiBlockBeginAlign(block);
 		/* Softbody not allowed in this situation, enforce! */
-		if ( ((md->type != eModifierType_Softbody && md->type != eModifierType_Collision) || !(ob->pd && ob->pd->deflect))
-		     && (md->type != eModifierType_Surface) )
+		if (((md->type != eModifierType_Softbody && md->type != eModifierType_Collision) || !(ob->pd && ob->pd->deflect)) &&
+		     (md->type != eModifierType_Surface) )
 		{
 			uiItemR(row, &ptr, "show_render", 0, "", ICON_NONE);
 			uiItemR(row, &ptr, "show_viewport", 0, "", ICON_NONE);
@@ -835,7 +840,7 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 		
 		if (!ELEM(md->type, eModifierType_Collision, eModifierType_Surface)) {
 			/* only here obdata, the rest of modifiers is ob level */
-			uiBlockSetButLock(block, object_data_is_libdata(ob), ERROR_LIBDATA_MESSAGE);
+			uiBlockSetButLock(block, BKE_object_obdata_is_libdata(ob), ERROR_LIBDATA_MESSAGE);
 			
 			if (md->type == eModifierType_ParticleSystem) {
 				ParticleSystem *psys = ((ParticleSystemModifierData *)md)->psys;
@@ -953,7 +958,7 @@ static void do_constraint_panels(bContext *C, void *ob_pt, int event)
 	// if there are problems because of this, then rna needs changed update functions.
 	// 
 	// object_test_constraints(ob);
-	// if (ob->pose) update_pose_constraint_flags(ob->pose);
+	// if (ob->pose) BKE_pose_update_constraint_flags(ob->pose);
 	
 	if (ob->type == OB_ARMATURE) DAG_id_tag_update(&ob->id, OB_RECALC_DATA | OB_RECALC_OB);
 	else DAG_id_tag_update(&ob->id, OB_RECALC_OB);
@@ -969,7 +974,7 @@ static void constraint_active_func(bContext *UNUSED(C), void *ob_v, void *con_v)
 /* draw panel showing settings for a constraint */
 static uiLayout *draw_constraint(uiLayout *layout, Object *ob, bConstraint *con)
 {
-	bPoseChannel *pchan = get_active_posechannel(ob);
+	bPoseChannel *pchan = BKE_pose_channel_active(ob);
 	bConstraintTypeInfo *cti;
 	uiBlock *block;
 	uiLayout *result = NULL, *col, *box, *row;
@@ -2150,15 +2155,15 @@ static void list_item_row(bContext *C, uiLayout *layout, PointerRNA *ptr, Pointe
 		uiItemL(sub, name, icon);
 		
 		ma = give_current_material(ob, index + 1);
-		if (ma && !scene_use_new_shading_nodes(scene)) {
+		if (ma && !BKE_scene_use_new_shading_nodes(scene)) {
 			manode = give_node_material(ma);
 			if (manode) {
 				char str[MAX_ID_NAME + 12];
-				BLI_snprintf(str, sizeof(str), "Node %s", manode->id.name + 2);
+				BLI_snprintf(str, sizeof(str), IFACE_("Node %s"), manode->id.name + 2);
 				uiItemL(sub, str, ui_id_icon_get(C, &manode->id, 1));
 			}
 			else if (ma->use_nodes) {
-				uiItemL(sub, "Node <none>", ICON_NONE);
+				uiItemL(sub, IFACE_("Node <none>"), ICON_NONE);
 			}
 		}
 	}
@@ -2192,7 +2197,9 @@ static void list_item_row(bContext *C, uiLayout *layout, PointerRNA *ptr, Pointe
 		uiDefButR(block, OPTION, 0, "", 0, 0, UI_UNIT_X, UI_UNIT_Y, itemptr, "lock_weight", 0, 0, 0, 0, 0,  NULL);
 #else
 		uiBlockSetEmboss(block, UI_EMBOSSN);
-		uiDefIconButBitC(block, TOG, DG_LOCK_WEIGHT, 0, (dg->flag & DG_LOCK_WEIGHT) ? ICON_LOCKED : ICON_UNLOCKED, 0, 0, UI_UNIT_X, UI_UNIT_Y, &dg->flag, 0, 0, 0, 0, "Maintain relative weights while painting");
+		uiDefIconButBitC(block, TOG, DG_LOCK_WEIGHT, 0, (dg->flag & DG_LOCK_WEIGHT) ? ICON_LOCKED : ICON_UNLOCKED,
+		                 0, 0, UI_UNIT_X, UI_UNIT_Y, &dg->flag, 0, 0, 0, 0,
+		                 TIP_("Maintain relative weights while painting"));
 		uiBlockSetEmboss(block, UI_EMBOSS);
 #endif
 	}
@@ -2233,6 +2240,20 @@ static void list_item_row(bContext *C, uiLayout *layout, PointerRNA *ptr, Pointe
 		else {
 			uiItemL(split, name, ICON_OBJECT_DATA);
 		}
+	}
+	else if (itemptr->type == &RNA_MaskLayer) {
+		split = uiLayoutSplit(sub, 0.5f, 0);
+
+		uiItemL(split, name, icon);
+
+		uiBlockSetEmboss(block, UI_EMBOSSN);
+		row = uiLayoutRow(split, 1);
+		// uiItemR(row, itemptr, "alpha", 0, "", ICON_NONE); // enable when used
+		uiItemR(row, itemptr, "hide", 0, "", 0);
+		uiItemR(row, itemptr, "hide_select", 0, "", 0);
+		uiItemR(row, itemptr, "hide_render", 0, "", 0);
+
+		uiBlockSetEmboss(block, UI_EMBOSS);
 	}
 
 	/* There is a last chance to display custom controls (in addition to the name/label):
@@ -2294,7 +2315,7 @@ static void list_item_row(bContext *C, uiLayout *layout, PointerRNA *ptr, Pointe
 
 void uiTemplateList(uiLayout *layout, bContext *C, PointerRNA *ptr, const char *propname, PointerRNA *activeptr, const char *activepropname, const char *prop_list, int rows, int maxrows, int listtype)
 {
-	//Scene *scene= CTX_data_scene(C);
+	//Scene *scene = CTX_data_scene(C);
 	PropertyRNA *prop = NULL, *activeprop;
 	PropertyType type, activetype;
 	StructRNA *ptype;
@@ -2362,7 +2383,8 @@ void uiTemplateList(uiLayout *layout, bContext *C, PointerRNA *ptr, const char *
 
 		if (ptr->data && prop) {
 			/* create list items */
-			RNA_PROP_BEGIN(ptr, itemptr, prop) {
+			RNA_PROP_BEGIN (ptr, itemptr, prop)
+			{
 				/* create button */
 				if (!(i % 9))
 					row = uiLayoutRow(col, 0);
@@ -2384,7 +2406,8 @@ void uiTemplateList(uiLayout *layout, bContext *C, PointerRNA *ptr, const char *
 
 		if (ptr->data && prop) {
 			/* create list items */
-			RNA_PROP_BEGIN(ptr, itemptr, prop) {
+			RNA_PROP_BEGIN (ptr, itemptr, prop)
+			{
 				found = (activei == i);
 
 				if (found) {
@@ -2446,7 +2469,8 @@ void uiTemplateList(uiLayout *layout, bContext *C, PointerRNA *ptr, const char *
 
 		if (ptr->data && prop) {
 			/* create list items */
-			RNA_PROP_BEGIN(ptr, itemptr, prop) {
+			RNA_PROP_BEGIN (ptr, itemptr, prop)
+			{
 				if (i >= pa->list_scroll && i < pa->list_scroll + items)
 					list_item_row(C, col, ptr, &itemptr, i, rnaicon, activeptr, activeprop, prop_list);
 
@@ -2703,7 +2727,8 @@ static void template_keymap_item_properties(uiLayout *layout, const char *title,
 	
 	flow = uiLayoutColumnFlow(layout, 2, 0);
 
-	RNA_STRUCT_BEGIN(ptr, prop) {
+	RNA_STRUCT_BEGIN (ptr, prop)
+	{
 		int flag = RNA_property_flag(prop);
 
 		if (flag & PROP_HIDDEN)

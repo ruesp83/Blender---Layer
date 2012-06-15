@@ -35,9 +35,9 @@
 
 /* **************** VIEWER ******************** */
 static bNodeSocketTemplate cmp_node_viewer_in[]= {
-	{	SOCK_RGBA, 1, "Image",		0.0f, 0.0f, 0.0f, 1.0f},
-	{	SOCK_FLOAT, 1, "Alpha",		1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, PROP_NONE},
-	{	SOCK_FLOAT, 1, "Z",			1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, PROP_NONE},
+	{	SOCK_RGBA, 1, N_("Image"),		0.0f, 0.0f, 0.0f, 1.0f},
+	{	SOCK_FLOAT, 1, N_("Alpha"),		1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, PROP_NONE},
+	{	SOCK_FLOAT, 1, N_("Z"),			1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, PROP_NONE},
 	{	-1, 0, ""	}
 };
 
@@ -55,7 +55,7 @@ static void node_composit_exec_viewer(void *data, bNode *node, bNodeStack **in, 
 		int rectx, recty;
 		void *lock;
 		
-		BKE_image_user_calc_frame(node->storage, rd->cfra, 0);
+		BKE_image_user_frame_calc(node->storage, rd->cfra, 0);
 
 		/* always returns for viewer image, but we check nevertheless */
 		ibuf= BKE_image_acquire_ibuf(ima, node->storage, &lock);
@@ -129,6 +129,8 @@ static void node_composit_init_viewer(bNodeTree *UNUSED(ntree), bNode* node, bNo
 	iuser->sfra= 1;
 	iuser->fie_ima= 2;
 	iuser->ok= 1;
+	node->custom3 = 0.5f;
+	node->custom4 = 0.5f;
 }
 
 void register_node_type_cmp_viewer(bNodeTreeType *ttype)

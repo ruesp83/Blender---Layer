@@ -130,8 +130,7 @@ static void flatten_string_append(FlattenString *fs, const char *c, int accum, i
 		fs->accum = naccum;
 	}
 	
-	for (i = 0; i < len; i++)
-	{
+	for (i = 0; i < len; i++) {
 		fs->buf[fs->pos + i] = c[i];
 		fs->accum[fs->pos + i] = accum;
 	}
@@ -1175,7 +1174,7 @@ static void calc_text_rcts(SpaceText *st, ARegion *ar, rcti *scroll, rcti *back)
 				/* push hl start down */
 				hlstart = barstart + barheight;
 			}
-			else if (lhlend > st->top  && lhlstart < st->top && hlstart > barstart) {
+			else if (lhlend > st->top && lhlstart < st->top && hlstart > barstart) {
 				/*fill out start */
 				hlstart = barstart;
 			}

@@ -118,8 +118,7 @@ static void mem_error_cb(const char *errorStr)
 }
 
 #ifdef WIN32
-typedef enum 
-{
+typedef enum {
   SCREEN_SAVER_MODE_NONE = 0,
   SCREEN_SAVER_MODE_PREVIEW,
   SCREEN_SAVER_MODE_SAVER,
@@ -848,7 +847,7 @@ int main(int argc, char** argv)
 						{
 							if (scene->gm.stereoflag == STEREO_ENABLED) {
 								stereomode = (RAS_IRasterizer::StereoMode) scene->gm.stereomode;
-								if (stereomode != RAS_IRasterizer::RAS_STEREO_QUADBUFFERED)
+								if (stereomode == RAS_IRasterizer::RAS_STEREO_QUADBUFFERED)
 									stereoWindow = true;
 							}
 						}
@@ -870,7 +869,7 @@ int main(int argc, char** argv)
 							if (domeWarp)
 							{
 								//XXX to do: convert relative to absolute path
-								domeText= add_text(domeWarp, "");
+								domeText= BKE_text_load(domeWarp, "");
 								if (!domeText)
 									printf("error: invalid warpdata text file - %s\n", domeWarp);
 								else

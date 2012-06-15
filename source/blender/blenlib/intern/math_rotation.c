@@ -78,7 +78,23 @@ void mul_qt_qtqt(float q[4], const float q1[4], const float q2[4])
 	q[2] = t2;
 }
 
-/* Assumes a unit quaternion */
+/**
+ * \note:
+ * Assumes a unit quaternion?
+ *
+ * in fact not, but you may wan't to use a unit quat, read on...
+ *
+ * Shortcut for 'q v q*' when \a v is actually a quaternion.
+ * This removes the need for converting a vector to a quaternion,
+ * calculating q's conjugate and converting back to a vector.
+ * It also happens to be faster (17+,24* vs * 24+,32*).
+ * If \a q is not a unit quaternion, then \a v will be both rotated by
+ * the same amount as if q was a unit quaternion, and scaled by the square of
+ * the length of q.
+ *
+ * For people used to python mathutils, its like:
+ * def mul_qt_v3(q, v): (q * Quaternion((0.0, v[0], v[1], v[2])) * q.conjugated())[1:]
+ */
 void mul_qt_v3(const float q[4], float v[3])
 {
 	float t0, t1, t2;
@@ -1615,7 +1631,7 @@ void normalize_dq(DualQuat *dq, float totweight)
 	}
 }
 
-void mul_v3m3_dq(float *co, float mat[][3], DualQuat *dq)
+void mul_v3m3_dq(float co[3], float mat[][3], DualQuat *dq)
 {
 	float M[3][3], t[3], scalemat[3][3], len2;
 	float w = dq->quat[0], x = dq->quat[1], y = dq->quat[2], z = dq->quat[3];
@@ -1675,12 +1691,13 @@ void quat_apply_track(float quat[4], short axis, short upflag)
 {
 	/* rotations are hard coded to match vec_to_quat */
 	const float quat_track[][4] = {
-	    {0.70710676908493, 0.0, -0.70710676908493, 0.0}, /* pos-y90 */
-	    {0.5, 0.5, 0.5, 0.5}, /* Quaternion((1,0,0), radians(90)) * Quaternion((0,1,0), radians(90)) */
-	    {0.70710676908493, 0.0, 0.0, 0.70710676908493}, /* pos-z90 */
-	    {0.70710676908493, 0.0, 0.70710676908493, 0.0}, /* neg-y90 */
-	    {0.5, -0.5, -0.5, 0.5}, /* Quaternion((1,0,0), radians(-90)) * Quaternion((0,1,0), radians(-90)) */
-	    {-3.0908619663705394e-08, 0.70710676908493, 0.70710676908493, 3.0908619663705394e-08}}; /* no rotation */
+		{0.70710676908493, 0.0, -0.70710676908493, 0.0}, /* pos-y90 */
+		{0.5, 0.5, 0.5, 0.5}, /* Quaternion((1,0,0), radians(90)) * Quaternion((0,1,0), radians(90)) */
+		{0.70710676908493, 0.0, 0.0, 0.70710676908493}, /* pos-z90 */
+		{0.70710676908493, 0.0, 0.70710676908493, 0.0}, /* neg-y90 */
+		{0.5, -0.5, -0.5, 0.5}, /* Quaternion((1,0,0), radians(-90)) * Quaternion((0,1,0), radians(-90)) */
+		{-3.0908619663705394e-08, 0.70710676908493, 0.70710676908493, 3.0908619663705394e-08} /* no rotation */
+	};
 
 	assert(axis >= 0 && axis <= 5);
 	assert(upflag >= 0 && upflag <= 2);

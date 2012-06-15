@@ -93,6 +93,29 @@ class AddPresetBase():
                                            filepath,
                                            preset_menu_class.preset_xml_map)
                 else:
+
+                    def rna_recursive_attr_expand(value, rna_path_step, level):
+                        if isinstance(value, bpy.types.PropertyGroup):
+                            for sub_value_attr in value.bl_rna.properties.keys():
+                                if sub_value_attr == "rna_type":
+                                    continue
+                                sub_value = getattr(value, sub_value_attr)
+                                rna_recursive_attr_expand(sub_value, "%s.%s" % (rna_path_step, sub_value_attr), level)
+                        elif type(value).__name__ == "bpy_prop_collection_idprop":  # could use nicer method
+                            file_preset.write("%s.clear()\n" % rna_path_step)
+                            for sub_value in value:
+                                file_preset.write("item_sub_%d = %s.add()\n" % (level, rna_path_step))
+                                rna_recursive_attr_expand(sub_value, "item_sub_%d" % level, level + 1)
+                        else:
+                            # convert thin wrapped sequences
+                            # to simple lists to repr()
+                            try:
+                                value = value[:]
+                            except:
+                                pass
+
+                            file_preset.write("%s = %r\n" % (rna_path_step, value))
+
                     file_preset = open(filepath, 'w')
                     file_preset.write("import bpy\n")
 
@@ -104,14 +127,7 @@ class AddPresetBase():
 
                     for rna_path in self.preset_values:
                         value = eval(rna_path)
-                        # convert thin wrapped sequences
-                        # to simple lists to repr()
-                        try:
-                            value = value[:]
-                        except:
-                            pass
-
-                        file_preset.write("%s = %r\n" % (rna_path, value))
+                        rna_recursive_attr_expand(value, rna_path, 1)
 
                     file_preset.close()
 
@@ -294,21 +310,22 @@ class AddPresetCloth(AddPresetBase, Operator):
 
     preset_subdir = "cloth"
 
+
 class AddPresetFluid(AddPresetBase, Operator):
     '''Add a Fluid Preset'''
     bl_idname = "fluid.preset_add"
     bl_label = "Add Fluid Preset"
     preset_menu = "FLUID_MT_presets"
-    
+
     preset_defines = [
     "fluid = bpy.context.fluid"
     ]
-    
+
     preset_values = [
     "fluid.settings.viscosity_base",
     "fluid.settings.viscosity_exponent",
     ]
-    
+
     preset_subdir = "fluid"
 
 
@@ -433,6 +450,24 @@ class AddPresetTrackingSettings(AddPresetBase, Operator):
     ]
 
     preset_subdir = "tracking_settings"
+
+
+class AddPresetNodeColor(AddPresetBase, Operator):
+    '''Add a Node Color Preset'''
+    bl_idname = "node.node_color_preset_add"
+    bl_label = "Add Node Color Preset"
+    preset_menu = "NODE_MT_node_color_presets"
+
+    preset_defines = [
+        "node = bpy.context.active_node"
+    ]
+
+    preset_values = [
+        "node.color",
+        "node.use_custom_color"
+    ]
+
+    preset_subdir = "node_color"
 
 
 class AddPresetInterfaceTheme(AddPresetBase, Operator):

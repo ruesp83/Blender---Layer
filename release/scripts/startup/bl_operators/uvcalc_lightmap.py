@@ -88,7 +88,7 @@ class prettyface(object):
             self.children = []
 
         else:  # blender face
-            uv_layer = data.id_data.uv_loop_layers.active.data
+            uv_layer = data.id_data.uv_layers.active.data
             self.uv = [uv_layer[i].uv for i in data.loop_indices]
 
             # cos = [v.co for v in data]
@@ -157,18 +157,17 @@ class prettyface(object):
                 angles_co.sort()
                 I = [i for a, i in angles_co]
 
-                #~ fuv = f.uv
-                uv_layer = f.id_data.uv_loop_layers.active.data
-                fuv = [uv_layer[i].uv for i in f.loops]  # XXX25
+                uv_layer = f.id_data.uv_layers.active.data
+                fuv = [uv_layer[i].uv for i in f.loop_indices]
 
                 if self.rot:
-                    fuv[I[2]] = p1
-                    fuv[I[1]] = p2
-                    fuv[I[0]] = p3
+                    fuv[I[2]][:] = p1
+                    fuv[I[1]][:] = p2
+                    fuv[I[0]][:] = p3
                 else:
-                    fuv[I[2]] = p1
-                    fuv[I[0]] = p2
-                    fuv[I[1]] = p3
+                    fuv[I[2]][:] = p1
+                    fuv[I[0]][:] = p2
+                    fuv[I[1]][:] = p3
 
             f, lens, lensord = uv[0]
 
@@ -179,10 +178,10 @@ class prettyface(object):
                 set_uv(f, (x2, y2), (x2, y1 + margin_h), (x1 + margin_w, y2))
 
         else:  # 1 QUAD
-            uv[1][0], uv[1][1] = x1, y1
-            uv[2][0], uv[2][1] = x1, y2
-            uv[3][0], uv[3][1] = x2, y2
-            uv[0][0], uv[0][1] = x2, y1
+            uv[1][:] = x1, y1
+            uv[2][:] = x1, y2
+            uv[3][:] = x2, y2
+            uv[0][:] = x2, y1
 
     def __hash__(self):
         # None unique hash
@@ -549,6 +548,16 @@ class LightMapPack(Operator):
     '''Follow UVs from active quads along continuous face loops'''
     bl_idname = "uv.lightmap_pack"
     bl_label = "Lightmap Pack"
+
+    # Disable REGISTER flag for now because this operator might create new
+    # images. This leads to non-proper operator redo because current undo
+    # stack is local for edit mode and can not remove images created by this
+    # oprtator.
+    # Proper solution would be to make undo stack aware of such things,
+    # but for now just disable redo. Keep undo here so unwanted changes to uv
+    # coords might be undone.
+    # This fixes infinite image creation reported there [#30968] (sergey)
+    bl_options = {'UNDO'}
 
     PREF_CONTEXT = bpy.props.EnumProperty(
             name="Selection",

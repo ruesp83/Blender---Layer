@@ -130,7 +130,13 @@ uiBut *uiDefAutoButR(uiBlock *block, PointerRNA *ptr, PropertyRNA *prop, int ind
 	return but;
 }
 
-int uiDefAutoButsRNA(uiLayout *layout, PointerRNA *ptr, int (*check_prop)(PointerRNA *, PropertyRNA *), const char label_align)
+/**
+ * \a check_prop callback filters functions to avoid drawing certain properties,
+ * in cases where PROP_HIDDEN flag can't be used for a property.
+ */
+int uiDefAutoButsRNA(uiLayout *layout, PointerRNA *ptr,
+                     int (*check_prop)(PointerRNA *, PropertyRNA *),
+                     const char label_align)
 {
 	uiLayout *split, *col;
 	int flag;
@@ -139,7 +145,8 @@ int uiDefAutoButsRNA(uiLayout *layout, PointerRNA *ptr, int (*check_prop)(Pointe
 
 	assert(ELEM3(label_align, '\0', 'H', 'V'));
 
-	RNA_STRUCT_BEGIN(ptr, prop) {
+	RNA_STRUCT_BEGIN (ptr, prop)
+	{
 		flag = RNA_property_flag(prop);
 		if (flag & PROP_HIDDEN || (check_prop && check_prop(ptr, prop) == FALSE))
 			continue;
@@ -168,7 +175,7 @@ int uiDefAutoButsRNA(uiLayout *layout, PointerRNA *ptr, int (*check_prop)(Pointe
 			}
 
 			/* may meed to add more cases here.
-			* don't override enum flag names */
+			 * don't override enum flag names */
 
 			/* name is shown above, empty name for button below */
 			name = (flag & PROP_ENUM_FLAG || is_boolean) ? NULL : "";

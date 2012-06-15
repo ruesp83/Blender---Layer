@@ -49,7 +49,12 @@ class PHYSICS_PT_game_physics(PhysicsButtonsPanel, Panel):
 
         physics_type = game.physics_type
 
-        if physics_type in {'DYNAMIC', 'RIGID_BODY'}:
+        if physics_type == 'CHARACTER':
+            layout.prop(game, "step_height", slider=True)
+            layout.prop(game, "jump_speed")
+            layout.prop(game, "fall_speed")
+
+        elif physics_type in {'DYNAMIC', 'RIGID_BODY'}:
             split = layout.split()
 
             col = split.column()
@@ -166,7 +171,7 @@ class PHYSICS_PT_game_physics(PhysicsButtonsPanel, Panel):
             subsub.active = game.use_anisotropic_friction
             subsub.prop(game, "friction_coefficients", text="", slider=True)
 
-        elif physics_type =='SENSOR':
+        elif physics_type == 'SENSOR':
             col = layout.column()
             col.prop(game, "use_actor", text="Detect Actors")
             col.prop(ob, "hide_render", text="Invisible")
@@ -192,7 +197,7 @@ class PHYSICS_PT_game_collision_bounds(PhysicsButtonsPanel, Panel):
     def poll(cls, context):
         game = context.object.game
         rd = context.scene.render
-        return (game.physics_type in {'DYNAMIC', 'RIGID_BODY', 'SENSOR', 'SOFT_BODY', 'STATIC'}) and (rd.engine in cls.COMPAT_ENGINES)
+        return (game.physics_type in {'DYNAMIC', 'RIGID_BODY', 'SENSOR', 'SOFT_BODY', 'STATIC', 'CHARACTER'}) and (rd.engine in cls.COMPAT_ENGINES)
 
     def draw_header(self, context):
         game = context.active_object.game
@@ -617,6 +622,14 @@ class WORLD_PT_game_physics(WorldButtonsPanel, Panel):
             col.prop(gs, "logic_step_max", text="Max")
 
             col = layout.column()
+            col.label(text="Physics Deactivation:")
+            sub = col.row(align=True)
+            sub.prop(gs, "deactivation_linear_threshold", text="Linear Threshold")
+            sub.prop(gs, "deactivation_angular_threshold", text="Angular Threshold")
+            sub = col.row()
+            sub.prop(gs, "deactivation_time", text="Time")
+
+            col = layout.column()
             col.prop(gs, "use_occlusion_culling", text="Occlusion Culling")
             sub = col.column()
             sub.active = gs.use_occlusion_culling
@@ -652,6 +665,65 @@ class WORLD_PT_game_physics_obstacles(WorldButtonsPanel, Panel):
         if gs.obstacle_simulation != 'NONE':
             layout.prop(gs, "level_height")
             layout.prop(gs, "show_obstacle_simulation")
+
+
+class DataButtonsPanel():
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "data"
+
+
+class DATA_PT_shadow_game(DataButtonsPanel, Panel):
+    bl_label = "Shadow"
+    COMPAT_ENGINES = {'BLENDER_GAME'}
+
+    @classmethod
+    def poll(cls, context):
+        COMPAT_LIGHTS = {'SPOT', 'SUN'}
+        lamp = context.lamp
+        engine = context.scene.render.engine
+        return (lamp and lamp.type in COMPAT_LIGHTS) and (engine in cls.COMPAT_ENGINES)
+
+    def draw_header(self, context):
+        lamp = context.lamp
+
+        self.layout.prop(lamp, "use_shadow", text="")
+
+    def draw(self, context):
+        layout = self.layout
+
+        lamp = context.lamp
+
+        layout.active = lamp.use_shadow
+
+        split = layout.split()
+
+        col = split.column()
+        col.prop(lamp, "shadow_color", text="")
+
+        col = split.column()
+        col.prop(lamp, "use_shadow_layer", text="This Layer Only")
+        col.prop(lamp, "use_only_shadow")
+
+        col = layout.column()
+        col.label("Buffer Type:")
+        col.prop(lamp, "ge_shadow_buffer_type", text="", toggle=True)
+        col.label("Quality:")
+        col = layout.column(align=True)
+        col.prop(lamp, "shadow_buffer_size", text="Size")
+        col.prop(lamp, "shadow_buffer_bias", text="Bias")
+        col.prop(lamp, "shadow_buffer_bleed_bias", text="Bleed Bias")
+
+        row = layout.row()
+        row.label("Clipping:")
+        row = layout.row(align=True)
+        row.prop(lamp, "shadow_buffer_clip_start", text="Clip Start")
+        row.prop(lamp, "shadow_buffer_clip_end", text="Clip End")
+
+        if lamp.type == 'SUN':
+            row = layout.row()
+            row.prop(lamp, "shadow_frustum_size", text="Frustum Size")
+
 
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)

@@ -491,6 +491,7 @@ static void init_brush_icons(void)
 	INIT_BRUSH_ICON(ICON_BRUSH_INFLATE, inflate);
 	INIT_BRUSH_ICON(ICON_BRUSH_LAYER, layer);
 	INIT_BRUSH_ICON(ICON_BRUSH_LIGHTEN, lighten);
+	INIT_BRUSH_ICON(ICON_BRUSH_MASK, mask);
 	INIT_BRUSH_ICON(ICON_BRUSH_MIX, mix);
 	INIT_BRUSH_ICON(ICON_BRUSH_MULTIPLY, multiply);
 	INIT_BRUSH_ICON(ICON_BRUSH_NUDGE, nudge);
@@ -532,7 +533,8 @@ static void init_internal_icons(void)
 		}
 	}
 	if (bbuf == NULL)
-		bbuf = IMB_ibImageFromMemory((unsigned char *)datatoc_blender_icons_png, datatoc_blender_icons_png_size, IB_rect, "<blender icons>");
+		bbuf = IMB_ibImageFromMemory((unsigned char *)datatoc_blender_icons_png,
+		                             datatoc_blender_icons_png_size, IB_rect, "<blender icons>");
 
 	if (bbuf) {
 		/* free existing texture if any */

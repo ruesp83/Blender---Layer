@@ -59,6 +59,7 @@
 
 #include "NOD_composite.h"
 #include "node_composite_util.h"
+#include "COM_compositor.h"
 
 static void foreach_nodetree(Main *main, void *calldata, bNodeTreeCallback func)
 {
@@ -72,16 +73,16 @@ static void foreach_nodetree(Main *main, void *calldata, bNodeTreeCallback func)
 
 static void foreach_nodeclass(Scene *UNUSED(scene), void *calldata, bNodeClassCallback func)
 {
-	func(calldata, NODE_CLASS_INPUT, IFACE_("Input"));
-	func(calldata, NODE_CLASS_OUTPUT, IFACE_("Output"));
-	func(calldata, NODE_CLASS_OP_COLOR, IFACE_("Color"));
-	func(calldata, NODE_CLASS_OP_VECTOR, IFACE_("Vector"));
-	func(calldata, NODE_CLASS_OP_FILTER, IFACE_("Filter"));
-	func(calldata, NODE_CLASS_CONVERTOR, IFACE_("Convertor"));
-	func(calldata, NODE_CLASS_MATTE, IFACE_("Matte"));
-	func(calldata, NODE_CLASS_DISTORT, IFACE_("Distort"));
-	func(calldata, NODE_CLASS_GROUP, IFACE_("Group"));
-	func(calldata, NODE_CLASS_LAYOUT, IFACE_("Layout"));
+	func(calldata, NODE_CLASS_INPUT, N_("Input"));
+	func(calldata, NODE_CLASS_OUTPUT, N_("Output"));
+	func(calldata, NODE_CLASS_OP_COLOR, N_("Color"));
+	func(calldata, NODE_CLASS_OP_VECTOR, N_("Vector"));
+	func(calldata, NODE_CLASS_OP_FILTER, N_("Filter"));
+	func(calldata, NODE_CLASS_CONVERTOR, N_("Convertor"));
+	func(calldata, NODE_CLASS_MATTE, N_("Matte"));
+	func(calldata, NODE_CLASS_DISTORT, N_("Distort"));
+	func(calldata, NODE_CLASS_GROUP, N_("Group"));
+	func(calldata, NODE_CLASS_LAYOUT, N_("Layout"));
 }
 
 static void free_node_cache(bNodeTree *UNUSED(ntree), bNode *node)
@@ -136,10 +137,20 @@ static void localize(bNodeTree *localtree, bNodeTree *ntree)
 		if (ELEM(node->type, CMP_NODE_VIEWER, CMP_NODE_SPLITVIEWER)) {
 			if (node->id) {
 				if (node->flag & NODE_DO_OUTPUT)
-					node->new_node->id= (ID *)copy_image((Image *)node->id);
+					node->new_node->id= (ID *)node->id;
 				else
 					node->new_node->id= NULL;
 			}
+		}
+		
+		/* copy over the preview buffers to update graduatly */
+		if (node->preview) {
+			bNodePreview *preview = MEM_callocN(sizeof(bNodePreview), "Preview");
+			preview->pad = node->preview->pad;
+			preview->xsize = node->preview->xsize;
+			preview->ysize = node->preview->ysize;
+			preview->rect = MEM_dupallocN(node->preview->rect);
+			node->new_node->preview = preview;
 		}
 		
 		for (sock= node->outputs.first; sock; sock= sock->next) {
@@ -151,11 +162,11 @@ static void localize(bNodeTree *localtree, bNodeTree *ntree)
 		}
 	}
 	
-	/* replace muted nodes by internal links */
+	/* replace muted nodes and reroute nodes by internal links */
 	for (node= localtree->nodes.first; node; node= node_next) {
 		node_next = node->next;
 		
-		if (node->flag & NODE_MUTED) {
+		if (node->flag & NODE_MUTED || node->type == NODE_REROUTE) {
 			/* make sure the update tag isn't lost when removing the muted node.
 			 * propagate this to all downstream nodes.
 			 */
@@ -211,7 +222,7 @@ static void local_merge(bNodeTree *localtree, bNodeTree *ntree)
 				   copied back to original node */
 				if (lnode->storage) {
 					if (lnode->new_node->storage)
-						BKE_tracking_distortion_destroy(lnode->new_node->storage);
+						BKE_tracking_distortion_free(lnode->new_node->storage);
 
 					lnode->new_node->storage= BKE_tracking_distortion_copy(lnode->storage);
 				}
@@ -575,19 +586,18 @@ static  void ntree_composite_texnode(bNodeTree *ntree, int init)
 }
 
 /* optimized tree execute test for compositing */
-void ntreeCompositExecTree(bNodeTree *ntree, RenderData *rd, int do_preview)
+/* optimized tree execute test for compositing */
+static void ntreeCompositExecTreeOld(bNodeTree *ntree, RenderData *rd, int do_preview)
 {
 	bNodeExec *nodeexec;
 	bNode *node;
 	ListBase threads;
 	ThreadData thdata;
 	int totnode, curnode, rendering= 1, n;
-	bNodeTreeExec *exec;
-
-	if (ntree==NULL) return;
-
-	exec = ntree->execdata;
-
+	bNodeTreeExec *exec= ntree->execdata;
+	
+	if (ntree == NULL) return;
+	
 	if (do_preview)
 		ntreeInitPreview(ntree, 0, 0);
 	
@@ -666,6 +676,14 @@ void ntreeCompositExecTree(bNodeTree *ntree, RenderData *rd, int do_preview)
 	
 	/* XXX top-level tree uses the ntree->execdata pointer */
 	ntreeCompositEndExecTree(exec, 1);
+}
+
+void ntreeCompositExecTree(bNodeTree *ntree, RenderData *rd, int rendering, int do_preview)
+{
+	if (G.rt == 200)
+		ntreeCompositExecTreeOld(ntree, rd, do_preview);
+	else
+		COM_execute(ntree, rendering);
 }
 
 /* *********************************************** */
@@ -757,26 +775,14 @@ void ntreeCompositForceHidden(bNodeTree *ntree, Scene *curscene)
 			if (srl)
 				force_hidden_passes(node, srl->passflag);
 		}
+		/* XXX this stuff is called all the time, don't want that.
+		 * Updates should only happen when actually necessary.
+		 */
+		#if 0
 		else if ( node->type==CMP_NODE_IMAGE) {
-			Image *ima= (Image *)node->id;
-			if (ima) {
-				if (ima->rr) {
-					ImageUser *iuser= node->storage;
-					RenderLayer *rl= BLI_findlink(&ima->rr->layers, iuser->layer);
-					if (rl)
-						force_hidden_passes(node, rl->passflag);
-					else
-						force_hidden_passes(node, RRES_OUT_IMAGE|RRES_OUT_ALPHA);
-				}
-				else if (ima->type!=IMA_TYPE_MULTILAYER) {	/* if ->rr not yet read we keep inputs */
-					force_hidden_passes(node, RRES_OUT_IMAGE|RRES_OUT_ALPHA|RRES_OUT_Z);
-				}
-				else
-					force_hidden_passes(node, RRES_OUT_IMAGE|RRES_OUT_ALPHA);
-			}
-			else
-				force_hidden_passes(node, RRES_OUT_IMAGE|RRES_OUT_ALPHA);
+			nodeUpdate(ntree, node);
 		}
+		#endif
 	}
 
 }
@@ -881,6 +887,10 @@ int ntreeCompositTagAnimated(bNodeTree *ntree)
 			}
 		}
 		else if (ELEM(node->type, CMP_NODE_MOVIECLIP, CMP_NODE_TRANSFORM)) {
+			nodeUpdate(ntree, node);
+			tagged= 1;
+		}
+		else if (node->type==CMP_NODE_MASK) {
 			nodeUpdate(ntree, node);
 			tagged= 1;
 		}

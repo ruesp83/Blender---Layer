@@ -35,12 +35,12 @@
 
 /* **************** Hue Saturation ******************** */
 static bNodeSocketTemplate cmp_node_hue_sat_in[]= {
-	{	SOCK_FLOAT, 1, "Fac",			1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, PROP_FACTOR},
-	{	SOCK_RGBA, 1, "Image",			1.0f, 1.0f, 1.0f, 1.0f},
+	{	SOCK_FLOAT, 1, N_("Fac"),			1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, PROP_FACTOR},
+	{	SOCK_RGBA, 1, N_("Image"),			1.0f, 1.0f, 1.0f, 1.0f},
 	{	-1, 0, ""	}
 };
 static bNodeSocketTemplate cmp_node_hue_sat_out[]= {
-	{	SOCK_RGBA, 0, "Image"},
+	{	SOCK_RGBA, 0, N_("Image")},
 	{	-1, 0, ""	}
 };
 
@@ -81,7 +81,7 @@ static void node_composit_exec_hue_sat(void *UNUSED(data), bNode *node, bNodeSta
 	else {
 		/* make output size of input image */
 		CompBuf *cbuf= dupalloc_compbuf(in[1]->data);
-		CompBuf *stackbuf=typecheck_compbuf(cbuf,CB_RGBA);
+		CompBuf *stackbuf=typecheck_compbuf(cbuf, CB_RGBA);
 		
 		composit2_pixel_processor(node, stackbuf, stackbuf, in[1]->vec, in[0]->data, in[0]->vec, do_hue_sat_fac, CB_RGBA, CB_VAL);
 

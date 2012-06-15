@@ -1,5 +1,27 @@
-# -*- mode: cmake; indent-tabs-mode: t; -*-
-
+# ***** BEGIN GPL LICENSE BLOCK *****
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+#
+# The Original Code is Copyright (C) 2006, Blender Foundation
+# All rights reserved.
+#
+# The Original Code is: all of this file.
+#
+# Contributor(s): Jacques Beaurain.
+#
+# ***** END GPL LICENSE BLOCK *****
 
 # foo_bar.spam --> foo_barMySuffix.spam
 macro(file_suffix
@@ -212,11 +234,10 @@ macro(setup_liblinks
 	target_link_libraries(${target}
 			${OPENGL_gl_LIBRARY}
 			${OPENGL_glu_LIBRARY}
-			${JPEG_LIBRARIES}
 			${PNG_LIBRARIES}
 			${ZLIB_LIBRARIES}
 			${FREETYPE_LIBRARY}
-			${PLATFORM_LINKLIBS})
+			${LAPACK_LIBRARIES})
 
 	# since we are using the local libs for python when compiling msvc projects, we need to add _d when compiling debug versions
 	if(WITH_PYTHON)  # AND NOT WITH_PYTHON_MODULE  # WIN32 needs
@@ -271,6 +292,7 @@ macro(setup_liblinks
 	if(WITH_BOOST)
 		target_link_libraries(${target} ${BOOST_LIBRARIES})
 	endif()
+	target_link_libraries(${target} ${JPEG_LIBRARIES})
 	if(WITH_IMAGE_OPENEXR)
 		if(WIN32 AND NOT UNIX AND NOT CMAKE_COMPILER_IS_GNUCC)
 			file_list_suffix(OPENEXR_LIBRARIES_DEBUG "${OPENEXR_LIBRARIES}" "_d")
@@ -328,6 +350,8 @@ macro(setup_liblinks
 	if(WIN32 AND NOT UNIX)
 		target_link_libraries(${target} ${PTHREADS_LIBRARIES})
 	endif()
+
+	target_link_libraries(${target} ${PLATFORM_LINKLIBS})
 endmacro()
 
 macro(TEST_SSE_SUPPORT

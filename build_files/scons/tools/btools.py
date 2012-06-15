@@ -134,7 +134,7 @@ def validate_arguments(args, bc):
             'BF_CXX', 'WITH_BF_STATICCXX', 'BF_CXX_LIB_STATIC',
             'BF_TWEAK_MODE', 'BF_SPLIT_SRC',
             'WITHOUT_BF_INSTALL',
-            'WITHOUT_BF_PYTHON_INSTALL',
+            'WITHOUT_BF_PYTHON_INSTALL', 'WITHOUT_BF_PYTHON_UNPACK',
             'WITHOUT_BF_OVERWRITE_INSTALL',
             'WITH_BF_OPENMP', 'BF_OPENMP', 'BF_OPENMP_LIBPATH',
             'WITH_GHOST_COCOA',
@@ -177,6 +177,7 @@ def validate_arguments(args, bc):
             'BF_DEBUG_CFLAGS', 'BF_DEBUG_CCFLAGS', 'BF_DEBUG_CXXFLAGS',
             'C_WARN', 'CC_WARN', 'CXX_WARN',
             'LLIBS', 'PLATFORM_LINKFLAGS','MACOSX_ARCHITECTURE', 'MACOSX_SDK_CHECK', 'XCODE_CUR_VER',
+            'BF_CYCLES_CUDA_BINARIES_ARCH',
     ]
     
     
@@ -518,6 +519,7 @@ def read_opts(env, cfg, args):
         (BoolVariable('BF_SPLIT_SRC', 'Split src lib into several chunks if true', False)),
         (BoolVariable('WITHOUT_BF_INSTALL', 'dont install if true', False)),
         (BoolVariable('WITHOUT_BF_PYTHON_INSTALL', 'dont install Python modules if true', False)),
+        (BoolVariable('WITHOUT_BF_PYTHON_UNPACK', 'dont remove and unpack Python modules everytime if true', False)),
         (BoolVariable('WITHOUT_BF_OVERWRITE_INSTALL', 'dont remove existing files before breating the new install directory (set to False when making packages for others)', False)),
         (BoolVariable('BF_FANCY', 'Enable fancy output if true', True)),
         (BoolVariable('BF_QUIET', 'Enable silent output if true', True)),
@@ -617,12 +619,18 @@ def buildslave(target=None, source=None, env=None):
     Builder for buildbot integration. Used by buildslaves of http://builder.blender.org only.
     """
 
-    if env['OURPLATFORM'] in ('win32-vc', 'win64-vc', 'win32-mingw', 'darwin'):
+    if env['OURPLATFORM'] in ('win32-vc', 'win64-vc', 'win32-mingw', 'darwin', 'win64-mingw'):
         extension = '.zip'
     else:
         extension = '.tar.bz2'
 
-    platform = env['OURPLATFORM'].split('-')[0]
+    if env['OURPLATFORM'] == 'win32-mingw':
+        platform = 'mingw32'
+    elif env['OURPLATFORM'] == 'win64-mingw':
+        platform = 'mingw64'
+    else:
+        platform = env['OURPLATFORM'].split('-')[0]
+
     if platform == 'linux':
         import platform
 
@@ -662,15 +670,13 @@ def NSIS_print(target, source, env):
 def NSIS_Installer(target=None, source=None, env=None):
     print "="*35
 
-    if env['OURPLATFORM'] not in ('win32-vc', 'win32-mingw', 'win64-vc'):
+    if env['OURPLATFORM'] not in ('win32-vc', 'win32-mingw', 'win64-vc', 'win64-mingw'):
         print "NSIS installer is only available on Windows."
         Exit()
-    if env['OURPLATFORM'] == 'win32-vc':
+    if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw'):
         bitness = '32'
-    elif env['OURPLATFORM'] == 'win64-vc':
+    elif env['OURPLATFORM'] in ('win64-vc', 'win64-mingw'):
         bitness = '64'
-    else:
-        bitness = '-mingw'
 
     start_dir = os.getcwd()
     rel_dir = os.path.join(start_dir,'release','windows','installer')
@@ -762,7 +768,7 @@ def NSIS_Installer(target=None, source=None, env=None):
     cmdline = "makensis " + "\""+tmpnsi+"\""
 
     startupinfo = subprocess.STARTUPINFO()
-    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    #startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
     proc = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, startupinfo=startupinfo, shell = True)
     data, err = proc.communicate()

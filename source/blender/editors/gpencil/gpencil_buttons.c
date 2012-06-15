@@ -40,6 +40,7 @@
 
 #include "DNA_gpencil_types.h"
 #include "DNA_screen_types.h"
+#include "DNA_space_types.h"
 
 #include "BKE_context.h"
 #include "BKE_global.h"
@@ -74,7 +75,7 @@ static void gp_ui_activelayer_cb(bContext *C, void *gpd, void *gpl)
 	/* make sure the layer we want to remove is the active one */
 	gpencil_layer_setactive(gpd, gpl);
 	
-	WM_event_add_notifier(C, NC_SCREEN|ND_GPENCIL|NA_EDITED, NULL); /* XXX please work! */
+	WM_event_add_notifier(C, NC_SCREEN | ND_GPENCIL | NA_EDITED, NULL); /* XXX please work! */
 }
 
 /* delete 'active' layer */
@@ -84,7 +85,7 @@ static void gp_ui_dellayer_cb(bContext *C, void *gpd, void *gpl)
 	gpencil_layer_setactive(gpd, gpl);
 	gpencil_layer_delactive(gpd);
 	
-	WM_event_add_notifier(C, NC_SCREEN|ND_GPENCIL|NA_EDITED, NULL); /* XXX please work! */
+	WM_event_add_notifier(C, NC_SCREEN | ND_GPENCIL | NA_EDITED, NULL); /* XXX please work! */
 }
 
 
@@ -133,7 +134,7 @@ static void gp_drawui_layer(uiLayout *layout, bGPdata *gpd, bGPDlayer *gpl, cons
 	uiItemR(sub, &ptr, "lock", 0, "", icon);
 	
 	/* when layer is locked or hidden, only draw header */
-	if (gpl->flag & (GP_LAYER_LOCKED|GP_LAYER_HIDE)) {
+	if (gpl->flag & (GP_LAYER_LOCKED | GP_LAYER_HIDE)) {
 		char name[256]; /* gpl->info is 128, but we need space for 'locked/hidden' as well */
 		
 		/* visibility button (only if hidden but not locked!) */
@@ -197,8 +198,8 @@ static void gp_drawui_layer(uiLayout *layout, bGPdata *gpd, bGPDlayer *gpl, cons
 		
 		/* color */
 		sub = uiLayoutColumn(col, 1);
-			uiItemR(sub, &ptr, "color", 0, "", ICON_NONE);
-			uiItemR(sub, &ptr, "alpha", UI_ITEM_R_SLIDER, NULL, ICON_NONE);
+		uiItemR(sub, &ptr, "color", 0, "", ICON_NONE);
+		uiItemR(sub, &ptr, "alpha", UI_ITEM_R_SLIDER, NULL, ICON_NONE);
 		
 		/* stroke thickness */
 		uiItemR(col, &ptr, "line_width", UI_ITEM_R_SLIDER, NULL, ICON_NONE);
@@ -230,12 +231,30 @@ typedef enum eGP_Stroke_Ops {
 	STROKE_OPTS_V3D_ON,
 } eGP_Stroke_Ops;
 
+static void draw_gpencil_space_specials(const bContext *C, uiLayout *layout)
+{
+	uiLayout *col, *row;
+	SpaceClip *sc = CTX_wm_space_clip(C);
+
+	col = uiLayoutColumn(layout, 0);
+
+	if (sc) {
+		bScreen *screen = CTX_wm_screen(C);
+		PointerRNA sc_ptr;
+
+		RNA_pointer_create(&screen->id, &RNA_SpaceClipEditor, sc, &sc_ptr);
+		row = uiLayoutRow(col, 1);
+		uiItemR(row, &sc_ptr, "grease_pencil_source", UI_ITEM_R_EXPAND, NULL, ICON_NONE);
+	}
+}
+
 /* Draw the contents for a grease-pencil panel*/
 static void draw_gpencil_panel(bContext *C, uiLayout *layout, bGPdata *gpd, PointerRNA *ctx_ptr)
 {
 	PointerRNA gpd_ptr;
 	bGPDlayer *gpl;
 	uiLayout *col, *row;
+	SpaceClip *sc = CTX_wm_space_clip(C);
 	short v3d_stroke_opts = STROKE_OPTS_NORMAL;
 	const short is_v3d = CTX_wm_view3d(C) != NULL;
 	
@@ -244,6 +263,7 @@ static void draw_gpencil_panel(bContext *C, uiLayout *layout, bGPdata *gpd, Poin
 	
 	/* draw gpd settings first ------------------------------------- */
 	col = uiLayoutColumn(layout, 0);
+
 	/* current Grease Pencil block */
 	/* TODO: show some info about who owns this? */
 	uiTemplateID(col, C, ctx_ptr, "grease_pencil", "GPENCIL_OT_data_add", NULL, "GPENCIL_OT_data_unlink");
@@ -251,8 +271,8 @@ static void draw_gpencil_panel(bContext *C, uiLayout *layout, bGPdata *gpd, Poin
 	/* add new layer button - can be used even when no data, since it can add a new block too */
 	uiItemO(col, IFACE_("New Layer"), ICON_NONE, "GPENCIL_OT_layer_add");
 	row = uiLayoutRow(col, 1);
-		uiItemO(row, IFACE_("Delete Frame"), ICON_NONE, "GPENCIL_OT_active_frame_delete");
-		uiItemO(row, IFACE_("Convert"), ICON_NONE, "GPENCIL_OT_convert");
+	uiItemO(row, IFACE_("Delete Frame"), ICON_NONE, "GPENCIL_OT_active_frame_delete");
+	uiItemO(row, IFACE_("Convert"), ICON_NONE, "GPENCIL_OT_convert");
 	
 	/* sanity checks... */
 	if (gpd == NULL)
@@ -266,29 +286,32 @@ static void draw_gpencil_panel(bContext *C, uiLayout *layout, bGPdata *gpd, Poin
 	
 	/* draw gpd drawing settings first ------------------------------------- */
 	col = uiLayoutColumn(layout, 1);
-		/* label */
-		uiItemL(col, IFACE_("Drawing Settings:"), ICON_NONE);
+	/* label */
+	uiItemL(col, IFACE_("Drawing Settings:"), ICON_NONE);
 		
-		/* check whether advanced 3D-View drawing space options can be used */
-		if (is_v3d) {
-			if (gpd->flag & (GP_DATA_DEPTH_STROKE|GP_DATA_DEPTH_VIEW))
-				v3d_stroke_opts = STROKE_OPTS_V3D_ON;
-			else
-				v3d_stroke_opts = STROKE_OPTS_V3D_OFF;
-		}
+	/* check whether advanced 3D-View drawing space options can be used */
+	if (is_v3d) {
+		if (gpd->flag & (GP_DATA_DEPTH_STROKE | GP_DATA_DEPTH_VIEW))
+			v3d_stroke_opts = STROKE_OPTS_V3D_ON;
+		else
+			v3d_stroke_opts = STROKE_OPTS_V3D_OFF;
+	}
 		
-		/* drawing space options */
-		row= uiLayoutRow(col, 1);
-			uiItemEnumR_string(row, &gpd_ptr, "draw_mode", "VIEW", NULL, ICON_NONE);
-			uiItemEnumR_string(row, &gpd_ptr, "draw_mode", "CURSOR", NULL, ICON_NONE);
-		row= uiLayoutRow(col, 1);
-			uiLayoutSetActive(row, v3d_stroke_opts);
-			uiItemEnumR_string(row, &gpd_ptr, "draw_mode", "SURFACE", NULL, ICON_NONE);
-			uiItemEnumR_string(row, &gpd_ptr, "draw_mode", "STROKE", NULL, ICON_NONE);
-		
-		row= uiLayoutRow(col, 0);
-			uiLayoutSetActive(row, v3d_stroke_opts==STROKE_OPTS_V3D_ON);
-			uiItemR(row, &gpd_ptr, "use_stroke_endpoints", 0, NULL, ICON_NONE);
+	/* drawing space options */
+	row = uiLayoutRow(col, 1);
+	uiItemEnumR_string(row, &gpd_ptr, "draw_mode", "VIEW", NULL, ICON_NONE);
+	uiItemEnumR_string(row, &gpd_ptr, "draw_mode", "CURSOR", NULL, ICON_NONE);
+
+	if (sc == NULL) {
+		row = uiLayoutRow(col, 1);
+		uiLayoutSetActive(row, v3d_stroke_opts);
+		uiItemEnumR_string(row, &gpd_ptr, "draw_mode", "SURFACE", NULL, ICON_NONE);
+		uiItemEnumR_string(row, &gpd_ptr, "draw_mode", "STROKE", NULL, ICON_NONE);
+
+		row = uiLayoutRow(col, 0);
+		uiLayoutSetActive(row, v3d_stroke_opts == STROKE_OPTS_V3D_ON);
+		uiItemR(row, &gpd_ptr, "use_stroke_endpoints", 0, NULL, ICON_NONE);
+	}
 }
 
 
@@ -299,6 +322,8 @@ void gpencil_panel_standard(const bContext *C, Panel *pa)
 	PointerRNA ptr;
 	
 	/* if (v3d->flag2 & V3D_DISPGP)... etc. */
+	
+	draw_gpencil_space_specials(C, pa->layout);
 	
 	/* get pointer to Grease Pencil Data */
 	gpd_ptr = gpencil_data_get_pointers((bContext *)C, &ptr);

@@ -96,12 +96,12 @@ static double  bpy_timer_run_tot;   /* accumulate python runs */
 #endif
 
 /* use for updating while a python script runs - in case of file load */
-void bpy_context_update(bContext *C)
+void BPY_context_update(bContext *C)
 {
 	/* don't do this from a non-main (e.g. render) thread, it can cause a race
-	   condition on C->data.recursion. ideal solution would be to disable
-	   context entirely from non-main threads, but that's more complicated */
-	if(!BLI_thread_is_main())
+	 * condition on C->data.recursion. ideal solution would be to disable
+	 * context entirely from non-main threads, but that's more complicated */
+	if (!BLI_thread_is_main())
 		return;
 
 	BPy_SetContext(C);
@@ -117,7 +117,7 @@ void bpy_context_set(bContext *C, PyGILState_STATE *gilstate)
 		*gilstate = PyGILState_Ensure();
 
 	if (py_call_level == 1) {
-		bpy_context_update(C);
+		BPY_context_update(C);
 
 #ifdef TIME_PY_RUN
 		if (bpy_timer_count == 0) {
@@ -178,7 +178,8 @@ void BPY_modules_update(bContext *C)
 
 	/* refreshes the main struct */
 	BPY_update_rna_module();
-	bpy_context_module->ptr.data = (void *)C;
+	if (bpy_context_module)
+		bpy_context_module->ptr.data = (void *)C;
 }
 
 void BPY_context_set(bContext *C)
@@ -222,6 +223,7 @@ void BPY_python_start(int argc, const char **argv)
 {
 #ifndef WITH_PYTHON_MODULE
 	PyThreadState *py_tstate = NULL;
+	const char *py_path_bundle = BLI_get_folder(BLENDER_SYSTEM_PYTHON, NULL);
 
 	/* not essential but nice to set our name */
 	static wchar_t program_path_wchar[FILE_MAX]; /* python holds a reference */
@@ -232,7 +234,7 @@ void BPY_python_start(int argc, const char **argv)
 	PyImport_ExtendInittab(bpy_internal_modules);
 
 	/* allow to use our own included python */
-	PyC_SetHomePath(BLI_get_folder(BLENDER_SYSTEM_PYTHON, NULL));
+	PyC_SetHomePath(py_path_bundle);
 
 	/* without this the sys.stdout may be set to 'ascii'
 	 * (it is on my system at least), where printing unicode values will raise
@@ -244,7 +246,11 @@ void BPY_python_start(int argc, const char **argv)
 	/* Python 3.2 now looks for '2.xx/python/include/python3.2d/pyconfig.h' to
 	 * parse from the 'sysconfig' module which is used by 'site',
 	 * so for now disable site. alternatively we could copy the file. */
-	Py_NoSiteFlag = 1;
+	if (py_path_bundle) {
+		Py_NoSiteFlag = 1;
+	}
+
+	Py_FrozenFlag = 1;
 
 	Py_Initialize();
 
@@ -415,9 +421,9 @@ static int python_script_exec(bContext *C, const char *fn, struct Text *text,
 
 				fclose(fp);
 
-				pystring = MEM_mallocN(strlen(fn) + 32, "pystring");
+				pystring = MEM_mallocN(strlen(fn) + 37, "pystring");
 				pystring[0] = '\0';
-				sprintf(pystring, "exec(open(r'%s').read())", fn);
+				sprintf(pystring, "f=open(r'%s');exec(f.read());f.close()", fn);
 				py_result = PyRun_String(pystring, Py_file_input, py_dict, py_dict);
 				MEM_freeN(pystring);
 			}
@@ -531,7 +537,12 @@ int BPY_button_exec(bContext *C, const char *expr, double *value, const short ve
 			val = 0.0;
 
 			for (i = 0; i < PyTuple_GET_SIZE(retval); i++) {
-				val += PyFloat_AsDouble(PyTuple_GET_ITEM(retval, i));
+				const double val_item = PyFloat_AsDouble(PyTuple_GET_ITEM(retval, i));
+				if (val_item == -1 && PyErr_Occurred()) {
+					val = -1;
+					break;
+				}
+				val += val_item;
 			}
 		}
 		else {
@@ -623,7 +634,7 @@ void BPY_modules_load_user(bContext *C)
 	/* update pointers since this can run from a nested script
 	 * on file load */
 	if (py_call_level) {
-		bpy_context_update(C);
+		BPY_context_update(C);
 	}
 
 	bpy_context_set(C, &gilstate);
@@ -654,7 +665,7 @@ int BPY_context_member_get(bContext *C, const char *member, bContextDataResult *
 	PyObject *pyctx = (PyObject *)CTX_py_dict_get(C);
 	PyObject *item = PyDict_GetItemString(pyctx, member);
 	PointerRNA *ptr = NULL;
-	int done = 0;
+	int done = FALSE;
 
 	if (item == NULL) {
 		/* pass */
@@ -667,7 +678,7 @@ int BPY_context_member_get(bContext *C, const char *member, bContextDataResult *
 
 		//result->ptr = ((BPy_StructRNA *)item)->ptr;
 		CTX_data_pointer_set(result, ptr->id.data, ptr->type, ptr->data);
-		done = 1;
+		done = TRUE;
 	}
 	else if (PySequence_Check(item)) {
 		PyObject *seq_fast = PySequence_Fast(item, "bpy_context_get sequence conversion");
@@ -697,7 +708,7 @@ int BPY_context_member_get(bContext *C, const char *member, bContextDataResult *
 			}
 			Py_DECREF(seq_fast);
 
-			done = 1;
+			done = TRUE;
 		}
 	}
 

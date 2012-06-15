@@ -272,6 +272,22 @@ MINLINE void add_v3_v3v3(float r[3], const float a[3], const float b[3])
 	r[2] = a[2] + b[2];
 }
 
+MINLINE void add_v4_v4(float r[4], const float a[4])
+{
+	r[0] += a[0];
+	r[1] += a[1];
+	r[2] += a[2];
+	r[3] += a[3];
+}
+
+MINLINE void add_v4_v4v4(float r[4], const float a[4], const float b[4])
+{
+	r[0] = a[0] + b[0];
+	r[1] = a[1] + b[1];
+	r[2] = a[2] + b[2];
+	r[3] = a[3] + b[3];
+}
+
 MINLINE void sub_v2_v2(float r[2], const float a[2])
 {
 	r[0] -= a[0];
@@ -361,6 +377,14 @@ MINLINE void mul_v4_fl(float r[4], float f)
 	r[3] *= f;
 }
 
+MINLINE void mul_v4_v4fl(float r[4], const float a[4], float f)
+{
+	r[0] = a[0] * f;
+	r[1] = a[1] * f;
+	r[2] = a[2] * f;
+	r[3] = a[3] * f;
+}
+
 MINLINE void madd_v2_v2fl(float r[2], const float a[2], float f)
 {
 	r[0] += a[0] * f;
@@ -407,6 +431,14 @@ MINLINE void madd_v4_v4fl(float r[4], const float a[4], float f)
 	r[1] += a[1] * f;
 	r[2] += a[2] * f;
 	r[3] += a[3] * f;
+}
+
+MINLINE void madd_v4_v4v4(float r[4], const float a[4], const float b[4])
+{
+	r[0] += a[0] * b[0];
+	r[1] += a[1] * b[1];
+	r[2] += a[2] * b[2];
+	r[3] += a[3] * b[3];
 }
 
 MINLINE void mul_v3_v3v3(float r[3], const float v1[3], const float v2[3])
@@ -458,6 +490,14 @@ MINLINE void negate_v4_v4(float r[4], const float a[4])
 	r[3] = -a[3];
 }
 
+/* could add more... */
+MINLINE void negate_v3_short(short r[3])
+{
+	r[0] = -r[0];
+	r[1] = -r[1];
+	r[2] = -r[2];
+}
+
 MINLINE float dot_v2v2(const float a[2], const float b[2])
 {
 	return a[0] * b[0] + a[1] * b[1];
@@ -478,6 +518,17 @@ MINLINE void cross_v3_v3v3(float r[3], const float a[3], const float b[3])
 	r[0] = a[1] * b[2] - a[2] * b[1];
 	r[1] = a[2] * b[0] - a[0] * b[2];
 	r[2] = a[0] * b[1] - a[1] * b[0];
+}
+
+/* Newell's Method */
+/* excuse this fairly spesific function,
+ * its used for polygon normals all over the place
+ * could use a better name */
+MINLINE void add_newell_cross_v3_v3v3(float n[3], const float v_prev[3], const float v_curr[3])
+{
+	n[0] += (v_prev[1] - v_curr[1]) * (v_prev[2] + v_curr[2]);
+	n[1] += (v_prev[2] - v_curr[2]) * (v_prev[0] + v_curr[0]);
+	n[2] += (v_prev[0] - v_curr[0]) * (v_prev[1] + v_curr[1]);
 }
 
 MINLINE void star_m3_v3(float rmat[][3], float a[3])
@@ -505,7 +556,7 @@ MINLINE float len_squared_v3(const float v[3])
 
 MINLINE float len_v2(const float v[2])
 {
-	return (float)sqrtf(v[0] * v[0] + v[1] * v[1]);
+	return sqrtf(v[0] * v[0] + v[1] * v[1]);
 }
 
 MINLINE float len_v2v2(const float v1[2], const float v2[2])
@@ -514,7 +565,7 @@ MINLINE float len_v2v2(const float v1[2], const float v2[2])
 
 	x = v1[0] - v2[0];
 	y = v1[1] - v2[1];
-	return (float)sqrtf(x * x + y * y);
+	return sqrtf(x * x + y * y);
 }
 
 MINLINE float len_v3(const float a[3])

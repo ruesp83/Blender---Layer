@@ -90,7 +90,7 @@ extern struct Render R;
 	*(v1 + 0) += *(v3 + 0) * (fac); \
 	*(v1 + 1) += *(v3 + 1) * (fac); \
 	*(v1 + 2) += *(v3 + 2) * (fac); \
-}
+} (void)0
 
 /* initialize material variables in shadeinput, 
  * doing inverse gamma correction where applicable */
@@ -1376,11 +1376,13 @@ void shade_samples_do_AO(ShadeSample *ssamp)
 		ShadeInput *shi= &ssamp->shi[0];
 		int sample;
 
-		if (((shi->passflag & SCE_PASS_COMBINED) && (shi->combinedflag & (SCE_PASS_AO|SCE_PASS_ENVIRONMENT|SCE_PASS_INDIRECT)))
-			|| (shi->passflag & (SCE_PASS_AO|SCE_PASS_ENVIRONMENT|SCE_PASS_INDIRECT)))
+		if (((shi->passflag & SCE_PASS_COMBINED) && (shi->combinedflag & (SCE_PASS_AO|SCE_PASS_ENVIRONMENT|SCE_PASS_INDIRECT))) ||
+		    (shi->passflag & (SCE_PASS_AO|SCE_PASS_ENVIRONMENT|SCE_PASS_INDIRECT)))
+		{
 			for (sample=0; sample<ssamp->tot; shi++, sample++)
 				if (!(shi->mode & MA_SHLESS))
 					ambient_occlusion(shi);		/* stores in shi->ao[] */
+		}
 	}
 }
 

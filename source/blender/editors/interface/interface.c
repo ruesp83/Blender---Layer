@@ -81,7 +81,7 @@
 
 /* avoid unneeded calls to ui_get_but_val */
 #define UI_BUT_VALUE_UNSET DBL_MAX
-#define UI_GET_BUT_VALUE_INIT(_but, _value) if (_value == DBL_MAX) {  (_value) = ui_get_but_val(_but); }
+#define UI_GET_BUT_VALUE_INIT(_but, _value) if (_value == DBL_MAX) {  (_value) = ui_get_but_val(_but); } (void)0
 
 /* 
  * a full doc with API notes can be found in bf-blender/trunk/blender/doc/guides/interface_API.txt
@@ -498,7 +498,7 @@ static int ui_but_float_precision(uiBut *but, double value)
 	return prec;
 }
 
-static void ui_draw_linkline(uiLinkLine *line)
+static void ui_draw_linkline(uiLinkLine *line, int hilightActiveLines)
 {
 	rcti rect;
 
@@ -509,8 +509,10 @@ static void ui_draw_linkline(uiLinkLine *line)
 	rect.xmax = (line->to->x1 + line->to->x2) / 2.0f;
 	rect.ymax = (line->to->y1 + line->to->y2) / 2.0f;
 	
-	if (line->flag & UI_SELECT) 
+	if (line->flag & UI_SELECT)
 		glColor3ub(100, 100, 100);
+	else if (hilightActiveLines && ((line->from->flag & UI_ACTIVE) || (line->to->flag & UI_ACTIVE)))
+		UI_ThemeColor(TH_TEXT_HI);
 	else 
 		glColor3ub(0, 0, 0);
 
@@ -521,18 +523,37 @@ static void ui_draw_links(uiBlock *block)
 {
 	uiBut *but;
 	uiLinkLine *line;
-	
-	but = block->buttons.first;
-	while (but) {
+
+	// Draw the inactive lines (lines with neither button being hovered over).
+	// As we go, remember if we see any active or selected lines.
+	int foundselectline = 0;
+	int foundactiveline = 0;
+	for (but = block->buttons.first; but; but = but->next) {
 		if (but->type == LINK && but->link) {
-			line = but->link->lines.first;
-			while (line) {
-				ui_draw_linkline(line);
-				line = line->next;
+			for (line = but->link->lines.first; line; line = line->next) {
+				if (!(line->from->flag & UI_ACTIVE) && !(line->to->flag & UI_ACTIVE))
+					ui_draw_linkline(line, 0);
+				else
+					foundactiveline = 1;
+
+				if ((line->from->flag & UI_SELECT) || (line->to->flag & UI_SELECT))
+					foundselectline = 1;
 			}
 		}
-		but = but->next;
 	}	
+
+	// Draw any active lines (lines with either button being hovered over).
+	// Do this last so they appear on top of inactive lines.
+	if (foundactiveline) {
+		for (but = block->buttons.first; but; but = but->next) {
+			if (but->type == LINK && but->link) {
+				for (line = but->link->lines.first; line; line = line->next) {
+					if ((line->from->flag & UI_ACTIVE) || (line->to->flag & UI_ACTIVE))
+						ui_draw_linkline(line, !foundselectline);
+				}
+			}
+		}	
+	}
 }
 
 /* ************** BLOCK ENDING FUNCTION ************* */
@@ -639,8 +660,8 @@ static int ui_but_update_from_old_block(const bContext *C, uiBlock *block, uiBut
 				/* typically the same pointers, but not on undo/redo */
 				/* XXX some menu buttons store button itself in but->poin. Ugly */
 				if (oldbut->poin != (char *)oldbut) {
-					SWAP(char *, oldbut->poin, but->poin)
-					SWAP(void *, oldbut->func_argN, but->func_argN)
+					SWAP(char *, oldbut->poin, but->poin);
+					SWAP(void *, oldbut->func_argN, but->func_argN);
 				}
 				
 				/* copy hardmin for list rows to prevent 'sticking' highlight to mouse position
@@ -694,7 +715,7 @@ int uiButActiveOnly(const bContext *C, uiBlock *block, uiBut *but)
 		}
 	}
 	if (activate || found == 0) {
-		ui_button_activate_do( (bContext *)C, CTX_wm_region(C), but);
+		ui_button_activate_do((bContext *)C, CTX_wm_region(C), but);
 	}
 	else if (found && isactive == 0) {
 		
@@ -1069,7 +1090,7 @@ static void ui_is_but_sel(uiBut *but, double *value)
 
 	if (but->bit) {
 		int lvalue;
-		UI_GET_BUT_VALUE_INIT(but, *value)
+		UI_GET_BUT_VALUE_INIT(but, *value);
 		lvalue = (int)*value;
 		if (BTST(lvalue, (but->bitnr)) ) is_push = is_true;
 		else is_push = !is_true;
@@ -1090,18 +1111,18 @@ static void ui_is_but_sel(uiBut *but, double *value)
 			case BUT_TOGDUAL:
 			case ICONTOG:
 			case OPTION:
-				UI_GET_BUT_VALUE_INIT(but, *value)
+				UI_GET_BUT_VALUE_INIT(but, *value);
 				if (*value != (double)but->hardmin) is_push = 1;
 				break;
 			case ICONTOGN:
 			case TOGN:
 			case OPTIONN:
-				UI_GET_BUT_VALUE_INIT(but, *value)
+				UI_GET_BUT_VALUE_INIT(but, *value);
 				if (*value == 0.0) is_push = 1;
 				break;
 			case ROW:
 			case LISTROW:
-				UI_GET_BUT_VALUE_INIT(but, *value)
+				UI_GET_BUT_VALUE_INIT(but, *value);
 				/* support for rna enum buts */
 				if (but->rnaprop && (RNA_property_flag(but->rnaprop) & PROP_ENUM_FLAG)) {
 					if ((int)*value & (int)but->hardmax) is_push = 1;
@@ -1416,15 +1437,15 @@ double ui_get_but_val(uiBut *but)
 		}
 	}
 	else if (but->type == HSVSLI) {
-		float h, s, v, *fp;
+		float *fp, hsv[3];
 		
 		fp = (but->editvec) ? but->editvec : (float *)but->poin;
-		rgb_to_hsv(fp[0], fp[1], fp[2], &h, &s, &v);
+		rgb_to_hsv_v(fp, hsv);
 
 		switch (but->str[0]) {
-			case 'H': value = h; break;
-			case 'S': value = s; break;
-			case 'V': value = v; break;
+			case 'H': value = hsv[0]; break;
+			case 'S': value = hsv[1]; break;
+			case 'V': value = hsv[2]; break;
 		}
 	} 
 	else if (but->pointype == CHA) {
@@ -1492,18 +1513,18 @@ void ui_set_but_val(uiBut *but, double value)
 	}
 	else if (but->pointype == 0) ;
 	else if (but->type == HSVSLI) {
-		float h, s, v, *fp;
+		float *fp, hsv[3];
 		
 		fp = (but->editvec) ? but->editvec : (float *)but->poin;
-		rgb_to_hsv(fp[0], fp[1], fp[2], &h, &s, &v);
+		rgb_to_hsv_v(fp, hsv);
 		
 		switch (but->str[0]) {
-			case 'H': h = value; break;
-			case 'S': s = value; break;
-			case 'V': v = value; break;
+			case 'H': hsv[0] = value; break;
+			case 'S': hsv[1] = value; break;
+			case 'V': hsv[2] = value; break;
 		}
 		
-		hsv_to_rgb(h, s, v, fp, fp + 1, fp + 2);
+		hsv_to_rgb_v(hsv, fp);
 		
 	}
 	else {
@@ -2150,7 +2171,7 @@ void ui_check_but(uiBut *but)
 	
 	/* only update soft range while not editing */
 	if (but->rnaprop && !(but->editval || but->editstr || but->editvec)) {
-		UI_GET_BUT_VALUE_INIT(but, value)
+		UI_GET_BUT_VALUE_INIT(but, value);
 		ui_set_but_soft_range(but, value);
 	}
 
@@ -2161,7 +2182,7 @@ void ui_check_but(uiBut *but)
 		case SCROLL:
 		case NUMSLI:
 		case HSVSLI:
-			UI_GET_BUT_VALUE_INIT(but, value)
+			UI_GET_BUT_VALUE_INIT(but, value);
 			if (value < (double)but->hardmin) ui_set_but_val(but, but->hardmin);
 			else if (value > (double)but->hardmax) ui_set_but_val(but, but->hardmax);
 			break;
@@ -2169,7 +2190,7 @@ void ui_check_but(uiBut *but)
 		case NUMABS:
 		{
 			double value_abs;
-			UI_GET_BUT_VALUE_INIT(but, value)
+			UI_GET_BUT_VALUE_INIT(but, value);
 			value_abs = fabs(value);
 			if (value_abs < (double)but->hardmin) ui_set_but_val(but, but->hardmin);
 			else if (value_abs > (double)but->hardmax) ui_set_but_val(but, but->hardmax);
@@ -2185,14 +2206,14 @@ void ui_check_but(uiBut *but)
 			
 		case ICONROW:
 			if (!but->rnaprop || (RNA_property_flag(but->rnaprop) & PROP_ICONS_CONSECUTIVE)) {
-				UI_GET_BUT_VALUE_INIT(but, value)
+				UI_GET_BUT_VALUE_INIT(but, value);
 				but->iconadd = (int)value - (int)(but->hardmin);
 			}
 			break;
 			
 		case ICONTEXTROW:
 			if (!but->rnaprop || (RNA_property_flag(but->rnaprop) & PROP_ICONS_CONSECUTIVE)) {
-				UI_GET_BUT_VALUE_INIT(but, value)
+				UI_GET_BUT_VALUE_INIT(but, value);
 				but->iconadd = (int)value - (int)(but->hardmin);
 			}
 			break;
@@ -2209,7 +2230,7 @@ void ui_check_but(uiBut *but)
 		case ICONTEXTROW:
 		
 			if (but->x2 - but->x1 > 24) {
-				UI_GET_BUT_VALUE_INIT(but, value)
+				UI_GET_BUT_VALUE_INIT(but, value);
 				ui_set_name_menu(but, (int)value);
 			}
 			break;
@@ -2219,7 +2240,7 @@ void ui_check_but(uiBut *but)
 		case HSVSLI:
 		case NUMABS:
 
-			UI_GET_BUT_VALUE_INIT(but, value)
+			UI_GET_BUT_VALUE_INIT(but, value);
 
 			if (ui_is_but_float(but)) {
 				if (value == (double) FLT_MAX) BLI_snprintf(but->drawstr, sizeof(but->drawstr), "%sinf", but->str);
@@ -2250,7 +2271,7 @@ void ui_check_but(uiBut *but)
 		case LABEL:
 			if (ui_is_but_float(but)) {
 				int prec;
-				UI_GET_BUT_VALUE_INIT(but, value)
+				UI_GET_BUT_VALUE_INIT(but, value);
 				prec = ui_but_float_precision(but, value);
 				BLI_snprintf(but->drawstr, sizeof(but->drawstr), "%s%.*f", but->str, prec, value);
 			}
@@ -2278,7 +2299,7 @@ void ui_check_but(uiBut *but)
 				strcat(but->drawstr, "Press a key");
 			}
 			else {
-				UI_GET_BUT_VALUE_INIT(but, value)
+				UI_GET_BUT_VALUE_INIT(but, value);
 				strcat(but->drawstr, WM_key_event_string((short)value));
 			}
 			break;
@@ -2644,9 +2665,9 @@ static uiBut *ui_def_but(uiBlock *block, int type, int retval, const char *str, 
  */
 
 #define UI_DEF_BUT_RNA_DISABLE(but) \
-    but->flag |= UI_BUT_DISABLED; \
-    but->lock = 1; \
-    but->lockstr = ""
+	but->flag |= UI_BUT_DISABLED; \
+	but->lock = 1; \
+	but->lockstr = ""
 
 
 static uiBut *ui_def_but_rna(uiBlock *block, int type, int retval, const char *str, int x1, int y1, short x2, short y2, PointerRNA *ptr, PropertyRNA *prop, int index, float min, float max, float a1, float a2,  const char *tip)
@@ -3333,6 +3354,16 @@ void uiButSetFlag(uiBut *but, int flag)
 void uiButClearFlag(uiBut *but, int flag)
 {
 	but->flag &= ~flag;
+}
+
+void uiButSetDrawFlag(uiBut *but, int flag)
+{
+	but->drawflag |= flag;
+}
+
+void uiButClearDrawFlag(uiBut *but, int flag)
+{
+	but->drawflag &= ~flag;
 }
 
 int uiButGetRetVal(uiBut *but)

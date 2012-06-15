@@ -73,7 +73,7 @@
 static FileSelection find_file_mouse_rect(SpaceFile *sfile, struct ARegion* ar, const rcti* rect)
 {
 	FileSelection sel;
-	float fxmin,fymin,fxmax, fymax;
+	float fxmin, fymin, fxmax, fymax;
 	
 	View2D* v2d = &ar->v2d;
 	rcti rect_view;
@@ -191,7 +191,7 @@ static FileSelect file_select_do(bContext* C, int selected_idx)
 				retval = FILE_SELECT_DIR;
 			}
 		}
-		else  {
+		else {
 			if (file->relname) {
 				BLI_strncpy(params->file, file->relname, FILE_MAXFILE);
 			}
@@ -241,7 +241,7 @@ static int file_border_select_modal(bContext *C, wmOperator *op, wmEvent *event)
 
 	result=	WM_border_select_modal(C, op, event);
 
-	if (result==OPERATOR_RUNNING_MODAL)	{
+	if (result == OPERATOR_RUNNING_MODAL) {
 
 		rect.xmin = RNA_int_get(op->ptr, "xmin");
 		rect.ymin = RNA_int_get(op->ptr, "ymin");
@@ -820,8 +820,12 @@ void FILE_OT_parent(struct wmOperatorType *ot)
 static int file_refresh_exec(bContext *C, wmOperator *UNUSED(unused))
 {
 	SpaceFile *sfile= CTX_wm_space_file(C);
+	struct FSMenu* fsmenu = fsmenu_get(); 
 
 	ED_fileselect_clear(C, sfile);
+
+	/* refresh system directory menu */
+	fsmenu_refresh_system_category(fsmenu);
 
 	WM_event_add_notifier(C, NC_SPACE|ND_SPACE_FILE_LIST, NULL);
 
@@ -911,8 +915,7 @@ static int file_smoothscroll_invoke(bContext *C, wmOperator *UNUSED(op), wmEvent
 	numfiles = filelist_numfiles(sfile->files);
 
 	/* check if we are editing a name */
-	for (i=0; i < numfiles; ++i)
-	{
+	for (i=0; i < numfiles; ++i) {
 		if (filelist_is_selected(sfile->files, i, CHECK_ALL) ) {
 			edit_idx=i;
 			break;
@@ -1036,7 +1039,7 @@ int file_directory_new_exec(bContext *C, wmOperator *op)
 	SpaceFile *sfile= CTX_wm_space_file(C);
 	
 	if (!sfile->params) {
-		BKE_report(op->reports,RPT_WARNING, "No parent directory given");
+		BKE_report(op->reports, RPT_WARNING, "No parent directory given");
 		return OPERATOR_CANCELLED;
 	}
 	
@@ -1050,7 +1053,7 @@ int file_directory_new_exec(bContext *C, wmOperator *op)
 	if (generate_name) {
 		/* create a new, non-existing folder name */
 		if (!new_folder_path(sfile->params->dir, path, name)) {
-			BKE_report(op->reports,RPT_ERROR, "Couldn't create new folder name");
+			BKE_report(op->reports, RPT_ERROR, "Couldn't create new folder name");
 			return OPERATOR_CANCELLED;
 		}
 	}
@@ -1059,7 +1062,7 @@ int file_directory_new_exec(bContext *C, wmOperator *op)
 	BLI_dir_create_recursive(path);
 
 	if (!BLI_exists(path)) {
-		BKE_report(op->reports,RPT_ERROR, "Couldn't create new folder");
+		BKE_report(op->reports, RPT_ERROR, "Couldn't create new folder");
 		return OPERATOR_CANCELLED;
 	} 
 
@@ -1100,7 +1103,11 @@ static void file_expand_directory(bContext *C)
 	SpaceFile *sfile= CTX_wm_space_file(C);
 	
 	if (sfile->params) {
-		if ( sfile->params->dir[0] == '~' ) {
+		/* TODO, what about // when relbase isn't valid? */
+		if (G.relbase_valid && strncmp(sfile->params->dir, "//", 2) == 0) {
+			BLI_path_abs(sfile->params->dir, G.main->name);
+		}
+		else if (sfile->params->dir[0] == '~') {
 			char tmpstr[sizeof(sfile->params->dir)-1];
 			BLI_strncpy(tmpstr, sfile->params->dir+1, sizeof(tmpstr));
 			BLI_join_dirfile(sfile->params->dir, sizeof(sfile->params->dir), BLI_getDefaultDocumentFolder(), tmpstr);
@@ -1331,7 +1338,7 @@ void FILE_OT_filenum(struct wmOperatorType *ot)
 	ot->poll = ED_operator_file_active; /* <- important, handler is on window level */
 
 	/* props */
-	RNA_def_int(ot->srna, "increment", 1, -100, 100, "Increment", "", -100,100);
+	RNA_def_int(ot->srna, "increment", 1, -100, 100, "Increment", "", -100, 100);
 }
 
 static int file_rename_exec(bContext *C, wmOperator *UNUSED(op))

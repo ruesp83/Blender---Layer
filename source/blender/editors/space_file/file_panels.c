@@ -116,7 +116,7 @@ static void file_panel_category(const bContext *C, Panel *pa, FSMenuCategory cat
 			BLI_strncpy(dir, entry, FILE_MAX);
 
 		/* create list item */
-		but = uiDefIconTextButS(block, LISTROW, 0, icon, dir, 0,0,UI_UNIT_X*10,UI_UNIT_Y, nr, 0, i, 0, 0, entry);
+		but = uiDefIconTextButS(block, LISTROW, 0, icon, dir, 0, 0, UI_UNIT_X * 10, UI_UNIT_Y, nr, 0, i, 0, 0, entry);
 		uiButSetFunc(but, file_panel_cb, entry, NULL);
 		uiButSetFlag(but, UI_ICON_LEFT|UI_TEXT_LEFT);
 
@@ -174,7 +174,7 @@ static void file_panel_operator_header(const bContext *C, Panel *pa)
 	SpaceFile *sfile= CTX_wm_space_file(C);
 	wmOperator *op= sfile->op;
 
-	BLI_strncpy(pa->drawname, op->type->name, sizeof(pa->drawname));
+	BLI_strncpy(pa->drawname, RNA_struct_ui_name(op->type->srna), sizeof(pa->drawname));
 }
 
 static int file_panel_check_prop(PointerRNA *UNUSED(ptr), PropertyRNA *prop)

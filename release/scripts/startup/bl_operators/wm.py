@@ -764,6 +764,7 @@ class WM_OT_path_open(Operator):
 
     filepath = StringProperty(
             subtype='FILE_PATH',
+            options={'SKIP_SAVE'},
             )
 
     def execute(self, context):
@@ -771,7 +772,13 @@ class WM_OT_path_open(Operator):
         import os
         import subprocess
 
-        filepath = bpy.path.abspath(self.filepath)
+        filepath = self.filepath
+
+        if not filepath:
+            self.report({'ERROR'}, "File path was not set")
+            return {'CANCELLED'}
+
+        filepath = bpy.path.abspath(filepath)
         filepath = os.path.normpath(filepath)
 
         if not os.path.exists(filepath):
@@ -792,6 +799,88 @@ class WM_OT_path_open(Operator):
         return {'FINISHED'}
 
 
+
+def _wm_doc_get_id(doc_id, do_url=True, url_prefix=""):
+    id_split = doc_id.split(".")
+    url = rna = None
+
+    if len(id_split) == 1:  # rna, class
+        if do_url:
+            url = "%s/bpy.types.%s.html" % (url_prefix, id_split[0])
+        else:
+            rna = "bpy.types.%s" % id_split[0]
+
+    elif len(id_split) == 2:  # rna, class.prop
+        class_name, class_prop = id_split
+
+        if hasattr(bpy.types, class_name.upper() + "_OT_" + class_prop):
+            if do_url:
+                url = ("%s/bpy.ops.%s.html#bpy.ops.%s.%s" % (url_prefix, class_name, class_name, class_prop))
+            else:
+                rna = "bpy.ops.%s.%s" % (class_name, class_prop)
+        else:
+
+            # detect if this is a inherited member and use that name instead
+            rna_parent = getattr(bpy.types, class_name).bl_rna
+            rna_prop = rna_parent.properties[class_prop]
+            rna_parent = rna_parent.base
+            while rna_parent and rna_prop == rna_parent.properties.get(class_prop):
+                class_name = rna_parent.identifier
+                rna_parent = rna_parent.base
+
+            if do_url:
+                url = ("%s/bpy.types.%s.html#bpy.types.%s.%s" % (url_prefix, class_name, class_name, class_prop))
+            else:
+                rna = ("bpy.types.%s.%s" % (class_name, class_prop))
+    
+    return url if do_url else rna
+
+
+class WM_OT_doc_view_manual(Operator):
+    '''Load online manual'''
+    bl_idname = "wm.doc_view_manual"
+    bl_label = "View Manual"
+
+    doc_id = doc_id
+
+    @staticmethod
+    def _find_reference(rna_id, url_mapping):
+        print("online manual check for: '%s'... " % rna_id)
+        from fnmatch import fnmatch
+        for pattern, url_suffix in url_mapping:
+            if fnmatch(rna_id, pattern):
+                print("            match found: '%s' --> '%s'" % (pattern, url_suffix))
+                return url_suffix
+        print("match not found")
+        return None
+
+    def execute(self, context):
+        rna_id = _wm_doc_get_id(self.doc_id, do_url=False)
+        if rna_id is None:
+            return {'PASS_THROUGH'}
+
+        import rna_wiki_reference
+        rna_ref = self._find_reference(rna_id, rna_wiki_reference.url_manual_mapping)
+
+        if rna_ref is None:
+            self.report({'WARNING'}, "No reference available '%s', "
+                                     "Update info in %r" %
+                                     (self.doc_id, rna_wiki_reference.__file__))
+
+        import sys
+        del sys.modules["rna_wiki_reference"]
+
+        if rna_ref is None:
+            return {'CANCELLED'}
+        else:
+            url = rna_wiki_reference.url_manual_prefix + rna_ref
+
+        import webbrowser
+        webbrowser.open(url)
+
+        return {'FINISHED'}
+
+
 class WM_OT_doc_view(Operator):
     '''Load online reference docs'''
     bl_idname = "wm.doc_view"
@@ -805,39 +894,9 @@ class WM_OT_doc_view(Operator):
         _prefix = ("http://www.blender.org/documentation/blender_python_api_%s" %
                    "_".join(str(v) for v in bpy.app.version))
 
-    def _nested_class_string(self, class_string):
-        ls = []
-        class_obj = getattr(bpy.types, class_string, None).bl_rna
-        while class_obj:
-            ls.insert(0, class_obj)
-            class_obj = class_obj.nested
-        return '.'.join(class_obj.identifier for class_obj in ls)
-
     def execute(self, context):
-        id_split = self.doc_id.split('.')
-        if len(id_split) == 1:  # rna, class
-            url = '%s/bpy.types.%s.html' % (self._prefix, id_split[0])
-        elif len(id_split) == 2:  # rna, class.prop
-            class_name, class_prop = id_split
-
-            if hasattr(bpy.types, class_name.upper() + '_OT_' + class_prop):
-                url = ("%s/bpy.ops.%s.html#bpy.ops.%s.%s" %
-                       (self._prefix, class_name, class_name, class_prop))
-            else:
-
-                # detect if this is a inherited member and use that name instead
-                rna_parent = getattr(bpy.types, class_name).bl_rna
-                rna_prop = rna_parent.properties[class_prop]
-                rna_parent = rna_parent.base
-                while rna_parent and rna_prop == rna_parent.properties.get(class_prop):
-                    class_name = rna_parent.identifier
-                    rna_parent = rna_parent.base
-
-                #~ class_name_full = self._nested_class_string(class_name)
-                url = ("%s/bpy.types.%s.html#bpy.types.%s.%s" %
-                       (self._prefix, class_name, class_name, class_prop))
-
-        else:
+        url = _wm_doc_get_id(self.doc_id, do_url=True, url_prefix=self._prefix)
+        if url is None:
             return {'PASS_THROUGH'}
 
         import webbrowser
@@ -1070,7 +1129,7 @@ class WM_OT_properties_context_change(Operator):
 
     context = StringProperty(
             name="Context",
-            maxlen=32,
+            maxlen=64,
             )
 
     def execute(self, context):
@@ -1538,6 +1597,65 @@ class WM_OT_addon_disable(Operator):
         addon_utils.disable(self.module)
         return {'FINISHED'}
 
+class WM_OT_theme_install(Operator):
+    "Install a theme"
+    bl_idname = "wm.theme_install"
+    bl_label  = "Install Theme..."
+
+    overwrite = BoolProperty(
+            name="Overwrite",
+            description="Remove existing theme file if exists",
+            default=True,
+            )
+    filepath = StringProperty(
+            subtype='FILE_PATH',
+            )
+    filter_folder = BoolProperty(
+            name="Filter folders",
+            default=True,
+            options={'HIDDEN'},
+            )
+    filter_glob = StringProperty(
+            default="*.xml",
+            options={'HIDDEN'},
+            )
+
+    def execute(self, context):
+        import os
+        import shutil
+        import traceback
+        
+        xmlfile = self.filepath
+
+        path_themes = bpy.utils.user_resource('SCRIPTS','presets/interface_theme',create=True)
+
+        if not path_themes:
+            self.report({'ERROR'}, "Failed to get themes path")
+            return {'CANCELLED'}
+
+        path_dest = os.path.join(path_themes, os.path.basename(xmlfile))
+
+        if not self.overwrite:
+            if os.path.exists(path_dest):
+                self.report({'WARNING'}, "File already installed to %r\n" % path_dest)
+                return {'CANCELLED'}
+
+        try:
+            shutil.copyfile(xmlfile, path_dest)
+            bpy.ops.script.execute_preset(filepath=path_dest,menu_idname="USERPREF_MT_interface_theme_presets")
+
+        except:
+            traceback.print_exc()
+            return {'CANCELLED'}
+
+        return {'FINISHED'}
+
+
+    def invoke(self, context, event):
+        wm = context.window_manager
+        wm.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
 
 class WM_OT_addon_install(Operator):
     "Install an addon"
@@ -1737,7 +1855,7 @@ class WM_OT_addon_remove(Operator):
 
         path, isdir = WM_OT_addon_remove.path_from_addon(self.module)
         if path is None:
-            self.report('WARNING', "Addon path %r could not be found" % path)
+            self.report({'WARNING'}, "Addon path %r could not be found" % path)
             return {'CANCELLED'}
 
         # in case its enabled

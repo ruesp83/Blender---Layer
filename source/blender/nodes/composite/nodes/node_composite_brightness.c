@@ -37,13 +37,13 @@
 /* **************** Brigh and contrsast  ******************** */
 
 static bNodeSocketTemplate cmp_node_brightcontrast_in[]= {
-	{	SOCK_RGBA, 1, "Image",			1.0f, 1.0f, 1.0f, 1.0f},
-	{	SOCK_FLOAT, 1, "Bright",		0.0f, 0.0f, 0.0f, 0.0f, -100.0f, 100.0f, PROP_NONE},
-	{	SOCK_FLOAT, 1, "Contrast",		0.0f, 0.0f, 0.0f, 0.0f, -100.0f, 100.0f, PROP_NONE},
+	{	SOCK_RGBA, 1, N_("Image"),			1.0f, 1.0f, 1.0f, 1.0f},
+	{	SOCK_FLOAT, 1, N_("Bright"),		0.0f, 0.0f, 0.0f, 0.0f, -100.0f, 100.0f, PROP_NONE},
+	{	SOCK_FLOAT, 1, N_("Contrast"),		0.0f, 0.0f, 0.0f, 0.0f, -100.0f, 100.0f, PROP_NONE},
 	{	-1, 0, ""	}
 };
 static bNodeSocketTemplate cmp_node_brightcontrast_out[]= {
-	{	SOCK_RGBA, 0, "Image"},
+	{	SOCK_RGBA, 0, N_("Image")},
 	{	-1, 0, ""	}
 };
 
@@ -57,10 +57,10 @@ static void do_brightnesscontrast(bNode *UNUSED(node), float *out, float *in, fl
 	float delta = contrast / 200.0f;
 	a = 1.0f - delta * 2.0f;
 	/*
-	* The algorithm is by Werner D. Streidt
-	* (http://visca.com/ffactory/archives/5-99/msg00021.html)
-	* Extracted of OpenCV demhist.c
-	*/
+	 * The algorithm is by Werner D. Streidt
+	 * (http://visca.com/ffactory/archives/5-99/msg00021.html)
+	 * Extracted of OpenCV demhist.c
+	 */
 	if (contrast > 0) {
 		a = 1.0f / a;
 		b = a * (brightness - delta);

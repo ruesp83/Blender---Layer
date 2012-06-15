@@ -108,10 +108,6 @@ if(WITH_INPUT_NDOF)
 	)
 endif()
 
-if(WITH_XDG_USER_DIRS)
-	add_definitions(-DWITH_XDG_USER_DIRS)
-endif()
-
 if(WITH_HEADLESS OR WITH_GHOST_SDL)
 	if(WITH_HEADLESS)
 		list(APPEND SRC
@@ -165,9 +161,11 @@ if(WITH_HEADLESS OR WITH_GHOST_SDL)
 		)
 	endif()
 
-	list(APPEND INC_SYS
-		${SDL_INCLUDE_DIR}
-	)
+	if(NOT WITH_HEADLESS)
+		list(APPEND INC_SYS
+			${SDL_INCLUDE_DIR}
+		)
+	endif()
 
 elseif(APPLE)
 	if(WITH_COCOA)

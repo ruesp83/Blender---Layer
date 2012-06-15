@@ -20,6 +20,7 @@
 import bpy
 from bpy.types import Panel, Menu
 
+
 class FLUID_MT_presets(Menu):
     bl_label = "Fluid Presets"
     preset_subdir = "fluid"
@@ -54,11 +55,11 @@ class PHYSICS_PT_fluid(PhysicButtonsPanel, Panel):
             return
 
         col.prop(fluid, "type")
-        if fluid.type not in {'NONE', 'DOMAIN', 'PARTICLE', 'FLUID'}:
+        if fluid.type not in {'NONE', 'DOMAIN', 'PARTICLE', 'FLUID', 'OBSTACLE'}:
             col.prop(fluid, "use")
 
         layout = layout.column()
-        if fluid.type not in {'NONE', 'DOMAIN', 'PARTICLE', 'FLUID'}:
+        if fluid.type not in {'NONE', 'DOMAIN', 'PARTICLE', 'FLUID', 'OBSTACLE'}:
             layout.active = fluid.use
 
         if fluid.type == 'DOMAIN':
@@ -191,13 +192,14 @@ class PHYSICS_PT_fluid(PhysicButtonsPanel, Panel):
 
 
 class PHYSICS_PT_domain_gravity(PhysicButtonsPanel, Panel):
-    bl_label = "Domain World"
+    bl_label = "Fluid World"
     bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context):
         md = context.fluid
-        return md and md.settings and (md.settings.type == 'DOMAIN')
+        rd = context.scene.render
+        return md and md.settings and (md.settings.type == 'DOMAIN') and (not rd.use_game_engine)
 
     def draw(self, context):
         layout = self.layout
@@ -232,7 +234,7 @@ class PHYSICS_PT_domain_gravity(PhysicButtonsPanel, Panel):
         sub.menu("FLUID_MT_presets", text=bpy.types.FLUID_MT_presets.bl_label)
         sub.operator("fluid.preset_add", text="", icon='ZOOMIN')
         sub.operator("fluid.preset_add", text="", icon='ZOOMOUT').remove_active = True
-        
+
         subsub = col.column(align=True)
         subsub.prop(fluid, "viscosity_base", text="Base")
         subsub.prop(fluid, "viscosity_exponent", text="Exponent", slider=True)
@@ -243,13 +245,14 @@ class PHYSICS_PT_domain_gravity(PhysicButtonsPanel, Panel):
 
 
 class PHYSICS_PT_domain_boundary(PhysicButtonsPanel, Panel):
-    bl_label = "Domain Boundary"
+    bl_label = "Fluid Boundary"
     bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context):
         md = context.fluid
-        return md and md.settings and (md.settings.type == 'DOMAIN')
+        rd = context.scene.render
+        return md and md.settings and (md.settings.type == 'DOMAIN') and (not rd.use_game_engine)
 
     def draw(self, context):
         layout = self.layout
@@ -272,13 +275,14 @@ class PHYSICS_PT_domain_boundary(PhysicButtonsPanel, Panel):
 
 
 class PHYSICS_PT_domain_particles(PhysicButtonsPanel, Panel):
-    bl_label = "Domain Particles"
+    bl_label = "Fluid Particles"
     bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context):
         md = context.fluid
-        return md and md.settings and (md.settings.type == 'DOMAIN')
+        rd = context.scene.render
+        return md and md.settings and (md.settings.type == 'DOMAIN') and (not rd.use_game_engine)
 
     def draw(self, context):
         layout = self.layout

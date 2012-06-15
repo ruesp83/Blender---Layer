@@ -131,7 +131,7 @@ def handle_args():
                         dest="sphinx_theme",
                         type=str,
                         default='default',
-                        help =
+                        help=
                         # see SPHINX_THEMES below
                         "Sphinx theme (default='default')\n"
                         "Available themes\n"
@@ -230,10 +230,10 @@ if not ARGS.partial:
 
 else:
     # can manually edit this too:
-    FILTER_BPY_OPS = ("import.scene", )  # allow
-    FILTER_BPY_TYPES = ("bpy_struct", "Operator", "ID")  # allow
+    #FILTER_BPY_OPS = ("import.scene", )  # allow
+    #FILTER_BPY_TYPES = ("bpy_struct", "Operator", "ID")  # allow
     EXCLUDE_INFO_DOCS = True
-    EXCLUDE_MODULES = (
+    EXCLUDE_MODULES = [
         "aud",
         "bge",
         "bge.constraints",
@@ -261,7 +261,7 @@ else:
         "mathutils",
         "mathutils.geometry",
         "mathutils.noise",
-    )
+        ]
 
     # ------
     # Filter
@@ -269,7 +269,18 @@ else:
     # TODO, support bpy.ops and bpy.types filtering
     import fnmatch
     m = None
-    EXCLUDE_MODULES = tuple([m for m in EXCLUDE_MODULES if not fnmatch.fnmatchcase(m, ARGS.partial)])
+    EXCLUDE_MODULES = [m for m in EXCLUDE_MODULES if not fnmatch.fnmatchcase(m, ARGS.partial)]
+
+    # special support for bpy.types.XXX
+    FILTER_BPY_OPS = tuple([m[8:] for m in ARGS.partial.split(":") if m.startswith("bpy.ops.")])
+    if FILTER_BPY_OPS:
+        EXCLUDE_MODULES.remove("bpy.ops")
+
+    FILTER_BPY_TYPES = tuple([m[10:] for m in ARGS.partial.split(":") if m.startswith("bpy.types.")])
+    if FILTER_BPY_TYPES:
+        EXCLUDE_MODULES.remove("bpy.types")
+
+    print(FILTER_BPY_TYPES)
 
     EXCLUDE_INFO_DOCS = (not fnmatch.fnmatchcase("info", ARGS.partial))
 
@@ -923,6 +934,8 @@ def pycontext2sphinx(basepath):
         "image_context_dir",
         "node_context_dir",
         "text_context_dir",
+        "clip_context_dir",
+        "sequencer_context_dir",
     )
 
     # Changes in blender will force errors here
@@ -932,6 +945,7 @@ def pycontext2sphinx(basepath):
         "active_object": ("Object", False),
         "active_operator": ("Operator", False),
         "active_pose_bone": ("PoseBone", False),
+        "active_node": ("Node", False),
         "armature": ("Armature", False),
         "bone": ("Bone", False),
         "brush": ("Brush", False),
@@ -942,6 +956,8 @@ def pycontext2sphinx(basepath):
         "dynamic_paint": ("DynamicPaintModifier", False),
         "edit_bone": ("EditBone", False),
         "edit_image": ("Image", False),
+        "edit_mask": ("Mask", False),
+        "edit_movieclip": ("MovieClip", False),
         "edit_object": ("Object", False),
         "edit_text": ("Text", False),
         "editable_bones": ("EditBone", True),

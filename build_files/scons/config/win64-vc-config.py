@@ -160,13 +160,14 @@ BF_BOOST_LIB = 'libboost_date_time-vc90-mt-s-1_47 libboost_filesystem-vc90-mt-s-
 BF_BOOST_LIBPATH = '${BF_BOOST}/lib'
 
 #CUDA
-WITH_BF_CYCLES_CUDA_BINARIES = True
+WITH_BF_CYCLES_CUDA_BINARIES = False
 #BF_CYCLES_CUDA_NVCC = "" # Path to the nvidia compiler
-BF_CYCLES_CUDA_BINARIES_ARCH = ['sm_13', 'sm_20', 'sm_21']
+BF_CYCLES_CUDA_BINARIES_ARCH = ['sm_13', 'sm_20', 'sm_21', 'sm_30']
 
 #Ray trace optimization
 WITH_BF_RAYOPTIMIZATION = True
-BF_RAYOPTIMIZATION_SSE_FLAGS = ['/arch:SSE','/arch:SSE2']
+# No need to manually specify SSE/SSE2 on x64 systems.
+BF_RAYOPTIMIZATION_SSE_FLAGS = ['']
 
 WITH_BF_STATICOPENGL = False
 BF_OPENGL_INC = '${BF_OPENGL}/include'

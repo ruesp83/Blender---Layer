@@ -37,15 +37,15 @@
 
 BLI_INLINE float D(float *data, const int res[3], int x, int y, int z)
 {
-	CLAMP(x, 0, res[0]-1);
-	CLAMP(y, 0, res[1]-1);
-	CLAMP(z, 0, res[2]-1);
-	return data[ V_I(x, y, z, res) ];
+	CLAMP(x, 0, res[0] - 1);
+	CLAMP(y, 0, res[1] - 1);
+	CLAMP(z, 0, res[2] - 1);
+	return data[BLI_VOXEL_INDEX(x, y, z, res)];
 }
 
 /* *** nearest neighbor *** */
 /* input coordinates must be in bounding box 0.0 - 1.0 */
-float voxel_sample_nearest(float *data, const int res[3], const float co[3])
+float BLI_voxel_sample_nearest(float *data, const int res[3], const float co[3])
 {
 	int xi, yi, zi;
 	
@@ -70,7 +70,7 @@ BLI_INLINE int _clamp(int a, int b, int c)
 	return (a < b) ? b : ((a > c) ? c : a);
 }
 
-float voxel_sample_trilinear(float *data, const int res[3], const float co[3])
+float BLI_voxel_sample_trilinear(float *data, const int res[3], const float co[3])
 {
 	if (data) {
 	
@@ -102,7 +102,7 @@ float voxel_sample_trilinear(float *data, const int res[3], const float co[3])
 }
 	
 
-float voxel_sample_triquadratic(float *data, const int res[3], const float co[3])
+float BLI_voxel_sample_triquadratic(float *data, const int res[3], const float co[3])
 {
 	if (data) {
 
@@ -128,11 +128,11 @@ float voxel_sample_triquadratic(float *data, const int res[3], const float co[3]
 						+ v[1] * ( u[0] * data[xc[0] + yc[1] + zc[2]] + u[1] * data[xc[1] + yc[1] + zc[2]] + u[2] * data[xc[2] + yc[1] + zc[2]] )
 						+ v[2] * ( u[0] * data[xc[0] + yc[2] + zc[2]] + u[1] * data[xc[1] + yc[2] + zc[2]] + u[2] * data[xc[2] + yc[2] + zc[2]] ) );
 
-}
+	}
 	return 0.f;
 }
 
-float voxel_sample_tricubic(float *data, const int res[3], const float co[3], int bspline)
+float BLI_voxel_sample_tricubic(float *data, const int res[3], const float co[3], int bspline)
 {
 	if (data) {
 

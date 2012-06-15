@@ -46,15 +46,15 @@ struct MTFace;
 /* materials */
 
 void init_def_material(void);
-void free_material(struct Material *sc); 
+void BKE_material_free(struct Material *sc); 
 void test_object_materials(struct ID *id);
 void resize_object_material(struct Object *ob, const short totcol);
 void init_material(struct Material *ma);
-struct Material *add_material(const char *name);
-struct Material *copy_material(struct Material *ma);
+struct Material *BKE_material_add(const char *name);
+struct Material *BKE_material_copy(struct Material *ma);
 struct Material *localize_material(struct Material *ma);
 struct Material *give_node_material(struct Material *ma); /* returns node material or self */
-void make_local_material(struct Material *ma);
+void BKE_material_make_local(struct Material *ma);
 void extern_local_matarar(struct Material **matar, short totcol);
 
 void automatname(struct Material *);
@@ -90,7 +90,7 @@ void end_render_materials(struct Main *);
 
 int material_in_material(struct Material *parmat, struct Material *mat);
 
-void	ramp_blend(int type, float r_col[3], const float fac, const float col[3]);
+void ramp_blend(int type, float r_col[3], const float fac, const float col[3]);
 
 /* copy/paste */
 void clear_matcopybuf(void);
@@ -106,4 +106,3 @@ int do_version_tface(struct Main *main, int fileload);
 #endif
 
 #endif
-

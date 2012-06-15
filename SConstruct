@@ -170,7 +170,7 @@ if sys.platform=='win32':
     if env['CC'] in ['cl', 'cl.exe']:
         platform = 'win64-vc' if bitness == 64 else 'win32-vc'
     elif env['CC'] in ['gcc']:
-        platform = 'win32-mingw'
+        platform = 'win64-mingw' if bitness == 64 else 'win32-mingw'
 
 env.SConscriptChdir(0)
 
@@ -553,7 +553,7 @@ if env['OURPLATFORM']!='darwin':
 
                 source=[os.path.join(dp, f) for f in df if not f.endswith(".pyc")]
                 # To ensure empty dirs are created too
-                if len(source)==0:
+                if len(source)==0 and not os.path.exists(dir):
                     env.Execute(Mkdir(dir))
                 scriptinstall.append(env.Install(dir=dir,source=source))
         if env['WITH_BF_CYCLES']:
@@ -667,42 +667,6 @@ if env['OURPLATFORM']=='linuxcross':
 
     scriptinstall.append(env.Install(dir=dir, source=source))
 
-#-- plugins
-pluglist = []
-plugtargetlist = []
-for tp, tn, tf in os.walk('release/plugins'):
-    if '.svn' in tn:
-        tn.remove('.svn')
-    if '_svn' in tn:
-        tn.remove('_svn')
-    df = tp[8:] # remove 'release/'
-    for f in tf:
-        pluglist.append(os.path.join(tp, f))
-        plugtargetlist.append( os.path.join(env['BF_INSTALLDIR'], VERSION, df, f) )
-
-
-# header files for plugins
-pluglist.append('source/blender/blenpluginapi/documentation.h')
-plugtargetlist.append(os.path.join(env['BF_INSTALLDIR'], VERSION, 'plugins', 'include', 'documentation.h'))
-pluglist.append('source/blender/blenpluginapi/externdef.h')
-plugtargetlist.append(os.path.join(env['BF_INSTALLDIR'], VERSION, 'plugins', 'include', 'externdef.h'))
-pluglist.append('source/blender/blenpluginapi/floatpatch.h')
-plugtargetlist.append(os.path.join(env['BF_INSTALLDIR'], VERSION, 'plugins', 'include', 'floatpatch.h'))
-pluglist.append('source/blender/blenpluginapi/iff.h')
-plugtargetlist.append(os.path.join(env['BF_INSTALLDIR'], VERSION, 'plugins', 'include', 'iff.h'))
-pluglist.append('source/blender/blenpluginapi/plugin.h')
-plugtargetlist.append(os.path.join(env['BF_INSTALLDIR'], VERSION, 'plugins', 'include', 'plugin.h'))
-pluglist.append('source/blender/blenpluginapi/util.h')
-plugtargetlist.append(os.path.join(env['BF_INSTALLDIR'], VERSION, 'plugins', 'include', 'util.h'))
-pluglist.append('source/blender/blenpluginapi/plugin.DEF')
-plugtargetlist.append(os.path.join(env['BF_INSTALLDIR'], VERSION, 'plugins', 'include', 'plugin.def'))
-
-plugininstall = []
-# plugins in blender 2.5 don't work at the moment.
-#for targetdir,srcfile in zip(plugtargetlist, pluglist):
-#    td, tf = os.path.split(targetdir)
-#    plugininstall.append(env.Install(dir=td, source=srcfile))
-
 textlist = []
 texttargetlist = []
 for tp, tn, tf in os.walk('release/text'):
@@ -716,11 +680,11 @@ for tp, tn, tf in os.walk('release/text'):
 textinstall = env.Install(dir=env['BF_INSTALLDIR'], source=textlist)
 
 if  env['OURPLATFORM']=='darwin':
-        allinstall = [blenderinstall, plugininstall, textinstall]
+        allinstall = [blenderinstall, textinstall]
 elif env['OURPLATFORM']=='linux':
-        allinstall = [blenderinstall, dotblenderinstall, scriptinstall, plugininstall, textinstall, iconinstall]
+        allinstall = [blenderinstall, dotblenderinstall, scriptinstall, textinstall, iconinstall]
 else:
-        allinstall = [blenderinstall, dotblenderinstall, scriptinstall, plugininstall, textinstall]
+        allinstall = [blenderinstall, dotblenderinstall, scriptinstall, textinstall]
 
 if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'win64-vc', 'linuxcross'):
     dllsources = []
@@ -774,9 +738,38 @@ if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'win64-vc', 'linuxcross'):
         dllsources.append('${LCGDIR}/thumbhandler/lib/BlendThumb.dll')	
     dllsources.append('${LCGDIR}/thumbhandler/lib/BlendThumb64.dll')
 
-    if env['WITH_BF_OIIO']:
+    if env['WITH_BF_OIIO'] and env['OURPLATFORM'] != 'win32-mingw':
         dllsources.append('${LCGDIR}/openimageio/bin/OpenImageIO.dll')
 
+    dllsources.append('#source/icons/blender.exe.manifest')
+
+    windlls = env.Install(dir=env['BF_INSTALLDIR'], source = dllsources)
+    allinstall += windlls
+
+if env['OURPLATFORM'] == 'win64-mingw':
+    dllsources = []
+    
+    if env['WITH_BF_PYTHON']:
+        if env['BF_DEBUG']:
+            dllsources.append('${BF_PYTHON_LIBPATH}/${BF_PYTHON_DLL}_d.dll')
+        else:
+            dllsources.append('${BF_PYTHON_LIBPATH}/${BF_PYTHON_DLL}.dll')
+
+    if env['WITH_BF_FFMPEG']:
+        dllsources += env['BF_FFMPEG_DLL'].split()
+
+    if env['WITH_BF_OPENAL']:
+        dllsources.append('${LCGDIR}/openal/lib/OpenAL32.dll')
+        dllsources.append('${LCGDIR}/openal/lib/wrap_oal.dll')
+
+    if env['WITH_BF_SNDFILE']:
+        dllsources.append('${LCGDIR}/sndfile/lib/libsndfile-1.dll')
+
+    if env['WITH_BF_SDL']:
+        dllsources.append('${LCGDIR}/sdl/lib/SDL.dll')
+	
+    dllsources.append('${LCGDIR}/thumbhandler/lib/BlendThumb64.dll')
+    dllsources.append('${LCGDIR}/binaries/pthreadGC2-w64.dll')
     dllsources.append('#source/icons/blender.exe.manifest')
 
     windlls = env.Install(dir=env['BF_INSTALLDIR'], source = dllsources)

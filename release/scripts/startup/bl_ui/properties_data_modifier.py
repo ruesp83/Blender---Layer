@@ -440,11 +440,15 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
         layout.separator()
 
-        flow = layout.column_flow()
-        flow.prop(md, "time")
-        flow.prop(md, "resolution")
-        flow.prop(md, "spatial_size")
-        flow.prop(md, "depth")
+        split = layout.split()
+
+        col = split.column()
+        col.prop(md, "time")
+        col.prop(md, "resolution")
+
+        col = split.column()
+        col.prop(md, "spatial_size")
+        col.prop(md, "depth")
 
         layout.label("Waves:")
 
@@ -543,6 +547,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col.prop(md, "angle")
         col.prop(md, "steps")
         col.prop(md, "render_steps")
+        col.prop(md, "use_smooth_shade")
 
         col = split.column()
         row = col.row()
@@ -677,6 +682,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         row = row.row()
         row.active = md.use_rim
         row.prop(md, "material_offset_rim", text="Rim")
+        sub.prop(md, "use_flip_normals")
 
     def SUBSURF(self, layout, ob, md):
         layout.row().prop(md, "subdivision_type", expand=True)
@@ -834,6 +840,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         if md.mode == 'SHARP':
             layout.prop(md, "sharpness")
 
+        layout.prop(md, "use_smooth_shade")
         layout.prop(md, "remove_disconnected_pieces")
         row = layout.row()
         row.active = md.remove_disconnected_pieces
@@ -953,5 +960,29 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         layout.separator()
         self.vertex_weight_mask(layout, ob, md)
 
+    def SKIN(self, layout, ob, md):
+        layout.operator("object.skin_armature_create", text="Create Armature")
+
+        layout.separator()
+        layout.prop(md, "branch_smoothing")
+        layout.prop(md, "use_smooth_shade")
+
+        layout.label(text="Selected Vertices:")
+        split = layout.split()
+        
+        col = split.column(align=True)
+        col.operator("object.skin_loose_mark_clear", text="Mark Loose").action = "MARK"
+        col.operator("object.skin_loose_mark_clear", text="Clear Loose").action = "CLEAR"
+
+        col = split.column()
+        col.operator("object.skin_root_mark", text="Mark Root")
+        col.operator("object.skin_radii_equalize", text="Equalize Radii")
+
+        layout.label(text="Symmetry Axes:")
+        col = layout.column()
+        col.prop(md, "use_x_symmetry")
+        col.prop(md, "use_y_symmetry")
+        col.prop(md, "use_z_symmetry")
+        
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)

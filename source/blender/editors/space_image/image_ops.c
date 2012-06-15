@@ -190,13 +190,14 @@ int space_image_main_area_poll(bContext *C)
 	return 0;
 }
 
-/* For IMAGE_OT_curves_point_set to avoid sampling when in uv smooth mode */
+/* For IMAGE_OT_curves_point_set to avoid sampling when in uv smooth mode or editmode */
 int space_image_main_area_not_uv_brush_poll(bContext *C)
 {
 	SpaceImage *sima = CTX_wm_space_image(C);
+	Scene *scene = CTX_data_scene(C);
+	ToolSettings *toolsettings = scene->toolsettings;
 
-	ToolSettings *toolsettings = CTX_data_scene(C)->toolsettings;
-	if (sima && !toolsettings->uvsculpt)
+	if (sima && !toolsettings->uvsculpt && !scene->obedit)
 		return 1;
 
 	return 0;
@@ -312,7 +313,7 @@ static int image_view_pan_modal(bContext *C, wmOperator *op, wmEvent *event)
 			image_view_pan_exec(C, op);
 			break;
 		default:
-			if (event->type == vpd->event_type &&  event->val == KM_RELEASE) {
+			if (event->type == vpd->event_type && event->val == KM_RELEASE) {
 				image_view_pan_exit(C, op, 0);
 				return OPERATOR_FINISHED;
 			}
@@ -333,6 +334,7 @@ void IMAGE_OT_view_pan(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "View Pan";
 	ot->idname = "IMAGE_OT_view_pan";
+	ot->description = "Pan the view";
 	
 	/* api callbacks */
 	ot->exec = image_view_pan_exec;
@@ -470,6 +472,7 @@ void IMAGE_OT_view_zoom(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "View Zoom";
 	ot->idname = "IMAGE_OT_view_zoom";
+	ot->description = "Zoom in/out the image";
 	
 	/* api callbacks */
 	ot->exec = image_view_zoom_exec;
@@ -538,6 +541,7 @@ void IMAGE_OT_view_ndof(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "NDOF Pan/Zoom";
 	ot->idname = "IMAGE_OT_view_ndof";
+	ot->description = "Use a 3D mouse device to pan/zoom the view";
 	
 	/* api callbacks */
 	ot->invoke = image_view_ndof_invoke;
@@ -591,6 +595,7 @@ void IMAGE_OT_view_all(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "View All";
 	ot->idname = "IMAGE_OT_view_all";
+	ot->description = "View the whole picture";
 	
 	/* api callbacks */
 	ot->exec = image_view_all_exec;
@@ -652,6 +657,7 @@ void IMAGE_OT_view_selected(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "View Center";
 	ot->idname = "IMAGE_OT_view_selected";
+	ot->description = "View all selected UVs";
 	
 	/* api callbacks */
 	ot->exec = image_view_selected_exec;
@@ -691,6 +697,7 @@ void IMAGE_OT_view_zoom_in(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "View Zoom In";
 	ot->idname = "IMAGE_OT_view_zoom_in";
+	ot->description = "Zoom in the image (centered around 2D cursor)";
 	
 	/* api callbacks */
 	ot->invoke = image_view_zoom_in_invoke;
@@ -732,6 +739,7 @@ void IMAGE_OT_view_zoom_out(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "View Zoom Out";
 	ot->idname = "IMAGE_OT_view_zoom_out";
+	ot->description = "Zoom out the image (centered around 2D cursor)";
 	
 	/* api callbacks */
 	ot->invoke = image_view_zoom_out_invoke;
@@ -774,6 +782,7 @@ void IMAGE_OT_view_zoom_ratio(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "View Zoom Ratio";
 	ot->idname = "IMAGE_OT_view_zoom_ratio";
+	ot->description = "Set zoom ration of the view";
 	
 	/* api callbacks */
 	ot->exec = image_view_zoom_ratio_exec;
@@ -824,7 +833,7 @@ static int image_open_exec(bContext *C, wmOperator *op)
 
 	errno = 0;
 
-	ima = BKE_add_image_file(str);
+	ima = BKE_image_load_exists(str);
 
 	if (!ima) {
 		if (op->customdata) MEM_freeN(op->customdata);
@@ -925,6 +934,52 @@ void IMAGE_OT_open(wmOperatorType *ot)
 	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE | MOVIEFILE, FILE_SPECIAL, FILE_OPENFILE, WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY);
 }
 
+/******************** Match movie length operator ********************/
+static int image_match_len_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	Scene *scene = CTX_data_scene(C);
+	Image *ima = CTX_data_pointer_get_type(C, "edit_image", &RNA_Image).data;
+	ImageUser *iuser = CTX_data_pointer_get_type(C, "edit_image_user", &RNA_ImageUser).data;
+
+	if (!ima || !iuser) {
+		/* Try to get a Texture, or a SpaceImage from context... */
+		SpaceImage *sima = CTX_wm_space_image(C);
+		Tex *tex = CTX_data_pointer_get_type(C, "texture", &RNA_Texture).data;
+		if (tex && tex->type == TEX_IMAGE) {
+			ima = tex->ima;
+			iuser = &tex->iuser;
+		}
+		else if (sima) {
+			ima = sima->image;
+			iuser = &sima->iuser;
+		}
+		
+	}
+
+	if (!ima || !iuser || !ima->anim)
+		return OPERATOR_CANCELLED;
+
+	iuser->frames = IMB_anim_get_duration(ima->anim, IMB_TC_RECORD_RUN);
+	BKE_image_user_frame_calc(iuser, scene->r.cfra, 0);
+
+	return OPERATOR_FINISHED;
+}
+
+/* called by other space types too */
+void IMAGE_OT_match_movie_length(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Match Movie Length";
+	ot->description = "Set image's users length to the one of this video";
+	ot->idname = "IMAGE_OT_match_movie_length";
+	
+	/* api callbacks */
+	ot->exec = image_match_len_exec;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER /* | OPTYPE_UNDO */; /* Don't think we need undo for that. */
+}
+
 /******************** replace image operator ********************/
 
 static int image_replace_exec(bContext *C, wmOperator *op)
@@ -977,6 +1032,7 @@ void IMAGE_OT_replace(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Replace Image";
 	ot->idname = "IMAGE_OT_replace";
+	ot->description = "Replace current image by another one from disk";
 	
 	/* api callbacks */
 	ot->exec = image_replace_exec;
@@ -1001,11 +1057,7 @@ typedef struct {
 
 static void save_image_options_defaults(SaveImageOptions *simopts)
 {
-	memset(&simopts->im_format, 0, sizeof(simopts->im_format));
-	simopts->im_format.planes = R_IMF_PLANES_RGB;
-	simopts->im_format.imtype = R_IMF_IMTYPE_PNG;
-	simopts->im_format.quality = 90;
-	simopts->im_format.compress = 90;
+	BKE_imformat_defaults(&simopts->im_format);
 	simopts->filepath[0] = '\0';
 }
 
@@ -1144,7 +1196,7 @@ static void save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			/* TODO, better solution, if a 24bit image is painted onto it may contain alpha */
 			if (ibuf->userflags & IB_BITMAPDIRTY) { /* it has been painted onto */
 				/* checks each pixel, not ideal */
-				ibuf->planes = BKE_alphatest_ibuf(ibuf) ? 32 : 24;
+				ibuf->planes = BKE_imbuf_alpha_test(ibuf) ? 32 : 24;
 			}
 		}
 		
@@ -1161,7 +1213,7 @@ static void save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			BKE_image_release_renderresult(scene, ima);
 		}
 		else {
-			if (BKE_write_ibuf_as(ibuf, simopts->filepath, &simopts->im_format, save_copy)) {
+			if (BKE_imbuf_write_as(ibuf, simopts->filepath, &simopts->im_format, save_copy)) {
 				ok = TRUE;
 			}
 		}
@@ -1246,13 +1298,7 @@ static int image_save_as_exec(bContext *C, wmOperator *op)
 static int image_save_as_check(bContext *UNUSED(C), wmOperator *op)
 {
 	ImageFormatData *imf = op->customdata;
-	char filepath[FILE_MAX];
-	RNA_string_get(op->ptr, "filepath", filepath);
-	if (BKE_add_image_extension(filepath, imf->imtype)) {
-		RNA_string_set(op->ptr, "filepath", filepath);
-		return TRUE;
-	}
-	return FALSE;
+	return WM_operator_filesel_ensure_ext_imtype(op, imf->imtype);
 }
 
 static int image_save_as_invoke(bContext *C, wmOperator *op, wmEvent *UNUSED(event))
@@ -1325,6 +1371,7 @@ void IMAGE_OT_save_as(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Save As Image";
 	ot->idname = "IMAGE_OT_save_as";
+	ot->description = "Save the image with another name and/or settings";
 	
 	/* api callbacks */
 	ot->exec = image_save_as_exec;
@@ -1371,6 +1418,7 @@ void IMAGE_OT_save(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Save Image";
 	ot->idname = "IMAGE_OT_save";
+	ot->description = "Save the image with current name and settings";
 	
 	/* api callbacks */
 	ot->exec = image_save_exec;
@@ -1448,6 +1496,7 @@ void IMAGE_OT_save_sequence(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Save Sequence";
 	ot->idname = "IMAGE_OT_save_sequence";
+	ot->description = "Save a sequence of images";
 	
 	/* api callbacks */
 	ot->exec = image_save_sequence_exec;
@@ -1483,6 +1532,7 @@ void IMAGE_OT_reload(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Reload Image";
 	ot->idname = "IMAGE_OT_reload";
+	ot->description = "Reload current image from disk";
 	
 	/* api callbacks */
 	ot->exec = image_reload_exec;
@@ -1524,7 +1574,7 @@ static int image_new_exec(bContext *C, wmOperator *op)
 	if (!alpha)
 		color[3] = 1.0f;
 
-	ima = BKE_add_image_size(width, height, name, alpha ? 32 : 24, floatbuf, uvtestgrid, color);
+	ima = BKE_image_add_generated(width, height, name, alpha ? 32 : 24, floatbuf, uvtestgrid, color);
 
 	if (!ima)
 		return OPERATOR_CANCELLED;
@@ -1655,6 +1705,7 @@ void IMAGE_OT_invert(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Invert Channels";
 	ot->idname = "IMAGE_OT_invert";
+	ot->description = "Invert image's channels";
 	
 	/* api callbacks */
 	ot->exec = image_invert_exec;
@@ -2030,6 +2081,7 @@ void IMAGE_OT_sample(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Sample Color";
 	ot->idname = "IMAGE_OT_sample";
+	ot->description = "Use mouse to sample a color in current image";
 	
 	/* api callbacks */
 	ot->invoke = image_sample_invoke;
@@ -2058,11 +2110,6 @@ static int image_sample_line_exec(bContext *C, wmOperator *op)
 	Histogram *hist = &sima->sample_line_hist;
 	
 	float x1f, y1f, x2f, y2f;
-	int x1, y1, x2, y2;
-	int i, x, y;
-	float *fp;
-	float rgb[3];
-	unsigned char *cp;
 	
 	if (ibuf == NULL) {
 		ED_space_image_release_buffer(sima, lock);
@@ -2076,46 +2123,13 @@ static int image_sample_line_exec(bContext *C, wmOperator *op)
 	
 	UI_view2d_region_to_view(&ar->v2d, x_start, y_start, &x1f, &y1f);
 	UI_view2d_region_to_view(&ar->v2d, x_end, y_end, &x2f, &y2f);
-	x1 = 0.5f + x1f * ibuf->x;
-	x2 = 0.5f + x2f * ibuf->x;
-	y1 = 0.5f + y1f * ibuf->y;
-	y2 = 0.5f + y2f * ibuf->y;
-	
-	hist->channels = 3;
-	hist->x_resolution = 256;
-	hist->xmax = 1.0f;
-	hist->ymax = 1.0f;
-	
-	for (i = 0; i < 256; i++) {
-		x = (int)(0.5f + x1 + (float)i * (x2 - x1) / 255.0f);
-		y = (int)(0.5f + y1 + (float)i * (y2 - y1) / 255.0f);
-		
-		if (x < 0 || y < 0 || x >= ibuf->x || y >= ibuf->y) {
-			hist->data_luma[i] = hist->data_r[i] = hist->data_g[i] = hist->data_b[i] = 0.0f;
-		}
-		else {
-			if (ibuf->rect_float) {
-				fp = (ibuf->rect_float + (ibuf->channels) * (y * ibuf->x + x));
 
-				if (scene->r.color_mgt_flag & R_COLOR_MANAGEMENT)
-					linearrgb_to_srgb_v3_v3(rgb, fp);
-				else
-					copy_v3_v3(rgb, fp);
+	hist->co[0][0] = x1f;
+	hist->co[0][1] = y1f;
+	hist->co[1][0] = x2f;
+	hist->co[1][1] = y2f;
 
-				hist->data_r[i] = rgb[0];
-				hist->data_g[i] = rgb[1];
-				hist->data_b[i] = rgb[2];
-				hist->data_luma[i] = rgb_to_luma(rgb);
-			}
-			else if (ibuf->rect) {
-				cp = (unsigned char *)(ibuf->rect + y * ibuf->x + x);
-				hist->data_r[i] = (float)cp[0] / 255.0f;
-				hist->data_g[i] = (float)cp[1] / 255.0f;
-				hist->data_b[i] = (float)cp[2] / 255.0f;
-				hist->data_luma[i] = (float)rgb_to_luma_byte(cp) / 255.0f;
-			}
-		}
-	}
+	BKE_histogram_update_sample_line(hist, ibuf, (scene->r.color_mgt_flag & R_COLOR_MANAGEMENT) != 0);
 	
 	ED_space_image_release_buffer(sima, lock);
 	
@@ -2127,7 +2141,10 @@ static int image_sample_line_exec(bContext *C, wmOperator *op)
 static int image_sample_line_invoke(bContext *C, wmOperator *op, wmEvent *event)
 {
 	SpaceImage *sima = CTX_wm_space_image(C);
-	
+
+	Histogram *hist = &sima->sample_line_hist;
+	hist->flag &= ~HISTO_FLAG_SAMPLELINE;
+
 	if (!ED_space_image_has_buffer(sima))
 		return OPERATOR_CANCELLED;
 	
@@ -2139,6 +2156,7 @@ void IMAGE_OT_sample_line(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Sample Line";
 	ot->idname = "IMAGE_OT_sample_line";
+	ot->description = "Sample a line and show it in Scope panels";
 	
 	/* api callbacks */
 	ot->invoke = image_sample_line_invoke;
@@ -2166,6 +2184,7 @@ void IMAGE_OT_curves_point_set(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Set Curves Point";
 	ot->idname = "IMAGE_OT_curves_point_set";
+	ot->description = "Set black point or white point for curves";
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -2202,7 +2221,7 @@ static int image_record_composite_apply(bContext *C, wmOperator *op)
 	
 	BKE_image_all_free_anim_ibufs(scene->r.cfra);
 	ntreeCompositTagAnimated(scene->nodetree);
-	ntreeCompositExecTree(scene->nodetree, &scene->r, scene->r.cfra != rcd->old_cfra);  /* 1 is no previews */
+	ntreeCompositExecTree(scene->nodetree, &scene->r, 0, scene->r.cfra != rcd->old_cfra);  /* 1 is no previews */
 
 	ED_area_tag_redraw(CTX_wm_area(C));
 	
@@ -2371,6 +2390,7 @@ void IMAGE_OT_cycle_render_slot(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Cycle Render Slot";
 	ot->idname = "IMAGE_OT_cycle_render_slot";
+	ot->description = "Cycle through all non-void render slots";
 	
 	/* api callbacks */
 	ot->exec = image_cycle_render_slot_exec;
@@ -2388,56 +2408,15 @@ void IMAGE_OT_cycle_render_slot(wmOperatorType *ot)
 
 /* goes over all ImageUsers, and sets frame numbers if auto-refresh is set */
 
+static void image_update_frame(struct Image *UNUSED(ima), struct ImageUser *iuser, void *customdata)
+{
+	int cfra = *(int*)customdata;
+
+	BKE_image_user_check_frame_calc(iuser, cfra, 0);
+}
+
 void ED_image_update_frame(const Main *mainp, int cfra)
 {
-	wmWindowManager *wm;
-	wmWindow *win;
-	Tex *tex;
-	
-	/* texture users */
-	for (tex = mainp->tex.first; tex; tex = tex->id.next) {
-		if (tex->type == TEX_IMAGE && tex->ima) {
-			if (ELEM(tex->ima->source, IMA_SRC_MOVIE, IMA_SRC_SEQUENCE)) {
-				if (tex->iuser.flag & IMA_ANIM_ALWAYS)
-					BKE_image_user_calc_frame(&tex->iuser, cfra, 0);
-			}
-		}
-	}
-	
-	/* image window, compo node users */
-	for (wm = mainp->wm.first; wm; wm = wm->id.next) { /* only 1 wm */
-		for (win = wm->windows.first; win; win = win->next) {
-			ScrArea *sa;
-			for (sa = win->screen->areabase.first; sa; sa = sa->next) {
-				if (sa->spacetype == SPACE_VIEW3D) {
-					View3D *v3d = sa->spacedata.first;
-					BGpic *bgpic;
-					for (bgpic = v3d->bgpicbase.first; bgpic; bgpic = bgpic->next)
-						if (bgpic->iuser.flag & IMA_ANIM_ALWAYS)
-							BKE_image_user_calc_frame(&bgpic->iuser, cfra, 0);
-				}
-				else if (sa->spacetype == SPACE_IMAGE) {
-					SpaceImage *sima = sa->spacedata.first;
-					if (sima->iuser.flag & IMA_ANIM_ALWAYS)
-						BKE_image_user_calc_frame(&sima->iuser, cfra, 0);
-				}
-				else if (sa->spacetype == SPACE_NODE) {
-					SpaceNode *snode = sa->spacedata.first;
-					if ((snode->treetype == NTREE_COMPOSIT) && (snode->nodetree)) {
-						bNode *node;
-						for (node = snode->nodetree->nodes.first; node; node = node->next) {
-							if (node->id && node->type == CMP_NODE_IMAGE) {
-								Image *ima = (Image *)node->id;
-								ImageUser *iuser = node->storage;
-								if (ELEM(ima->source, IMA_SRC_MOVIE, IMA_SRC_SEQUENCE))
-									if (iuser->flag & IMA_ANIM_ALWAYS)
-										BKE_image_user_calc_frame(iuser, cfra, 0);
-							}
-						}
-					}
-				}
-			}
-		}
-	}
+	BKE_image_walk_all_users(mainp, &cfra, image_update_frame);
 }
 

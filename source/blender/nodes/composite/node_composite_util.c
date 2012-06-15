@@ -568,6 +568,22 @@ CompBuf *valbuf_from_rgbabuf(CompBuf *cbuf, int channel)
 	return valbuf;
 }
 
+void valbuf_to_rgbabuf(CompBuf *valbuf, CompBuf *cbuf, int channel)
+{
+	float *valf, *rectf;
+	int tot;
+
+	valf= valbuf->rect;
+
+	/* defaults to returning alpha channel */
+	if ((channel < CHAN_R) || (channel > CHAN_A)) channel = CHAN_A;
+
+	rectf = cbuf->rect + channel;
+
+	for (tot= cbuf->x*cbuf->y; tot>0; tot--, valf++, rectf+=4)
+		*rectf = *valf;
+}
+
 static CompBuf *generate_procedural_preview(CompBuf *cbuf, int newx, int newy)
 {
 	CompBuf *outbuf;
@@ -643,37 +659,37 @@ void generate_preview(void *data, bNode *node, CompBuf *stackbuf)
 
 void do_rgba_to_yuva(bNode *UNUSED(node), float *out, float *in)
 {
-	rgb_to_yuv(in[0],in[1],in[2], &out[0], &out[1], &out[2]);
+	rgb_to_yuv(in[0], in[1], in[2], &out[0], &out[1], &out[2]);
 	out[3]=in[3];
 }
 
 void do_rgba_to_hsva(bNode *UNUSED(node), float *out, float *in)
 {
-	rgb_to_hsv(in[0],in[1],in[2], &out[0], &out[1], &out[2]);
+	rgb_to_hsv(in[0], in[1], in[2], &out[0], &out[1], &out[2]);
 	out[3]=in[3];
 }
 
 void do_rgba_to_ycca(bNode *UNUSED(node), float *out, float *in)
 {
-	rgb_to_ycc(in[0],in[1],in[2], &out[0], &out[1], &out[2], BLI_YCC_ITU_BT601);
+	rgb_to_ycc(in[0], in[1], in[2], &out[0], &out[1], &out[2], BLI_YCC_ITU_BT601);
 	out[3]=in[3];
 }
 
 void do_yuva_to_rgba(bNode *UNUSED(node), float *out, float *in)
 {
-	yuv_to_rgb(in[0],in[1],in[2], &out[0], &out[1], &out[2]);
+	yuv_to_rgb(in[0], in[1], in[2], &out[0], &out[1], &out[2]);
 	out[3]=in[3];
 }
 
 void do_hsva_to_rgba(bNode *UNUSED(node), float *out, float *in)
 {
-	hsv_to_rgb(in[0],in[1],in[2], &out[0], &out[1], &out[2]);
+	hsv_to_rgb(in[0], in[1], in[2], &out[0], &out[1], &out[2]);
 	out[3]=in[3];
 }
 
 void do_ycca_to_rgba(bNode *UNUSED(node), float *out, float *in)
 {
-	ycc_to_rgb(in[0],in[1],in[2], &out[0], &out[1], &out[2], BLI_YCC_ITU_BT601);
+	ycc_to_rgb(in[0], in[1], in[2], &out[0], &out[1], &out[2], BLI_YCC_ITU_BT601);
 	out[3]=in[3];
 }
 
@@ -884,8 +900,9 @@ static void FHT2D(fREAL *data, unsigned int Mx, unsigned int My,
 			#define PRED(k) (((k & Nym) << Mx) + (k >> My))
 			for (j=PRED(i); j>i; j=PRED(j));
 			if (j < i) continue;
-			for (k=i, j=PRED(i); j!=i; k=j, j=PRED(j), stm--)
-				{ t=data[j], data[j]=data[k], data[k]=t; }
+			for (k=i, j=PRED(i); j!=i; k=j, j=PRED(j), stm--) {
+				t=data[j], data[j]=data[k], data[k]=t;
+			}
 			#undef PRED
 			stm--;
 		}
@@ -985,7 +1002,7 @@ void convolve(CompBuf* dst, CompBuf* in1, CompBuf* in2)
 	fRGB wt, *colp;
 	int x, y, ch;
 	int xbl, ybl, nxb, nyb, xbsz, ybsz;
-	int in2done = 0;
+	int in2done = FALSE;
 
 	CompBuf* rdst = alloc_compbuf(in1->x, in1->y, in1->type, 1);
 
@@ -1005,7 +1022,7 @@ void convolve(CompBuf* dst, CompBuf* in1, CompBuf* in2)
 	for (y=0; y<in2->y; y++) {
 		colp = (fRGB*)&in2->rect[y*in2->x*in2->type];
 		for (x=0; x<in2->x; x++)
-			fRGB_add(wt, colp[x]);
+			add_v3_v3(wt, colp[x]);
 	}
 	if (wt[0] != 0.f) wt[0] = 1.f/wt[0];
 	if (wt[1] != 0.f) wt[1] = 1.f/wt[1];
@@ -1013,7 +1030,7 @@ void convolve(CompBuf* dst, CompBuf* in1, CompBuf* in2)
 	for (y=0; y<in2->y; y++) {
 		colp = (fRGB*)&in2->rect[y*in2->x*in2->type];
 		for (x=0; x<in2->x; x++)
-			fRGB_colormult(colp[x], wt);
+			mul_v3_v3(colp[x], wt);
 	}
 
 	// copy image data, unpacking interleaved RGBA into separate channels
@@ -1085,7 +1102,7 @@ void convolve(CompBuf* dst, CompBuf* in1, CompBuf* in2)
 				}
 
 			}
-			in2done = 1;
+			in2done = TRUE;
 		}
 	}
 
@@ -1108,7 +1125,7 @@ void qd_getPixel(CompBuf* src, int x, int y, float* col)
 		float bc[4];
 		src->rect_procedural(src, bc, (float)x/(float)src->xrad, (float)y/(float)src->yrad);
 
-		switch(src->type) {
+		switch (src->type) {
 			/* these fallthrough to get all the channels */
 			case CB_RGBA: col[3]=bc[3]; 
 			case CB_VEC3: col[2]=bc[2];
@@ -1118,7 +1135,7 @@ void qd_getPixel(CompBuf* src, int x, int y, float* col)
 	}
 	else if ((x >= 0) && (x < src->x) && (y >= 0) && (y < src->y)) {
 		float* bc = &src->rect[(x + y*src->x)*src->type];
-		switch(src->type) {
+		switch (src->type) {
 			/* these fallthrough to get all the channels */
 			case CB_RGBA: col[3]=bc[3]; 
 			case CB_VEC3: col[2]=bc[2];
@@ -1127,7 +1144,7 @@ void qd_getPixel(CompBuf* src, int x, int y, float* col)
 		}
 	}
 	else {
-		switch(src->type) {
+		switch (src->type) {
 			/* these fallthrough to get all the channels */
 			case CB_RGBA: col[3]=0.0; 
 			case CB_VEC3: col[2]=0.0; 
@@ -1142,7 +1159,7 @@ void qd_setPixel(CompBuf* src, int x, int y, float* col)
 {
 	if ((x >= 0) && (x < src->x) && (y >= 0) && (y < src->y)) {
 		float* bc = &src->rect[(x + y*src->x)*src->type];
-		switch(src->type) {
+		switch (src->type) {
 			/* these fallthrough to get all the channels */
 			case CB_RGBA: bc[3]=col[3]; 
 			case CB_VEC3: bc[2]=col[2];
@@ -1199,7 +1216,7 @@ void qd_getPixelLerp(CompBuf* src, float u, float v, float* col)
 	const int x1 = (int)ufl, y1 = (int)vfl;
 	const int x2 = (int)ceil(u), y2 = (int)ceil(v);
 	if ((x2 >= 0) && (y2 >= 0) && (x1 < src->x) && (y1 < src->y)) {
-		const float B[4] = {0,0,0,0};
+		const float B[4] = {0, 0, 0, 0};
 		const int ox1 = (x1 < 0), oy1 = (y1 < 0), ox2 = (x2 >= src->x), oy2 = (y2 >= src->y);
 		const float* c00 = (ox1 || oy1) ? B : &src->rect[(x1 + y1*src->x)*src->type];
 		const float* c10 = (ox2 || oy1) ? B : &src->rect[(x2 + y1*src->x)*src->type];
@@ -1225,7 +1242,7 @@ void qd_getPixelLerpChan(CompBuf* src, float u, float v, int chan, float* out)
 	const int x2 = (int)ceil(u), y2 = (int)ceil(v);
 	if (chan >= src->type) chan = 0;
 	if ((x2 >= 0) && (y2 >= 0) && (x1 < src->x) && (y1 < src->y)) {
-		const float B[4] = {0,0,0,0};
+		const float B[4] = {0, 0, 0, 0};
 		const int ox1 = (x1 < 0), oy1 = (y1 < 0), ox2 = (x2 >= src->x), oy2 = (y2 >= src->y);
 		const float* c00 = (ox1 || oy1) ? B : &src->rect[(x1 + y1*src->x)*src->type + chan];
 		const float* c10 = (ox2 || oy1) ? B : &src->rect[(x2 + y1*src->x)*src->type + chan];
@@ -1262,14 +1279,14 @@ CompBuf* qd_downScaledCopy(CompBuf* src, int scale)
 					xx = x*scale;
 					mx = xx + scale;
 					if (mx > src->x) mx = src->x;
-					colsum[0] = colsum[1] = colsum[2] = 0.f;
+					zero_v3(colsum);
 					for (sy=yy; sy<my; sy++) {
 						fRGB* scolp = (fRGB*)&src->rect[sy*src->x*src->type];
 						for (sx=xx; sx<mx; sx++)
-							fRGB_add(colsum, scolp[sx]);
+							add_v3_v3(colsum, scolp[sx]);
 					}
-					fRGB_mult(colsum, fscale);
-					fRGB_copy(fcolp[x], colsum);
+					mul_v3_fl(colsum, fscale);
+					copy_v3_v3(fcolp[x], colsum);
 				}
 			}
 		}
@@ -1348,7 +1365,7 @@ void IIR_gauss(CompBuf* src, float sigma, int chan, int xy)
 	Y[L-3] = cf[0]*W[L-3] + cf[1]*Y[L-2] + cf[2]*Y[L-1] + cf[3]*tsv[0];       \
 	for (i=L-4; i>=0; i--)                                                    \
 		Y[i] = cf[0]*W[i] + cf[1]*Y[i+1] + cf[2]*Y[i+2] + cf[3]*Y[i+3];       \
-}
+} (void)0
 
 	// intermediate buffers
 	sz = MAX2(src->x, src->y);

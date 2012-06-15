@@ -88,8 +88,8 @@ extern "C"
 #include "BKE_global.h"
 #include "BKE_animsys.h"
 #include "BKE_library.h"
-#include "BKE_material.h" // copy_material
-#include "BKE_mesh.h" // copy_mesh
+#include "BKE_material.h" // BKE_material_copy
+#include "BKE_mesh.h" // BKE_mesh_copy
 #include "DNA_space_types.h"
 #include "DNA_anim_types.h"
 #include "RNA_define.h"
@@ -308,25 +308,11 @@ void KX_BlenderSceneConverter::ConvertScene(class KX_Scene* destinationscene,
 				useDbvtCulling = (blenderscene->gm.mode & WO_DBVT_CULLING) != 0;
 				break;
 			}
-							
-			case WOPHY_ODE:
-			{
-				physics_engine = UseODE;
-				break;
-			}
-			case WOPHY_DYNAMO:
-			{
-				physics_engine = UseDynamo;
-				break;
-			}
-			case WOPHY_SUMO:
-			{
-				physics_engine = UseSumo; 
-				break;
-			}
+			default:
 			case WOPHY_NONE:
 			{
 				physics_engine = UseNone;
+				break;
 			}
 		}
 	}
@@ -338,8 +324,9 @@ void KX_BlenderSceneConverter::ConvertScene(class KX_Scene* destinationscene,
 			{
 				CcdPhysicsEnvironment* ccdPhysEnv = new CcdPhysicsEnvironment(useDbvtCulling);
 				ccdPhysEnv->setDebugDrawer(new BlenderDebugDraw());
-				ccdPhysEnv->setDeactivationLinearTreshold(0.8f); // default, can be overridden by Python
-				ccdPhysEnv->setDeactivationAngularTreshold(1.0f); // default, can be overridden by Python
+				ccdPhysEnv->setDeactivationLinearTreshold(blenderscene->gm.lineardeactthreshold);
+				ccdPhysEnv->setDeactivationAngularTreshold(blenderscene->gm.angulardeactthreshold);
+				ccdPhysEnv->setDeactivationTime(blenderscene->gm.deactivationtime);
 
 				SYS_SystemHandle syshandle = SYS_GetSystem(); /*unused*/
 				int visualizePhysics = SYS_GetCommandLineInt(syshandle,"show_physics",0);
@@ -352,11 +339,7 @@ void KX_BlenderSceneConverter::ConvertScene(class KX_Scene* destinationscene,
 				destinationscene->SetPhysicsEnvironment(ccdPhysEnv);
 				break;
 			}
-#endif	
-		case UseDynamo:
-		{
-		}
-		
+#endif
 		default:
 		case UseNone:
 			physics_engine = UseNone;
@@ -947,13 +930,34 @@ bool KX_BlenderSceneConverter::LinkBlendFilePath(const char *path, char *group, 
 	return LinkBlendFile(bpy_openlib, path, group, scene_merge, err_str, options);
 }
 
+static void load_datablocks(Main *main_newlib, BlendHandle *bpy_openlib, const char *path, int idcode)
+{
+	Main *main_tmp= NULL; /* created only for linking, then freed */
+	LinkNode *names = NULL;
+	short flag= 0; /* don't need any special options */
+
+	/* here appending/linking starts */
+	main_tmp = BLO_library_append_begin(main_newlib, &bpy_openlib, (char *)path);
+
+	int totnames_dummy;
+	names = BLO_blendhandle_get_datablock_names( bpy_openlib, idcode, &totnames_dummy);
+	
+	int i=0;
+	LinkNode *n= names;
+	while(n) {
+		BLO_library_append_named_part(main_tmp, &bpy_openlib, (char *)n->link, idcode);
+		n= (LinkNode *)n->next;
+		i++;
+	}
+	BLI_linklist_free(names, free);	/* free linklist *and* each node's data */
+	
+	BLO_library_append_end(NULL, main_tmp, &bpy_openlib, idcode, flag);
+}
+
 bool KX_BlenderSceneConverter::LinkBlendFile(BlendHandle *bpy_openlib, const char *path, char *group, KX_Scene *scene_merge, char **err_str, short options)
 {
 	Main *main_newlib; /* stored as a dynamic 'main' until we free it */
-	Main *main_tmp= NULL; /* created only for linking, then freed */
-	LinkNode *names = NULL;
 	int idcode= BKE_idcode_from_name(group);
-	short flag= 0; /* don't need any special options */
 	ReportList reports;
 	static char err_local[255];
 	
@@ -981,40 +985,11 @@ bool KX_BlenderSceneConverter::LinkBlendFile(BlendHandle *bpy_openlib, const cha
 	main_newlib= (Main *)MEM_callocN( sizeof(Main), "BgeMain");
 	BKE_reports_init(&reports, RPT_STORE);	
 
-	/* here appending/linking starts */
-	main_tmp = BLO_library_append_begin(main_newlib, &bpy_openlib, (char *)path);
-
-	int totnames_dummy;
-	names = BLO_blendhandle_get_datablock_names( bpy_openlib, idcode, &totnames_dummy);
-	
-	int i=0;
-	LinkNode *n= names;
-	while(n) {
-		BLO_library_append_named_part(main_tmp, &bpy_openlib, (char *)n->link, idcode);
-		n= (LinkNode *)n->next;
-		i++;
-	}
-	BLI_linklist_free(names, free);	/* free linklist *and* each node's data */
-	
-	BLO_library_append_end(NULL, main_tmp, &bpy_openlib, idcode, flag);
+	load_datablocks(main_newlib, bpy_openlib, path, idcode);
 
 	/* now do another round of linking for Scenes so all actions are properly loaded */
 	if (idcode==ID_SCE && options & LIB_LOAD_LOAD_ACTIONS) {
-		main_tmp = BLO_library_append_begin(main_newlib, &bpy_openlib, (char *)path);
-
-		int totnames_dummy;
-		names = BLO_blendhandle_get_datablock_names( bpy_openlib, ID_AC, &totnames_dummy);
-	
-		int i=0;
-		LinkNode *n= names;
-		while(n) {
-			BLO_library_append_named_part(main_tmp, &bpy_openlib, (char *)n->link, ID_AC);
-			n= (LinkNode *)n->next;
-			i++;
-		}
-		BLI_linklist_free(names, free);	/* free linklist *and* each node's data */
-	
-		BLO_library_append_end(NULL, main_tmp, &bpy_openlib, ID_AC, flag);
+		load_datablocks(main_newlib, bpy_openlib, path, ID_AC);
 	}
 	
 	BLO_blendhandle_close(bpy_openlib);
@@ -1427,7 +1402,7 @@ RAS_MeshObject *KX_BlenderSceneConverter::ConvertMeshSpecial(KX_Scene* kx_scene,
 	/* Watch this!, if its used in the original scene can cause big troubles */
 	if (me->us > 0) {
 		printf("Mesh has a user \"%s\"\n", name);
-		me = (ID*)copy_mesh((Mesh*)me);
+		me = (ID*)BKE_mesh_copy((Mesh*)me);
 		me->us--;
 	}
 	BLI_remlink(&m_maggie->mesh, me); /* even if we made the copy it needs to be removed */
@@ -1451,7 +1426,7 @@ RAS_MeshObject *KX_BlenderSceneConverter::ConvertMeshSpecial(KX_Scene* kx_scene,
 			if (mat_old && (mat_old->id.flag & LIB_DOIT)==0)
 			{
 				Material *mat_old= mesh->mat[i];
-				Material *mat_new= copy_material( mat_old );
+				Material *mat_new= BKE_material_copy( mat_old );
 				
 				mat_new->id.flag |= LIB_DOIT;
 				mat_old->id.us--;

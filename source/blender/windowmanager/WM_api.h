@@ -166,6 +166,7 @@ int			WM_enum_search_invoke(struct bContext *C, struct wmOperator *op, struct wm
 int			WM_operator_confirm		(struct bContext *C, struct wmOperator *op, struct wmEvent *event);
 		/* invoke callback, file selector "filepath" unset + exec */
 int			WM_operator_filesel		(struct bContext *C, struct wmOperator *op, struct wmEvent *event);
+int         WM_operator_filesel_ensure_ext_imtype(wmOperator *op, const char imtype);
 			/* poll callback, context checks */
 int			WM_operator_winactive	(struct bContext *C);
 			/* invoke callback, exec + redo popup */
@@ -187,7 +188,7 @@ void		WM_operatortype_append_ptr	(void (*opfunc)(struct wmOperatorType*, void *)
 void		WM_operatortype_append_macro_ptr	(void (*opfunc)(struct wmOperatorType*, void *), void *userdata);
 int			WM_operatortype_remove(const char *idname);
 
-struct wmOperatorType *WM_operatortype_append_macro(const char *idname, const char *name, int flag);
+struct wmOperatorType *WM_operatortype_append_macro(const char *idname, const char *name, const char *description, int flag);
 struct wmOperatorTypeMacro *WM_operatortype_macro_define(struct wmOperatorType *ot, const char *idname);
 
 
@@ -208,6 +209,7 @@ void		WM_operator_properties_create_ptr(struct PointerRNA *ptr, struct wmOperato
 void		WM_operator_properties_free(struct PointerRNA *ptr);
 void		WM_operator_properties_filesel(struct wmOperatorType *ot, int filter, short type, short action, short flag, short display);
 void		WM_operator_properties_gesture_border(struct wmOperatorType *ot, int extend);
+void        WM_operator_properties_mouse_select(struct wmOperatorType *ot);
 void		WM_operator_properties_gesture_straightline(struct wmOperatorType *ot, int cursor);
 void		WM_operator_properties_select_all(struct wmOperatorType *ot);
 
@@ -258,6 +260,7 @@ int			WM_gesture_lines_cancel(struct bContext *C, struct wmOperator *op);
 int			WM_gesture_lasso_invoke(struct bContext *C, struct wmOperator *op, struct wmEvent *event);
 int			WM_gesture_lasso_modal(struct bContext *C, struct wmOperator *op, struct wmEvent *event);
 int			WM_gesture_lasso_cancel(struct bContext *C, struct wmOperator *op);
+int       (*WM_gesture_lasso_path_to_array(struct bContext *C, struct wmOperator *op, int *mcords_tot))[2];
 int			WM_gesture_straightline_invoke(struct bContext *C, struct wmOperator *op, struct wmEvent *event);
 int			WM_gesture_straightline_modal(struct bContext *C, struct wmOperator *op, struct wmEvent *event);
 int			WM_gesture_straightline_cancel(struct bContext *C, struct wmOperator *op);

@@ -230,13 +230,26 @@ static struct GPUTextureState {
 	Image *ima, *curima;
 
 	int domipmap, linearmipmap;
+	int texpaint; /* store this so that new images created while texture painting won't be set to mipmapped */
 
 	int alphablend;
 	float anisotropic;
+	int gpu_mipmap;
 	MTFace *lasttface;
-} GTS = {0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, 1, 0, -1, 1.f, NULL};
+} GTS = {0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, 1, 0, 0, -1, 1.f, 0, NULL};
 
 /* Mipmap settings */
+
+void GPU_set_gpu_mipmapping(int gpu_mipmap){
+	int old_value = GTS.gpu_mipmap;
+
+	/* only actually enable if it's supported */
+	GTS.gpu_mipmap = gpu_mipmap && GLEW_EXT_framebuffer_object;
+
+	if(old_value != GTS.gpu_mipmap) {
+		GPU_free_images();
+	}
+}
 
 void GPU_set_mipmap(int mipmap)
 {
@@ -256,7 +269,7 @@ void GPU_set_linear_mipmap(int linear)
 
 static int gpu_get_mipmap(void)
 {
-	return GTS.domipmap;
+	return GTS.domipmap && !GTS.texpaint;
 }
 
 static GLenum gpu_get_mipmap_filter(int mag)
@@ -441,14 +454,16 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, int compare, int 
 
 	/* if same image & tile, we're done */
 	if (compare && ima == GTS.curima && GTS.curtile == GTS.tile &&
-	   GTS.tilemode == GTS.curtilemode && GTS.curtileXRep == GTS.tileXRep &&
-	   GTS.curtileYRep == GTS.tileYRep)
+	    GTS.tilemode == GTS.curtilemode && GTS.curtileXRep == GTS.tileXRep &&
+	    GTS.curtileYRep == GTS.tileYRep)
+	{
 		return (ima != NULL);
+	}
 
 	/* if tiling mode or repeat changed, change texture matrix to fit */
 	if (GTS.tilemode!=GTS.curtilemode || GTS.curtileXRep!=GTS.tileXRep ||
-	   GTS.curtileYRep != GTS.tileYRep) {
-
+	    GTS.curtileYRep != GTS.tileYRep)
+	{
 		glMatrixMode(GL_TEXTURE);
 		glLoadIdentity();
 
@@ -618,7 +633,7 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, int compare, int 
 
 	/* create image */
 	glGenTextures(1, (GLuint *)bind);
-	glBindTexture( GL_TEXTURE_2D, *bind);
+	glBindTexture(GL_TEXTURE_2D, *bind);
 
 	if (!(gpu_get_mipmap() && mipmap)) {
 		if (use_high_bit_depth)
@@ -629,10 +644,19 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, int compare, int 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gpu_get_mipmap_filter(1));
 	}
 	else {
-		if (use_high_bit_depth)
-			gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA16, rectw, recth, GL_RGBA, GL_FLOAT, frect);
-		else
-			gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA, rectw, recth, GL_RGBA, GL_UNSIGNED_BYTE, rect);
+		if(GTS.gpu_mipmap) {
+			if (use_high_bit_depth)
+				glTexImage2D(GL_TEXTURE_2D, 0,  GL_RGBA16,  rectw, recth, 0, GL_RGBA, GL_FLOAT, frect);
+			else
+				glTexImage2D(GL_TEXTURE_2D, 0,  GL_RGBA,  rectw, recth, 0, GL_RGBA, GL_UNSIGNED_BYTE, rect);
+
+			glGenerateMipmapEXT(GL_TEXTURE_2D);
+		} else {
+			if (use_high_bit_depth)
+				gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA16, rectw, recth, GL_RGBA, GL_FLOAT, frect);
+			else
+				gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA, rectw, recth, GL_RGBA, GL_UNSIGNED_BYTE, rect);
+		}
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gpu_get_mipmap_filter(0));
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gpu_get_mipmap_filter(1));
 
@@ -712,7 +736,7 @@ int GPU_set_tpage(MTFace *tface, int mipmap, int alphablend)
 	gpu_verify_repeat(ima);
 	
 	/* Did this get lost in the image recode? */
-	/* tag_image_time(ima);*/
+	/* BKE_image_tag_time(ima);*/
 
 	return 1;
 }
@@ -727,6 +751,8 @@ void GPU_paint_set_mipmap(int mipmap)
 	
 	if (!GTS.domipmap)
 		return;
+
+	GTS.texpaint = !mipmap;
 
 	if (mipmap) {
 		for (ima=G.main->image.first; ima; ima=ima->id.next) {
@@ -764,8 +790,9 @@ void GPU_paint_update_image(Image *ima, int x, int y, int w, int h, int mipmap)
 	ibuf = BKE_image_get_ibuf(ima, NULL);
 	
 	if (ima->repbind || (gpu_get_mipmap() && mipmap) || !ima->bindcode || !ibuf ||
-		(!is_power_of_2_i(ibuf->x) || !is_power_of_2_i(ibuf->y)) ||
-		(w == 0) || (h == 0)) {
+	    (!is_power_of_2_i(ibuf->x) || !is_power_of_2_i(ibuf->y)) ||
+	    (w == 0) || (h == 0))
+	{
 		/* these cases require full reload still */
 		GPU_free_image(ima);
 	}
@@ -1014,6 +1041,8 @@ static struct GPUMaterialState {
 	float (*gviewmat)[4];
 	float (*gviewinv)[4];
 
+	int backface_culling;
+
 	GPUBlendMode *alphablend;
 	GPUBlendMode alphablend_fixed[FIXEDMAT];
 	int use_alpha_pass, is_alpha_pass;
@@ -1074,7 +1103,7 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 	GPUBlendMode alphablend;
 	int a;
 	int gamma = scene->r.color_mgt_flag & R_COLOR_MANAGEMENT;
-	int new_shading_nodes = scene_use_new_shading_nodes(scene);
+	int new_shading_nodes = BKE_scene_use_new_shading_nodes(scene);
 	
 	/* initialize state */
 	memset(&GMS, 0, sizeof(GMS));
@@ -1082,10 +1111,12 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 	GMS.lastretval = -1;
 	GMS.lastalphablend = GPU_BLEND_SOLID;
 
+	GMS.backface_culling = (v3d->flag2 & V3D_BACKFACE_CULLING);
+
 	GMS.gob = ob;
 	GMS.gscene = scene;
 	GMS.totmat= ob->totcol+1; /* materials start from 1, default material is 0 */
-	GMS.glay= v3d->lay;
+	GMS.glay= (v3d->localvd)? v3d->localvd->lay: v3d->lay; /* keep lamps visible in local view */
 	GMS.gviewmat= rv3d->viewmat;
 	GMS.gviewinv= rv3d->viewinv;
 
@@ -1097,7 +1128,7 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 	GMS.use_alpha_pass = (do_alpha_after != NULL);
 	GMS.is_alpha_pass = (v3d && v3d->transp);
 	if (GMS.use_alpha_pass)
-		*do_alpha_after = 0;
+		*do_alpha_after = FALSE;
 	
 	if (GMS.totmat > FIXEDMAT) {
 		GMS.matbuf= MEM_callocN(sizeof(GPUMaterialFixed)*GMS.totmat, "GMS.matbuf");
@@ -1154,11 +1185,11 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 			}
 		}
 
-		/* setting do_alpha_after = 1 indicates this object needs to be
+		/* setting 'do_alpha_after = TRUE' indicates this object needs to be
 		 * drawn in a second alpha pass for improved blending */
 		if (do_alpha_after && !GMS.is_alpha_pass)
 			if (ELEM3(alphablend, GPU_BLEND_ALPHA, GPU_BLEND_ADD, GPU_BLEND_ALPHA_SORT))
-				*do_alpha_after= 1;
+				*do_alpha_after = TRUE;
 
 		GMS.alphablend[a]= alphablend;
 	}
@@ -1245,6 +1276,13 @@ int GPU_enable_material(int nr, void *attribs)
 				alphablend= mat->game.alpha_blend;
 
 			if (GMS.is_alpha_pass) glDepthMask(1);
+
+			if (GMS.backface_culling) {
+				if (mat->game.flag)
+					glEnable(GL_CULL_FACE);
+				else
+					glDisable(GL_CULL_FACE);
+			}
 		}
 		else {
 			/* or do fixed function opengl material */
@@ -1280,6 +1318,9 @@ void GPU_disable_material(void)
 	GMS.lastretval= 1;
 
 	if (GMS.gboundmat) {
+		if (GMS.backface_culling)
+			glDisable(GL_CULL_FACE);
+
 		if (GMS.is_alpha_pass) glDepthMask(0);
 		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat));
 		GMS.gboundmat= NULL;
@@ -1302,7 +1343,7 @@ void GPU_end_object_materials(void)
 	GMS.gmatbuf= NULL;
 	GMS.alphablend= NULL;
 
-	/* resetting the texture matrix after the glScale needed for tiled textures */
+	/* resetting the texture matrix after the scaling needed for tiled textures */
 	if (GTS.tilemode) {
 		glMatrixMode(GL_TEXTURE);
 		glLoadIdentity();
@@ -1408,7 +1449,7 @@ int GPU_scene_object_lights(Scene *scene, Object *ob, int lay, float viewmat[][4
 		glPushMatrix();
 		glLoadMatrixf((float *)viewmat);
 		
-		where_is_object_simul(scene, base->object);
+		BKE_object_where_is_calc_simul(scene, base->object);
 		
 		if (la->type==LA_SUN) {
 			/* sun lamp */

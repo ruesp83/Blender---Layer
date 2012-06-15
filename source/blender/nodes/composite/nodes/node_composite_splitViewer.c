@@ -34,8 +34,8 @@
 
 /* **************** SPLIT VIEWER ******************** */
 static bNodeSocketTemplate cmp_node_splitviewer_in[]= {
-	{	SOCK_RGBA, 1, "Image",		0.0f, 0.0f, 0.0f, 1.0f},
-	{	SOCK_RGBA, 1, "Image",		0.0f, 0.0f, 0.0f, 1.0f},
+	{	SOCK_RGBA, 1, N_("Image"),		0.0f, 0.0f, 0.0f, 1.0f},
+	{	SOCK_RGBA, 1, N_("Image"),		0.0f, 0.0f, 0.0f, 1.0f},
 	{	-1, 0, ""	}
 };
 
@@ -69,7 +69,7 @@ static void node_composit_exec_splitviewer(void *data, bNode *node, bNodeStack *
 		buf1= typecheck_compbuf(in[0]->data, CB_RGBA);
 		buf2= typecheck_compbuf(in[1]->data, CB_RGBA);
 		
-		BKE_image_user_calc_frame(node->storage, rd->cfra, 0);
+		BKE_image_user_frame_calc(node->storage, rd->cfra, 0);
 		
 		/* always returns for viewer image, but we check nevertheless */
 		ibuf= BKE_image_acquire_ibuf(ima, node->storage, &lock);

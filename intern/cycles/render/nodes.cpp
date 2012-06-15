@@ -33,6 +33,11 @@ TextureMapping::TextureMapping()
 	rotation = make_float3(0.0f, 0.0f, 0.0f);
 	scale = make_float3(1.0f, 1.0f, 1.0f);
 
+	min = make_float3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+	max = make_float3(FLT_MAX, FLT_MAX, FLT_MAX);
+
+	use_minmax = false;
+
 	x_mapping = X;
 	y_mapping = Y;
 	z_mapping = Z;
@@ -69,6 +74,8 @@ bool TextureMapping::skip()
 	
 	if(x_mapping != X || y_mapping != Y || z_mapping != Z)
 		return false;
+	if(use_minmax)
+		return false;
 	
 	return true;
 }
@@ -85,6 +92,12 @@ void TextureMapping::compile(SVMCompiler& compiler, int offset_in, int offset_ou
 	compiler.add_node(tfm.y);
 	compiler.add_node(tfm.z);
 	compiler.add_node(tfm.w);
+
+	if(use_minmax) {
+		compiler.add_node(NODE_MIN_MAX, offset_out, offset_out);
+		compiler.add_node(float3_to_float4(min));
+		compiler.add_node(float3_to_float4(max));
+	}
 }
 
 /* Image Texture */
@@ -319,7 +332,7 @@ static void sky_texture_precompute(KernelSunSky *ksunsky, float3 dir, float turb
 	float T2 = T * T;
 
 	float chi = (4.0f / 9.0f - T / 120.0f) * (M_PI_F - 2.0f * theta);
-	ksunsky->zenith_Y = (4.0453f * T - 4.9710f) * tan(chi) - 0.2155f * T + 2.4192f;
+	ksunsky->zenith_Y = (4.0453f * T - 4.9710f) * tanf(chi) - 0.2155f * T + 2.4192f;
 	ksunsky->zenith_Y *= 0.06f;
 
 	ksunsky->zenith_x =
@@ -682,7 +695,7 @@ static ShaderEnum wave_type_init()
 ShaderEnum WaveTextureNode::type_enum = wave_type_init();
 
 WaveTextureNode::WaveTextureNode()
-: TextureNode("marble_texture")
+: TextureNode("wave_texture")
 {
 	type = ustring("Bands");
 
@@ -742,7 +755,7 @@ void WaveTextureNode::compile(OSLCompiler& compiler)
 {
 	compiler.parameter("Type", type);
 
-	compiler.add(this, "node_marble_texture");
+	compiler.add(this, "node_wave_texture");
 }
 
 /* Magic Texture */
@@ -1503,6 +1516,7 @@ TextureCoordinateNode::TextureCoordinateNode()
 {
 	add_input("Normal", SHADER_SOCKET_NORMAL, ShaderInput::NORMAL, true);
 	add_output("Generated", SHADER_SOCKET_POINT);
+	add_output("Normal", SHADER_SOCKET_NORMAL);
 	add_output("UV", SHADER_SOCKET_POINT);
 	add_output("Object", SHADER_SOCKET_POINT);
 	add_output("Camera", SHADER_SOCKET_POINT);
@@ -1513,9 +1527,9 @@ TextureCoordinateNode::TextureCoordinateNode()
 void TextureCoordinateNode::attributes(AttributeRequestSet *attributes)
 {
 	if(!output("Generated")->links.empty())
-		attributes->add(Attribute::STD_GENERATED);
+		attributes->add(ATTR_STD_GENERATED);
 	if(!output("UV")->links.empty())
-		attributes->add(Attribute::STD_UV);
+		attributes->add(ATTR_STD_UV);
 
 	ShaderNode::attributes(attributes);
 }
@@ -1545,15 +1559,21 @@ void TextureCoordinateNode::compile(SVMCompiler& compiler)
 			compiler.add_node(geom_node, NODE_GEOM_P, out->stack_offset);
 		}
 		else {
-			int attr = compiler.attribute(Attribute::STD_GENERATED);
+			int attr = compiler.attribute(ATTR_STD_GENERATED);
 			compiler.stack_assign(out);
 			compiler.add_node(attr_node, attr, out->stack_offset, NODE_ATTR_FLOAT3);
 		}
 	}
 
+	out = output("Normal");
+	if(!out->links.empty()) {
+		compiler.stack_assign(out);
+		compiler.add_node(texco_node, NODE_TEXCO_NORMAL, out->stack_offset);
+	}
+
 	out = output("UV");
 	if(!out->links.empty()) {
-		int attr = compiler.attribute(Attribute::STD_UV);
+		int attr = compiler.attribute(ATTR_STD_UV);
 		compiler.stack_assign(out);
 		compiler.add_node(attr_node, attr, out->stack_offset, NODE_ATTR_FLOAT3);
 	}
@@ -1616,6 +1636,7 @@ LightPathNode::LightPathNode()
 	add_output("Is Singular Ray", SHADER_SOCKET_FLOAT);
 	add_output("Is Reflection Ray", SHADER_SOCKET_FLOAT);
 	add_output("Is Transmission Ray", SHADER_SOCKET_FLOAT);
+	add_output("Ray Length", SHADER_SOCKET_FLOAT);
 }
 
 void LightPathNode::compile(SVMCompiler& compiler)
@@ -1664,11 +1685,149 @@ void LightPathNode::compile(SVMCompiler& compiler)
 		compiler.stack_assign(out);
 		compiler.add_node(NODE_LIGHT_PATH, NODE_LP_transmission, out->stack_offset);
 	}
+	
+	out = output("Ray Length");
+	if(!out->links.empty()) {
+		compiler.stack_assign(out);
+		compiler.add_node(NODE_LIGHT_PATH, NODE_LP_ray_length, out->stack_offset);
+	}
+
 }
 
 void LightPathNode::compile(OSLCompiler& compiler)
 {
 	compiler.add(this, "node_light_path");
+}
+
+/* Light Falloff */
+
+LightFalloffNode::LightFalloffNode()
+: ShaderNode("light_path")
+{
+	add_input("Strength", SHADER_SOCKET_FLOAT, 100.0f);
+	add_input("Smooth", SHADER_SOCKET_FLOAT, 0.0f);
+	add_output("Quadratic", SHADER_SOCKET_FLOAT);
+	add_output("Linear", SHADER_SOCKET_FLOAT);
+	add_output("Constant", SHADER_SOCKET_FLOAT);
+}
+
+void LightFalloffNode::compile(SVMCompiler& compiler)
+{
+	ShaderInput *strength_in = input("Strength");
+	ShaderInput *smooth_in = input("Smooth");
+
+	compiler.stack_assign(strength_in);
+	compiler.stack_assign(smooth_in);
+
+	ShaderOutput *out = output("Quadratic");
+	if(!out->links.empty()) {
+		compiler.stack_assign(out);
+		compiler.add_node(NODE_LIGHT_FALLOFF, NODE_LIGHT_FALLOFF_QUADRATIC,
+			compiler.encode_uchar4(strength_in->stack_offset, smooth_in->stack_offset, out->stack_offset));
+	}
+
+	out = output("Linear");
+	if(!out->links.empty()) {
+		compiler.stack_assign(out);
+		compiler.add_node(NODE_LIGHT_FALLOFF, NODE_LIGHT_FALLOFF_LINEAR,
+			compiler.encode_uchar4(strength_in->stack_offset, smooth_in->stack_offset, out->stack_offset));
+	}
+
+	out = output("Constant");
+	if(!out->links.empty()) {
+		compiler.stack_assign(out);
+		compiler.add_node(NODE_LIGHT_FALLOFF, NODE_LIGHT_FALLOFF_CONSTANT,
+			compiler.encode_uchar4(strength_in->stack_offset, smooth_in->stack_offset, out->stack_offset));
+	}
+}
+
+void LightFalloffNode::compile(OSLCompiler& compiler)
+{
+	compiler.add(this, "node_light_falloff");
+}
+
+/* Object Info */
+
+ObjectInfoNode::ObjectInfoNode()
+: ShaderNode("object_info")
+{
+	add_output("Location", SHADER_SOCKET_VECTOR);
+	add_output("Object Index", SHADER_SOCKET_FLOAT);
+	add_output("Material Index", SHADER_SOCKET_FLOAT);
+	add_output("Random", SHADER_SOCKET_FLOAT);
+}
+
+void ObjectInfoNode::compile(SVMCompiler& compiler)
+{
+	ShaderOutput *out = output("Location");
+	if(!out->links.empty()) {
+		compiler.stack_assign(out);
+		compiler.add_node(NODE_OBJECT_INFO, NODE_INFO_OB_LOCATION, out->stack_offset);
+	}
+
+	out = output("Object Index");
+	if(!out->links.empty()) {
+		compiler.stack_assign(out);
+		compiler.add_node(NODE_OBJECT_INFO, NODE_INFO_OB_INDEX, out->stack_offset);
+	}
+
+	out = output("Material Index");
+	if(!out->links.empty()) {
+		compiler.stack_assign(out);
+		compiler.add_node(NODE_OBJECT_INFO, NODE_INFO_MAT_INDEX, out->stack_offset);
+	}
+
+	out = output("Random");
+	if(!out->links.empty()) {
+		compiler.stack_assign(out);
+		compiler.add_node(NODE_OBJECT_INFO, NODE_INFO_OB_RANDOM, out->stack_offset);
+	}
+}
+
+void ObjectInfoNode::compile(OSLCompiler& compiler)
+{
+	compiler.add(this, "node_object_info");
+}
+
+/* Particle Info */
+
+ParticleInfoNode::ParticleInfoNode()
+: ShaderNode("particle_info")
+{
+	add_output("Age", SHADER_SOCKET_FLOAT);
+	add_output("Lifetime", SHADER_SOCKET_FLOAT);
+}
+
+void ParticleInfoNode::attributes(AttributeRequestSet *attributes)
+{
+	if(!output("Age")->links.empty())
+		attributes->add(ATTR_STD_PARTICLE);
+	if(!output("Lifetime")->links.empty())
+		attributes->add(ATTR_STD_PARTICLE);
+
+	ShaderNode::attributes(attributes);
+}
+
+void ParticleInfoNode::compile(SVMCompiler& compiler)
+{
+	ShaderOutput *out;
+	
+	out = output("Age");
+	if(!out->links.empty()) {
+		compiler.stack_assign(out);
+		compiler.add_node(NODE_PARTICLE_INFO, NODE_INFO_PAR_AGE, out->stack_offset);
+	}
+	
+	out = output("Lifetime");
+	if(!out->links.empty()) {
+		compiler.stack_assign(out);
+		compiler.add_node(NODE_PARTICLE_INFO, NODE_INFO_PAR_LIFETIME, out->stack_offset);
+	}
+}
+
+void ParticleInfoNode::compile(OSLCompiler& compiler)
+{
+	compiler.add(this, "node_particle_info");
 }
 
 /* Value */
