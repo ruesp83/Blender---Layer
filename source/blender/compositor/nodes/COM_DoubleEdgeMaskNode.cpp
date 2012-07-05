@@ -25,16 +25,18 @@
 #include "DNA_scene_types.h"
 #include "COM_ExecutionSystem.h"
 
-DoubleEdgeMaskNode::DoubleEdgeMaskNode(bNode *editorNode): Node(editorNode)
+DoubleEdgeMaskNode::DoubleEdgeMaskNode(bNode *editorNode) : Node(editorNode)
 {
+	/* pass */
 }
 
-void DoubleEdgeMaskNode::convertToOperations(ExecutionSystem *system, CompositorContext * context)
+void DoubleEdgeMaskNode::convertToOperations(ExecutionSystem *system, CompositorContext *context)
 {
 	DoubleEdgeMaskOperation *operation;
 	bNode *bnode = this->getbNode();
 	
 	operation = new DoubleEdgeMaskOperation();
+	operation->setbNode(bnode);
 	operation->setAdjecentOnly(bnode->custom1);
 	operation->setKeepInside(bnode->custom2);
 	

@@ -1669,7 +1669,7 @@ static int viewzoom_exec(bContext *C, wmOperator *op)
 			if (rv3d->camzoom > RV3D_CAMZOOM_MAX) rv3d->camzoom = RV3D_CAMZOOM_MAX;
 		}
 		else if (rv3d->dist > 0.001f * v3d->grid) {
-			view_zoom_mouseloc(ar, .83333f, mx, my);
+			view_zoom_mouseloc(ar, 0.83333f, mx, my);
 		}
 	}
 
@@ -1921,7 +1921,7 @@ static int viewdolly_exec(bContext *C, wmOperator *op)
 		view_dolly_mouseloc(ar, rv3d->ofs, mousevec, 1.2f);
 	}
 	else {
-		view_dolly_mouseloc(ar, rv3d->ofs, mousevec, .83333f);
+		view_dolly_mouseloc(ar, rv3d->ofs, mousevec, 0.83333f);
 	}
 
 	if (rv3d->viewlock & RV3D_BOXVIEW)
@@ -2873,7 +2873,7 @@ static int viewnumpad_exec(bContext *C, wmOperator *op)
 			break;
 
 		case RV3D_VIEW_BACK:
-			axis_set_view(C, v3d, ar, 0.0, 0.0, (float)-cos(M_PI / 4.0), (float)-cos(M_PI / 4.0),
+			axis_set_view(C, v3d, ar, 0.0, 0.0, -cosf(M_PI / 4.0), -cosf(M_PI / 4.0),
 			              viewnum, nextperspo, align_active);
 			break;
 
@@ -2888,7 +2888,7 @@ static int viewnumpad_exec(bContext *C, wmOperator *op)
 			break;
 
 		case RV3D_VIEW_FRONT:
-			axis_set_view(C, v3d, ar, (float)cos(M_PI / 4.0), (float)-sin(M_PI / 4.0), 0.0, 0.0,
+			axis_set_view(C, v3d, ar, cosf(M_PI / 4.0), -sinf(M_PI / 4.0), 0.0, 0.0,
 			              viewnum, nextperspo, align_active);
 			break;
 

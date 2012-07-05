@@ -24,7 +24,7 @@ bl_info = {
     'location': 'View3D > Add > Curve',
     'description': 'Adds many different types of Curves',
     'warning': '', # used for warning icon and text in addons panel
-    'wiki_url': 'http://wiki.blender.org/index.php/Extensions:2.5/Py/' \
+    'wiki_url': 'http://wiki.blender.org/index.php/Extensions:2.6/Py/' \
         'Scripts/Curve/Curves_Galore',
     'tracker_url': 'https://projects.blender.org/tracker/index.php?'\
         'func=detail&aid=22404',
@@ -762,11 +762,10 @@ def main(context, self, align_matrix):
     return
 
 class Curveaceous_galore(bpy.types.Operator):
-    ''''''
+    """Add many types of curves"""
     bl_idname = "mesh.curveaceous_galore"
     bl_label = "Curveaceous galore"
     bl_options = {'REGISTER', 'UNDO'}
-    bl_description = "adds many types of curves"
 
     # align_matrix for the invoke
     align_matrix = Matrix()

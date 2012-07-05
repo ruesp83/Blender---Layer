@@ -1125,7 +1125,7 @@ int ED_view3d_lock(RegionView3D *rv3d)
 			break;
 
 		case RV3D_VIEW_BACK:
-			QUATSET(rv3d->viewquat, 0.0, 0.0, (float)-cos(M_PI / 4.0), (float)-cos(M_PI / 4.0));
+			QUATSET(rv3d->viewquat, 0.0, 0.0, -cosf(M_PI / 4.0), -cosf(M_PI / 4.0));
 			break;
 
 		case RV3D_VIEW_LEFT:
@@ -1137,7 +1137,7 @@ int ED_view3d_lock(RegionView3D *rv3d)
 			break;
 
 		case RV3D_VIEW_FRONT:
-			QUATSET(rv3d->viewquat, (float)cos(M_PI / 4.0), (float)-sin(M_PI / 4.0), 0.0, 0.0);
+			QUATSET(rv3d->viewquat, (float)cos(M_PI / 4.0), -sinf(M_PI / 4.0), 0.0, 0.0);
 			break;
 
 		case RV3D_VIEW_RIGHT:
@@ -1564,13 +1564,15 @@ static void endlocalview(Main *bmain, Scene *scene, ScrArea *sa)
 
 static int localview_exec(bContext *C, wmOperator *UNUSED(unused))
 {
+	Main *bmain = CTX_data_main(C);
 	View3D *v3d = CTX_wm_view3d(C);
 	
 	if (v3d->localvd)
 		endlocalview(CTX_data_main(C), CTX_data_scene(C), CTX_wm_area(C));
 	else
 		initlocalview(CTX_data_main(C), CTX_data_scene(C), CTX_wm_area(C));
-	
+
+	DAG_id_type_tag(bmain, ID_OB);
 	ED_area_tag_redraw(CTX_wm_area(C));
 	
 	return OPERATOR_FINISHED;

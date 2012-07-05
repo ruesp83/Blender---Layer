@@ -47,14 +47,15 @@
 #include "COM_ScaleOperation.h"
 #include "COM_SetValueOperation.h"
 
-RenderLayersNode::RenderLayersNode(bNode *editorNode): Node(editorNode)
+RenderLayersNode::RenderLayersNode(bNode *editorNode) : Node(editorNode)
 {
+	/* pass */
 }
 
-void RenderLayersNode::testSocketConnection(ExecutionSystem *system, int outputSocketNumber, RenderLayersBaseProg * operation)
+void RenderLayersNode::testSocketConnection(ExecutionSystem *system, int outputSocketNumber, RenderLayersBaseProg *operation)
 {
 	OutputSocket *outputSocket = this->getOutputSocket(outputSocketNumber);
-	Scene *scene = (Scene*)this->getbNode()->id;
+	Scene *scene = (Scene *)this->getbNode()->id;
 	short layerId = this->getbNode()->custom1;
 
 	if (outputSocket->isConnected()) {
@@ -79,9 +80,9 @@ void RenderLayersNode::testSocketConnection(ExecutionSystem *system, int outputS
 	}
 }
 
-void RenderLayersNode::convertToOperations(ExecutionSystem *graph, CompositorContext * context)
+void RenderLayersNode::convertToOperations(ExecutionSystem *graph, CompositorContext *context)
 {
-	testSocketConnection(graph, 0, new RenderLayersColourProg());
+	testSocketConnection(graph, 0, new RenderLayersColorProg());
 	testSocketConnection(graph, 1, new RenderLayersAlphaProg());
 	testSocketConnection(graph, 2, new RenderLayersDepthProg());
 	testSocketConnection(graph, 3, new RenderLayersNormalOperation());

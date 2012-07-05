@@ -33,18 +33,20 @@
 #include "COM_SetValueOperation.h"
 #include "COM_GammaCorrectOperation.h"
 
-DefocusNode::DefocusNode(bNode *editorNode): Node(editorNode)
+DefocusNode::DefocusNode(bNode *editorNode) : Node(editorNode)
 {
+	/* pass */
 }
 
-void DefocusNode::convertToOperations(ExecutionSystem *graph, CompositorContext * context)
+void DefocusNode::convertToOperations(ExecutionSystem *graph, CompositorContext *context)
 {
 	bNode *node = this->getbNode();
-	Scene *scene = (Scene*)node->id;
-	Object *camob = (scene)? scene->camera: NULL;
-	NodeDefocus *data = (NodeDefocus*)node->storage;
+	Scene *scene = (Scene *)node->id;
+	Object *camob = (scene) ? scene->camera : NULL;
+	NodeDefocus *data = (NodeDefocus *)node->storage;
 
 	NodeOperation *radiusOperation;
+	OutputSocket * depthOperation;
 	if (data->no_zbuf) {
 		MathMultiplyOperation *multiply = new MathMultiplyOperation();
 		SetValueOperation *multiplier = new SetValueOperation();
@@ -62,6 +64,7 @@ void DefocusNode::convertToOperations(ExecutionSystem *graph, CompositorContext 
 		graph->addOperation(maxRadius);
 		graph->addOperation(minimize);
 		radiusOperation = minimize;
+		depthOperation = minimize->getOutputSocket(0);
 	}
 	else {
 		ConvertDepthToRadiusOperation *converter = new ConvertDepthToRadiusOperation();
@@ -71,14 +74,15 @@ void DefocusNode::convertToOperations(ExecutionSystem *graph, CompositorContext 
 		this->getInputSocket(1)->relinkConnections(converter->getInputSocket(0), 1, graph);
 		graph->addOperation(converter);
 		radiusOperation = converter;
+		depthOperation = converter->getInputSocket(0)->getConnection()->getFromSocket();
 	}
 	
 	BokehImageOperation *bokeh = new BokehImageOperation();
-	NodeBokehImage * bokehdata = new NodeBokehImage();
+	NodeBokehImage *bokehdata = new NodeBokehImage();
 	bokehdata->angle = data->rotation;
 	bokehdata->rounding = 0.0f;
 	bokehdata->flaps = data->bktype;
-	if (data->bktype<3) {
+	if (data->bktype < 3) {
 		bokehdata->flaps = 5;
 		bokehdata->rounding = 1.0f;
 	}
@@ -88,16 +92,33 @@ void DefocusNode::convertToOperations(ExecutionSystem *graph, CompositorContext 
 	bokeh->setData(bokehdata);
 	bokeh->deleteDataOnFinish();
 	graph->addOperation(bokeh);
-	
+
+#ifdef COM_DEFOCUS_SEARCH	
+	InverseSearchRadiusOperation *search = new InverseSearchRadiusOperation();
+	addLink(graph, radiusOperation->getOutputSocket(0), search->getInputSocket(0));
+	addLink(graph, depthOperation, search->getInputSocket(1));
+	search->setMaxBlur(data->maxblur);
+	search->setThreshold(data->bthresh);
+	graph->addOperation(search);
+#endif
 	VariableSizeBokehBlurOperation *operation = new VariableSizeBokehBlurOperation();
-	operation->setQuality(context->getQuality());
+	if (data->preview) {
+		operation->setQuality(COM_QUALITY_LOW);
+	} else {
+		operation->setQuality(context->getQuality());
+	}
 	operation->setMaxBlur(data->maxblur);
+	operation->setbNode(node);
 	operation->setThreshold(data->bthresh);
 	addLink(graph, bokeh->getOutputSocket(), operation->getInputSocket(1));
 	addLink(graph, radiusOperation->getOutputSocket(), operation->getInputSocket(2));
+	addLink(graph, depthOperation, operation->getInputSocket(3));
+#ifdef COM_DEFOCUS_SEARCH
+	addLink(graph, search->getOutputSocket(), operation->getInputSocket(4));
+#endif
 	if (data->gamco) {
-		GammaCorrectOperation * correct = new GammaCorrectOperation();
-		GammaUncorrectOperation * inverse = new GammaUncorrectOperation();
+		GammaCorrectOperation *correct = new GammaCorrectOperation();
+		GammaUncorrectOperation *inverse = new GammaUncorrectOperation();
 		this->getInputSocket(0)->relinkConnections(correct->getInputSocket(0), 0, graph);
 		addLink(graph, correct->getOutputSocket(), operation->getInputSocket(0));
 		addLink(graph, operation->getOutputSocket(), inverse->getInputSocket(0));
@@ -109,6 +130,5 @@ void DefocusNode::convertToOperations(ExecutionSystem *graph, CompositorContext 
 		this->getInputSocket(0)->relinkConnections(operation->getInputSocket(0), 0, graph);
 		this->getOutputSocket()->relinkConnections(operation->getOutputSocket());
 	}
-	
 	graph->addOperation(operation);
 }

@@ -636,7 +636,7 @@ static void rna_def_trackingSettings(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 	RNA_def_property_int_sdna(prop, NULL, "default_margin");
 	RNA_def_property_range(prop, 0, 300);
-	RNA_def_property_ui_text(prop, "Margin", "Default distance from image boudary at which marker stops tracking");
+	RNA_def_property_ui_text(prop, "Margin", "Default distance from image boundary at which marker stops tracking");
 
 	/* default_tracking_motion_model */
 	prop = RNA_def_property(srna, "default_motion_model", PROP_ENUM, PROP_NONE);
@@ -780,21 +780,21 @@ static void rna_def_trackingCamera(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "k1", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "k1");
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-	RNA_def_property_ui_range(prop, -10, 10, .1, 3);
+	RNA_def_property_ui_range(prop, -10, 10, 0.1, 3);
 	RNA_def_property_ui_text(prop, "K1", "First coefficient of third order polynomial radial distortion");
 	RNA_def_property_update(prop, NC_MOVIECLIP | NA_EDITED, "rna_tracking_flushUpdate");
 
 	prop = RNA_def_property(srna, "k2", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "k2");
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-	RNA_def_property_ui_range(prop, -10, 10, .1, 3);
+	RNA_def_property_ui_range(prop, -10, 10, 0.1, 3);
 	RNA_def_property_ui_text(prop, "K2", "Second coefficient of third order polynomial radial distortion");
 	RNA_def_property_update(prop, NC_MOVIECLIP | NA_EDITED, "rna_tracking_flushUpdate");
 
 	prop = RNA_def_property(srna, "k3", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "k3");
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-	RNA_def_property_ui_range(prop, -10, 10, .1, 3);
+	RNA_def_property_ui_range(prop, -10, 10, 0.1, 3);
 	RNA_def_property_ui_text(prop, "K3", "Third coefficient of third order polynomial radial distortion");
 	RNA_def_property_update(prop, NC_MOVIECLIP | NA_EDITED, "rna_tracking_flushUpdate");
 
@@ -952,7 +952,7 @@ static void rna_def_trackingTrack(BlenderRNA *brna)
 	RNA_def_property_int_sdna(prop, NULL, "margin");
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 	RNA_def_property_range(prop, 0, 300);
-	RNA_def_property_ui_text(prop, "Margin", "Distance from image boudary at which marker stops tracking");
+	RNA_def_property_ui_text(prop, "Margin", "Distance from image boundary at which marker stops tracking");
 
 	/* tracking motion model */
 	prop = RNA_def_property(srna, "motion_model", PROP_ENUM, PROP_NONE);
@@ -1170,7 +1170,7 @@ static void rna_def_trackingStabilization(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", TRACKING_AUTOSCALE);
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 	RNA_def_property_ui_text(prop, "Autoscale",
-	                         "Automatically scale footage to cover unfilled areas when stabilizating");
+	                         "Automatically scale footage to cover unfilled areas when stabilizing");
 	RNA_def_property_update(prop, NC_MOVIECLIP | ND_DISPLAY, "rna_tracking_flushUpdate");
 
 	/* max scale */
@@ -1242,7 +1242,7 @@ static void rna_def_reconstructedCamera(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "average_error", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "error");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-	RNA_def_property_ui_text(prop, "Average Error", "Average error of resonctruction");
+	RNA_def_property_ui_text(prop, "Average Error", "Average error of reconstruction");
 }
 
 static void rna_def_trackingReconstruction(BlenderRNA *brna)
@@ -1266,7 +1266,7 @@ static void rna_def_trackingReconstruction(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "average_error", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "error");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-	RNA_def_property_ui_text(prop, "Average Error", "Average error of resonctruction");
+	RNA_def_property_ui_text(prop, "Average Error", "Average error of reconstruction");
 
 	/* cameras */
 	prop = RNA_def_property(srna, "cameras", PROP_COLLECTION, PROP_NONE);

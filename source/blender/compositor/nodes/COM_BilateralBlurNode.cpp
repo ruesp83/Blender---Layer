@@ -28,12 +28,14 @@
 
 BilateralBlurNode::BilateralBlurNode(bNode *editorNode) : Node(editorNode)
 {
+	/* pass */
 }
 
 void BilateralBlurNode::convertToOperations(ExecutionSystem *graph, CompositorContext *context)
 {
 	NodeBilateralBlurData *data = (NodeBilateralBlurData *)this->getbNode()->storage;
 	BilateralBlurOperation *operation = new BilateralBlurOperation();
+	operation->setbNode(this->getbNode());
 	operation->setQuality(context->getQuality());
 	operation->setData(data);
 	this->getInputSocket(0)->relinkConnections(operation->getInputSocket(0), 0, graph);

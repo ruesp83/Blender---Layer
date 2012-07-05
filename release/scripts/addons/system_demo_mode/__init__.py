@@ -25,7 +25,7 @@ bl_info = {
     "location": "Demo Menu",
     "description": "Demo mode lets you select multiple blend files and loop over them.",
     "warning": "",
-    "wiki_url": "http://wiki.blender.org/index.php/Extensions:2.5/Py/"
+    "wiki_url": "http://wiki.blender.org/index.php/Extensions:2.6/Py/"
                 "Scripts/System/Demo_Mode#Running_Demo_Mode",
     "tracker_url": "",
     "support": 'OFFICIAL',
@@ -47,7 +47,7 @@ from bpy.props import (StringProperty,
 
 
 class DemoModeSetup(bpy.types.Operator):
-    '''Create a demo script and optionally execute it'''
+    """Create a demo script and optionally execute it"""
     bl_idname = "wm.demo_mode_setup"
     bl_label = "Demo Mode (Setup)"
     bl_options = {'PRESET'}

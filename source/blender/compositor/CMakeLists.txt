@@ -46,6 +46,10 @@ set(INC
 	../../../intern/guardedalloc
 )
 
+set(INC_SYS
+
+)
+
 set(SRC
 	COM_compositor.h
 	COM_defines.h
@@ -288,6 +292,10 @@ set(SRC
 	nodes/COM_BokehBlurNode.h
 	nodes/COM_DirectionalBlurNode.cpp
 	nodes/COM_DirectionalBlurNode.h
+	operations/COM_GaussianAlphaXBlurOperation.cpp
+	operations/COM_GaussianAlphaXBlurOperation.h
+	operations/COM_GaussianAlphaYBlurOperation.cpp
+	operations/COM_GaussianAlphaYBlurOperation.h
 	operations/COM_GaussianXBlurOperation.cpp
 	operations/COM_GaussianXBlurOperation.h
 	operations/COM_GaussianYBlurOperation.cpp
@@ -411,10 +419,10 @@ set(SRC
 	operations/COM_PreviewOperation.cpp
 	operations/COM_SplitViewerOperation.h
 	operations/COM_SplitViewerOperation.cpp
-	operations/COM_ConvertValueToColourProg.h
-	operations/COM_ConvertValueToColourProg.cpp
-	operations/COM_ConvertColourToValueProg.h
-	operations/COM_ConvertColourToValueProg.cpp
+	operations/COM_ConvertValueToColorProg.h
+	operations/COM_ConvertValueToColorProg.cpp
+	operations/COM_ConvertColorToValueProg.h
+	operations/COM_ConvertColorToValueProg.cpp
 	operations/COM_ConvertColorToBWOperation.h
 	operations/COM_ConvertColorToBWOperation.cpp
 	operations/COM_ConvertColorToVectorOperation.h

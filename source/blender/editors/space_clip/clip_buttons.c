@@ -118,13 +118,13 @@ void uiTemplateMovieClip(uiLayout *layout, bContext *C, PointerRNA *ptr, const c
 		uiTemplateID(layout, C, ptr, propname, NULL, "CLIP_OT_open", NULL);
 
 	if (clip) {
-		row = uiLayoutRow(layout, 0);
+		row = uiLayoutRow(layout, FALSE);
 		block = uiLayoutGetBlock(row);
 		uiDefBut(block, LABEL, 0, "File Path:", 0, 19, 145, 19, NULL, 0, 0, 0, 0, "");
 
-		row = uiLayoutRow(layout, 0);
-		split = uiLayoutSplit(row, 0.0, 0);
-		row = uiLayoutRow(split, 1);
+		row = uiLayoutRow(layout, FALSE);
+		split = uiLayoutSplit(row, 0.0f, FALSE);
+		row = uiLayoutRow(split, TRUE);
 
 		uiItemR(row, &clipptr, "filepath", 0, "", ICON_NONE);
 		uiItemO(row, "", ICON_FILE_REFRESH, "clip.reload");
@@ -165,7 +165,8 @@ void uiTemplateTrack(uiLayout *layout, PointerRNA *ptr, const char *propname)
 
 	block = uiLayoutAbsoluteBlock(layout);
 
-	scopes->track_preview_height = (scopes->track_preview_height <= UI_UNIT_Y) ? UI_UNIT_Y : scopes->track_preview_height;
+	scopes->track_preview_height =
+		(scopes->track_preview_height <= UI_UNIT_Y) ? UI_UNIT_Y : scopes->track_preview_height;
 
 	uiDefBut(block, TRACKPREVIEW, 0, "", rect.xmin, rect.ymin, rect.xmax - rect.xmin,
 	         scopes->track_preview_height, scopes, 0, 0, 0, 0, "");
@@ -395,7 +396,7 @@ void uiTemplateMarker(uiLayout *layout, PointerRNA *ptr, const char *propname, P
 		BKE_movieclip_get_size(clip, user, &width, &height);
 
 		if (track->flag & TRACK_LOCKED) {
-			uiLayoutSetActive(layout, 0);
+			uiLayoutSetActive(layout, FALSE);
 			block = uiLayoutAbsoluteBlock(layout);
 			uiDefBut(block, LABEL, 0, "Track is locked", 0, 0, 300, 19, NULL, 0, 0, 0, 0, "");
 
@@ -433,7 +434,7 @@ void uiTemplateMarker(uiLayout *layout, PointerRNA *ptr, const char *propname, P
 		uiDefButBitI(block, OPTIONN, MARKER_DISABLED, B_MARKER_FLAG,  "Enabled", 10, 190, 145, 19, &cb->marker_flag,
 		             0, 0, 0, 0, tip);
 
-		col = uiLayoutColumn(layout, 1);
+		col = uiLayoutColumn(layout, TRUE);
 		uiLayoutSetActive(col, (cb->marker_flag & MARKER_DISABLED) == 0);
 
 		block = uiLayoutAbsoluteBlock(col);

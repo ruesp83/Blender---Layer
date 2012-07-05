@@ -979,7 +979,9 @@ class VIEW3D_MT_object_group(Menu):
         layout = self.layout
 
         layout.operator("group.create")
+        # layout.operator_menu_enum("group.objects_remove", "group")  # BUGGY
         layout.operator("group.objects_remove")
+        layout.operator("group.objects_remove_all")
 
         layout.separator()
 
@@ -1119,7 +1121,7 @@ class VIEW3D_MT_brush(Menu):
             sculpt_tool = brush.sculpt_tool
 
             layout.separator()
-            layout.operator_menu_enum("brush.curve_preset", "shape", text='Curve Preset')
+            layout.operator_menu_enum("brush.curve_preset", "shape", text="Curve Preset")
             layout.separator()
 
             if sculpt_tool != 'GRAB':
@@ -1770,7 +1772,7 @@ class VIEW3D_MT_edit_mesh_vertices(Menu):
 
         layout.operator("mesh.vertices_smooth")
         layout.operator("mesh.remove_doubles")
-        layout.operator("mesh.sort_elements", text="Sort Vertices").elements = {"VERT"}
+        layout.operator("mesh.sort_elements", text="Sort Vertices").elements = {'VERT'}
 
         layout.operator("mesh.select_vertex_path")
 
@@ -1820,7 +1822,7 @@ class VIEW3D_MT_edit_mesh_edges(Menu):
         layout.operator("mesh.bevel")
         layout.operator("mesh.edge_split")
         layout.operator("mesh.bridge_edge_loops")
-        layout.operator("mesh.sort_elements", text="Sort Edges").elements = {"EDGE"}
+        layout.operator("mesh.sort_elements", text="Sort Edges").elements = {'EDGE'}
 
         layout.separator()
 
@@ -1853,7 +1855,7 @@ class VIEW3D_MT_edit_mesh_faces(Menu):
         layout.operator("mesh.bevel")
         layout.operator("mesh.solidify")
         layout.operator("mesh.wireframe")
-        layout.operator("mesh.sort_elements", text="Sort Faces").elements = {"FACE"}
+        layout.operator("mesh.sort_elements", text="Sort Faces").elements = {'FACE'}
 
         layout.separator()
 
@@ -2391,7 +2393,7 @@ class VIEW3D_PT_view3d_display(Panel):
             col.prop(gs, "material_mode", text="")
             col.prop(view, "show_textured_solid")
 
-        col.prop(view, "show_backface_culling")            
+        col.prop(view, "show_backface_culling")
 
         layout.separator()
 
@@ -2556,7 +2558,7 @@ class VIEW3D_PT_background_image(Panel):
                         has_bg = True
 
                 elif bg.source == 'MOVIE_CLIP':
-                    box.prop(bg, 'use_camera_clip')
+                    box.prop(bg, "use_camera_clip")
 
                     column = box.column()
                     column.active = not bg.use_camera_clip

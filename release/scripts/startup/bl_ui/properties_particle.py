@@ -86,7 +86,7 @@ class PARTICLE_PT_context_particles(ParticleButtonsPanel, Panel):
     def draw(self, context):
         layout = self.layout
 
-        if context.scene.render.engine == "BLENDER_GAME":
+        if context.scene.render.engine == 'BLENDER_GAME':
             layout.label("Not available in the Game Engine")
             return
 
@@ -841,7 +841,7 @@ class PARTICLE_PT_render(ParticleButtonsPanel, Panel):
                     row = layout.row()
                     row.prop(part, "use_simplify_viewport")
                     sub = row.row()
-                    sub.active = part.viewport == True
+                    sub.active = part.use_simplify_viewport == True
                     sub.prop(part, "simplify_viewport")
 
         elif part.render_type == 'OBJECT':

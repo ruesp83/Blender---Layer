@@ -1570,16 +1570,6 @@ static int sequencer_add_duplicate_exec(bContext *C, wmOperator *UNUSED(op))
 	return OPERATOR_CANCELLED;
 }
 
-static int sequencer_add_duplicate_invoke(bContext *C, wmOperator *op, wmEvent *UNUSED(event))
-{
-	sequencer_add_duplicate_exec(C, op);
-
-	RNA_enum_set(op->ptr, "mode", TFM_TRANSLATION);
-	WM_operator_name_call(C, "TRANSFORM_OT_transform", WM_OP_INVOKE_REGION_WIN, op->ptr);
-
-	return OPERATOR_FINISHED;
-}
-
 void SEQUENCER_OT_duplicate(wmOperatorType *ot)
 {
 	/* identifiers */
@@ -1588,7 +1578,6 @@ void SEQUENCER_OT_duplicate(wmOperatorType *ot)
 	ot->description = "Duplicate the selected strips";
 	
 	/* api callbacks */
-	ot->invoke = sequencer_add_duplicate_invoke;
 	ot->exec = sequencer_add_duplicate_exec;
 	ot->poll = ED_operator_sequencer_active;
 	
@@ -2705,8 +2694,11 @@ static int sequencer_swap_data_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	sound_remove_scene_sound(scene, seq_act->scene_sound);
-	sound_remove_scene_sound(scene, seq_other->scene_sound);
+	if (seq_act->scene_sound)
+		sound_remove_scene_sound(scene, seq_act->scene_sound);
+
+	if (seq_other->scene_sound)
+		sound_remove_scene_sound(scene, seq_other->scene_sound);
 
 	seq_act->scene_sound = NULL;
 	seq_other->scene_sound = NULL;
@@ -2813,7 +2805,7 @@ void SEQUENCER_OT_rebuild_proxy(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Rebuild Proxy and Timecode Indices";
 	ot->idname = "SEQUENCER_OT_rebuild_proxy";
-	ot->description = "Rebuild all selected proxies and timecode indeces using the job system";
+	ot->description = "Rebuild all selected proxies and timecode indices using the job system";
 	
 	/* api callbacks */
 	ot->exec = sequencer_rebuild_proxy_exec;

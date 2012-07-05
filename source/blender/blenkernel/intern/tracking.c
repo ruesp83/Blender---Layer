@@ -216,7 +216,7 @@ void BKE_tracking_get_camera_object_matrix(Scene *scene, Object *ob, float mat[4
 }
 
 void BKE_tracking_get_projection_matrix(MovieTracking *tracking, MovieTrackingObject *object,
-                                    int framenr, int winx, int winy, float mat[4][4])
+                                        int framenr, int winx, int winy, float mat[4][4])
 {
 	MovieReconstructedCamera *camera;
 	float lens = tracking->camera.focal * tracking->camera.sensor_width / (float)winx;
@@ -831,7 +831,7 @@ static bGPDlayer *track_mask_gpencil_layer_get(MovieTrackingTrack *track)
 }
 
 static void track_mask_gpencil_layer_rasterize(int frame_width, int frame_height,
-											   MovieTrackingMarker *marker, bGPDlayer *layer,
+                                               MovieTrackingMarker *marker, bGPDlayer *layer,
                                                float *mask, int mask_width, int mask_height)
 {
 	bGPDframe *frame = layer->frames.first;
@@ -853,7 +853,8 @@ static void track_mask_gpencil_layer_rasterize(int frame_width, int frame_height
 					fp[1] = (stroke_points[i].y - marker->search_min[1]) * frame_height / mask_height;
 				}
 
-				PLX_raskterize((float (*)[2])mask_points, stroke->totpoints, mask, mask_width, mask_height, FALSE /* XXX- TODO: make on/off for AA*/);
+				/* TODO: add an option to control wether AA is enabled or not */
+				PLX_raskterize((float (*)[2])mask_points, stroke->totpoints, mask, mask_width, mask_height, FALSE);
 
 				MEM_freeN(mask_points);
 			}
@@ -1415,18 +1416,18 @@ void BKE_tracking_distortion_update(MovieDistortion *distortion, MovieTracking *
 		distortion->intrinsics = libmv_CameraIntrinsicsNew(camera->focal,
 		                                                   camera->principal[0], camera->principal[1] * aspy,
 		                                                   camera->k1, camera->k2, camera->k3,
-                                                           calibration_width, calibration_height * aspy);
+		                                                   calibration_width, calibration_height * aspy);
 	}
 	else {
 		libmv_CameraIntrinsicsUpdate(distortion->intrinsics, camera->focal,
 		                             camera->principal[0], camera->principal[1] * aspy,
 		                             camera->k1, camera->k2, camera->k3,
-                                     calibration_width, calibration_height * aspy);
+		                             calibration_width, calibration_height * aspy);
 	}
 #else
 	(void) distortion;
-	(void) width;
-	(void) height;
+	(void) calibration_width;
+	(void) calibration_height;
 	(void) camera;
 	(void) aspy;
 #endif
@@ -1558,7 +1559,7 @@ ImBuf *BKE_tracking_undistort_frame(MovieTracking *tracking, ImBuf *ibuf, int ca
 		camera->intrinsics = BKE_tracking_distortion_new();
 
 	return BKE_tracking_distortion_exec(camera->intrinsics, tracking, ibuf, calibration_width,
-                                        calibration_height, overscan, TRUE);
+	                                    calibration_height, overscan, TRUE);
 }
 
 ImBuf *BKE_tracking_distort_frame(MovieTracking *tracking, ImBuf *ibuf, int calibration_width,
@@ -1570,7 +1571,7 @@ ImBuf *BKE_tracking_distort_frame(MovieTracking *tracking, ImBuf *ibuf, int cali
 		camera->intrinsics = BKE_tracking_distortion_new();
 
 	return BKE_tracking_distortion_exec(camera->intrinsics, tracking, ibuf, calibration_width,
-                                        calibration_height, overscan, FALSE);
+	                                    calibration_height, overscan, FALSE);
 }
 
 /*********************** Image sampling *************************/
@@ -1578,14 +1579,14 @@ ImBuf *BKE_tracking_distort_frame(MovieTracking *tracking, ImBuf *ibuf, int cali
 static void disable_imbuf_channels(ImBuf *ibuf, MovieTrackingTrack *track, int grayscale)
 {
 	BKE_tracking_disable_channels(ibuf, track->flag & TRACK_DISABLE_RED,
-	                                    track->flag & TRACK_DISABLE_GREEN,
-                                        track->flag & TRACK_DISABLE_BLUE, grayscale);
+	                              track->flag & TRACK_DISABLE_GREEN,
+	                              track->flag & TRACK_DISABLE_BLUE, grayscale);
 }
 
 ImBuf *BKE_tracking_sample_pattern(int frame_width, int frame_height, ImBuf *search_ibuf,
-                                         MovieTrackingTrack *track, MovieTrackingMarker *marker,
-                                         int use_mask, int num_samples_x, int num_samples_y,
-                                         float pos[2])
+                                   MovieTrackingTrack *track, MovieTrackingMarker *marker,
+                                   int use_mask, int num_samples_x, int num_samples_y,
+                                   float pos[2])
 {
 #ifdef WITH_LIBMV
 	ImBuf *pattern_ibuf;
@@ -1661,7 +1662,7 @@ ImBuf *BKE_tracking_get_pattern_imbuf(ImBuf *ibuf, MovieTrackingTrack *track, Mo
 	search_ibuf = BKE_tracking_get_search_imbuf(ibuf, track, marker, anchored, disable_channels);
 
 	pattern_ibuf = BKE_tracking_sample_pattern(ibuf->x, ibuf->y, search_ibuf, track, marker,
-	                                                 FALSE, num_samples_x, num_samples_y, NULL);
+	                                           FALSE, num_samples_x, num_samples_y, NULL);
 
 	IMB_freeImBuf(search_ibuf);
 
@@ -1711,7 +1712,7 @@ ImBuf *BKE_tracking_get_search_imbuf(ImBuf *ibuf, MovieTrackingTrack *track, Mov
  * out, do a partial grayscale conversion so the display is better.
  */
 void BKE_tracking_disable_channels(ImBuf *ibuf, int disable_red, int disable_green, int disable_blue,
-                                         int grayscale)
+                                   int grayscale)
 {
 	int x, y;
 	float scale;
@@ -2395,7 +2396,7 @@ int BKE_tracking_context_step(MovieTrackingContext *context)
 	ImBuf *destination_ibuf;
 	int frame_delta = context->backwards ? -1 : 1;
 	int curfra =  BKE_movieclip_remap_scene_to_clip_frame(context->clip, context->user.framenr);
-	int nextfra;
+	/* int nextfra; */ /* UNUSED */
 	int a, ok = FALSE, map_size;
 
 	int frame_width, frame_height;
@@ -2413,7 +2414,7 @@ int BKE_tracking_context_step(MovieTrackingContext *context)
 	if (!destination_ibuf)
 		return FALSE;
 
-	nextfra = curfra + frame_delta;
+	/* nextfra = curfra + frame_delta; */ /* UNUSED */
 
 	frame_width = destination_ibuf->x;
 	frame_height = destination_ibuf->y;
@@ -2470,9 +2471,9 @@ int BKE_tracking_context_step(MovieTrackingContext *context)
 				/* run the tracker! */
 				tracked = libmv_trackRegion(&options,
 				                            track_context->search_area,
-											track_context->search_area_width,
-											track_context->search_area_height,
-											patch_new, width, height,
+				                            track_context->search_area_width,
+				                            track_context->search_area_height,
+				                            patch_new, width, height,
 				                            src_pixel_x, src_pixel_y,
 				                            &result,
 				                            dst_pixel_x, dst_pixel_y);
@@ -2482,7 +2483,7 @@ int BKE_tracking_context_step(MovieTrackingContext *context)
 			#pragma omp critical
 			{
 				tracking_insert_new_marker(context, track, marker, curfra, tracked,
-				                                 frame_width, frame_height, dst_pixel_x, dst_pixel_y);
+				                           frame_width, frame_height, dst_pixel_x, dst_pixel_y);
 			}
 
 			ok = TRUE;
@@ -2550,7 +2551,8 @@ static struct libmv_Tracks *libmv_tracks_new(ListBase *tracksbase, int width, in
 
 			if ((marker->flag & MARKER_DISABLED) == 0) {
 				libmv_tracksInsert(tracks, marker->framenr, tracknr,
-				                   marker->pos[0] * width, marker->pos[1] * height);
+				                   (marker->pos[0] + track->offset[0]) * width,
+				                   (marker->pos[1] + track->offset[1]) * height);
 			}
 		}
 
@@ -2869,18 +2871,6 @@ static void reconstruct_update_solve_cb(void *customdata, double progress, const
 }
 #endif
 
-#if 0
-static int solve_reconstruction_testbreak_cb(void *customdata)
-{
-	ReconstructProgressData *progressdata = customdata;
-
-	if (progressdata->stop && *progressdata->stop)
-		return TRUE;
-
-	return G.afbreek;
-}
-#endif
-
 void BKE_tracking_reconstruction_solve(MovieReconstructContext *context, short *stop, short *do_update,
                                        float *progress, char *stats_message, int message_size)
 {
@@ -3038,9 +3028,9 @@ static unsigned char *detect_get_frame_ucharbuf(ImBuf *ibuf)
 
 			if (ibuf->rect_float) {
 				const float *rrgbf = ibuf->rect_float + pixel * 4;
-				const float grey_f = 0.2126f * rrgbf[0] + 0.7152f * rrgbf[1] + 0.0722f * rrgbf[2];
+				const float gray_f = 0.2126f * rrgbf[0] + 0.7152f * rrgbf[1] + 0.0722f * rrgbf[2];
 
-				*cp = FTOCHAR(grey_f);
+				*cp = FTOCHAR(gray_f);
 			}
 			else {
 				const unsigned char *rrgb = (unsigned char *)ibuf->rect + pixel * 4;
@@ -3070,7 +3060,7 @@ void BKE_tracking_detect_fast(MovieTracking *tracking, ListBase *tracksbase, ImB
 	MEM_freeN(pixels);
 
 	detect_retrieve_libmv_features(tracking, tracksbase, features, framenr,
-	                        ibuf->x, ibuf->y, layer, place_outside_layer);
+	                               ibuf->x, ibuf->y, layer, place_outside_layer);
 
 	libmv_destroyFeatures(features);
 #else

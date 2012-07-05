@@ -27,7 +27,7 @@ bl_info = {
     "location": "File > Import-Export > Raw Faces (.raw) ",
     "description": "Import-Export Raw Faces",
     "warning": "",
-    "wiki_url": "http://wiki.blender.org/index.php/Extensions:2.5/Py/"
+    "wiki_url": "http://wiki.blender.org/index.php/Extensions:2.6/Py/"
                 "Scripts/Import-Export/Raw_Mesh_IO",
     "tracker_url": "https://projects.blender.org/tracker/index.php?"
                    "func=detail&aid=25692",
@@ -47,7 +47,7 @@ from bpy_extras.io_utils import ExportHelper
 
 
 class RawImporter(bpy.types.Operator):
-    '''Load Raw triangle mesh data'''
+    """Load Raw triangle mesh data"""
     bl_idname = "import_mesh.raw"
     bl_label = "Import RAW"
     bl_options = {'UNDO'}
@@ -69,7 +69,7 @@ class RawImporter(bpy.types.Operator):
 
 
 class RawExporter(bpy.types.Operator, ExportHelper):
-    '''Save Raw triangle mesh data'''
+    """Save Raw triangle mesh data"""
     bl_idname = "export_mesh.raw"
     bl_label = "Export RAW"
 

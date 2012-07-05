@@ -20,13 +20,15 @@
  *		Monique Dewanchand
  */
 
+#include <limits.h>
+
 #include "COM_FastGaussianBlurOperation.h"
 #include "MEM_guardedalloc.h"
 #include "BLI_utildefines.h"
 
-FastGaussianBlurOperation::FastGaussianBlurOperation() : BlurBaseOperation()
+FastGaussianBlurOperation::FastGaussianBlurOperation() : BlurBaseOperation(COM_DT_COLOR)
 {
-	this->iirgaus = NULL;
+	this->m_iirgaus = NULL;
 }
 
 void FastGaussianBlurOperation::executePixel(float *color, int x, int y, MemoryBuffer *inputBuffers[], void *data)
@@ -49,7 +51,7 @@ bool FastGaussianBlurOperation::determineDependingAreaOfInterest(rcti *input, Re
 		return true;
 	}
 	else {
-		if (this->iirgaus) {
+		if (this->m_iirgaus) {
 			return false;
 		}
 		else {
@@ -70,50 +72,53 @@ void FastGaussianBlurOperation::initExecution()
 
 void FastGaussianBlurOperation::deinitExecution() 
 {
-	if (this->iirgaus) {
-		delete this->iirgaus;
-		this->iirgaus = NULL;
+	if (this->m_iirgaus) {
+		delete this->m_iirgaus;
+		this->m_iirgaus = NULL;
 	}
-	BlurBaseOperation::deinitMutex();	
+	BlurBaseOperation::deinitMutex();
 }
 
 void *FastGaussianBlurOperation::initializeTileData(rcti *rect, MemoryBuffer **memoryBuffers)
 {
 	lockMutex();
-	if (!iirgaus) {
-		MemoryBuffer *newBuf = (MemoryBuffer *)this->inputProgram->initializeTileData(rect, memoryBuffers);
+	if (!this->m_iirgaus) {
+		MemoryBuffer *newBuf = (MemoryBuffer *)this->m_inputProgram->initializeTileData(rect, memoryBuffers);
 		MemoryBuffer *copy = newBuf->duplicate();
 		updateSize(memoryBuffers);
-		
+
 		int c;
-		sx = data->sizex * this->size / 2.0f;
-		sy = data->sizey * this->size / 2.0f;
+		this->m_sx = this->m_data->sizex * this->m_size / 2.0f;
+		this->m_sy = this->m_data->sizey * this->m_size / 2.0f;
 		
-		if ((sx == sy) && (sx > 0.f)) {
+		if ((this->m_sx == this->m_sy) && (this->m_sx > 0.f)) {
 			for (c = 0; c < COM_NUMBER_OF_CHANNELS; ++c)
-				IIR_gauss(copy, sx, c, 3);
+				IIR_gauss(copy, this->m_sx, c, 3);
 		}
 		else {
-			if (sx > 0.f) {
+			if (this->m_sx > 0.0f) {
 				for (c = 0; c < COM_NUMBER_OF_CHANNELS; ++c)
-					IIR_gauss(copy, sx, c, 1);
+					IIR_gauss(copy, this->m_sx, c, 1);
 			}
-			if (sy > 0.f) {
+			if (this->m_sy > 0.0f) {
 				for (c = 0; c < COM_NUMBER_OF_CHANNELS; ++c)
-					IIR_gauss(copy, sy, c, 2);
+					IIR_gauss(copy, this->m_sy, c, 2);
 			}
 		}
-		this->iirgaus = copy;
+		this->m_iirgaus = copy;
 	}
 	unlockMutex();
-	return iirgaus;
+	return this->m_iirgaus;
 }
 
-void FastGaussianBlurOperation::IIR_gauss(MemoryBuffer *src, float sigma, int chan, int xy)
+void FastGaussianBlurOperation::IIR_gauss(MemoryBuffer *src, float sigma, unsigned int chan, unsigned int xy)
 {
 	double q, q2, sc, cf[4], tsM[9], tsu[3], tsv[3];
 	double *X, *Y, *W;
-	int i, x, y, sz;
+	const unsigned int src_width = src->getWidth();
+	const unsigned int src_height = src->getHeight();
+	unsigned int x, y, sz;
+	unsigned int i;
 	float *buffer = src->getBuffer();
 	
 	// <0.5 not valid, though can have a possibly useful sort of sharpening effect
@@ -123,8 +128,8 @@ void FastGaussianBlurOperation::IIR_gauss(MemoryBuffer *src, float sigma, int ch
 	
 	// XXX The YVV macro defined below explicitly expects sources of at least 3x3 pixels,
 	//     so just skiping blur along faulty direction if src's def is below that limit!
-	if (src->getWidth() < 3) xy &= ~(int) 1;
-	if (src->getHeight() < 3) xy &= ~(int) 2;
+	if (src_width < 3) xy &= ~(int) 1;
+	if (src_height < 3) xy &= ~(int) 2;
 	if (xy < 1) return;
 	
 	// see "Recursive Gabor Filtering" by Young/VanVliet
@@ -178,33 +183,34 @@ void FastGaussianBlurOperation::IIR_gauss(MemoryBuffer *src, float sigma, int ch
 	Y[L - 1] = cf[0] * W[L - 1] + cf[1] * tsv[0] + cf[2] * tsv[1] + cf[3] * tsv[2];     \
 	Y[L - 2] = cf[0] * W[L - 2] + cf[1] * Y[L - 1] + cf[2] * tsv[0] + cf[3] * tsv[1];   \
 	Y[L - 3] = cf[0] * W[L - 3] + cf[1] * Y[L - 2] + cf[2] * Y[L - 1] + cf[3] * tsv[0]; \
-	for (i = L - 4; i >= 0; i--) {                                                      \
+	/* 'i != UINT_MAX' is really 'i >= 0', but necessary for unsigned int wrapping */   \
+	for (i = L - 4; i != UINT_MAX; i--) {                                               \
 		Y[i] = cf[0] * W[i] + cf[1] * Y[i + 1] + cf[2] * Y[i + 2] + cf[3] * Y[i + 3];   \
 	}                                                                                   \
 } (void)0
 	
 	// intermediate buffers
-	sz = MAX2(src->getWidth(), src->getHeight());
+	sz = MAX2(src_width, src_height);
 	X = (double *)MEM_callocN(sz * sizeof(double), "IIR_gauss X buf");
 	Y = (double *)MEM_callocN(sz * sizeof(double), "IIR_gauss Y buf");
 	W = (double *)MEM_callocN(sz * sizeof(double), "IIR_gauss W buf");
 	if (xy & 1) {   // H
-		for (y = 0; y < src->getHeight(); ++y) {
-			const int yx = y * src->getWidth();
-			for (x = 0; x < src->getWidth(); ++x)
+		for (y = 0; y < src_height; ++y) {
+			const int yx = y * src_width;
+			for (x = 0; x < src_width; ++x)
 				X[x] = buffer[(x + yx) * COM_NUMBER_OF_CHANNELS + chan];
-			YVV(src->getWidth());
-			for (x = 0; x < src->getWidth(); ++x)
+			YVV(src_width);
+			for (x = 0; x < src_width; ++x)
 				buffer[(x + yx) * COM_NUMBER_OF_CHANNELS + chan] = Y[x];
 		}
 	}
 	if (xy & 2) {   // V
-		for (x = 0; x < src->getWidth(); ++x) {
-			for (y = 0; y < src->getHeight(); ++y)
-				X[y] = buffer[(x + y * src->getWidth()) * COM_NUMBER_OF_CHANNELS + chan];
-			YVV(src->getHeight());
-			for (y = 0; y < src->getHeight(); ++y)
-				buffer[(x + y * src->getWidth()) * COM_NUMBER_OF_CHANNELS + chan] = Y[y];
+		for (x = 0; x < src_width; ++x) {
+			for (y = 0; y < src_height; ++y)
+				X[y] = buffer[(x + y * src_width) * COM_NUMBER_OF_CHANNELS + chan];
+			YVV(src_height);
+			for (y = 0; y < src_height; ++y)
+				buffer[(x + y * src_width) * COM_NUMBER_OF_CHANNELS + chan] = Y[y];
 		}
 	}
 	

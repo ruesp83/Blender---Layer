@@ -29,11 +29,12 @@ extern "C" {
 	#include "DNA_movieclip_types.h"
 }
 
-KeyingScreenNode::KeyingScreenNode(bNode *editorNode): Node(editorNode)
+KeyingScreenNode::KeyingScreenNode(bNode *editorNode) : Node(editorNode)
 {
+	/* pass */
 }
 
-void KeyingScreenNode::convertToOperations(ExecutionSystem *graph, CompositorContext * context)
+void KeyingScreenNode::convertToOperations(ExecutionSystem *graph, CompositorContext *context)
 {
 	OutputSocket *outputScreen = this->getOutputSocket(0);
 
@@ -44,6 +45,7 @@ void KeyingScreenNode::convertToOperations(ExecutionSystem *graph, CompositorCon
 
 	// always connect the output image
 	KeyingScreenOperation *operation = new KeyingScreenOperation();
+	operation->setbNode(editorNode);
 
 	if (outputScreen->isConnected()) {
 		outputScreen->relinkConnections(operation->getOutputSocket());

@@ -373,7 +373,7 @@ void draw_volume(ARegion *ar, GPUTexture *tex, float min[3], float max[3], int r
 
 	/* d0 = (viewnormal[0]*cv[i][0] + viewnormal[1]*cv[i][1] + viewnormal[2]*cv[i][2]); */ /* UNUSED */
 	ds = (ABS(viewnormal[0]) * size[0] + ABS(viewnormal[1]) * size[1] + ABS(viewnormal[2]) * size[2]);
-	dd = ds/96.f;
+	dd = ds / 96.f;
 	n = 0;
 	good_index = i;
 
@@ -431,7 +431,7 @@ void draw_volume(ARegion *ar, GPUTexture *tex, float min[3], float max[3], int r
 	}
 
 	tend();
-	// printf ( "Draw Time: %f\n",( float ) tval() );
+	// printf ( "Draw Time: %f\n",(float) tval() );
 
 	if (tex_shadow)
 		GPU_texture_unbind(tex_shadow);

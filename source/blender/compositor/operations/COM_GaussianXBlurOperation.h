@@ -27,24 +27,24 @@
 
 class GaussianXBlurOperation : public BlurBaseOperation {
 private:
-	float *gausstab;
-	int rad;
+	float *m_gausstab;
+	int m_rad;
 	void updateGauss(MemoryBuffer **memoryBuffers);
 public:
 	GaussianXBlurOperation();
 
 	/**
-	   *@brief the inner loop of this program
+	 * @brief the inner loop of this program
 	 */
 	void executePixel(float *color, int x, int y, MemoryBuffer * inputBuffers[], void *data);
 	
 	/**
-	   *@brief initialize the execution
+	 * @brief initialize the execution
 	 */
 	void initExecution();
 
 	/**
-	   *@brief Deinitialize the execution
+	 * @brief Deinitialize the execution
 	 */
 	void deinitExecution();
 	

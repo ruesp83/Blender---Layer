@@ -20,11 +20,12 @@
  *		Monique Dewanchand
  */
 
-#include "COM_Node.h"
-#include "string.h"
+#include <string.h>
 
-#include "COM_NodeOperation.h"
 #include "BKE_node.h"
+
+#include "COM_Node.h"
+#include "COM_NodeOperation.h"
 #include "COM_SetValueOperation.h"
 #include "COM_SetVectorOperation.h"
 #include "COM_SetColorOperation.h"
@@ -35,49 +36,40 @@
 
 #include "COM_SocketProxyNode.h"
 
-//#include "stdio.h"
+//#include <stdio.h>
 #include "COM_defines.h"
 
-Node::Node(bNode *editorNode, bool create_sockets)
+Node::Node(bNode *editorNode, bool create_sockets): NodeBase()
 {
-	this->editorNode = editorNode;
+	setbNode(editorNode);
 	
 	if (create_sockets) {
-		bNodeSocket * input = (bNodeSocket*)editorNode->inputs.first;
+		bNodeSocket *input = (bNodeSocket *)editorNode->inputs.first;
 		while (input != NULL) {
 			DataType dt = COM_DT_VALUE;
 			if (input->type == SOCK_RGBA) dt = COM_DT_COLOR;
 			if (input->type == SOCK_VECTOR) dt = COM_DT_VECTOR;
 			
 			this->addInputSocket(dt, (InputSocketResizeMode)input->resizemode, input);
-			input = (bNodeSocket*)input->next;
+			input = (bNodeSocket *)input->next;
 		}
-		bNodeSocket *output = (bNodeSocket*)editorNode->outputs.first;
+		bNodeSocket *output = (bNodeSocket *)editorNode->outputs.first;
 		while (output != NULL) {
 			DataType dt = COM_DT_VALUE;
 			if (output->type == SOCK_RGBA) dt = COM_DT_COLOR;
 			if (output->type == SOCK_VECTOR) dt = COM_DT_VECTOR;
 			
 			this->addOutputSocket(dt, output);
-			output = (bNodeSocket*)output->next;
+			output = (bNodeSocket *)output->next;
 		}
 	}
-}
-Node::Node()
-{
-	this->editorNode = NULL;
-}
-
-bNode *Node::getbNode()
-{
-	return this->editorNode;
 }
 
 void Node::addSetValueOperation(ExecutionSystem *graph, InputSocket *inputsocket, int editorNodeInputSocketIndex)
 {
-	bNodeSocket *bSock = (bNodeSocket*)this->getEditorInputSocket(editorNodeInputSocketIndex);
+	bNodeSocket *bSock = (bNodeSocket *)this->getEditorInputSocket(editorNodeInputSocketIndex);
 	SetValueOperation *operation = new SetValueOperation();
-	bNodeSocketValueFloat *val = (bNodeSocketValueFloat*)bSock->default_value;
+	bNodeSocketValueFloat *val = (bNodeSocketValueFloat *)bSock->default_value;
 	operation->setValue(val->value);
 	this->addLink(graph, operation->getOutputSocket(), inputsocket);
 	graph->addOperation(operation);
@@ -86,11 +78,15 @@ void Node::addSetValueOperation(ExecutionSystem *graph, InputSocket *inputsocket
 void Node::addPreviewOperation(ExecutionSystem *system, OutputSocket *outputSocket)
 {
 	if (this->isInActiveGroup()) {
-		PreviewOperation *operation = new PreviewOperation();
-		system->addOperation(operation);
-		operation->setbNode(this->getbNode());
-		operation->setbNodeTree(system->getContext().getbNodeTree());
-		this->addLink(system, outputSocket, operation->getInputSocket(0));
+		if (!(this->getbNode()->flag & NODE_HIDDEN)) { // do not calculate previews of hidden nodes.
+			if (this->getbNode()->flag & NODE_PREVIEW) {
+				PreviewOperation *operation = new PreviewOperation();
+				system->addOperation(operation);
+				operation->setbNode(this->getbNode());
+				operation->setbNodeTree(system->getContext().getbNodeTree());
+				this->addLink(system, outputSocket, operation->getInputSocket(0));
+			}
+		}
 	}
 }
 
@@ -118,9 +114,9 @@ SocketConnection *Node::addLink(ExecutionSystem *graph, OutputSocket *outputSock
 
 void Node::addSetColorOperation(ExecutionSystem *graph, InputSocket *inputsocket, int editorNodeInputSocketIndex)
 {
-	bNodeSocket *bSock = (bNodeSocket*)this->getEditorInputSocket(editorNodeInputSocketIndex);
+	bNodeSocket *bSock = (bNodeSocket *)this->getEditorInputSocket(editorNodeInputSocketIndex);
 	SetColorOperation *operation = new SetColorOperation();
-	bNodeSocketValueRGBA *val = (bNodeSocketValueRGBA*)bSock->default_value;
+	bNodeSocketValueRGBA *val = (bNodeSocketValueRGBA *)bSock->default_value;
 	operation->setChannel1(val->value[0]);
 	operation->setChannel2(val->value[1]);
 	operation->setChannel3(val->value[2]);
@@ -131,8 +127,8 @@ void Node::addSetColorOperation(ExecutionSystem *graph, InputSocket *inputsocket
 
 void Node::addSetVectorOperation(ExecutionSystem *graph, InputSocket *inputsocket, int editorNodeInputSocketIndex)
 {
-	bNodeSocket *bSock = (bNodeSocket*)this->getEditorInputSocket(editorNodeInputSocketIndex);
-	bNodeSocketValueVector *val = (bNodeSocketValueVector*)bSock->default_value;
+	bNodeSocket *bSock = (bNodeSocket *)this->getEditorInputSocket(editorNodeInputSocketIndex);
+	bNodeSocketValueVector *val = (bNodeSocketValueVector *)bSock->default_value;
 	SetVectorOperation *operation = new SetVectorOperation();
 	operation->setX(val->value[0]);
 	operation->setY(val->value[1]);
@@ -143,7 +139,7 @@ void Node::addSetVectorOperation(ExecutionSystem *graph, InputSocket *inputsocke
 
 bNodeSocket *Node::getEditorInputSocket(int editorNodeInputSocketIndex)
 {
-	bNodeSocket *bSock = (bNodeSocket*)this->getbNode()->inputs.first;
+	bNodeSocket *bSock = (bNodeSocket *)this->getbNode()->inputs.first;
 	int index = 0;
 	while (bSock != NULL) {
 		if (index == editorNodeInputSocketIndex) {
@@ -156,7 +152,7 @@ bNodeSocket *Node::getEditorInputSocket(int editorNodeInputSocketIndex)
 }
 bNodeSocket *Node::getEditorOutputSocket(int editorNodeInputSocketIndex)
 {
-	bNodeSocket *bSock = (bNodeSocket*)this->getbNode()->outputs.first;
+	bNodeSocket *bSock = (bNodeSocket *)this->getbNode()->outputs.first;
 	int index = 0;
 	while (bSock != NULL) {
 		if (index == editorNodeInputSocketIndex) {
@@ -170,9 +166,9 @@ bNodeSocket *Node::getEditorOutputSocket(int editorNodeInputSocketIndex)
 
 InputSocket *Node::findInputSocketBybNodeSocket(bNodeSocket *socket)
 {
-	vector<InputSocket*> &inputsockets = this->getInputSockets();
+	vector<InputSocket *> &inputsockets = this->getInputSockets();
 	unsigned int index;
-	for (index = 0 ; index < inputsockets.size(); index ++) {
+	for (index = 0; index < inputsockets.size(); index++) {
 		InputSocket *input = inputsockets[index];
 		if (input->getbNodeSocket() == socket) {
 			return input;
@@ -183,9 +179,9 @@ InputSocket *Node::findInputSocketBybNodeSocket(bNodeSocket *socket)
 
 OutputSocket *Node::findOutputSocketBybNodeSocket(bNodeSocket *socket)
 {
-	vector<OutputSocket*> &outputsockets = this->getOutputSockets();
+	vector<OutputSocket *> &outputsockets = this->getOutputSockets();
 	unsigned int index;
-	for (index = 0 ; index < outputsockets.size(); index ++) {
+	for (index = 0; index < outputsockets.size(); index++) {
 		OutputSocket *output = outputsockets[index];
 		if (output->getbNodeSocket() == socket) {
 			return output;

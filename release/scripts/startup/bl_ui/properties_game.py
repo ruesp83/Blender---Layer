@@ -50,6 +50,8 @@ class PHYSICS_PT_game_physics(PhysicsButtonsPanel, Panel):
         physics_type = game.physics_type
 
         if physics_type == 'CHARACTER':
+            layout.prop(game, "use_actor")
+            layout.prop(ob, "hide_render", text="Invisible")  # out of place but useful
             layout.prop(game, "step_height", slider=True)
             layout.prop(game, "jump_speed")
             layout.prop(game, "fall_speed")
@@ -452,7 +454,7 @@ class SCENE_PT_game_navmesh(SceneButtonsPanel, Panel):
 
         rd = context.scene.game_settings.recast_data
 
-        layout.operator("mesh.navmesh_make", text='Build navigation mesh')
+        layout.operator("mesh.navmesh_make", text="Build navigation mesh")
 
         col = layout.column()
         col.label(text="Rasterization:")

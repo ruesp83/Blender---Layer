@@ -226,7 +226,7 @@ static void draw_movieclip_cache(SpaceClip *sc, ARegion *ar, MovieClip *clip, Sc
 
 static void draw_movieclip_notes(SpaceClip *sc, ARegion *ar)
 {
-	MovieClip *clip = ED_space_clip(sc);
+	MovieClip *clip = ED_space_clip_get_clip(sc);
 	MovieTracking *tracking = &clip->tracking;
 	char str[256] = {0};
 	int block = FALSE;
@@ -255,7 +255,7 @@ static void draw_movieclip_buffer(SpaceClip *sc, ARegion *ar, ImBuf *ibuf,
                                   int width, int height, float zoomx, float zoomy)
 {
 	int x, y;
-	MovieClip *clip = ED_space_clip(sc);
+	MovieClip *clip = ED_space_clip_get_clip(sc);
 
 	/* find window pixel coordinates of origin */
 	UI_view2d_to_region_no_clip(&ar->v2d, 0.0f, 0.0f, &x, &y);
@@ -344,7 +344,7 @@ static void draw_track_path(SpaceClip *sc, MovieClip *UNUSED(clip), MovieTrackin
 	if (count == 0)
 		return;
 
-	start_frame = framenr = ED_space_clip_clip_framenr(sc);
+	start_frame = framenr = ED_space_clip_get_clip_frame_number(sc);
 
 	marker = BKE_tracking_marker_get(track, framenr);
 	if (marker->framenr != framenr || marker->flag & MARKER_DISABLED)
@@ -811,6 +811,11 @@ static void draw_marker_slide_zones(SpaceClip *sc, MovieTrackingTrack *track, Mo
 	}
 
 	if ((sc->flag & SC_SHOW_MARKER_PATTERN) && ((track->pat_flag & SELECT) == sel || outline)) {
+		int i;
+		float pat_min[2], pat_max[2];
+/*		float dx = 12.0f / width, dy = 12.0f / height;*/ /* XXX UNUSED */
+		float tilt_ctrl[2];
+
 		if (!outline) {
 			if (track->pat_flag & SELECT)
 				glColor3fv(scol);
@@ -818,26 +823,47 @@ static void draw_marker_slide_zones(SpaceClip *sc, MovieTrackingTrack *track, Mo
 				glColor3fv(col);
 		}
 
-		/* XXX: need to be real check if affine tracking is enabled, but for now not
-		 *      sure how to do this, so assume affine tracker is always enabled */
-		if (TRUE) {
-			int i;
-
-			/* pattern's corners sliding squares */
-			for (i = 0; i < 4; i++) {
-				draw_marker_slide_square(marker->pattern_corners[i][0], marker->pattern_corners[i][1],
-				                         patdx / 1.5f, patdy / 1.5f, outline, px);
-			}
+		/* pattern's corners sliding squares */
+		for (i = 0; i < 4; i++) {
+			draw_marker_slide_square(marker->pattern_corners[i][0], marker->pattern_corners[i][1],
+			                         patdx / 1.5f, patdy / 1.5f, outline, px);
 		}
-		else {
-			/* pattern offset square */
-			draw_marker_slide_square(marker->pattern_corners[3][0], marker->pattern_corners[3][1],
-			                         patdx, patdy, outline, px);
 
-			/* pattern re-sizing triangle */
-			draw_marker_slide_triangle(marker->pattern_corners[1][0], marker->pattern_corners[1][1],
-			                           patdx, patdy, outline, px);
-		}
+		/* ** sliders to control overall pattern  ** */
+		add_v2_v2v2(tilt_ctrl, marker->pattern_corners[1], marker->pattern_corners[2]);
+
+		BKE_tracking_marker_pattern_minmax(marker, pat_min, pat_max);
+
+		glEnable(GL_LINE_STIPPLE);
+		glLineStipple(3, 0xaaaa);
+
+#if 0
+		/* TODO: disable for now, needs better approach visualizing this */
+
+		glBegin(GL_LINE_LOOP);
+		glVertex2f(pat_min[0] - dx, pat_min[1] - dy);
+		glVertex2f(pat_max[0] + dx, pat_min[1] - dy);
+		glVertex2f(pat_max[0] + dx, pat_max[1] + dy);
+		glVertex2f(pat_min[0] - dx, pat_max[1] + dy);
+		glEnd();
+
+		/* marker's offset slider */
+		draw_marker_slide_square(pat_min[0] - dx, pat_max[1] + dy, patdx, patdy, outline, px);
+
+		/* pattern re-sizing triangle */
+		draw_marker_slide_triangle(pat_max[0] + dx, pat_min[1] - dy, patdx, patdy, outline, px);
+#endif
+
+		glBegin(GL_LINES);
+		glVertex2f(0.0f, 0.0f);
+		glVertex2fv(tilt_ctrl);
+		glEnd();
+
+		glDisable(GL_LINE_STIPPLE);
+
+
+		/* slider to control pattern tilt */
+		draw_marker_slide_square(tilt_ctrl[0], tilt_ctrl[1], patdx, patdy, outline, px);
 	}
 
 	glPopMatrix();
@@ -898,7 +924,7 @@ static void draw_marker_texts(SpaceClip *sc, MovieTrackingTrack *track, MovieTra
 
 	if (marker->flag & MARKER_DISABLED)
 		strcpy(state, "disabled");
-	else if (marker->framenr != ED_space_clip_clip_framenr(sc))
+	else if (marker->framenr != ED_space_clip_get_clip_frame_number(sc))
 		strcpy(state, "estimated");
 	else if (marker->flag & MARKER_TRACKED)
 		strcpy(state, "tracked");
@@ -946,7 +972,7 @@ static void draw_tracking_tracks(SpaceClip *sc, ARegion *ar, MovieClip *clip,
 	ListBase *tracksbase = BKE_tracking_get_active_tracks(tracking);
 	MovieTrackingTrack *track, *act_track;
 	MovieTrackingMarker *marker;
-	int framenr = ED_space_clip_clip_framenr(sc);
+	int framenr = ED_space_clip_get_clip_frame_number(sc);
 	int undistort = sc->user.render_flag & MCLIP_PROXY_RENDER_UNDISTORT;
 	float *marker_pos = NULL, *fp, *active_pos = NULL, cur_pos[2];
 
@@ -1292,7 +1318,7 @@ static void draw_distortion(SpaceClip *sc, ARegion *ar, MovieClip *clip,
 		MovieTrackingTrack *track = BKE_tracking_track_get_active(&sc->clip->tracking);
 
 		if (track) {
-			int framenr = sc->user.framenr;
+			int framenr = ED_space_clip_get_clip_frame_number(sc);
 			MovieTrackingMarker *marker = BKE_tracking_marker_get_exact(track, framenr);
 
 			offsx = marker->pos[0];
@@ -1382,19 +1408,23 @@ static void draw_distortion(SpaceClip *sc, ARegion *ar, MovieClip *clip,
 	glPopMatrix();
 }
 
-void clip_draw_main(SpaceClip *sc, ARegion *ar, Scene *scene)
+void clip_draw_main(const bContext *C, ARegion *ar)
 {
-	MovieClip *clip = ED_space_clip(sc);
+	SpaceClip *sc = CTX_wm_space_clip(C);
+	MovieClip *clip = ED_space_clip_get_clip(sc);
+	Scene *scene = CTX_data_scene(C);
 	ImBuf *ibuf;
 	int width, height;
 	float zoomx, zoomy;
 
-	/* if no clip, nothing to do */
-	if (!clip)
-		return;
+	ED_space_clip_get_size(C, &width, &height);
+	ED_space_clip_get_zoom(C, &zoomx, &zoomy);
 
-	ED_space_clip_size(sc, &width, &height);
-	ED_space_clip_zoom(sc, ar, &zoomx, &zoomy);
+	/* if no clip, nothing to do */
+	if (!clip) {
+		ED_region_grid_draw(ar, zoomx, zoomy);
+		return;
+	}
 
 	if (sc->flag & SC_SHOW_STABLE) {
 		float smat[4][4], ismat[4][4];
@@ -1450,7 +1480,7 @@ void clip_draw_main(SpaceClip *sc, ARegion *ar, Scene *scene)
 void clip_draw_grease_pencil(bContext *C, int onlyv2d)
 {
 	SpaceClip *sc = CTX_wm_space_clip(C);
-	MovieClip *clip = ED_space_clip(sc);
+	MovieClip *clip = ED_space_clip_get_clip(sc);
 
 	if (!clip)
 		return;
@@ -1466,12 +1496,10 @@ void clip_draw_grease_pencil(bContext *C, int onlyv2d)
 				MovieTrackingTrack *track = BKE_tracking_track_get_active(&sc->clip->tracking);
 
 				if (track) {
-					int framenr = sc->user.framenr;
-					/* don't get the exact marker since it may not exist for the frame */
+					int framenr = ED_space_clip_get_clip_frame_number(sc);
 					MovieTrackingMarker *marker = BKE_tracking_marker_get(track, framenr);
-					if (marker) {
-						glTranslatef(marker->pos[0], marker->pos[1], 0.0f);
-					}
+
+					glTranslatef(marker->pos[0], marker->pos[1], 0.0f);
 				}
 			}
 

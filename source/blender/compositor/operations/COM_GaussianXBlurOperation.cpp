@@ -27,19 +27,20 @@ extern "C" {
 	#include "RE_pipeline.h"
 }
 
-GaussianXBlurOperation::GaussianXBlurOperation() : BlurBaseOperation()
+GaussianXBlurOperation::GaussianXBlurOperation() : BlurBaseOperation(COM_DT_COLOR)
 {
-	this->gausstab = NULL;
-	this->rad = 0;
-
+	this->m_gausstab = NULL;
+	this->m_rad = 0;
 }
 
 void *GaussianXBlurOperation::initializeTileData(rcti *rect, MemoryBuffer **memoryBuffers)
 {
-	if (!this->sizeavailable) {
+	lockMutex();
+	if (!this->m_sizeavailable) {
 		updateGauss(memoryBuffers);
 	}
 	void *buffer = getInputOperation(0)->initializeTileData(NULL, memoryBuffers);
+	unlockMutex();
 	return buffer;
 }
 
@@ -47,37 +48,35 @@ void GaussianXBlurOperation::initExecution()
 {
 	BlurBaseOperation::initExecution();
 
-	if (this->sizeavailable) {
-		float rad = size * this->data->sizex;
+	initMutex();
+
+	if (this->m_sizeavailable) {
+		float rad = this->m_size * this->m_data->sizex;
 		if (rad < 1)
 			rad = 1;
 
-		this->rad = rad;
-		this->gausstab = BlurBaseOperation::make_gausstab(rad);
+		this->m_rad = rad;
+		this->m_gausstab = BlurBaseOperation::make_gausstab(rad);
 	}
 }
 
 void GaussianXBlurOperation::updateGauss(MemoryBuffer **memoryBuffers)
 {
-	if (this->gausstab == NULL) {
+	if (this->m_gausstab == NULL) {
 		updateSize(memoryBuffers);
-		float rad = size * this->data->sizex;
+		float rad = this->m_size * this->m_data->sizex;
 		if (rad < 1)
 			rad = 1;
 
-		this->rad = rad;
-		this->gausstab = BlurBaseOperation::make_gausstab(rad);	
-	}	
+		this->m_rad = rad;
+		this->m_gausstab = BlurBaseOperation::make_gausstab(rad);
+	}
 }
 
 void GaussianXBlurOperation::executePixel(float *color, int x, int y, MemoryBuffer *inputBuffers[], void *data)
 {
-	float tempColor[4];
-	tempColor[0] = 0;
-	tempColor[1] = 0;
-	tempColor[2] = 0;
-	tempColor[3] = 0;
-	float overallmultiplyer = 0.0f;
+	float color_accum[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+	float multiplier_accum = 0.0f;
 	MemoryBuffer *inputBuffer = (MemoryBuffer *)data;
 	float *buffer = inputBuffer->getBuffer();
 	int bufferwidth = inputBuffer->getWidth();
@@ -86,8 +85,8 @@ void GaussianXBlurOperation::executePixel(float *color, int x, int y, MemoryBuff
 
 	int miny = y;
 	int maxy = y;
-	int minx = x - this->rad;
-	int maxx = x + this->rad;
+	int minx = x - this->m_rad;
+	int maxx = x + this->m_rad;
 	miny = max(miny, inputBuffer->getRect()->ymin);
 	minx = max(minx, inputBuffer->getRect()->xmin);
 	maxy = min(maxy, inputBuffer->getRect()->ymax);
@@ -98,20 +97,22 @@ void GaussianXBlurOperation::executePixel(float *color, int x, int y, MemoryBuff
 	int offsetadd = getOffsetAdd();
 	int bufferindex = ((minx - bufferstartx) * 4) + ((miny - bufferstarty) * 4 * bufferwidth);
 	for (int nx = minx; nx < maxx; nx += step) {
-		index = (nx - x) + this->rad;
-		const float multiplyer = gausstab[index];
-		madd_v4_v4fl(tempColor, &buffer[bufferindex], multiplyer);
-		overallmultiplyer += multiplyer;
+		index = (nx - x) + this->m_rad;
+		const float multiplier = this->m_gausstab[index];
+		madd_v4_v4fl(color_accum, &buffer[bufferindex], multiplier);
+		multiplier_accum += multiplier;
 		bufferindex += offsetadd;
 	}
-	mul_v4_v4fl(color, tempColor, 1.0f / overallmultiplyer);
+	mul_v4_v4fl(color, color_accum, 1.0f / multiplier_accum);
 }
 
 void GaussianXBlurOperation::deinitExecution()
 {
 	BlurBaseOperation::deinitExecution();
-	delete this->gausstab;
-	this->gausstab = NULL;
+	delete [] this->m_gausstab;
+	this->m_gausstab = NULL;
+
+	deinitMutex();
 }
 
 bool GaussianXBlurOperation::determineDependingAreaOfInterest(rcti *input, ReadBufferOperation *readOperation, rcti *output)
@@ -128,9 +129,9 @@ bool GaussianXBlurOperation::determineDependingAreaOfInterest(rcti *input, ReadB
 		return true;
 	}
 	else {
-		if (this->sizeavailable && this->gausstab != NULL) {
-			newInput.xmax = input->xmax + rad;
-			newInput.xmin = input->xmin - rad;
+		if (this->m_sizeavailable && this->m_gausstab != NULL) {
+			newInput.xmax = input->xmax + this->m_rad;
+			newInput.xmin = input->xmin - this->m_rad;
 			newInput.ymax = input->ymax;
 			newInput.ymin = input->ymin;
 		}

@@ -26,7 +26,7 @@ bl_info = {
     'location': 'File > Import > Blizzard M3 (.m3)',
     'description': 'Imports the Blizzard M3 format (.m3)',
     'warning': '',
-    'wiki_url': 'http://wiki.blender.org/index.php/Extensions:2.5/Py/Scripts/'\
+    'wiki_url': 'http://wiki.blender.org/index.php/Extensions:2.6/Py/Scripts/'\
         'Import-Export/M3_Import',
     'tracker_url': 'http://projects.blender.org/tracker/index.php?'\
         'func=detail&aid=24017',
@@ -50,7 +50,7 @@ from bpy_extras.io_utils import ImportHelper
 
 
 class ImportM3(bpy.types.Operator, ImportHelper):
-    '''Import from M3 file format (.m3)'''
+    """Import from M3 file format (.m3)"""
     bl_idname = 'import_scene.blizzard_m3'
     bl_label = 'Import M3'
     bl_options = {'UNDO'}

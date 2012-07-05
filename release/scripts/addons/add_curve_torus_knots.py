@@ -25,7 +25,7 @@ bl_info = {
     "location": "View3D > Add > Curve",
     "description": "Adds many types of (torus) knots",
     "warning": "",
-    "wiki_url": "http://wiki.blender.org/index.php/Extensions:2.5/Py/"\
+    "wiki_url": "http://wiki.blender.org/index.php/Extensions:2.6/Py/"\
         "Scripts/Curve/Torus_Knot",
     "tracker_url": "https://projects.blender.org/tracker/index.php?"\
         "func=detail&aid=22403",
@@ -97,7 +97,7 @@ def create_torus_knot(self, context):
 
 
 class torus_knot_plus(bpy.types.Operator, AddObjectHelper):
-    ''''''
+    """"""
     bl_idname = "curve.torus_knot_plus"
     bl_label = "Torus Knot +"
     bl_options = {'REGISTER', 'UNDO'}
