@@ -31,18 +31,15 @@ def points_as_bmesh_cells(verts,
     from mathutils import Vector
 
     cells = []
-    
-    '''
-    if points_scale:
-        points_scale = (1.0 / points_scale[0],
-                        1.0 / points_scale[1],
-                        1.0 / points_scale[2],
-                        )
-    '''
 
     points_sorted_current = [p for p in points]
     plane_indices = []
     vertices = []
+
+    if points_scale is not None:
+        points_scale = tuple(points_scale)
+    if points_scale == (1.0, 1.0, 1.0):
+        points_scale = None
 
     # there are many ways we could get planes - convex hull for eg
     # but it ends up fastest if we just use bounding box
@@ -55,12 +52,12 @@ def points_as_bmesh_cells(verts,
         ymin, ymax = min(ya) - margin_bounds, max(ya) + margin_bounds
         zmin, zmax = min(za) - margin_bounds, max(za) + margin_bounds
         convexPlanes = [
-            Vector((+1.0, 0.0, 0.0, -abs(xmax))),
-            Vector((-1.0, 0.0, 0.0, -abs(xmin))),
-            Vector((0.0, +1.0, 0.0, -abs(ymax))),
-            Vector((0.0, -1.0, 0.0, -abs(ymin))),
-            Vector((0.0, 0.0, +1.0, -abs(zmax))),
-            Vector((0.0, 0.0, -1.0, -abs(zmin))),
+            Vector((+1.0, 0.0, 0.0, -xmax)),
+            Vector((-1.0, 0.0, 0.0, +xmin)),
+            Vector((0.0, +1.0, 0.0, -ymax)),
+            Vector((0.0, -1.0, 0.0, +ymin)),
+            Vector((0.0, 0.0, +1.0, -zmax)),
+            Vector((0.0, 0.0, -1.0, +zmin)),
             ]
 
     for i, point_cell_current in enumerate(points):
@@ -76,7 +73,7 @@ def points_as_bmesh_cells(verts,
             normal = points_sorted_current[j] - point_cell_current
             nlength = normal.length
 
-            if points_scale is not None:                
+            if points_scale is not None:
                 normal_alt = normal.copy()
                 normal_alt.x *= points_scale[0]
                 normal_alt.y *= points_scale[1]

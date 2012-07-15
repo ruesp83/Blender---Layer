@@ -34,7 +34,8 @@ _redraw_yasiamevil.arg = dict(type='DRAW_WIN_SWAP', iterations=1)
 def _points_from_object(obj, source):
 
     _source_all = {
-        'PARTICLE', 'PENCIL',
+        'PARTICLE_OWN', 'PARTICLE_CHILD',
+        'PENCIL',
         'VERT_OWN', 'VERT_CHILD',
         }
 
@@ -77,6 +78,12 @@ def _points_from_object(obj, source):
                 points.extend([matrix * v.co for v in mesh.vertices])
                 bpy.data.meshes.remove(mesh)
 
+    def points_from_particles(obj):
+        points.extend([p.location.copy()
+                         for psys in obj.particle_systems
+                         for p in psys.particles])
+
+
     # geom own
     if 'VERT_OWN' in source:
         points_from_verts(obj)
@@ -87,10 +94,12 @@ def _points_from_object(obj, source):
             points_from_verts(obj_child)
 
     # geom particles
-    if 'PARTICLE' in source:
-        points.extend([p.location.copy()
-                         for psys in obj.particle_systems
-                         for p in psys.particles])
+    if 'PARTICLE_OWN' in source:
+        points_from_particles(obj)
+
+    if 'PARTICLE_CHILD' in source:
+        for obj_child in obj.children:
+            points_from_particles(obj_child)
 
     # grease pencil
     def get_points(stroke):
@@ -109,11 +118,13 @@ def _points_from_object(obj, source):
             points.extend([p for spline in get_splines(gp)
                              for p in spline])
 
+    print("Found %d points" % len(points))
+
     return points
 
 
 def cell_fracture_objects(scene, obj,
-                          source={'PARTICLE'},
+                          source={'PARTICLE_OWN'},
                           source_limit=0,
                           source_noise=0.0,
                           clean=True,
@@ -157,6 +168,8 @@ def cell_fracture_objects(scene, obj,
     del to_tuple
     del Vector
 
+    # end remove doubles
+    # ------------------
 
     if source_noise > 0.0:
         from random import random
@@ -169,9 +182,7 @@ def cell_fracture_objects(scene, obj,
         from mathutils.noise import random_unit_vector
         
         points[:] = [p + (random_unit_vector() * (scalar * random())) for p in points]
-    
-    # end remove doubles
-    # ------------------
+
 
     if use_debug_points:
         bm = bmesh.new()
@@ -205,7 +216,21 @@ def cell_fracture_objects(scene, obj,
 
         # create the convex hulls
         bm = bmesh.new()
+        
+        # WORKAROUND FOR CONVEX HULL BUG/LIMIT
+        # XXX small noise
+        import random
+        def R(): return (random.random() - 0.5) * 0.001
+        # XXX small noise
+
         for i, co in enumerate(cell_points):
+            
+            # XXX small noise
+            co.x += R()
+            co.y += R()
+            co.z += R()
+            # XXX small noise
+            
             bm_vert = bm.verts.new(co)
             bm_vert.tag = True
 
@@ -291,20 +316,28 @@ def cell_fracture_objects(scene, obj,
 
 
 def cell_fracture_boolean(scene, obj, objects,
-                          apply=True,
+                          use_debug_bool=False,
                           clean=True,
                           use_island_split=False,
+                          use_interior_vgroup=False,
                           use_debug_redraw=False,
                           ):
 
     objects_boolean = []
+
+    if use_interior_vgroup:
+        obj.data.polygons.foreach_set("hide", [False] * len(obj.data.polygons))
     
     for obj_cell in objects:
         mod = obj_cell.modifiers.new(name="Boolean", type='BOOLEAN')
         mod.object = obj
         mod.operation = 'INTERSECT'
 
-        if apply:
+        if not use_debug_bool:
+
+            if use_interior_vgroup:
+                obj_cell.data.polygons.foreach_set("hide", [True] * len(obj_cell.data.polygons))
+
             mesh_new = obj_cell.to_mesh(scene,
                                         apply_modifiers=True,
                                         settings='PREVIEW')
@@ -340,13 +373,35 @@ def cell_fracture_boolean(scene, obj, objects,
                 bm.to_mesh(mesh_new)
                 bm.free()
 
+            if use_interior_vgroup and mesh_new:
+                bm = bmesh.new()
+                bm.from_mesh(mesh_new)
+                for bm_vert in bm.verts:
+                    bm_vert.tag = True
+                for bm_face in bm.faces:
+                    if not bm_face.hide:
+                        for bm_vert in bm_face.verts:
+                            bm_vert.tag = False
+                # now add all vgroups
+                defvert_lay = bm.verts.layers.deform.verify()
+                for bm_vert in bm.verts:
+                    if bm_vert.tag:
+                        bm_vert[defvert_lay][0] = 1.0
+                for bm_face in bm.faces:
+                    bm_face.hide = False
+                bm.to_mesh(mesh_new)
+                bm.free()
+
+                # add a vgroup
+                obj_cell.vertex_groups.new(name="Interior")
+
         if obj_cell is not None:
             objects_boolean.append(obj_cell)
             
             if use_debug_redraw:
                 _redraw_yasiamevil()
 
-    if apply and use_island_split:
+    if (not use_debug_bool) and use_island_split:
         # this is ugly and Im not proud of this - campbell
         objects_islands = []
         for obj_cell in objects_boolean:

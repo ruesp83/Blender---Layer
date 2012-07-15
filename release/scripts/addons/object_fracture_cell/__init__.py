@@ -18,16 +18,14 @@
 
 bl_info = {
     "name": "Cell Fracture",
-    "author": "ideasman42",
+    "author": "ideasman42, phymec, Sergey Sharybin",
     "version": (0, 1),
     "blender": (2, 6, 4),
     "location": "Search > Fracture Object & Add -> Fracture Helper Objects",
     "description": "Fractured Object, Bomb, Projectile, Recorder",
     "warning": "",
     "wiki_url": "http://wiki.blender.org/index.php/Extensions:2.6/Py/"
-                "Scripts/Object/Fracture",
-    "tracker_url": "https://projects.blender.org/tracker/index.php?"
-                   "func=detail&aid=21793",
+                "Scripts/Object/CellFracture",
     "category": "Object"}
 
 
@@ -53,11 +51,18 @@ def main_object(scene, obj, level, **kw):
     use_recenter = kw_copy.pop("use_recenter")
     use_remove_original = kw_copy.pop("use_remove_original")
     recursion = kw_copy.pop("recursion")
+    recursion_source_limit = kw_copy.pop("recursion_source_limit")
     recursion_chance = kw_copy.pop("recursion_chance")
     recursion_chance_select = kw_copy.pop("recursion_chance_select")
     use_layer_next = kw_copy.pop("use_layer_next")
+    use_layer_index = kw_copy.pop("use_layer_index")
     group_name = kw_copy.pop("group_name")
     use_island_split = kw_copy.pop("use_island_split")
+    use_debug_bool = kw_copy.pop("use_debug_bool")
+    use_interior_vgroup = kw_copy.pop("use_interior_vgroup")
+
+    if level != 0:
+        kw_copy["source_limit"] = recursion_source_limit
 
     from . import fracture_cell_setup
 
@@ -71,6 +76,8 @@ def main_object(scene, obj, level, **kw):
     objects = fracture_cell_setup.cell_fracture_objects(scene, obj, **kw_copy)
     objects = fracture_cell_setup.cell_fracture_boolean(scene, obj, objects,
                                                         use_island_split=use_island_split,
+                                                        use_interior_vgroup=use_interior_vgroup,
+                                                        use_debug_bool=use_debug_bool,
                                                         use_debug_redraw=kw_copy["use_debug_redraw"])
 
     # todo, split islands.
@@ -125,18 +132,27 @@ def main_object(scene, obj, level, **kw):
     # Scene Options
 
     # layer
-    if use_layer_next:
+    layers_new = None
+    if use_layer_index != 0:
+        layers_new = [False] * 20
+        layers_new[use_layer_index - 1] = True
+    elif use_layer_next:
         layers_new = [False] * 20
         layers_new[(obj.layers[:].index(True) + 1) % 20] = True
+
+    if layers_new is not None:
         for obj_cell in objects:
             obj_cell.layers = layers_new
+
     # group
     if group_name:
         group = bpy.data.groups.get(group_name)
         if group is None:
             group = bpy.data.groups.new(group_name)
+        group_objects = group.objects[:]
         for obj_cell in objects:
-            group.objects.link(obj_cell)
+            if obj_cell not in group_objects:
+                group.objects.link(obj_cell)
 
     if kw_copy["use_debug_redraw"]:
         obj.draw_type = obj_draw_type_prev
@@ -150,19 +166,68 @@ def main(context, **kw):
     import time
     t = time.time()
     scene = context.scene
-    obj = context.active_object
-    objects = main_object(scene, obj, 0, **kw)
+    objects_context = context.selected_editable_objects
+
+    kw_copy = kw.copy()
+
+    # mass
+    mass_mode = kw_copy.pop("mass_mode")
+    mass = kw_copy.pop("mass")
+
+    objects = []
+    for obj in objects_context:
+        if obj.type == 'MESH':
+            objects += main_object(scene, obj, 0, **kw_copy)
 
     bpy.ops.object.select_all(action='DESELECT')
     for obj_cell in objects:
         obj_cell.select = True
     
+    if mass_mode == 'UNIFORM':
+        for obj_cell in objects:
+            obj_cell.game.mass = mass
+    elif mass_mode == 'VOLUME':
+        from mathutils import Vector
+        def _get_volume(obj_cell):
+            def _getObjectBBMinMax():
+                min_co = Vector((1000000.0, 1000000.0, 1000000.0))
+                max_co = -min_co
+                matrix = obj_cell.matrix_world
+                for i in range(0, 8):
+                    bb_vec = obj_cell.matrix_world * Vector(obj_cell.bound_box[i])
+                    min_co[0] = min(bb_vec[0], min_co[0])
+                    min_co[1] = min(bb_vec[1], min_co[1])
+                    min_co[2] = min(bb_vec[2], min_co[2])
+                    max_co[0] = max(bb_vec[0], max_co[0])
+                    max_co[1] = max(bb_vec[1], max_co[1])
+                    max_co[2] = max(bb_vec[2], max_co[2])
+                return (min_co, max_co)
+
+            def _getObjectVolume():
+                min_co, max_co = _getObjectBBMinMax()
+                x = max_co[0] - min_co[0]
+                y = max_co[1] - min_co[1]
+                z = max_co[2] - min_co[2]
+                volume = x * y * z
+                return volume
+
+            return _getObjectVolume()
+        
+        
+        obj_volume_ls = [_get_volume(obj_cell) for obj_cell in objects]
+        obj_volume_tot = sum(obj_volume_ls)
+        mass_fac = mass / obj_volume_tot
+        for i, obj_cell in enumerate(objects):
+            obj_cell.game.mass = obj_volume_ls[i] * mass_fac
+    else:
+        assert(0)
+
     print("Done! %d objects in %.4f sec" % (len(objects), time.time() - t))
 
 
 class FractureCell(Operator):
     bl_idname = "object.add_fracture_cell_objects"
-    bl_label = "Cell Fracture Mesh"
+    bl_label = "Cell fracture selected mesh objects"
     bl_options = {'PRESET'}
 
     # -------------------------------------------------------------------------
@@ -171,12 +236,14 @@ class FractureCell(Operator):
             name="Source",
             items=(('VERT_OWN', "Own Verts", "Use own vertices"),
                    ('VERT_CHILD', "Child Verts", "Use own vertices"),
-                   ('PARTICLE', "Particles", ("All particle systems of the "
-                                              "source object")),
+                   ('PARTICLE_OWN', "Own Particles", ("All particle systems of the "
+                                                      "source object")),
+                   ('PARTICLE_CHILD', "Child Particles", ("All particle systems of the "
+                                                          "child objects")),
                    ('PENCIL', "Grease Pencil", "This objects grease pencil"),
                    ),
             options={'ENUM_FLAG'},
-            default={'PARTICLE', 'VERT_OWN'}  # 'VERT_OWN', 'EDGE_OWN', 'FACE_OWN'
+            default={'PARTICLE_OWN', 'VERT_OWN'},
             )
 
     source_limit = IntProperty(
@@ -209,6 +276,13 @@ class FractureCell(Operator):
             description="Break shards resursively",
             min=0, max=5000,
             default=0,
+            )
+
+    recursion_source_limit = IntProperty(
+            name="Source Limit",
+            description="Limit the number of input points, 0 for unlimited (applies to recursion only)",
+            min=0, max=5000,
+            default=8,
             )
 
     recursion_chance = FloatProperty(
@@ -268,6 +342,31 @@ class FractureCell(Operator):
             default=0,
             )
 
+    use_interior_vgroup = BoolProperty(
+            name="Interior VGroup",
+            description="Create a vertex group for interior verts",
+            default=False,
+            )
+
+    # -------------------------------------------------------------------------
+    # Physics Options
+    
+    mass_mode = EnumProperty(
+            name="Mass Mode",
+            items=(('VOLUME', "Volume", "All objects get the same volume"),
+                   ('UNIFORM', "Uniform", "All objects get the same volume"),
+                   ),
+            default='VOLUME',
+            )
+    
+    mass = FloatProperty(
+            name="Mass",
+            description="Mass to give created objects",
+            min=0.001, max=1000.0,
+            default=1.0,
+            )
+
+
     # -------------------------------------------------------------------------
     # Object Options
 
@@ -289,9 +388,16 @@ class FractureCell(Operator):
     # .. dirreferent from object options in that this controls how the objects
     #    are setup in the scene.  
 
+    use_layer_index = IntProperty(
+            name="Layer Index",
+            description="Layer to add the objects into or 0 for existing",
+            default=0,
+            min=0, max=20,
+            )
+
     use_layer_next = BoolProperty(
             name="Next Layer",
-            description="At the object into the next layer",
+            description="At the object into the next layer (layer index overrides)",
             default=True,
             )
 
@@ -313,6 +419,12 @@ class FractureCell(Operator):
             name="Show Progress Realtime",
             description="Redraw as fracture is done",
             default=True,
+            )
+
+    use_debug_bool = BoolProperty(
+            name="Debug Boolean",
+            description="Skip applying the boolean modifier",
+            default=False,
             )
 
     def execute(self, context):
@@ -346,6 +458,7 @@ class FractureCell(Operator):
         col.label("Recursive Shatter")
         rowsub = col.row(align=True)
         rowsub.prop(self, "recursion")
+        rowsub.prop(self, "recursion_source_limit")
         rowsub = col.row()
         rowsub.prop(self, "recursion_chance")
         rowsub.prop(self, "recursion_chance_select", expand=True)
@@ -357,11 +470,21 @@ class FractureCell(Operator):
         rowsub.prop(self, "use_smooth_faces")
         rowsub.prop(self, "use_smooth_edges")
         rowsub.prop(self, "use_data_match")
+        rowsub.prop(self, "use_interior_vgroup")
         rowsub.prop(self, "material_index")
         rowsub = col.row()
         # could be own section, control how we subdiv
         rowsub.prop(self, "margin")
         rowsub.prop(self, "use_island_split")
+
+
+        box = layout.box()
+        col = box.column()
+        col.label("Physics")
+        rowsub = col.row(align=True)
+        rowsub.prop(self, "mass_mode")
+        rowsub.prop(self, "mass")
+
 
         box = layout.box()
         col = box.column()
@@ -374,32 +497,34 @@ class FractureCell(Operator):
         col = box.column()
         col.label("Scene")
         rowsub = col.row(align=True)
+        rowsub.prop(self, "use_layer_index")
         rowsub.prop(self, "use_layer_next")
         rowsub.prop(self, "group_name")
-        
+
         box = layout.box()
         col = box.column()
         col.label("Debug")
         rowsub = col.row(align=True)
         rowsub.prop(self, "use_debug_redraw")
         rowsub.prop(self, "use_debug_points")
+        rowsub.prop(self, "use_debug_bool")
 
-#def menu_func(self, context):
-#    self.layout.menu("INFO_MT_add_fracture_objects", icon="PLUGIN")
+
+def menu_func(self, context):
+    layout = self.layout
+    layout.label("Cell Fracture:")
+    layout.operator("object.add_fracture_cell_objects",
+                    text="Cell Fracture")
 
 
 def register():
     bpy.utils.register_class(FractureCell)
-
-    # Add the "add fracture objects" menu to the "Add" menu
-    # bpy.types.INFO_MT_add.append(menu_func)
+    bpy.types.VIEW3D_PT_tools_objectmode.append(menu_func)
 
 
 def unregister():
     bpy.utils.unregister_class(FractureCell)
-
-    # Remove "add fracture objects" menu from the "Add" menu.
-    # bpy.types.INFO_MT_add.remove(menu_func)
+    bpy.types.VIEW3D_PT_tools_objectmode.remove(menu_func)
 
 
 if __name__ == "__main__":
