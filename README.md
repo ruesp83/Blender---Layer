@@ -8,6 +8,11 @@ I have drawn up a roadmap and started raising funds for the development of the I
 The project is divided for a total of 6 phases, where each stage has its budget.
 Each phase addresses a particular aspect, such as: layer management, operations, etc..
 
+Status Funding
+--------------
+Donors who have contributed to this project are listed here:[Funding][3]
+![Bar](img_fun)
+
 Phases
 ------
 
@@ -134,3 +139,5 @@ Fabio Russo (ruesp83)
 
 [1]: http://en.wikipedia.org/wiki/Layers_%28digital_image_editing%29
 [2]: http://wiki.blender.org/index.php?title=User:Kwk/Gsoc2010/ImageLayers
+[3]: http://ruesp83.wordpress.com/image-layer/funding/
+[img_fun]: http://ruesp83.files.wordpress.com/2012/06/striscia.png
