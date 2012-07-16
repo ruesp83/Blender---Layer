@@ -84,7 +84,7 @@ Current Status: WIP Phase 2 70%
                     |-> Layer to Image Size
                     |-> Scale Layer
         2) Begin integration layer with Blender.
-		3) Saving an image in a single layer (Save, Save As ..).
+        3) Saving an image in a single layer (Save, Save As ..).
 
 
 ### Phase 3:
@@ -128,6 +128,9 @@ Current Status: WIP Phase 2 70%
         3) To be defined yet!
 
 
+Video
+-----
+[Image Layer Phase 1][video]
 Contact
 -------
 Fabio Russo (ruesp83)
@@ -148,3 +151,4 @@ See the COPYING file for more info.
 [1]: http://en.wikipedia.org/wiki/Layers_%28digital_image_editing%29
 [2]: http://wiki.blender.org/index.php?title=User:Kwk/Gsoc2010/ImageLayers
 [3]: http://ruesp83.wordpress.com/image-layer/funding/
+[video]: https://vimeo.com/40404889
