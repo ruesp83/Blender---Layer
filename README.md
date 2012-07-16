@@ -12,7 +12,7 @@ Phases
 ------
 
 ### Phase 1:
-    **Stage**    : Management
+    *Stage*    : Management
     Target   : Management and operations common to organize Layer.
     Deadline : 15/04/2012
     Amount   : 500€
