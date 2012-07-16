@@ -11,7 +11,7 @@ Each phase addresses a particular aspect, such as: layer management, operations,
 Status Funding
 --------------
 Donors who have contributed to this project are listed here:[Funding][3]
-![Bar](img_fun)
+![Bar](http://ruesp83.files.wordpress.com/2012/06/striscia.png)
 
 Phases
 ------
@@ -140,4 +140,3 @@ Fabio Russo (ruesp83)
 [1]: http://en.wikipedia.org/wiki/Layers_%28digital_image_editing%29
 [2]: http://wiki.blender.org/index.php?title=User:Kwk/Gsoc2010/ImageLayers
 [3]: http://ruesp83.wordpress.com/image-layer/funding/
-[img_fun]: http://ruesp83.files.wordpress.com/2012/06/striscia.png
