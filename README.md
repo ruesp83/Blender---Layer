@@ -12,7 +12,7 @@ Phases
 ------
 
 ### Phase 1:
-    '''Stage'''    : Management
+    **Stage**    : Management
     Target   : Management and operations common to organize Layer.
     Deadline : 15/04/2012
     Amount   : 500€
@@ -121,6 +121,16 @@ Phases
         2) Add Blend Mode for Brushes.
         3) To be defined yet!
 
+
+Contact
+-------
+Fabio Russo (ruesp83)
+
+- http://ruesp83.wordpress.com/
+- https://github.com/ruesp83
+- https://twitter.com/ruesp83
+- https://www.facebook.com/ruesp83
+- ruesp83@libero.it
 
 [1]: http://en.wikipedia.org/wiki/Layers_%28digital_image_editing%29
 [2]: http://wiki.blender.org/index.php?title=User:Kwk/Gsoc2010/ImageLayers
