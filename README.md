@@ -21,7 +21,7 @@ Current Status: WIP Phase 2 70%
     Stage    : Management
     Target   : Management and operations common to organize Layer.
     Deadline : 15/04/2012
-    Amount   : 500ï¿½
+    Amount   : 500€
     Info     : 
         1) Operations management layer.
             Menu Layer
@@ -64,7 +64,7 @@ Current Status: WIP Phase 2 70%
     Stage    : Transform
     Target   : Simple operation to change the selected layer.
     Deadline : Defined after phase 1
-    Amount   : 800ï¿½
+    Amount   : 800€
     Info     : 
         1) Operations for manipulating layers.
             Menu Layer
@@ -91,7 +91,7 @@ Current Status: WIP Phase 2 70%
     Stage    : Color
     Target   : Operation for the color management.
     Deadline : Defined after phase 2
-    Amount   : 1200ï¿½
+    Amount   : 1200€
     Info     : 
         1) Exposure, Saturation, Hue, Contrast, Color Temperature and Tint, Sharpness.
         2) Add GrayScale for the Color Space.
@@ -102,7 +102,7 @@ Current Status: WIP Phase 2 70%
     Stage    : Import & Export
     Target   : Import and export in the formats most commonly used layer.
     Deadline : Defined after phase 3
-    Amount   : 2000ï¿½
+    Amount   : 2000€
     Info     : Import and Export in ora, xcf, ...
 
 
@@ -110,7 +110,7 @@ Current Status: WIP Phase 2 70%
     Stage    : Tools
     Target   : Paint Tools, Selection Tools, Generic Tools
     Deadline : Defined after phase 4
-    Amount   : 2500ï¿½
+    Amount   : 2500€
     Info     : 
         1) Paint Tools: Color Picker, Text Tool, Bucket Fill, Shapes.
         2) Selection Tools: Rectangle, Ellipse, Free, Polygonal.
@@ -121,7 +121,7 @@ Current Status: WIP Phase 2 70%
     Stage    : Brush
     Target   : Improvement Brush 
     Deadline : Defined after phase 5
-    Amount   : 3000ï¿½
+    Amount   : 3000€
     Info     :
         1) Import the improvements made by Jason Wilkins in GSOC 2011.
         2) Add Blend Mode for Brushes.
