@@ -100,6 +100,7 @@ set(SRC
 	intern/key.c
 	intern/lamp.c
 	intern/lattice.c
+	intern/layer.c
 	intern/library.c
 	intern/mask_rasterize.c
 	intern/mask.c
@@ -189,6 +190,7 @@ set(SRC
 	BKE_key.h
 	BKE_lamp.h
 	BKE_lattice.h
+	BKE_layer.h
 	BKE_library.h
 	BKE_mask.h
 	BKE_main.h

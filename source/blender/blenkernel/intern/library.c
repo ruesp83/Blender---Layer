@@ -622,6 +622,9 @@ static ID *alloc_libblock_notest(short type)
 		case ID_IM:
 			id = MEM_callocN(sizeof(Image), "image");
 			break;
+		/*case ID_IL:
+			id= MEM_callocN(sizeof(ImageLayer), "imagelayer");
+			break;*/
 		case ID_LT:
 			id = MEM_callocN(sizeof(Lattice), "latt");
 			break;

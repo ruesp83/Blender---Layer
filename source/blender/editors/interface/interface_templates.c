@@ -1924,6 +1924,12 @@ void uiTemplateCurveMapping(uiLayout *layout, PointerRNA *ptr, const char *propn
 /********************* ColorWheel Template ************************/
 
 #define WHEEL_SIZE  100
+#define PICKER_H	100 //150
+#define PICKER_W	100 //150
+#define PICKER_SPACE	6
+#define PICKER_BAR		14
+
+#define PICKER_TOTAL_W	(PICKER_W+PICKER_SPACE+PICKER_BAR)
 
 void uiTemplateColorWheel(uiLayout *layout, PointerRNA *ptr, const char *propname, int value_slider, int lock, int lock_luminosity, int cubic)
 {
@@ -1942,9 +1948,10 @@ void uiTemplateColorWheel(uiLayout *layout, PointerRNA *ptr, const char *propnam
 	
 	col = uiLayoutColumn(layout, FALSE);
 	row = uiLayoutRow(col, TRUE);
-	
-	but = uiDefButR_prop(block, HSVCIRCLE, 0, "",   0, 0, WHEEL_SIZE, WHEEL_SIZE, ptr, prop, -1, 0.0, 0.0, 0, 0, "");
+	but = uiDefButR_prop(block, HSVCIRCLE, 0, "", 0, 0, WHEEL_SIZE, WHEEL_SIZE, ptr, prop, -1, 0.0, 0.0, 0, 0, "");
 
+	but = uiDefButR_prop(block, HSVCIRCLE, 0, "", 0, 0, WHEEL_SIZE, WHEEL_SIZE, ptr, prop, -1, 0.0, 0.0, 0, 0, "");
+		
 	if (lock) {
 		but->flag |= UI_BUT_COLOR_LOCK;
 	}
@@ -1961,8 +1968,78 @@ void uiTemplateColorWheel(uiLayout *layout, PointerRNA *ptr, const char *propnam
 
 	uiItemS(row);
 	
-	if (value_slider)
+	if (value_slider) 
 		uiDefButR_prop(block, HSVCUBE, 0, "", WHEEL_SIZE + 6, 0, 14, WHEEL_SIZE, ptr, prop, -1, softmin, softmax, UI_GRAD_V_ALT, 0, "");
+}
+
+void uiTemplateColor(uiLayout *layout, PointerRNA *ptr, const char *propname, int value_slider, int lock, int lock_luminosity, int cubic)
+{
+	PropertyRNA *prop= RNA_struct_find_property(ptr, propname);
+	uiBlock *block= uiLayoutGetBlock(layout);
+	uiLayout *col, *row;
+	uiBut *but;
+	float softmin, softmax, step, precision;
+
+	if (!prop) {
+		RNA_warning("property not found: %s.%s", RNA_struct_identifier(ptr->type), propname);
+		return;
+	}
+
+	RNA_property_float_ui_range(ptr, prop, &softmin, &softmax, &step, &precision);
+	
+	col = uiLayoutColumn(layout, 0);
+	row= uiLayoutRow(col, 1);
+
+	switch (U.color_picker_type) {
+		case USER_CP_CIRCLE:
+			but = uiDefButR_prop(block, HSVCIRCLE, 0, "", 0, 0, WHEEL_SIZE, WHEEL_SIZE, ptr, prop, -1, 0.0, 0.0, 0, 0, "");
+			break;
+		case USER_CP_SQUARE_SV:
+			but= uiDefButR_prop(block, HSVCUBE, 0, "",	0, PICKER_BAR+PICKER_SPACE, PICKER_TOTAL_W, PICKER_H, ptr, prop, 0, 0.0, 0.0, UI_GRAD_SV, 0, "");
+			break;
+		case USER_CP_SQUARE_HS:
+			but= uiDefButR_prop(block, HSVCUBE, 0, "",	0, PICKER_BAR+PICKER_SPACE, PICKER_TOTAL_W, PICKER_H, ptr, prop, 0, 0.0, 0.0, UI_GRAD_HS, 0, "");
+			break;
+		case USER_CP_SQUARE_HV:
+			but= uiDefButR_prop(block, HSVCUBE, 0, "",	0, PICKER_BAR+PICKER_SPACE, PICKER_TOTAL_W, PICKER_H, ptr, prop, 0, 0.0, 0.0, UI_GRAD_HV, 0, "");
+			break;
+	}
+
+	
+	if (lock) {
+		but->flag |= UI_BUT_COLOR_LOCK;
+	}
+
+	if (lock_luminosity) {
+		float color[4]; /* in case of alpha */
+		but->flag |= UI_BUT_VEC_SIZE_LOCK;
+		RNA_property_float_get_array(ptr, prop, color);
+		but->a2= len_v3(color);
+	}
+
+	if (cubic)
+		but->flag |= UI_BUT_COLOR_CUBIC;
+		
+	if (value_slider) {
+		switch (U.color_picker_type) {
+			case USER_CP_CIRCLE:
+				uiItemS(row);
+				uiDefButR_prop(block, HSVCUBE, 0, "", WHEEL_SIZE+6, 0, 14, WHEEL_SIZE, ptr, prop, -1, softmin, softmax, UI_GRAD_V_ALT, 0, "");
+				break;
+			case USER_CP_SQUARE_SV:
+				uiItemS(col);
+				uiDefButR_prop(block, HSVCUBE, 0, "", 0, 0, PICKER_TOTAL_W, PICKER_BAR, ptr, prop, -1, 0, 0, UI_GRAD_SV + 3, 0, "");
+				break;
+			case USER_CP_SQUARE_HS:
+				uiItemS(col);
+				uiDefButR_prop(block, HSVCUBE, 0, "", 0, 0, PICKER_TOTAL_W, PICKER_BAR, ptr, prop, -1, 0, 0, UI_GRAD_HS + 3, 0, "");
+				break;
+			case USER_CP_SQUARE_HV:
+				uiItemS(col);
+				uiDefButR_prop(block, HSVCUBE, 0, "", 0, 0, PICKER_TOTAL_W, PICKER_BAR, ptr, prop, -1, 0, 0, UI_GRAD_HV + 3, 0, "");
+				break;
+		}
+	}
 }
 
 /********************* Layer Buttons Template ************************/
@@ -2081,6 +2158,10 @@ static int list_item_icon_get(bContext *C, PointerRNA *itemptr, int rnaicon, int
 	else if (RNA_struct_is_a(itemptr->type, &RNA_TextureSlot)) {
 		id = RNA_pointer_get(itemptr, "texture").data;
 	}
+	/*else if (RNA_struct_is_a(itemptr->type, &RNA_ImageLayer)) {
+		//id= RNA_pointer_get(itemptr, "imagelayer").data;
+
+	}*/
 	else if (RNA_struct_is_a(itemptr->type, &RNA_DynamicPaintSurface)) {
 		DynamicPaintSurface *surface = (DynamicPaintSurface *)itemptr->data;
 
@@ -2143,6 +2224,18 @@ static void list_item_row(bContext *C, uiLayout *layout, PointerRNA *ptr, Pointe
 		uiItemL(sub, name, icon);
 		uiBlockSetEmboss(block, UI_EMBOSS);
 		uiDefButR(block, OPTION, 0, "", 0, 0, UI_UNIT_X, UI_UNIT_Y, itemptr, "use", 0, 0, 0, 0, 0,  NULL);
+	}
+	else if (RNA_struct_is_a(itemptr->type, &RNA_ImageLayer)) {
+		ImageLayer *layer = (ImageLayer*)itemptr->data;
+		uiItemL(sub, name, icon);
+		uiBlockSetEmboss(block, UI_EMBOSSN);
+		//uiDefButR(block, OPTION, 0, "", 0, 0, UI_UNIT_X, UI_UNIT_Y, itemptr, "visible", 0, 0, 0, 0, 0,  NULL);
+		uiDefIconButR(block, OPTION, 0, (layer->lock & IMA_LAYER_LOCK) ? ICON_LOCKED : ICON_UNLOCKED,
+				0, 0, UI_UNIT_X, UI_UNIT_Y, itemptr, "lock", 0, 0, 0, 0, 0, NULL);
+		uiDefIconButR(block, OPTION, 0, (layer->visible & IMA_LAYER_VISIBLE) ? ICON_RESTRICT_VIEW_OFF : ICON_RESTRICT_VIEW_ON,
+				0, 0, UI_UNIT_X, UI_UNIT_Y, itemptr, "visible", 0, 0, 0, 0, 0, NULL);
+		uiBlockSetEmboss(block, UI_EMBOSS);
+
 	}
 	else if (RNA_struct_is_a(itemptr->type, &RNA_MaterialSlot)) {
 		/* provision to draw active node name */

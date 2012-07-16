@@ -257,7 +257,7 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 	RE_ReleaseResult(oglrender->re);
 
 	/* update byte from float buffer */
-	ibuf = BKE_image_acquire_ibuf(oglrender->ima, &oglrender->iuser, &lock);
+	ibuf = BKE_image_acquire_ibuf(oglrender->ima, &oglrender->iuser, &lock, IMA_IBUF_LAYER);
 
 	if (ibuf) {
 		image_buffer_rect_update(scene, rr, ibuf, NULL);
@@ -517,7 +517,7 @@ static int screen_opengl_render_anim_step(bContext *C, wmOperator *op)
 	screen_opengl_render_apply(oglrender);
 
 	/* save to disk */
-	ibuf = BKE_image_acquire_ibuf(oglrender->ima, &oglrender->iuser, &lock);
+	ibuf = BKE_image_acquire_ibuf(oglrender->ima, &oglrender->iuser, &lock, IMA_IBUF_LAYER);
 
 	if (ibuf) {
 		/* color -> grayscale */

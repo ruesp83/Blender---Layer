@@ -87,7 +87,7 @@ static int pack_all_invoke(bContext *C, wmOperator *op, wmEvent *UNUSED(event))
 	// first check for dirty images
 	for (ima = bmain->image.first; ima; ima = ima->id.next) {
 		if (ima->ibufs.first) { /* XXX FIX */
-			ibuf = BKE_image_get_ibuf(ima, NULL);
+			ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 			
 			if (ibuf && (ibuf->userflags & IB_BITMAPDIRTY))
 				break;

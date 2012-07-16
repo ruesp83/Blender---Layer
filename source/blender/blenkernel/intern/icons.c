@@ -191,6 +191,9 @@ void BKE_previewimg_free_id(ID *id)
 	else if (GS(id->name) == ID_IM) {
 		Image *img  = (Image *)id;
 		BKE_previewimg_free(&img->preview);
+	/*} else if (GS(id->name) == ID_IL) {
+		ImageLayer *iml  = (ImageLayer*)id;
+		BKE_previewimg_free(&iml->preview);*/
 	}
 	else if (GS(id->name) == ID_BR) {
 		Brush *br  = (Brush *)id;
@@ -226,6 +229,10 @@ PreviewImage *BKE_previewimg_get(ID *id)
 		Image *img  = (Image *)id;
 		if (!img->preview) img->preview = BKE_previewimg_create();
 		prv_img = img->preview;
+	/*} else if (GS(id->name) == ID_IL) {
+		ImageLayer *iml  = (ImageLayer*)id;
+		if (!iml->preview) iml->preview = BKE_previewimg_create();
+		prv_img = iml->preview;*/
 	}
 	else if (GS(id->name) == ID_BR) {
 		Brush *br  = (Brush *)id;

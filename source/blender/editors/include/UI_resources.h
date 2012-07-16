@@ -198,6 +198,10 @@ enum {
 	TH_STITCH_PREVIEW_UNSTITCHABLE,
 	TH_STITCH_PREVIEW_ACTIVE,
 
+	TH_SHOW_BOUNDARY_LAYER,
+	TH_COL1_BOUNDARY_LAYER,
+	TH_COL2_BOUNDARY_LAYER,
+
 	TH_MATCH,           /* highlight color for search matches */
 	TH_SELECT_HIGHLIGHT, /* highlight color for selected outliner item */
 

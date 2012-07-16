@@ -37,7 +37,7 @@ ImBuf *MultilayerBaseOperation::getImBuf()
 	rpass = (RenderPass *)BLI_findlink(&this->m_renderlayer->passes, this->m_passId);
 	if (rpass) {
 		this->m_imageUser->pass = this->m_passId;
-		BKE_image_multilayer_index(this->m_image->rr, this->m_imageUser);
+		BKE_render_multilayer_index(this->m_image->rr, this->m_imageUser);
 		return BaseImageOperation::getImBuf();
 	}
 	return NULL;

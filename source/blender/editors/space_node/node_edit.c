@@ -1583,7 +1583,7 @@ static int snode_bg_viewmove_invoke(bContext *C, wmOperator *op, wmEvent *event)
 	void *lock;
 	
 	ima = BKE_image_verify_viewer(IMA_TYPE_COMPOSITE, "Viewer Node");
-	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock);
+	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock, IMA_IBUF_IMA);
 	
 	if (ibuf == NULL) {
 		BKE_image_release_ibuf(ima, lock);
@@ -1688,8 +1688,8 @@ static void sample_draw(const bContext *C, ARegion *ar, void *arg_info)
 	if (info->draw) {
 		ED_image_draw_info(ar, (scene->r.color_mgt_flag & R_COLOR_MANAGEMENT), info->channels,
 		                   info->x, info->y, info->col, info->colf,
-		                   NULL, NULL /* zbuf - unused for nodes */
-		                   );
+		                   NULL, NULL, /* zbuf - unused for nodes */
+		                   1);
 	}
 }
 
@@ -1704,7 +1704,7 @@ static void sample_apply(bContext *C, wmOperator *op, wmEvent *event)
 	float fx, fy, bufx, bufy;
 	
 	ima = BKE_image_verify_viewer(IMA_TYPE_COMPOSITE, "Viewer Node");
-	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock);
+	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock, IMA_IBUF_IMA);
 	if (!ibuf) {
 		info->draw = 0;
 		return;
@@ -4369,7 +4369,7 @@ void NODE_OT_add_file(wmOperatorType *ot)
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-	
+
 	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE, FILE_SPECIAL, FILE_OPENFILE, WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);  //XXX TODO, relative_path
 	RNA_def_string(ot->srna, "name", "Image", MAX_ID_NAME - 2, "Name", "Datablock name to assign");
 }

@@ -365,7 +365,7 @@ static void do_multires_bake(MultiresBakeRender *bkr, Image *ima, MPassKnownData
                              MInitBakeData initBakeData, MApplyBakeData applyBakeData, MFreeBakeData freeBakeData)
 {
 	DerivedMesh *dm = bkr->lores_dm;
-	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
+	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 	const int lvl = bkr->lvl;
 	const int tot_face = dm->getNumTessFaces(dm);
 	MVert *mvert = dm->getVertArray(dm);
@@ -600,7 +600,7 @@ static void interp_barycentric_mface(DerivedMesh *dm, MFace *mface, const float 
 static void *init_heights_data(MultiresBakeRender *bkr, Image *ima)
 {
 	MHeightBakeData *height_data;
-	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
+	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 	DerivedMesh *lodm = bkr->lores_dm;
 
 	height_data = MEM_callocN(sizeof(MHeightBakeData), "MultiresBake heightData");
@@ -654,7 +654,7 @@ static void free_normal_data(void *bake_data)
 static void apply_heights_data(void *bake_data)
 {
 	MHeightBakeData *height_data = (MHeightBakeData *)bake_data;
-	ImBuf *ibuf = BKE_image_get_ibuf(height_data->ima, NULL);
+	ImBuf *ibuf = BKE_image_get_ibuf(height_data->ima, NULL, IMA_IBUF_IMA);
 	int x, y, i;
 	float height, *heights = height_data->heights;
 	float min = height_data->height_min, max = height_data->height_max;
@@ -712,7 +712,7 @@ static void apply_heights_callback(DerivedMesh *lores_dm, DerivedMesh *hires_dm,
 	MTFace *mtface = CustomData_get_layer(&lores_dm->faceData, CD_MTFACE);
 	MFace mface;
 	Image *ima = mtface[face_index].tpage;
-	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
+	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 	MHeightBakeData *height_data = (MHeightBakeData *)bake_data;
 	float uv[2], *st0, *st1, *st2, *st3;
 	int pixel = ibuf->x * y + x;
@@ -783,7 +783,7 @@ static void apply_tangmat_callback(DerivedMesh *lores_dm, DerivedMesh *hires_dm,
 	MTFace *mtface = CustomData_get_layer(&lores_dm->faceData, CD_MTFACE);
 	MFace mface;
 	Image *ima = mtface[face_index].tpage;
-	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
+	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 	MNormalBakeData *normal_data = (MNormalBakeData *)bake_data;
 	float uv[2], *st0, *st1, *st2, *st3;
 	int pixel = ibuf->x * y + x;
@@ -862,7 +862,7 @@ static void bake_images(MultiresBakeRender *bkr)
 
 	for (link = bkr->image.first; link; link = link->next) {
 		Image *ima = (Image *)link->data;
-		ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
+		ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 
 		if (ibuf->x > 0 && ibuf->y > 0) {
 			ibuf->userdata = MEM_callocN(ibuf->y * ibuf->x, "MultiresBake imbuf mask");
@@ -888,7 +888,7 @@ static void finish_images(MultiresBakeRender *bkr)
 
 	for (link = bkr->image.first; link; link = link->next) {
 		Image *ima = (Image *)link->data;
-		ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
+		ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 
 		if (ibuf->x <= 0 || ibuf->y <= 0)
 			continue;
@@ -977,7 +977,7 @@ static int multiresbake_check(bContext *C, wmOperator *op)
 					ok = 0;
 				}
 				else {
-					ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
+					ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 
 					if (!ibuf) {
 						BKE_report(op->reports, RPT_ERROR, "Baking should happend to image with image buffer");
@@ -1066,7 +1066,7 @@ static void clear_images(MTFace *mtface, int totface)
 		Image *ima = mtface[a].tpage;
 
 		if ((ima->id.flag & LIB_DOIT) == 0) {
-			ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
+			ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 
 			IMB_rectfill(ibuf, (ibuf->planes == R_IMF_PLANES_RGBA) ? vec_alpha : vec_solid);
 			ima->id.flag |= LIB_DOIT;
@@ -1362,7 +1362,7 @@ static void finish_bake_internal(BakeRender *bkr)
 		/* force OpenGL reload and mipmap recalc */
 		for (ima = G.main->image.first; ima; ima = ima->id.next) {
 			if (ima->ok == IMA_OK_LOADED) {
-				ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
+				ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 				if (ibuf) {
 					if (ibuf->userflags & IB_BITMAPDIRTY) {
 						GPU_free_image(ima);

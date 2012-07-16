@@ -38,6 +38,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_math.h"
 #include "imbuf.h"
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
@@ -124,4 +125,146 @@ void IMB_flipx(struct ImBuf *ibuf)
 			}
 		}
 	}
+}
+
+/*float bilinear_interpolation(unsigned char *outI, float *outF, float x, float y, int width, int height)
+{
+    int x0 = int(x);
+    int y0 = int(y);
+    int x1 = x0 + 1;
+    int y1 = y1 + 1;
+    if (x1 >= width)
+		x1 = x0;
+
+    if (y1 >= height)
+	    y1 = y0;
+
+    float v0 = input[x0][y0];
+    float v1 = input[x1][y0];
+    float v2 = input[x0][y1];
+    float v3 = input[x1][y1];
+    float dx = x - float(x0);
+    float dx1 = 1 - dx;
+    float vx0 = v1 * dx + v0 * dx1;
+    float vx1 = v3 * dx + v2 * dx1;
+    float dy = y - float(y0);
+    return vx1 * dy + vx0 * (1 - dy);
+}*/
+
+struct ImBuf *IMB_rotation(struct ImBuf *ibuf, float x, float y, float angle, int filter_type, float default_color[4])
+{
+	ImBuf *ibuf2;
+	int w, h, flags = 0;
+	int offset_d, offset_s, Src_x, Src_y;
+	float cosine, sine, p1x, p1y, p2x, p2y, p3x, p3y, minx, miny, maxx, maxy;
+	unsigned char *outI_d, *outI_s;
+	unsigned char ccol[4];
+	float *outF_d, *outF_s;
+
+	//angle = DEG2RADF(angle);
+
+	if (ibuf) {
+		int i, j;
+		
+		w = ibuf->x;
+		h = ibuf->y;
+
+		cosine = (float)cos(angle);
+		sine = (float)sin(angle);
+
+		p1x = (-ibuf->y * sine);
+		p1y = (ibuf->y * cosine);
+		p2x = (ibuf->x * cosine - ibuf->y * sine);
+		p2y = (ibuf->y * cosine + ibuf->x * sine);
+		p3x = (ibuf->x * cosine);
+		p3y = (ibuf->x * sine);
+
+		minx = MIN2(0, MIN2(p1x, MIN2(p2x, p3x)));
+		miny = MIN2(0, MIN2(p1y, MIN2(p2y, p3y)));
+		maxx = MAX2(p1x, MAX2(p2x, p3x));
+		maxy = MAX2(p1y, MAX2(p2y, p3y));
+
+		h = (int)floor(fabs(maxy)-miny); 
+		w = (int)floor(fabs(maxx)-minx);
+
+		if (ibuf->rect) flags |= IB_rect;
+		if (ibuf->rect_float) flags |= IB_rectfloat;
+		
+		ibuf2 = IMB_allocImBuf(w, h, ibuf->planes, flags);
+		
+		if (ibuf->rect)
+			rgba_float_to_uchar(ccol, default_color);
+
+		for (j = 0; j < ibuf2->y; j++) {
+			for (i = 0; i < ibuf2->x; i++) {
+								
+				/*if ((vec[0] >= 0) && (vec[0] < w) && (vec[1] >= 0) && (vec[1] < h)) {
+					switch (filter_type) {
+						case 0:
+							neareast_interpolation(ibuf, ibuf2, vec[0], vec[1], i, j);
+							break;
+						case 1:
+							bilinear_interpolation(ibuf, ibuf2, vec[0], vec[1], i, j);
+							break;
+						case 2: {
+							//bicubic_interpolation(ibuf, ibuf2, vec[0], vec[1], i, j);
+
+							bicubic_interpolation_color(ibuf, outI, outF, vec[0], vec[1]);
+							break;
+						}
+					}
+				}*/
+
+				Src_x = (int)((i + minx) * cosine + (j + miny) * sine); 
+				Src_y = (int)((j + miny) * cosine - (i + minx) * sine); 
+
+				if ((Src_x >= 0) && (Src_x < ibuf->x) && (Src_y >=0) && 
+					(Src_y < ibuf->y)) {
+						offset_d = ibuf2->x * j * 4 + 4 * i;
+						offset_s = ibuf->x * Src_y * 4 + 4 * Src_x;
+						
+						if (ibuf->rect_float) {
+							outF_d = NULL;
+							outF_s = NULL;
+							outF_d = ibuf2->rect_float + offset_d;
+							outF_s = ibuf->rect_float + offset_s;
+
+							copy_v4_v4(outF_d, outF_s);
+						}
+						
+						if (ibuf->rect) {
+							outI_d = NULL;
+							outI_s = NULL;
+							outI_d = (unsigned char *)ibuf2->rect + offset_d;
+							outI_s = (unsigned char *)ibuf->rect + offset_s;
+
+							outI_d[0] = outI_s[0];
+							outI_d[1] = outI_s[1];
+							outI_d[2] = outI_s[2];
+							outI_d[3] = outI_s[3];
+						}
+						//bicubic_interpolation(ibuf, ibuf2, vec[0], vec[1], i, j);
+						//bicubic_interpolation_color(ibuf, outI_d, outF_d, Src_x, Src_y);
+				}
+				else {
+					if (ibuf->rect_float) {
+						float *col;
+						col = ibuf2->rect_float + ibuf2->x * j * 4 + 4 * i;
+						copy_v4_v4(col, default_color);
+					}
+					if (ibuf->rect) {
+						unsigned char *col;
+						
+						col = (unsigned char *)ibuf2->rect + ibuf2->x * j * 4 + 4 * i;
+						col[0] = ccol[0];
+						col[1] = ccol[1];
+						col[2] = ccol[2];
+						col[3] = ccol[3];
+					}
+				}
+			}
+		}
+	}
+	IMB_freeImBuf(ibuf);
+	return ibuf2;
 }

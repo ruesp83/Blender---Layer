@@ -92,6 +92,8 @@ Any case: direct data is ALWAYS after the lib block
 /* allow writefile to use deprecated functionality (for forward compatibility code) */
 #define DNA_DEPRECATED_ALLOW
 
+#include "IMB_imbuf_types.h"
+
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
 #include "DNA_actuator_types.h"
@@ -104,6 +106,7 @@ Any case: direct data is ALWAYS after the lib block
 #include "DNA_genfile.h"
 #include "DNA_group_types.h"
 #include "DNA_gpencil_types.h"
+//#include "DNA_image_types.h"
 #include "DNA_fileglobal_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
@@ -1917,11 +1920,23 @@ static void write_previews(WriteData *wd, PreviewImage *prv)
 	}
 }
 
+static void write_ibufs(WriteData *wd, ImBuf *ibuf)
+{
+	if (ibuf) {
+		//writestruct(wd, DATA, "ImBuf", 1, ibuf);
+		if (ibuf->rect_float)
+			writedata(wd, DATA, ibuf->x*ibuf->y*sizeof(float), ibuf->rect_float);
+		else if (ibuf->rect)
+			writedata(wd, DATA, ibuf->x*ibuf->y*sizeof(char), ibuf->rect);
+	}
+}
+
 static void write_images(WriteData *wd, ListBase *idbase)
 {
 	Image *ima;
 	PackedFile * pf;
-
+	ImageLayer *iml;
+	//ImBuf *ibuf;
 
 	ima= idbase->first;
 	while (ima) {
@@ -1936,6 +1951,14 @@ static void write_images(WriteData *wd, ListBase *idbase)
 				writedata(wd, DATA, pf->size, pf->data);
 			}
 
+			if (ima->imlayers.first) {
+				for (iml = (ImageLayer *)ima->imlayers.last; iml; iml = iml->prev) {
+					writestruct(wd, DATA, "ImageLayer", 1, iml); 
+					//ibuf = (ImBuf *)iml->ibufs.first;
+					write_ibufs(wd, (ImBuf *)iml->ibufs.first);
+				}
+			}
+			
 			write_previews(wd, ima->preview);
 		}
 		ima= ima->id.next;

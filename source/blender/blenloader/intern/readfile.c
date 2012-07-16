@@ -52,6 +52,8 @@
 /* allow readfile to use deprecated functionality */
 #define DNA_DEPRECATED_ALLOW
 
+#include "IMB_imbuf_types.h"
+
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
 #include "DNA_actuator_types.h"
@@ -66,6 +68,7 @@
 #include "DNA_genfile.h"
 #include "DNA_group_types.h"
 #include "DNA_gpencil_types.h"
+//#include "DNA_image_types.h"
 #include "DNA_ipo_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
@@ -1729,6 +1732,25 @@ static PreviewImage *direct_link_preview_image(FileData *fd, PreviewImage *old_p
 	return prv;
 }
 
+/* ************ READ IMBUF *************** */
+
+static ImBuf *direct_link_ibufs(FileData *fd, ImBuf *ibuf)
+{
+	//ImBuf *imbuf= newdataadr(fd, imbuf_old);
+
+	if (ibuf) {
+		int i;
+		for (i=0; i < ibuf->x+ibuf->y; ++i) {
+			if (ibuf->rect[i]) {
+				ibuf->rect[i] = newdataadr(fd, ibuf->rect[i]);
+			}
+		}
+	}
+
+	return ibuf;
+}
+
+
 /* ************ READ ANIMATION STUFF ***************** */
 
 /* Legacy Data Support (for Version Patching) ----------------------------- */
@@ -2991,6 +3013,29 @@ static void link_ibuf_list(FileData *fd, ListBase *lb)
 	lb->last = prev;
 }
 
+static void link_imalayers_list(FileData *fd, ListBase *lb)
+{
+	Link *ln, *next;
+	ImageLayer *layer;
+	
+	if(lb->last==NULL) return;
+	
+	lb->last = newdataadr(fd, lb->last);
+	ln = lb->last;
+	next = NULL;
+	while(ln) {
+		ln->prev = newdataadr(fd, ln->prev);
+		ln->next = next;
+		next = ln;
+		layer = (ImageLayer *)ln;
+		//layer->ibufs.first = newdataadr(fd, layer->ibufs.first);
+		layer->ibufs.first = direct_link_ibufs(fd, (ImBuf *)layer->ibufs.first);
+		//link_ibuf_list(fd, &layer->ibufs);
+		ln = ln->prev;
+	}
+	lb->first = next;	
+}
+
 static void direct_link_image(FileData *fd, Image *ima)
 {
 	/* for undo system, pointers could be restored */
@@ -3022,8 +3067,11 @@ static void direct_link_image(FileData *fd, Image *ima)
 	}
 	
 	ima->packedfile = direct_link_packedfile(fd, ima->packedfile);
+	link_imalayers_list(fd, &ima->imlayers);
 	ima->preview = direct_link_preview_image(fd, ima->preview);
 	ima->ok = 1;
+
+	
 }
 
 

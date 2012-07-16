@@ -461,10 +461,18 @@ struct ImBuf *IMB_double_y(struct ImBuf *ibuf1);
  */
 void IMB_flipx(struct ImBuf *ibuf);
 void IMB_flipy(struct ImBuf *ibuf);
+struct ImBuf *IMB_rotation(struct ImBuf *ibuf, float x, float y, float angle, int filter_type, float default_color[4]);
 
 /* Premultiply alpha */
 
 void IMB_premultiply_alpha(struct ImBuf *ibuf);
+
+/**
+ *
+ * \attention Defined in offset.c
+ */
+struct ImBuf *IMB_offset(struct ImBuf *ibuf, float x, float y, int half, int wrap, float default_color[4]);
+
 
 /**
  *

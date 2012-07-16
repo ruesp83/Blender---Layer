@@ -56,6 +56,7 @@ set(SRC
 	intern/metadata.c
 	intern/module.c
 	intern/moviecache.c
+	intern/offset.c
 	intern/png.c
 	intern/readimage.c
 	intern/rectop.c

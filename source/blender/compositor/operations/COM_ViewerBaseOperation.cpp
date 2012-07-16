@@ -58,7 +58,7 @@ void ViewerBaseOperation::initExecution()
 void ViewerBaseOperation::initImage()
 {
 	Image *anImage = this->m_image;
-	ImBuf *ibuf = BKE_image_acquire_ibuf(anImage, this->m_imageUser, &this->m_lock);
+	ImBuf *ibuf = BKE_image_acquire_ibuf(anImage, this->m_imageUser, &this->m_lock, IMA_IBUF_IMA);
 	
 	if (!ibuf) return;
 	if (ibuf->x != (int)getWidth() || ibuf->y != (int)getHeight()) {

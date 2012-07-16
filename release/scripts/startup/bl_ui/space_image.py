@@ -117,11 +117,16 @@ class IMAGE_MT_image(Menu):
         ima = sima.image
 
         layout.operator("image.new")
-        layout.operator("image.open")
+        layout.operator("image.open", text="Open Image").action = 'IMAGE'
+        
 
         show_render = sima.show_render
+        show_paint = sima.show_paint
 
         if ima:
+            if show_paint:
+                layout.operator("image.open", text="Open as Layer").action = 'LAYER'
+
             if not show_render:
                 layout.operator("image.replace")
                 layout.operator("image.reload")
@@ -158,6 +163,103 @@ class IMAGE_MT_image(Menu):
                 layout.prop(sima, "use_image_paint")
 
             layout.separator()
+
+
+class IMAGE_MT_layers(Menu):
+    bl_label = "Layer"
+
+    def draw(self, context):
+        layout = self.layout
+
+        sima = context.space_data
+        ima = sima.image
+
+        layout.menu("IMAGE_MT_layers_new", icon='NEW')
+        # layout.operator("image.open")
+        layout.operator("image.image_layer_duplicate", icon='GHOST')
+        layout.operator("image.image_layer_clean", icon='FILE')
+        layout.menu("IMAGE_MT_layers_remove", icon='CANCEL')
+        layout.menu("IMAGE_MT_layers_merge", icon='LINK_AREA')
+        layout.separator()
+        layout.menu("IMAGE_MT_layers_select", icon='FILE_TICK')
+        layout.menu("IMAGE_MT_layers_order", icon='SORTALPHA')
+        layout.menu("IMAGE_MT_layers_transform")
+
+
+class IMAGE_MT_layers_new(Menu):
+    bl_label = "Add"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.image_layer_add", icon='NEW')
+        layout.separator()
+        layout.operator("image.image_layer_add_above", icon='TRIA_UP')
+        layout.operator("image.image_layer_add_below", icon='TRIA_DOWN')
+
+
+class IMAGE_MT_layers_select(Menu):
+    bl_label = "Select"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.image_layer_select", text="Select Previous Layer").action = 'PREVIOUS'
+        layout.operator("image.image_layer_select", text="Select Next Layer" ).action = 'NEXT'
+        layout.operator("image.image_layer_select", text="Select Top Layer").action = 'TOP'
+        layout.operator("image.image_layer_select", text="Select Bottom Layer").action = 'BOTTOM'
+
+
+class IMAGE_MT_layers_order(Menu):
+    bl_label = "Order"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.image_layer_move", text="Layer the Top").type = 'TOP'
+        layout.operator("image.image_layer_move", text="Raise Layer", icon='TRIA_UP').type = 'UP'
+        layout.operator("image.image_layer_move", text="Lower Layer", icon='TRIA_DOWN').type = 'DOWN'
+        layout.operator("image.image_layer_move", text="Layer the Bottom").type = 'BOTTOM'
+        layout.separator()
+        layout.operator("image.image_layer_move", text="Invert").type = 'INVERT'
+
+
+class IMAGE_MT_layers_transform(Menu):
+    bl_label = "Transform"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.image_layer_flip", text="Flip Horizontally", icon='ARROW_LEFTRIGHT').type = 'FLIP_H'
+        layout.operator("image.image_layer_flip", text="Flip Vertically").type = 'FLIP_V'
+        layout.separator()
+        layout.operator("image.image_layer_rotate", text="Rotate 90 clockwise", icon='TIME').type = 'ROT_90'
+        layout.operator("image.image_layer_rotate", text="Rotate 90 anti-clockwise", icon='RECOVER_LAST').type = 'ROT_90A'
+        layout.operator("image.image_layer_rotate", text="Rotate 180").type = 'ROT_180'
+        layout.operator("image.image_layer_arbitrary_rot", text="Arbitrary Rotation", icon='FILE_REFRESH')
+        layout.separator()
+        layout.operator("image.image_layer_offset", text="Offset")
+
+
+class IMAGE_MT_layers_remove(Menu):
+    bl_label = "Remove"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.image_layer_remove", text="Layer").action = 'SELECTED'
+        layout.operator("image.image_layer_remove", text="Hidden Layers" ).action = 'HIDDEN'
+
+
+class IMAGE_MT_layers_merge(Menu):
+    bl_label = "Merge"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.image_layer_merge", text="Merge Down").type = 'DOWN'
+        layout.operator("image.image_layer_merge", text="Merge Visible" ).type = 'VISIBLE'
+        layout.operator("image.image_layer_merge", text="Merge All" ).type = 'ONE'
 
 
 class IMAGE_MT_image_invert(Menu):
@@ -355,7 +457,7 @@ class IMAGE_HT_header(Header):
         toolsettings = context.tool_settings
 
         show_render = sima.show_render
-        # show_paint = sima.show_paint
+        show_paint = sima.show_paint
         show_uvedit = sima.show_uvedit
 
         row = layout.row(align=True)
@@ -374,10 +476,17 @@ class IMAGE_HT_header(Header):
             else:
                 sub.menu("IMAGE_MT_image", text="Image")
 
+            if show_paint:
+                sub.menu("IMAGE_MT_layers", text="Layer")
+
             if show_uvedit:
                 sub.menu("IMAGE_MT_uvs")
 
         layout.template_ID(sima, "image", new="image.new")
+
+        if not ima:
+            layout.operator("image.open", text="Open Image", icon='IMASEL').action = 'IMAGE'
+
         if not show_render:
             layout.prop(sima, "use_image_pin", text="")
 
@@ -411,6 +520,7 @@ class IMAGE_HT_header(Header):
             layout.template_image_layers(ima, iuser)
 
             # painting
+            # if not show_render:
             layout.prop(sima, "use_image_paint", text="")
 
             # draw options
@@ -653,6 +763,57 @@ class IMAGE_PT_view_properties(Panel):
             sub.row().prop(uvedit, "draw_stretch_type", expand=True)
 
 
+class IMAGE_PT_image_layers(Panel, ImagePaintPanel):
+    bl_label = "Image Layers"
+
+    @classmethod
+    def poll(cls, context):
+        sima = context.space_data
+        return sima.show_paint
+
+    def draw(self, context):
+        layout = self.layout
+        sima = context.space_data
+        ima = sima.image
+        layers = ima.image_layers
+
+        if ima:
+            row = layout.row()
+            row.template_list(ima, "image_layers", ima.image_layers, "active_image_layer_index", 
+                              rows=5, maxrows=5)
+
+            col = row.column(align=True)
+            col.operator("image.image_layer_add", text="", icon='NEW')
+            
+            if layers.active_image_layer:
+                col.operator("image.image_layer_duplicate", text="", icon='GHOST')
+                sub = col.column()
+                
+                if (layers.active_image_layer.type == 'BASE'):
+                    sub.enabled = False
+                else:
+                    sub.enabled = True
+                sub.operator("image.image_layer_remove", text="", icon='CANCEL').action = 'SELECTED'
+                col.operator("image.image_layer_move", text="", icon='TRIA_UP').type = 'UP'
+                col.operator("image.image_layer_move", text="", icon='TRIA_DOWN').type = 'DOWN'
+                split = layout.split(percentage=0.35)
+                col = split.column()
+                col.label(text="Name")
+                col.label(text="Opacity:")
+                col.label(text="Blend Modes:")
+                col = split.column()
+                col.prop(layers.active_image_layer, "name", text="")
+                sub = col.column()
+                if (((layers.active_image_layer.background != 'ALPHA') and 
+                    (layers.active_image_layer.type == 'BASE')) or
+                    (not layers.active_image_layer.visible)):
+                    sub.enabled = False
+                else:
+                    sub.enabled = True
+                sub.prop(layers.active_image_layer, "opacity", text="")
+                sub.prop(layers.active_image_layer, "blend_type", text="")
+
+
 class IMAGE_PT_paint(Panel, ImagePaintPanel):
     bl_space_type = 'IMAGE_EDITOR'
     bl_region_type = 'UI'
@@ -674,7 +835,7 @@ class IMAGE_PT_paint(Panel, ImagePaintPanel):
 
         if brush:
             col = layout.column()
-            col.template_color_wheel(brush, "color", value_slider=True)
+            col.template_color(brush, "color", value_slider=True)
             col.prop(brush, "color", text="")
 
             row = col.row(align=True)

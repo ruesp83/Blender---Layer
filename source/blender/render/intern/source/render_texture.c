@@ -1225,7 +1225,7 @@ int multitex_nodes(Tex *tex, float *texvec, float *dxt, float *dyt, int osatex, 
 			rgbnor= multitex(tex, texvec, dxt, dyt, osatex, texres, thread, which_output);
 
 			if (mtex->mapto & (MAP_COL+MAP_COLSPEC+MAP_COLMIR)) {
-				ImBuf *ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser);
+				ImBuf *ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser, IMA_IBUF_IMA);
 				
 				/* don't linearize float buffers, assumed to be linear */
 				if (ibuf && !(ibuf->rect_float) && R.r.color_mgt_flag & R_COLOR_MANAGEMENT)
@@ -1703,7 +1703,7 @@ static int compatible_bump_compute(CompatibleBump *compat_bump, ShadeInput *shi,
 	if (!shi->osatex && (tex->type == TEX_IMAGE) && tex->ima) {
 		/* in case we have no proper derivatives, fall back to
 		 * computing du/dv it based on image size */
-		ImBuf* ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser);
+		ImBuf* ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser, IMA_IBUF_IMA);
 		if (ibuf) {
 			du = 1.f/(float)ibuf->x;
 			dv = 1.f/(float)ibuf->y;
@@ -1878,7 +1878,7 @@ static int ntap_bump_compute(NTapBump *ntap_bump, ShadeInput *shi, MTex *mtex, T
 
 	/* resolve image dimensions */
 	if (found_deriv_map || (mtex->texflag&MTEX_BUMP_TEXTURESPACE)!=0) {
-		ImBuf* ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser);
+		ImBuf* ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser, IMA_IBUF_IMA);
 		if (ibuf) {
 			dimx = ibuf->x;
 			dimy = ibuf->y;
@@ -2377,7 +2377,7 @@ void do_material_tex(ShadeInput *shi, Render *re)
 				/* inverse gamma correction */
 				if (tex->type==TEX_IMAGE) {
 					Image *ima = tex->ima;
-					ImBuf *ibuf = BKE_image_get_ibuf(ima, &tex->iuser);
+					ImBuf *ibuf = BKE_image_get_ibuf(ima, &tex->iuser, IMA_IBUF_IMA);
 					
 					/* don't linearize float buffers, assumed to be linear */
 					if (ibuf && !(ibuf->rect_float) && re->r.color_mgt_flag & R_COLOR_MANAGEMENT)
@@ -2889,7 +2889,7 @@ void do_halo_tex(HaloRen *har, float xn, float yn, float col_r[4])
 		/* inverse gamma correction */
 		if (mtex->tex->type==TEX_IMAGE) {
 			Image *ima = mtex->tex->ima;
-			ImBuf *ibuf = BKE_image_get_ibuf(ima, &mtex->tex->iuser);
+			ImBuf *ibuf = BKE_image_get_ibuf(ima, &mtex->tex->iuser, IMA_IBUF_IMA);
 			
 			/* don't linearize float buffers, assumed to be linear */
 			if (ibuf && !(ibuf->rect_float) && R.r.color_mgt_flag & R_COLOR_MANAGEMENT)
@@ -3104,7 +3104,7 @@ void do_sky_tex(const float rco[3], float lo[3], const float dxyview[2], float h
 				/* inverse gamma correction */
 				if (tex->type==TEX_IMAGE) {
 					Image *ima = tex->ima;
-					ImBuf *ibuf = BKE_image_get_ibuf(ima, &tex->iuser);
+					ImBuf *ibuf = BKE_image_get_ibuf(ima, &tex->iuser, IMA_IBUF_IMA);
 					
 					/* don't linearize float buffers, assumed to be linear */
 					if (ibuf && !(ibuf->rect_float) && R.r.color_mgt_flag & R_COLOR_MANAGEMENT)
@@ -3318,7 +3318,7 @@ void do_lamp_tex(LampRen *la, const float lavec[3], ShadeInput *shi, float col_r
 				/* inverse gamma correction */
 				if (tex->type==TEX_IMAGE) {
 					Image *ima = tex->ima;
-					ImBuf *ibuf = BKE_image_get_ibuf(ima, &tex->iuser);
+					ImBuf *ibuf = BKE_image_get_ibuf(ima, &tex->iuser, IMA_IBUF_IMA);
 					
 					/* don't linearize float buffers, assumed to be linear */
 					if (ibuf && !(ibuf->rect_float) && R.r.color_mgt_flag & R_COLOR_MANAGEMENT)
