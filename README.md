@@ -15,6 +15,7 @@ Donors who have contributed to this project are listed here:[Funding][3]
 
 Phases
 ------
+Current Status: WIP Phase 2 70%
 
 ### Phase 1:
     Stage    : Management
