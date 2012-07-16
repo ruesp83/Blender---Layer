@@ -138,6 +138,13 @@ Fabio Russo (ruesp83)
 - https://www.facebook.com/ruesp83
 - ruesp83@libero.it
 
+License
+-------
+Image Layer is available under the GNU General Public License, which describes the rights
+to distribute or change the code.
+See the COPYING file for more info.
+
+
 [1]: http://en.wikipedia.org/wiki/Layers_%28digital_image_editing%29
 [2]: http://wiki.blender.org/index.php?title=User:Kwk/Gsoc2010/ImageLayers
 [3]: http://ruesp83.wordpress.com/image-layer/funding/
