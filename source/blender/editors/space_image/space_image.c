@@ -512,6 +512,7 @@ static void image_operatortypes(void)
 	WM_operatortype_append(IMAGE_OT_image_layer_rotate);
 	WM_operatortype_append(IMAGE_OT_image_layer_arbitrary_rot);
 	WM_operatortype_append(IMAGE_OT_image_layer_offset);
+	WM_operatortype_append(IMAGE_OT_image_layer_scale);
 }
 
 static void image_keymap(struct wmKeyConfig *keyconf)

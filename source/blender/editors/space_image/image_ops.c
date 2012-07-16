@@ -1672,7 +1672,7 @@ static int image_new_invoke(bContext *C, wmOperator *op, wmEvent *UNUSED(event))
 
 }
 
-static int image_offset_invoke(bContext *C, wmOperator *op, wmEvent *UNUSED(event))
+static int image_op_layer_invoke(bContext *C, wmOperator *op, wmEvent *UNUSED(event))
 {
 	return WM_operator_props_dialog_popup(C, op, 250, 100);;
 }
@@ -2500,11 +2500,11 @@ static int image_layer_rotate_exec(bContext *C, wmOperator *op)
 
 	ibuf = (ImBuf*)((ImageLayer*)layer->ibufs.first);
 	if (type == 1) /* ROT_90 */
-		layer->ibufs.first = IMB_rotation(ibuf, 0.0, 0.0, -90.0, 1.0, 2, col);
+		layer->ibufs.first = IMB_rotation(ibuf, 0.0, 0.0, -90.0, 2, col);
 	else if (type == 2) /* ROT_90A */
-		layer->ibufs.first = IMB_rotation(ibuf, 0.0, 0.0, 90.0, 1.0, 2, col);
+		layer->ibufs.first = IMB_rotation(ibuf, 0.0, 0.0, 90.0, 2, col);
 	else if (type == 3) /* ROT_180 */
-		layer->ibufs.first = IMB_rotation(ibuf, 0.0, 0.0, 180.0, 1.0, 2, col);
+		layer->ibufs.first = IMB_rotation(ibuf, 0.0, 0.0, 180.0, 2, col);
 
 	WM_event_add_notifier(C, NC_IMAGE|ND_DRAW, NULL);
  
@@ -2592,7 +2592,7 @@ void IMAGE_OT_image_layer_arbitrary_rot(wmOperatorType *ot)
 	/* api callbacks */
 	ot->exec= image_layer_arbitrary_rot_exec;
 	ot->poll = image_layer_poll;
-	ot->invoke = image_offset_invoke;
+	ot->invoke = image_op_layer_invoke;
  
 	/* flags */
 	ot->flag= OPTYPE_REGISTER|OPTYPE_UNDO;
@@ -2660,7 +2660,6 @@ static int image_layer_offset_exec(bContext *C, wmOperator *op)
 
 void IMAGE_OT_image_layer_offset(wmOperatorType *ot)
 {
-
 	/* identifiers */
 	ot->name = "Offset Layer";
 	ot->idname = "IMAGE_OT_image_layer_offset";
@@ -2669,7 +2668,7 @@ void IMAGE_OT_image_layer_offset(wmOperatorType *ot)
 	/* api callbacks */
 	ot->exec= image_layer_offset_exec;
 	ot->poll = image_layer_poll;
-	ot->invoke = image_offset_invoke;
+	ot->invoke = image_op_layer_invoke;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -2679,6 +2678,78 @@ void IMAGE_OT_image_layer_offset(wmOperatorType *ot)
 	RNA_def_int(ot->srna, "off_y", 0, INT_MIN, INT_MAX, "Y", "Offset Y", -16384, 16384);
 	RNA_def_boolean(ot->srna, "half", 0, "Offset by x/2 y/2", "Offset by x/2 y/2.");
 	RNA_def_boolean(ot->srna, "wrap", 1, "Wrap around", "Wrap around.");
+}
+
+static int image_layer_scale_exec(bContext *C, wmOperator *op)
+{
+	Image *ima= CTX_data_edit_image(C);
+	ImageLayer *layer;
+	struct ImBuf *ibuf;
+	int width, height, proportions;
+	float props;
+	
+	if(!ima)
+		return OPERATOR_CANCELLED;
+	
+	layer = imalayer_get_current(ima);
+	if (!layer)
+			return OPERATOR_CANCELLED;
+
+	ibuf = (ImBuf *)layer->ibufs.first;
+	if (!ibuf)
+			return OPERATOR_CANCELLED;
+	
+	width = RNA_int_get(op->ptr, "width");
+	height = RNA_int_get(op->ptr, "height");
+	proportions = RNA_boolean_get(op->ptr, "proportions");
+
+	if ((width == 0) && (height == 0))
+		return OPERATOR_CANCELLED;
+
+	if (proportions) {
+		if ((width != 0) && (height != 0)) {
+			BKE_report(op->reports, RPT_WARNING, "If you want to keep the proportions, the height or width must be 0.");
+			return OPERATOR_CANCELLED;
+		}
+
+		if ((width == 0) || (height == 0)) {
+			if (width == 0) {
+				props = (float)ibuf->y / ibuf->x;
+				width = (int)floor((float)height / props);
+			}
+			else {
+				props = (float)ibuf->x / ibuf->y;
+				height = (int)floor((float)width / props);
+			}
+		}
+	}
+
+	IMB_scaleImBuf(ibuf, width, height);
+
+	WM_event_add_notifier(C, NC_IMAGE|ND_DRAW, NULL);
+ 
+	return OPERATOR_FINISHED;
+}
+
+void IMAGE_OT_image_layer_scale(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Scale Layer";
+	ot->idname = "IMAGE_OT_image_layer_scale";
+	ot->description ="Scale the layer";
+ 
+	/* api callbacks */
+	ot->exec= image_layer_scale_exec;
+	ot->poll = image_layer_poll;
+	ot->invoke = image_op_layer_invoke;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	/* properties */
+	RNA_def_int(ot->srna, "width", 0, 0, INT_MAX, "Width", "Width", 0, 16384);
+	RNA_def_int(ot->srna, "height", 0, 0, INT_MAX, "Height", "Height", 0, 16384);
+	RNA_def_boolean(ot->srna, "proportions", 1, "Keep Proportions", "Keep proportions");
 }
 /********************* pack operator *********************/
 

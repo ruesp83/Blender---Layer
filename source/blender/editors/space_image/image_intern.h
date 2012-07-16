@@ -110,7 +110,7 @@ void IMAGE_OT_image_layer_flip(struct wmOperatorType *ot);
 void IMAGE_OT_image_layer_rotate(struct wmOperatorType *ot);
 void IMAGE_OT_image_layer_arbitrary_rot(struct wmOperatorType *ot);
 void IMAGE_OT_image_layer_offset(struct wmOperatorType *ot);
-//void IMAGE_OT_image_layer_offset(struct wmOperatorType *ot);
+void IMAGE_OT_image_layer_scale(struct wmOperatorType *ot);
 
 
 #endif /* __IMAGE_INTERN_H__ */

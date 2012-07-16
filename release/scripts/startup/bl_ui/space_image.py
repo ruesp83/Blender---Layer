@@ -183,7 +183,8 @@ class IMAGE_MT_layers(Menu):
         layout.separator()
         layout.menu("IMAGE_MT_layers_select", icon='FILE_TICK')
         layout.menu("IMAGE_MT_layers_order", icon='SORTALPHA')
-        layout.menu("IMAGE_MT_layers_transform")
+        layout.menu("IMAGE_MT_layers_transform", icon='MANIPUL')
+        layout.menu("IMAGE_MT_layers_scale", icon='MAN_SCALE')
 
 
 class IMAGE_MT_layers_new(Menu):
@@ -238,7 +239,16 @@ class IMAGE_MT_layers_transform(Menu):
         layout.operator("image.image_layer_rotate", text="Rotate 180").type = 'ROT_180'
         layout.operator("image.image_layer_arbitrary_rot", text="Arbitrary Rotation", icon='FILE_REFRESH')
         layout.separator()
-        layout.operator("image.image_layer_offset", text="Offset")
+        layout.operator("image.image_layer_offset", text="Offset", icon='MAN_TRANS')
+
+
+class IMAGE_MT_layers_scale(Menu):
+    bl_label = "Scale"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.image_layer_scale", text="Scale Layer")
 
 
 class IMAGE_MT_layers_remove(Menu):
