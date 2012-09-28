@@ -48,10 +48,6 @@
 #include "BKE_fcurve.h"
 #include "BKE_idprop.h"
 
-
-#define SMALL -1.0e-10
-#define SELECT 1
-
 /* ******************************** F-Modifiers ********************************* */
 
 /* Info ------------------------------- */
@@ -965,8 +961,8 @@ FModifierTypeInfo *get_fmodifier_typeinfo(int type)
 	}
 	
 	/* only return for valid types */
-	if ( (type >= FMODIFIER_TYPE_NULL) && 
-	     (type <= FMODIFIER_NUM_TYPES) )
+	if ((type >= FMODIFIER_TYPE_NULL) &&
+	    (type <  FMODIFIER_NUM_TYPES))
 	{
 		/* there shouldn't be any segfaults here... */
 		return fmodifiersTypeInfo[type];
@@ -1298,7 +1294,7 @@ float evaluate_time_fmodifiers(ListBase *modifiers, FCurve *fcu, float cvalue, f
 	return evaltime;
 }
 
-/* Evalautes the given set of F-Curve Modifiers using the given data
+/* Evaluates the given set of F-Curve Modifiers using the given data
  * Should only be called after evaluate_time_fmodifiers() has been called...
  */
 void evaluate_value_fmodifiers(ListBase *modifiers, FCurve *fcu, float *cvalue, float evaltime)

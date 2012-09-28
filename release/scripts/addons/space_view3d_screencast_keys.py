@@ -592,7 +592,6 @@ class ScreencastKeysStatus(bpy.types.Operator):
             if context.window_manager.screencast_keys_keys is False:
                 # operator is called for the first time, start everything
                 context.window_manager.screencast_keys_keys = True
-                context.window_manager.modal_handler_add(self)
                 self.key = []
                 self.time = []
                 self.mouse = []
@@ -605,6 +604,7 @@ class ScreencastKeysStatus(bpy.types.Operator):
                 self._timer = context.window_manager.event_timer_add(0.025,
                     context.window)
                 ScreencastKeysStatus.overall_time.insert(0, time.time())
+                context.window_manager.modal_handler_add(self)
                 return {'RUNNING_MODAL'}
             else:
                 # operator is called again, stop displaying
@@ -826,13 +826,14 @@ class OBJECT_PT_keys_status(bpy.types.Panel):
 
             row = layout.row(align=True)
             row.enabled = sc.screencast_keys_timer_show
-            row.prop(sc,"screencast_keys_timer_size")
+            row.prop(sc, "screencast_keys_timer_size")
             row = layout.row(align=True)
             row.enabled = sc.screencast_keys_timer_show
             row.operator("view3d.screencast_keys_timer_reset", text="Reset")
 
-classes = [ScreencastKeysStatus, ScreencastKeysTimerReset, 
-    OBJECT_PT_keys_status]
+classes = (ScreencastKeysStatus,
+           ScreencastKeysTimerReset,
+           OBJECT_PT_keys_status)
 
 
 def register():

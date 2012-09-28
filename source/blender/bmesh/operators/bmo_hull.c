@@ -44,6 +44,8 @@
 
 #include "bmesh.h"
 
+#include "intern/bmesh_operators_private.h"  /* own include */
+
 #define HULL_EPSILON_FLT 0.0001f
 /* values above 0.0001 cause errors, see below for details, don't increase
  * without checking against bug [#32027] */
@@ -61,7 +63,7 @@ typedef enum {
 	HULL_FLAG_HOLE =            (1 << 5)
 } HullFlags;
 
-/* Store hull triangles seperate from BMesh faces until the end; this
+/* Store hull triangles separate from BMesh faces until the end; this
  * way we don't have to worry about cleaning up extraneous edges or
  * incorrectly deleting existing geometry. */
 typedef struct HullTriangle {
@@ -628,7 +630,7 @@ static void hull_tag_unused(BMesh *bm, BMOperator *op)
 	}
 }
 
-void hull_tag_holes(BMesh *bm, BMOperator *op)
+static void hull_tag_holes(BMesh *bm, BMOperator *op)
 {
 	BMIter iter;
 	BMOIter oiter;

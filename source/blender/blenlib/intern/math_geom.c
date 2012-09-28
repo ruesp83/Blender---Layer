@@ -188,7 +188,7 @@ float dist_squared_to_line_segment_v2(const float p[2], const float l1[2], const
 	if (len == 0.0f) {
 		rc[0] = p[0] - l1[0];
 		rc[1] = p[1] - l1[1];
-		return (float)(sqrt(rc[0] * rc[0] + rc[1] * rc[1]));
+		return (rc[0] * rc[0] + rc[1] * rc[1]);
 	}
 
 	labda = (rc[0] * (p[0] - l1[0]) + rc[1] * (p[1] - l1[1])) / len;
@@ -352,7 +352,7 @@ int isect_line_line_v2(const float v1[2], const float v2[2], const float v3[2], 
 }
 
 /* get intersection point of two 2D segments and return intersection type:
- *  -1: colliniar
+ *  -1: collinear
  *   1: intersection
  */
 int isect_seg_seg_v2_point(const float v1[2], const float v2[2], const float v3[2], const float v4[2], float vi[2])
@@ -410,7 +410,7 @@ int isect_seg_seg_v2_point(const float v1[2], const float v2[2], const float v3[
 			}
 		}
 
-		/* lines are colliniar */
+		/* lines are collinear */
 		return -1;
 	}
 
@@ -430,7 +430,7 @@ int isect_seg_seg_v2(const float v1[2], const float v2[2], const float v3[2], co
 {
 #define CCW(A, B, C) ((C[1] - A[1]) * (B[0] - A[0]) > (B[1]-A[1]) * (C[0]-A[0]))
 
-   return CCW(v1, v3, v4) != CCW(v2, v3, v4) && CCW(v1, v2, v3) != CCW(v1, v2, v4);
+	return CCW(v1, v3, v4) != CCW(v2, v3, v4) && CCW(v1, v2, v3) != CCW(v1, v2, v4);
 
 #undef CCW
 }
@@ -561,7 +561,7 @@ int isect_line_sphere_v2(const float l1[2], const float l2[2],
 }
 
 /*
- * -1: colliniar
+ * -1: collinear
  *  1: intersection
  */
 static short IsectLLPt2Df(const float x0, const float y0, const float x1, const float y1,
@@ -583,17 +583,17 @@ static short IsectLLPt2Df(const float x0, const float y0, const float x1, const 
 	 * compute slopes, note the cludge for infinity, however, this will
 	 * be close enough
 	 */
-	if (fabs(x1 - x0) > 0.000001f)
+	if (fabsf(x1 - x0) > 0.000001f)
 		m1 = (y1 - y0) / (x1 - x0);
 	else
 		return -1; /*m1 = (float)1e+10;*/ /* close enough to infinity */
 
-	if (fabs(x3 - x2) > 0.000001f)
+	if (fabsf(x3 - x2) > 0.000001f)
 		m2 = (y3 - y2) / (x3 - x2);
 	else
 		return -1; /*m2 = (float)1e+10;*/ /* close enough to infinity */
 
-	if (fabs(m1 - m2) < 0.000001f)
+	if (fabsf(m1 - m2) < 0.000001f)
 		return -1;  /* parallel lines */
 
 	/* compute constants */
@@ -733,7 +733,7 @@ int isect_ray_tri_v3(const float p1[3], const float d[3],
 	cross_v3_v3v3(p, d, e2);
 	a = dot_v3v3(e1, p);
 	/* note: these values were 0.000001 in 2.4x but for projection snapping on
-	 * a human head (1BU==1m), subsurf level 2, this gave many errors - campbell */
+	 * a human head (1BU == 1m), subsurf level 2, this gave many errors - campbell */
 	if ((a > -0.00000001f) && (a < 0.00000001f)) return 0;
 	f = 1.0f / a;
 
@@ -772,7 +772,7 @@ int isect_ray_plane_v3(const float p1[3], const float d[3],
 	cross_v3_v3v3(p, d, e2);
 	a = dot_v3v3(e1, p);
 	/* note: these values were 0.000001 in 2.4x but for projection snapping on
-	 * a human head (1BU==1m), subsurf level 2, this gave many errors - campbell */
+	 * a human head (1BU == 1m), subsurf level 2, this gave many errors - campbell */
 	if ((a > -0.00000001f) && (a < 0.00000001f)) return 0;
 	f = 1.0f / a;
 
@@ -1387,7 +1387,7 @@ int isect_ray_aabb(const IsectRayAABBData *data, const float bb_min[3],
 }
 
 /* find closest point to p on line through l1,l2 and return lambda,
- * where (0 <= lambda <= 1) when cp is in the line segement l1,l2
+ * where (0 <= lambda <= 1) when cp is in the line segment l1,l2
  */
 float closest_to_line_v3(float cp[3], const float p[3], const float l1[3], const float l2[3])
 {
@@ -1429,7 +1429,7 @@ float line_point_factor_v2(const float p[2], const float l1[2], const float l2[2
 	return (dot_v2v2(u, h) / dot_v2v2(u, u));
 }
 
-/* ensyre the distance between these points is no greater then 'dist'
+/* ensure the distance between these points is no greater then 'dist'
  * if it is, scale then both into the center */
 void limit_dist_v3(float v1[3], float v2[3], const float dist)
 {
@@ -1669,10 +1669,10 @@ static int point_in_slice(const float p[3], const float v1[3], const float l1[3]
 	 * a line including l1,l2 and a point not on the line
 	 * define a subset of R3 delimited by planes parallel to the line and orthogonal
 	 * to the (point --> line) distance vector,one plane on the line one on the point,
-	 * the room inside usually is rather small compared to R3 though still infinte
+	 * the room inside usually is rather small compared to R3 though still infinite
 	 * useful for restricting (speeding up) searches
 	 * e.g. all points of triangular prism are within the intersection of 3 'slices'
-	 * onother trivial case : cube
+	 * another trivial case : cube
 	 * but see a 'spat' which is a deformed cube with paired parallel planes needs only 3 slices too
 	 */
 	float h, rp[3], cp[3], q[3];
@@ -1991,8 +1991,13 @@ void barycentric_weights_v2(const float v1[2], const float v2[2], const float v3
 void barycentric_weights_v2_quad(const float v1[2], const float v2[2], const float v3[2], const float v4[2],
                                  const float co[2], float w[4])
 {
-#define MEAN_VALUE_HALF_TAN_V2(_area, i1, i2) ((_area = cross_v2v2(dirs[i1], dirs[i2])) != 0.0f ? \
-	                                           (((lens[i1] * lens[i2]) - dot_v2v2(dirs[i1], dirs[i2])) / _area) : 0.0f)
+	/* note: fabsf() here is not needed for convex quads (and not used in interp_weights_poly_v2).
+	 *       but in the case of concave/bow-tie quads for the mask rasterizer it gives unreliable results
+	 *       without adding absf(). If this becomes an issue for more general usage we could have
+	 *       this optional or use a different function - Campbell */
+#define MEAN_VALUE_HALF_TAN_V2(_area, i1, i2) \
+	        ((_area = cross_v2v2(dirs[i1], dirs[i2])) != 0.0f ? \
+	         fabsf(((lens[i1] * lens[i2]) - dot_v2v2(dirs[i1], dirs[i2])) / _area) : 0.0f)
 
 	float wtot, area;
 
@@ -2224,7 +2229,7 @@ void interp_weights_poly_v3(float *w, float v[][3], const int n, const float co[
 		t2 = mean_value_half_tan_v3(co, vmid, vnext);
 
 		len = len_v3v3(co, vmid);
-		w[i] = (t1 + t2) / len;
+		w[i] = (len != 0.0f)? (t1 + t2) / len: 0.0f;
 		totweight += w[i];
 	}
 
@@ -2252,7 +2257,7 @@ void interp_weights_poly_v2(float *w, float v[][2], const int n, const float co[
 		t2 = mean_value_half_tan_v2(co, vmid, vnext);
 
 		len = len_v2v2(co, vmid);
-		w[i] = (t1 + t2) / len;
+		w[i] = (len != 0.0f)? (t1 + t2) / len: 0.0f;
 		totweight += w[i];
 	}
 
@@ -2367,7 +2372,8 @@ void resolve_quad_uv(float r_uv[2], const float st[2], const float st0[2], const
 
 /***************************** View & Projection *****************************/
 
-void orthographic_m4(float matrix[][4], const float left, const float right, const float bottom, const float top, const float nearClip, const float farClip)
+void orthographic_m4(float matrix[][4], const float left, const float right, const float bottom, const float top,
+                     const float nearClip, const float farClip)
 {
 	float Xdelta, Ydelta, Zdelta;
 
@@ -2386,7 +2392,8 @@ void orthographic_m4(float matrix[][4], const float left, const float right, con
 	matrix[3][2] = -(farClip + nearClip) / Zdelta;
 }
 
-void perspective_m4(float mat[4][4], const float left, const float right, const float bottom, const float top, const float nearClip, const float farClip)
+void perspective_m4(float mat[4][4], const float left, const float right, const float bottom, const float top,
+                    const float nearClip, const float farClip)
 {
 	float Xdelta, Ydelta, Zdelta;
 
@@ -2843,7 +2850,7 @@ void vcloud_estimate_transform(int list_size, float (*pos)[3], float *weight, fl
 		if (lloc) copy_v3_v3(lloc, accu_com);
 		if (rloc) copy_v3_v3(rloc, accu_rcom);
 		if (lrot || lscale) { /* caller does not want rot nor scale, strange but legal */
-			/*so now do some reverse engeneering and see if we can split rotation from scale ->Polardecompose*/
+			/*so now do some reverse engineering and see if we can split rotation from scale ->Polardecompose*/
 			/* build 'projection' matrix */
 			float m[3][3], mr[3][3], q[3][3], qi[3][3];
 			float va[3], vb[3], stunt[3];

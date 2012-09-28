@@ -472,11 +472,8 @@ static void render_envmap(Render *re, EnvMap *env)
 			ibuf = IMB_allocImBuf(envre->rectx, envre->recty, 24, IB_rect | IB_rectfloat);
 			memcpy(ibuf->rect_float, rl->rectf, ibuf->channels * ibuf->x * ibuf->y * sizeof(float));
 			
-			if (re->scene->r.color_mgt_flag & R_COLOR_MANAGEMENT)
-				ibuf->profile = IB_PROFILE_LINEAR_RGB;
-			
 			/* envmap renders without alpha */
-			alpha = ((float *)ibuf->rect_float) + 3;
+			alpha = ibuf->rect_float + 3;
 			for (y = ibuf->x * ibuf->y - 1; y >= 0; y--, alpha += 4)
 				*alpha = 1.0;
 			
@@ -688,7 +685,7 @@ int envmaptex(Tex *tex, float *texvec, float *dxt, float *dyt, int osatex, TexRe
 		env->ima = tex->ima;
 		if (env->ima && env->ima->ok) {
 			if (env->cube[1] == NULL) {
-				ImBuf *ibuf_ima = BKE_image_get_ibuf(env->ima, NULL, IMA_IBUF_IMA);
+				ImBuf *ibuf_ima = BKE_image_get_ibuf(env->ima, NULL);
 				if (ibuf_ima)
 					envmap_split_ima(env, ibuf_ima);
 				else

@@ -55,7 +55,6 @@
 #include "BKE_curve.h" 
 #include "BKE_global.h"
 #include "BKE_object.h"
-#include "BKE_utildefines.h"
 
 #include "RNA_access.h"
 
@@ -75,12 +74,10 @@ void free_fcurve(FCurve *fcu)
 {
 	if (fcu == NULL) 
 		return;
-	
+
 	/* free curve data */
-	if (fcu) {
-		if (fcu->bezt) MEM_freeN(fcu->bezt);
-		if (fcu->fpt) MEM_freeN(fcu->fpt);
-	}
+	if (fcu->bezt) MEM_freeN(fcu->bezt);
+	if (fcu->fpt)  MEM_freeN(fcu->fpt);
 	
 	/* free RNA-path, as this were allocated when getting the path string */
 	if (fcu->rna_path)
@@ -365,7 +362,7 @@ int binarysearch_bezt_index(BezTriple array[], float frame, int arraylen, short 
 	/* initialize replace-flag first */
 	*replace = 0;
 	
-	/* sneaky optimisations (don't go through searching process if...):
+	/* sneaky optimizations (don't go through searching process if...):
 	 *	- keyframe to be added is to be added out of current bounds
 	 *	- keyframe to be added would replace one of the existing ones on bounds
 	 */
@@ -433,16 +430,18 @@ int binarysearch_bezt_index(BezTriple array[], float frame, int arraylen, short 
 /* ...................................... */
 
 /* helper for calc_fcurve_* functions -> find first and last BezTriple to be used */
-static void get_fcurve_end_keyframes(FCurve *fcu, BezTriple **first, BezTriple **last,
-                                     const short do_sel_only)
+static short get_fcurve_end_keyframes(FCurve *fcu, BezTriple **first, BezTriple **last,
+                                      const short do_sel_only)
 {
+	short found = FALSE;
+	
 	/* init outputs */
 	*first = NULL;
 	*last = NULL;
 	
 	/* sanity checks */
 	if (fcu->bezt == NULL)
-		return;
+		return found;
 	
 	/* only include selected items? */
 	if (do_sel_only) {
@@ -454,6 +453,7 @@ static void get_fcurve_end_keyframes(FCurve *fcu, BezTriple **first, BezTriple *
 		for (i = 0; i < fcu->totvert; bezt++, i++) {
 			if (BEZSELECTED(bezt)) {
 				*first = bezt;
+				found = TRUE;
 				break;
 			}
 		}
@@ -463,6 +463,7 @@ static void get_fcurve_end_keyframes(FCurve *fcu, BezTriple **first, BezTriple *
 		for (i = 0; i < fcu->totvert; bezt--, i++) {
 			if (BEZSELECTED(bezt)) {
 				*last = bezt;
+				found = TRUE;
 				break;
 			}
 		}
@@ -471,13 +472,16 @@ static void get_fcurve_end_keyframes(FCurve *fcu, BezTriple **first, BezTriple *
 		/* just full array */
 		*first = fcu->bezt;
 		*last = ARRAY_LAST_ITEM(fcu->bezt, BezTriple, sizeof(BezTriple), fcu->totvert);
+		found = TRUE;
 	}
+	
+	return found;
 }
 
 
 /* Calculate the extents of F-Curve's data */
-void calc_fcurve_bounds(FCurve *fcu, float *xmin, float *xmax, float *ymin, float *ymax,
-                        const short do_sel_only, const short include_handles)
+short calc_fcurve_bounds(FCurve *fcu, float *xmin, float *xmax, float *ymin, float *ymax,
+                         const short do_sel_only, const short include_handles)
 {
 	float xminv = 999999999.0f, xmaxv = -999999999.0f;
 	float yminv = 999999999.0f, ymaxv = -999999999.0f;
@@ -490,7 +494,7 @@ void calc_fcurve_bounds(FCurve *fcu, float *xmin, float *xmax, float *ymin, floa
 			
 			if (xmin || xmax) {
 				/* get endpoint keyframes */
-				get_fcurve_end_keyframes(fcu, &bezt_first, &bezt_last, do_sel_only);
+				foundvert = get_fcurve_end_keyframes(fcu, &bezt_first, &bezt_last, do_sel_only);
 				
 				if (bezt_first) {
 					BLI_assert(bezt_last != NULL);
@@ -500,8 +504,8 @@ void calc_fcurve_bounds(FCurve *fcu, float *xmin, float *xmax, float *ymin, floa
 						xmaxv = MAX3(xmaxv, bezt_last->vec[1][0],  bezt_last->vec[2][0]);
 					}
 					else {
-						xminv = MIN2(xminv, bezt_first->vec[1][0]);
-						xmaxv = MAX2(xmaxv, bezt_last->vec[1][0]);
+						xminv = minf(xminv, bezt_first->vec[1][0]);
+						xmaxv = maxf(xmaxv, bezt_last->vec[1][0]);
 					}
 				}
 			}
@@ -517,8 +521,8 @@ void calc_fcurve_bounds(FCurve *fcu, float *xmin, float *xmax, float *ymin, floa
 							ymaxv = MAX4(ymaxv, bezt->vec[1][1], bezt->vec[0][1], bezt->vec[2][1]);
 						}
 						else {
-							yminv = MIN2(yminv, bezt->vec[1][1]);
-							ymaxv = MAX2(ymaxv, bezt->vec[1][1]);
+							yminv = minf(yminv, bezt->vec[1][1]);
+							ymaxv = maxf(ymaxv, bezt->vec[1][1]);
 						}
 						
 						foundvert = TRUE;
@@ -529,8 +533,8 @@ void calc_fcurve_bounds(FCurve *fcu, float *xmin, float *xmax, float *ymin, floa
 		else if (fcu->fpt) {
 			/* frame range can be directly calculated from end verts */
 			if (xmin || xmax) {
-				xminv = MIN2(xminv, fcu->fpt[0].vec[0]);
-				xmaxv = MAX2(xmaxv, fcu->fpt[fcu->totvert - 1].vec[0]);
+				xminv = minf(xminv, fcu->fpt[0].vec[0]);
+				xmaxv = maxf(xmaxv, fcu->fpt[fcu->totvert - 1].vec[0]);
 			}
 			
 			/* only loop over keyframes to find extents for values if needed */
@@ -566,6 +570,8 @@ void calc_fcurve_bounds(FCurve *fcu, float *xmin, float *xmax, float *ymin, floa
 		if (ymin) *ymin = 0.0f;
 		if (ymax) *ymax = 1.0f;
 	}
+	
+	return foundvert;
 }
 
 /* Calculate the extents of F-Curve's keyframes */
@@ -585,15 +591,15 @@ void calc_fcurve_range(FCurve *fcu, float *start, float *end,
 			if (bezt_first) {
 				BLI_assert(bezt_last != NULL);
 				
-				min = MIN2(min, bezt_first->vec[1][0]);
-				max = MAX2(max, bezt_last->vec[1][0]);
+				min = minf(min, bezt_first->vec[1][0]);
+				max = maxf(max, bezt_last->vec[1][0]);
 				
 				foundvert = TRUE;
 			}
 		}
 		else if (fcu->fpt) {
-			min = MIN2(min, fcu->fpt[0].vec[0]);
-			max = MAX2(max, fcu->fpt[fcu->totvert - 1].vec[0]);
+			min = minf(min, fcu->fpt[0].vec[0]);
+			max = maxf(max, fcu->fpt[fcu->totvert - 1].vec[0]);
 			
 			foundvert = TRUE;
 		}

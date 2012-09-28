@@ -27,7 +27,10 @@ macro(list_insert_after
 	list_id item_check item_add
 	)
 	set(_index)
-	list(FIND ${list_id} "${item_check}" _index)
+	list(FIND "${list_id}" "${item_check}" _index)
+	if("${_index}" MATCHES "-1")
+		message(FATAL_ERROR "'${list_id}' doesn't contain '${item_check}'")
+	endif()
 	math(EXPR _index "${_index} + 1")
 	list(INSERT ${list_id} "${_index}" ${item_add})
 	unset(_index)
@@ -37,7 +40,10 @@ macro(list_insert_before
 	list_id item_check item_add
 	)
 	set(_index)
-	list(FIND ${list_id} "${item_check}" _index)
+	list(FIND "${list_id}" "${item_check}" _index)
+	if("${_index}" MATCHES "-1")
+		message(FATAL_ERROR "'${list_id}' doesn't contain '${item_check}'")
+	endif()
 	list(INSERT ${list_id} "${_index}" ${item_add})
 	unset(_index)
 endmacro()
@@ -212,6 +218,9 @@ macro(SETUP_LIBDIRS)
 	if(WITH_OPENIMAGEIO)
 		link_directories(${OPENIMAGEIO_LIBPATH})
 	endif()
+	if(WITH_OPENCOLORIO)
+		link_directories(${OPENCOLORIO_LIBPATH})
+	endif()
 	if(WITH_IMAGE_OPENJPEG AND WITH_SYSTEM_OPENJPEG)
 		link_directories(${OPENJPEG_LIBPATH})
 	endif()
@@ -307,6 +316,9 @@ macro(setup_liblinks
 	if(WITH_OPENIMAGEIO)
 		target_link_libraries(${target} ${OPENIMAGEIO_LIBRARIES})
 	endif()
+	if(WITH_OPENCOLORIO)
+		target_link_libraries(${target} ${OPENCOLORIO_LIBRARIES})
+	endif()
 	if(WITH_BOOST)
 		target_link_libraries(${target} ${BOOST_LIBRARIES})
 	endif()
@@ -366,6 +378,9 @@ macro(setup_liblinks
 	endif()
 	if(WITH_MOD_CLOTH_ELTOPO)
 		target_link_libraries(${target} ${LAPACK_LIBRARIES})
+	endif()
+	if(WITH_CYCLES_OSL)
+		target_link_libraries(${target} ${OSL_LIBRARIES})
 	endif()
 	if(WIN32 AND NOT UNIX)
 		target_link_libraries(${target} ${PTHREADS_LIBRARIES})
@@ -461,6 +476,7 @@ macro(remove_strict_flags)
 
 	if(CMAKE_COMPILER_IS_GNUCC)
 		remove_cc_flag("-Wstrict-prototypes")
+		remove_cc_flag("-Wmissing-prototypes")
 		remove_cc_flag("-Wunused-parameter")
 		remove_cc_flag("-Wwrite-strings")
 		remove_cc_flag("-Wundef")
@@ -638,7 +654,7 @@ macro(blender_project_hack_post)
 	# --------------
 	# MINGW HACK END
 	if (_reset_standard_libraries)
-		# Must come after project(...)
+		# Must come after projecINCt(...)
 		#
 		# MINGW workaround for -ladvapi32 being included which surprisingly causes
 		# string formatting of floats, eg: printf("%.*f", 3, value). to crash blender
@@ -719,12 +735,51 @@ macro(set_lib_path
 		lvar
 		lproj)
 
-	
-	if(MSVC10 AND EXISTS ${LIBDIR}/vc2010/${lproj})
-		set(${lvar} ${LIBDIR}/vc2010/${lproj})
+	if(MSVC10)
+		set(${lvar} ${LIBDIR}/${lproj}/vc2010)
 	else()
 		set(${lvar} ${LIBDIR}/${lproj})
 	endif()
+endmacro()
 
 
+macro(data_to_c
+      file_from file_to
+      list_to_add)
+
+	list(APPEND ${list_to_add} ${file_to})
+
+	get_filename_component(_file_to_path ${file_to} PATH)
+
+	add_custom_command(
+		OUTPUT ${file_to}
+		COMMAND ${CMAKE_COMMAND} -E make_directory ${_file_to_path}
+		COMMAND ${CMAKE_BINARY_DIR}/bin/${CMAKE_CFG_INTDIR}/datatoc ${file_from} ${file_to}
+		DEPENDS ${file_from} datatoc)
+	unset(_file_to_path)
+endmacro()
+
+
+# same as above but generates the var name and output automatic.
+macro(data_to_c_simple
+      file_from
+      list_to_add)
+
+	# remove ../'s
+	get_filename_component(_file_from ${CMAKE_CURRENT_SOURCE_DIR}/${file_from}   REALPATH)
+	get_filename_component(_file_to   ${CMAKE_CURRENT_BINARY_DIR}/${file_from}.c REALPATH)
+
+	list(APPEND ${list_to_add} ${_file_to})
+
+	get_filename_component(_file_to_path ${_file_to} PATH)
+
+	add_custom_command(
+		OUTPUT  ${_file_to}
+		COMMAND ${CMAKE_COMMAND} -E make_directory ${_file_to_path}
+		COMMAND ${CMAKE_BINARY_DIR}/bin/${CMAKE_CFG_INTDIR}/datatoc ${_file_from} ${_file_to}
+		DEPENDS ${_file_from} datatoc)
+
+	unset(_file_from)
+	unset(_file_to)
+	unset(_file_to_path)
 endmacro()

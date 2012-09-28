@@ -46,6 +46,8 @@ struct Object;
 struct ImageFormatData;
 struct Main;
 
+#define IMA_MAX_SPACE       64
+
 /* call from library */
 void    BKE_image_free(struct Image *me);
 
@@ -64,6 +66,7 @@ int     BKE_imtype_is_movie(const char imtype);
 int     BKE_imtype_supports_zbuf(const char imtype);
 int     BKE_imtype_supports_compress(const char imtype);
 int     BKE_imtype_supports_quality(const char imtype);
+int     BKE_imtype_requires_linear_float(const char imtype);
 char    BKE_imtype_valid_channels(const char imtype);
 char    BKE_imtype_valid_depths(const char imtype);
 
@@ -72,7 +75,7 @@ char    BKE_imtype_from_arg(const char *arg);
 void    BKE_imformat_defaults(struct ImageFormatData *im_format);
 void    BKE_imbuf_to_image_format(struct ImageFormatData *im_format, const struct ImBuf *imbuf);
 
-struct anim *openanim(const char *name, int flags, int streamindex);
+struct anim *openanim(const char *name, int flags, int streamindex, char colorspace[IMA_MAX_SPACE]);
 
 void    BKE_image_de_interlace(struct Image *ima, int odd);
 
@@ -106,6 +109,12 @@ struct RenderResult;
 #define IMA_TYPE_R_RESULT   4
 #define IMA_TYPE_COMPOSITE  5
 
+enum {
+	IMA_GENTYPE_BLANK = 0,
+	IMA_GENTYPE_GRID = 1,
+	IMA_GENTYPE_GRID_COLOR = 2
+};
+
 /* ima->ok */
 #define IMA_OK              1
 #define IMA_OK_LOADED       2
@@ -123,24 +132,19 @@ struct RenderResult;
 #define IMA_CHAN_FLAG_RGB   2
 #define IMA_CHAN_FLAG_ALPHA 4
 
-#define IMA_IBUF_IMA	1
-#define IMA_IBUF_LAYER	2
-
 /* depending Image type, and (optional) ImageUser setting it returns ibuf */
 /* always call to make signals work */
-struct ImBuf *BKE_image_get_ibuf(struct Image *ima, struct ImageUser *iuser, int type_ibuf);
+struct ImBuf *BKE_image_get_ibuf(struct Image *ima, struct ImageUser *iuser);
 
 /* same as above, but can be used to retrieve images being rendered in
  * a thread safe way, always call both acquire and release */
-struct ImBuf *BKE_image_acquire_ibuf(struct Image *ima, struct ImageUser *iuser, void **lock_r, int type_ibuf);
+struct ImBuf *BKE_image_acquire_ibuf(struct Image *ima, struct ImageUser *iuser, void **lock_r);
 void BKE_image_release_ibuf(struct Image *ima, void *lock);
 
 /* returns a new image or NULL if it can't load */
 struct Image *BKE_image_load(const char *filepath);
 /* returns existing Image when filename/type is same (frame optional) */
 struct Image *BKE_image_load_exists(const char *filepath);
-struct ImageLayer *BKE_add_image_file_as_layer(struct Image *ima, const char *name);
-struct ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short uvtestgrid, float color[4]);
 
 /* adds image, adds ibuf, generates color or pattern */
 struct Image *BKE_image_add_generated(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short uvtestgrid, float color[4]);
@@ -166,9 +170,7 @@ int  BKE_image_user_frame_get(const struct ImageUser *iuser, int cfra, int field
 void BKE_image_user_file_path(struct ImageUser *iuser, struct Image *ima, char *path); 
 
 /* sets index offset for multilayer files */
-struct RenderPass *BKE_render_multilayer_index(struct RenderResult *rr, struct ImageUser *iuser);
-
-struct ImageLayer *BKE_image_multilayer_index(struct Image *ima, struct ImageUser *iuser);
+struct RenderPass *BKE_image_multilayer_index(struct RenderResult *rr, struct ImageUser *iuser);
 
 /* for multilayer images as well as for render-viewer */
 struct RenderResult *BKE_image_acquire_renderresult(struct Scene *scene, struct Image *ima);
@@ -202,6 +204,10 @@ int BKE_image_scale(struct Image *image, int width, int height);
 
 /* check if texture has alpha (depth=32) */
 int BKE_image_has_alpha(struct Image *image);
+
+void BKE_image_get_size(struct Image *image, struct ImageUser *iuser, int *width, int *height);
+void BKE_image_get_size_fl(struct Image *image, struct ImageUser *iuser, float size[2]);
+void BKE_image_get_aspect(struct Image *image, float *aspx, float *aspy);
 
 /* image_gen.c */
 void BKE_image_buf_fill_color(unsigned char *rect, float *rect_float, int width, int height, const float color[4]);

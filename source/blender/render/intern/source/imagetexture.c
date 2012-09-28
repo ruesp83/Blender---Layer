@@ -125,7 +125,7 @@ int imagewrap(Tex *tex, Image *ima, ImBuf *ibuf, const float texvec[3], TexResul
 		if (ima->ibufs.first==NULL && (R.r.scemode & R_NO_IMAGE_LOAD))
 			return retval;
 		
-		ibuf= BKE_image_get_ibuf(ima, &tex->iuser, IMA_IBUF_IMA);
+		ibuf= BKE_image_get_ibuf(ima, &tex->iuser);
 
 		ima->flag|= IMA_USED_FOR_RENDER;
 	}
@@ -396,16 +396,16 @@ static float square_rctf(rctf *rf)
 {
 	float x, y;
 
-	x= rf->xmax- rf->xmin;
-	y= rf->ymax- rf->ymin;
-	return (x*y);
+	x = BLI_rctf_size_x(rf);
+	y = BLI_rctf_size_y(rf);
+	return x * y;
 }
 
 static float clipx_rctf(rctf *rf, float x1, float x2)
 {
 	float size;
 
-	size= rf->xmax - rf->xmin;
+	size = BLI_rctf_size_x(rf);
 
 	if (rf->xmin<x1) {
 		rf->xmin = x1;
@@ -417,8 +417,8 @@ static float clipx_rctf(rctf *rf, float x1, float x2)
 		rf->xmin = rf->xmax;
 		return 0.0;
 	}
-	else if (size!=0.0f) {
-		return (rf->xmax - rf->xmin)/size;
+	else if (size != 0.0f) {
+		return BLI_rctf_size_x(rf) / size;
 	}
 	return 1.0;
 }
@@ -427,7 +427,7 @@ static float clipy_rctf(rctf *rf, float y1, float y2)
 {
 	float size;
 
-	size= rf->ymax - rf->ymin;
+	size = BLI_rctf_size_y(rf);
 
 	if (rf->ymin<y1) {
 		rf->ymin = y1;
@@ -440,8 +440,8 @@ static float clipy_rctf(rctf *rf, float y1, float y2)
 		rf->ymin = rf->ymax;
 		return 0.0;
 	}
-	else if (size!=0.0f) {
-		return (rf->ymax - rf->ymin)/size;
+	else if (size != 0.0f) {
+		return BLI_rctf_size_y(rf) / size;
 	}
 	return 1.0;
 
@@ -539,7 +539,7 @@ static void boxsample(ImBuf *ibuf, float minx, float miny, float maxx, float max
 	 */
 	/* note: actually minx etc isn't in the proper range... this due to filter size and offset vectors for bump */
 	/* note: talpha must be initialized */
-	/* note: even when 'imaprepeat' is set, this can only repeate once in any direction.
+	/* note: even when 'imaprepeat' is set, this can only repeat once in any direction.
 	 * the point which min/max is derived from is assumed to be wrapped */
 	TexResult texr;
 	rctf *rf, stack[8];
@@ -717,7 +717,7 @@ static int ibuf_get_color_clip_bilerp(float col[4], ImBuf *ibuf, float u, float 
 	return ibuf_get_color_clip(col, ibuf, (int)u, (int)v, extflag);
 }
 
-static void area_sample(TexResult* texr, ImBuf* ibuf, float fx, float fy, afdata_t* AFD)
+static void area_sample(TexResult *texr, ImBuf *ibuf, float fx, float fy, afdata_t *AFD)
 {
 	int xs, ys, clip = 0;
 	float tc[4], xsd, ysd, cw = 0.f;
@@ -839,7 +839,7 @@ static void imp2radangle(float A, float B, float C, float F, float* a, float* b,
 	}
 }
 
-static void ewa_eval(TexResult* texr, ImBuf* ibuf, float fx, float fy, afdata_t* AFD)
+static void ewa_eval(TexResult *texr, ImBuf *ibuf, float fx, float fy, afdata_t *AFD)
 {
 	/* scaling dxt/dyt by full resolution can cause overflow because of huge A/B/C and esp. F values,
 	 * scaling by aspect ratio alone does the opposite, so try something in between instead... */
@@ -926,7 +926,7 @@ static void ewa_eval(TexResult* texr, ImBuf* ibuf, float fx, float fy, afdata_t*
 	texr->ta = texr->talpha ? texr->ta*d : 1.f; /* TXF alpha (clip ? cw*d : 1.f); */
 }
 
-static void feline_eval(TexResult* texr, ImBuf* ibuf, float fx, float fy, afdata_t* AFD)
+static void feline_eval(TexResult *texr, ImBuf *ibuf, float fx, float fy, afdata_t *AFD)
 {
 	const int maxn = AFD->iProbes - 1;
 	const float ll = ((AFD->majrad == AFD->minrad) ? 2.f*AFD->majrad : 2.f*(AFD->majrad - AFD->minrad)) / (maxn ? (float)maxn : 1.f);
@@ -980,9 +980,9 @@ static void alpha_clip_aniso(ImBuf *ibuf, float minx, float miny, float maxx, fl
 		rf.ymin = miny*(ibuf->y);
 		rf.ymax = maxy*(ibuf->y);
 
-		alphaclip = clipx_rctf(&rf, 0.0, (float)(ibuf->x));
-		alphaclip*= clipy_rctf(&rf, 0.0, (float)(ibuf->y));
-		alphaclip= MAX2(alphaclip, 0.0f);
+		alphaclip  = clipx_rctf(&rf, 0.0, (float)(ibuf->x));
+		alphaclip *= clipy_rctf(&rf, 0.0, (float)(ibuf->y));
+		alphaclip  = maxf(alphaclip, 0.0f);
 
 		if (alphaclip!=1.0f) {
 			/* premul it all */
@@ -1049,10 +1049,14 @@ static int imagewraposa_aniso(Tex *tex, Image *ima, ImBuf *ibuf, const float tex
 
 	if (ima) {	/* hack for icon render */
 		if ((ima->ibufs.first == NULL) && (R.r.scemode & R_NO_IMAGE_LOAD)) return retval;
-		ibuf = BKE_image_get_ibuf(ima, &tex->iuser, IMA_IBUF_IMA); 
+		ibuf = BKE_image_get_ibuf(ima, &tex->iuser); 
 	}
 
 	if ((ibuf == NULL) || ((ibuf->rect == NULL) && (ibuf->rect_float == NULL))) return retval;
+
+	if (ima) {
+		ima->flag |= IMA_USED_FOR_RENDER;
+	}
 
 	/* mipmap test */
 	image_mipmap_test(tex, ibuf);
@@ -1219,7 +1223,7 @@ static int imagewraposa_aniso(Tex *tex, Image *ima, ImBuf *ibuf, const float tex
 		ImBuf *previbuf, *curibuf;
 		float levf;
 		int maxlev;
-		ImBuf* mipmaps[IB_MIPMAP_LEVELS + 1];
+		ImBuf *mipmaps[IB_MIPMAP_LEVELS + 1];
 
 		/* modify ellipse minor axis if too eccentric, use for area sampling as well
 		 * scaling dxt/dyt as done in pbrt is not the same
@@ -1236,8 +1240,8 @@ static int imagewraposa_aniso(Tex *tex, Image *ima, ImBuf *ibuf, const float tex
 			float fProbes;
 			a *= ff;
 			b *= ff;
-			a = MAX2(a, 1.f);
-			b = MAX2(b, 1.f);
+			a = maxf(a, 1.0f);
+			b = maxf(b, 1.0f);
 			fProbes = 2.f*(a / b) - 1.f;
 			AFD.iProbes = (int)floorf(fProbes + 0.5f);
 			AFD.iProbes = MIN2(AFD.iProbes, tex->afmax);
@@ -1253,8 +1257,8 @@ static int imagewraposa_aniso(Tex *tex, Image *ima, ImBuf *ibuf, const float tex
 			if (ecc > (float)tex->afmax) b = a / (float)tex->afmax;
 			b *= ff;
 		}
-		maxd = MAX2(b, 1e-8f);
-		levf = ((float)M_LOG2E)*logf(maxd);
+		maxd = maxf(b, 1e-8f);
+		levf = ((float)M_LOG2E) * logf(maxd);
 
 		curmap = 0;
 		maxlev = 1;
@@ -1338,8 +1342,8 @@ static int imagewraposa_aniso(Tex *tex, Image *ima, ImBuf *ibuf, const float tex
 			imp2radangle(A, B, C, F, &a, &b, &th, &ecc);
 			a *= ff;
 			b *= ff;
-			a = MAX2(a, 1.f);
-			b = MAX2(b, 1.f);
+			a = maxf(a, 1.0f);
+			b = maxf(b, 1.0f);
 			fProbes = 2.f*(a / b) - 1.f;
 			/* no limit to number of Probes here */
 			AFD.iProbes = (int)floorf(fProbes + 0.5f);
@@ -1438,7 +1442,7 @@ int imagewraposa(Tex *tex, Image *ima, ImBuf *ibuf, const float texvec[3], const
 		if (ima->ibufs.first==NULL && (R.r.scemode & R_NO_IMAGE_LOAD))
 			return retval;
 		
-		ibuf= BKE_image_get_ibuf(ima, &tex->iuser, IMA_IBUF_IMA); 
+		ibuf= BKE_image_get_ibuf(ima, &tex->iuser); 
 
 		ima->flag|= IMA_USED_FOR_RENDER;
 	}
@@ -1622,12 +1626,12 @@ int imagewraposa(Tex *tex, Image *ima, ImBuf *ibuf, const float texvec[3], const
 		ImBuf *previbuf, *curibuf;
 		float bumpscale;
 		
-		dx= minx;
-		dy= miny;
-		maxd= MAX2(dx, dy);
-		if (maxd>0.5f) maxd= 0.5f;
+		dx = minx;
+		dy = miny;
+		maxd = maxf(dx, dy);
+		if (maxd > 0.5f) maxd = 0.5f;
 
-		pixsize = 1.0f/ (float) MIN2(ibuf->x, ibuf->y);
+		pixsize = 1.0f / (float) MIN2(ibuf->x, ibuf->y);
 		
 		bumpscale= pixsize/maxd;
 		if (bumpscale>1.0f) bumpscale= 1.0f;
@@ -1779,11 +1783,8 @@ int imagewraposa(Tex *tex, Image *ima, ImBuf *ibuf, const float texvec[3], const
 	}
 
 	/* de-premul, this is being premulled in shade_input_do_shade() */
-	if (texres->ta!=1.0f && texres->ta>1e-4f) {
-		fx= 1.0f/texres->ta;
-		texres->tr*= fx;
-		texres->tg*= fx;
-		texres->tb*= fx;
+	if (texres->ta != 1.0f && texres->ta > 1e-4f) {
+		mul_v3_fl(&texres->tr, 1.0f / texres->ta);
 	}
 
 	BRICONTRGB;
@@ -1791,25 +1792,22 @@ int imagewraposa(Tex *tex, Image *ima, ImBuf *ibuf, const float texvec[3], const
 	return retval;
 }
 
-void image_sample(Image *ima, float fx, float fy, float dx, float dy, float *result)
+void image_sample(Image *ima, float fx, float fy, float dx, float dy, float result[4])
 {
 	TexResult texres;
-	ImBuf *ibuf= BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
+	ImBuf *ibuf= BKE_image_get_ibuf(ima, NULL);
 	
-	if (ibuf==NULL) {
-		result[0]= result[1]= result[2]= result[3]= 0.0f;
+	if (UNLIKELY(ibuf == NULL)) {
+		zero_v4(result);
 		return;
 	}
 	
 	if ( (R.flag & R_SEC_FIELD) && (ibuf->flags & IB_fields) )
 		ibuf->rect+= (ibuf->x*ibuf->y);
 
-	texres.talpha= 1; /* boxsample expects to be initialized */
-	boxsample(ibuf, fx, fy, fx+dx, fy+dy, &texres, 0, 1);
-	result[0]= texres.tr;
-	result[1]= texres.tg;
-	result[2]= texres.tb;
-	result[3]= texres.ta;
+	texres.talpha = TRUE; /* boxsample expects to be initialized */
+	boxsample(ibuf, fx, fy, fx + dx, fy + dy, &texres, 0, 1);
+	copy_v4_v4(result, &texres.tr);
 	
 	if ( (R.flag & R_SEC_FIELD) && (ibuf->flags & IB_fields) )
 		ibuf->rect-= (ibuf->x*ibuf->y);
@@ -1817,15 +1815,11 @@ void image_sample(Image *ima, float fx, float fy, float dx, float dy, float *res
 	ima->flag|= IMA_USED_FOR_RENDER;
 }
 
-void ibuf_sample(ImBuf *ibuf, float fx, float fy, float dx, float dy, float *result)
+void ibuf_sample(ImBuf *ibuf, float fx, float fy, float dx, float dy, float result[4])
 {
-	TexResult texres;
+	TexResult texres = {0};
 	afdata_t AFD;
-	
-	if (ibuf==NULL) {
-		return;
-	}
-	
+
 	AFD.dxt[0] = dx; AFD.dxt[1] = dx;
 	AFD.dyt[0] = dy; AFD.dyt[1] = dy;
 	//copy_v2_v2(AFD.dxt, dx);
@@ -1833,13 +1827,8 @@ void ibuf_sample(ImBuf *ibuf, float fx, float fy, float dx, float dy, float *res
 	
 	AFD.intpol = 1;
 	AFD.extflag = TXC_EXTD;
-	
-	memset(&texres, 0, sizeof(texres));
+
 	ewa_eval(&texres, ibuf, fx, fy, &AFD);
 	
-	
-	result[0]= texres.tr;
-	result[1]= texres.tg;
-	result[2]= texres.tb;
-	result[3]= texres.ta;
+	copy_v4_v4(result, &texres.tr);
 }

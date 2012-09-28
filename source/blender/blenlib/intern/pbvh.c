@@ -189,8 +189,8 @@ static void BB_expand(BB *bb, float co[3])
 {
 	int i;
 	for (i = 0; i < 3; ++i) {
-		bb->bmin[i] = MIN2(bb->bmin[i], co[i]);
-		bb->bmax[i] = MAX2(bb->bmax[i], co[i]);
+		bb->bmin[i] = minf(bb->bmin[i], co[i]);
+		bb->bmax[i] = maxf(bb->bmax[i], co[i]);
 	}
 }
 
@@ -199,8 +199,8 @@ static void BB_expand_with_bb(BB *bb, BB *bb2)
 {
 	int i;
 	for (i = 0; i < 3; ++i) {
-		bb->bmin[i] = MIN2(bb->bmin[i], bb2->bmin[i]);
-		bb->bmax[i] = MAX2(bb->bmax[i], bb2->bmax[i]);
+		bb->bmin[i] = minf(bb->bmin[i], bb2->bmin[i]);
+		bb->bmax[i] = maxf(bb->bmax[i], bb2->bmax[i]);
 	}
 }
 
@@ -260,12 +260,12 @@ static void update_node_vb(PBVH *bvh, PBVHNode *node)
 	node->vb = vb;
 }
 
-//void BLI_pbvh_node_BB_reset(PBVHNode* node)
+//void BLI_pbvh_node_BB_reset(PBVHNode *node)
 //{
 //	BB_reset(&node->vb);
 //}
 //
-//void BLI_pbvh_node_BB_expand(PBVHNode* node, float co[3])
+//void BLI_pbvh_node_BB_expand(PBVHNode *node, float co[3])
 //{
 //	BB_expand(&node->vb, co);
 //}
@@ -487,7 +487,7 @@ static void build_leaf(PBVH *bvh, int node_index, BBC *prim_bbc,
 
 /* Return zero if all primitives in the node can be drawn with the
  * same material (including flat/smooth shading), non-zerootherwise */
-int leaf_needs_material_split(PBVH *bvh, int offset, int count)
+static int leaf_needs_material_split(PBVH *bvh, int offset, int count)
 {
 	int i, prim;
 
@@ -663,7 +663,7 @@ void BLI_pbvh_build_grids(PBVH *bvh, CCGElem **grids, DMGridAdjacency *gridadj,
 	bvh->totgrid = totgrid;
 	bvh->gridkey = *key;
 	bvh->grid_hidden = grid_hidden;
-	bvh->leaf_limit = MAX2(LEAF_LIMIT / ((gridsize - 1) * (gridsize - 1)), 1);
+	bvh->leaf_limit = maxi(LEAF_LIMIT / ((gridsize - 1) * (gridsize - 1)), 1);
 
 	BB_reset(&cb);
 
@@ -1169,10 +1169,14 @@ static void pbvh_update_draw_buffers(PBVH *bvh, PBVHNode **nodes, int totnode)
 					break;
 				case PBVH_FACES:
 					GPU_update_mesh_buffers(node->draw_buffers,
+					                        bvh->faces,
+					                        node->prim_indices,
+					                        node->totprim,
 					                        bvh->verts,
 					                        node->vert_indices,
 					                        node->uniq_verts +
 					                        node->face_verts,
+					                        node->face_vert_indices,
 					                        CustomData_get_layer(bvh->vdata,
 					                                             CD_PAINT_MASK));
 					break;

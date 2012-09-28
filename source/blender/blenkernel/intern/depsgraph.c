@@ -75,7 +75,6 @@
 #include "BKE_scene.h"
 #include "BKE_screen.h"
 #include "BKE_tracking.h"
-#include "BKE_utildefines.h"
 
 #include "depsgraph_private.h"
  
@@ -352,10 +351,9 @@ static void dag_add_driver_relation(AnimData *adt, DagForest *dag, DagNode *node
 static void dag_add_material_driver_relations(DagForest *dag, DagNode *node, Material *ma);
 
 /* recursive handling for material nodetree drivers */
-static void dag_add_material_nodetree_driver_relations(DagForest *dag, DagNode *node, bNodeTree *ntree, Material *rootma)
+static void dag_add_material_nodetree_driver_relations(DagForest *dag, DagNode *node, bNodeTree *ntree)
 {
 	bNode *n;
-	Material *ma;
 
 	/* nodetree itself */
 	if (ntree->adt) {
@@ -364,14 +362,13 @@ static void dag_add_material_nodetree_driver_relations(DagForest *dag, DagNode *
 	
 	/* nodetree's nodes... */
 	for (n = ntree->nodes.first; n; n = n->next) {
-		if (n->id && GS(n->id->name) == ID_MA) {
-			ma = (Material *)n->id;
-			if (ma != rootma) {
-				dag_add_material_driver_relations(dag, node, ma);
+		if (n->id) {
+			if (GS(n->id->name) == ID_MA) {
+				dag_add_material_driver_relations(dag, node, (Material *)n->id);
 			}
-		}
-		else if (n->type == NODE_GROUP && n->id) {
-			dag_add_material_nodetree_driver_relations(dag, node, (bNodeTree *)n->id, rootma);
+			else if (n->type == NODE_GROUP) {
+				dag_add_material_nodetree_driver_relations(dag, node, (bNodeTree *)n->id);
+			}
 		}
 	}
 }
@@ -379,6 +376,15 @@ static void dag_add_material_nodetree_driver_relations(DagForest *dag, DagNode *
 /* recursive handling for material drivers */
 static void dag_add_material_driver_relations(DagForest *dag, DagNode *node, Material *ma)
 {
+	/* Prevent infinite recursion by checking (and tagging the material) as having been visited 
+	 * already (see build_dag()). This assumes ma->id.flag & LIB_DOIT isn't set by anything else
+	 * in the meantime... [#32017]
+	 */
+	if (ma->id.flag & LIB_DOIT)
+		return;
+	else
+		ma->id.flag |= LIB_DOIT;
+	
 	/* material itself */
 	if (ma->adt) {
 		dag_add_driver_relation(ma->adt, dag, node, 1);
@@ -390,7 +396,7 @@ static void dag_add_material_driver_relations(DagForest *dag, DagNode *node, Mat
 
 	/* material's nodetree */
 	if (ma->nodetree) {
-		dag_add_material_nodetree_driver_relations(dag, node, ma->nodetree, ma);
+		dag_add_material_nodetree_driver_relations(dag, node, ma->nodetree);
 	}
 }
 
@@ -495,7 +501,7 @@ static void build_dag_object(DagForest *dag, DagNode *scenenode, Scene *scene, O
 	if (ob->adt)
 		dag_add_driver_relation(ob->adt, dag, node, (ob->type == OB_ARMATURE));  // XXX isdata arg here doesn't give an accurate picture of situation
 		
-	key = ob_get_key(ob);
+	key = BKE_key_from_object(ob);
 	if (key && key->adt)
 		dag_add_driver_relation(key->adt, dag, node, 1);
 
@@ -563,12 +569,14 @@ static void build_dag_object(DagForest *dag, DagNode *scenenode, Scene *scene, O
 
 	/* softbody collision  */
 	if ((ob->type == OB_MESH) || (ob->type == OB_CURVE) || (ob->type == OB_LATTICE)) {
-		if (modifiers_isModifierEnabled(ob, eModifierType_Softbody) 
-			|| modifiers_isModifierEnabled(ob, eModifierType_Cloth)
-			|| modifiers_isModifierEnabled(ob, eModifierType_Smoke)
-			|| modifiers_isModifierEnabled(ob, eModifierType_DynamicPaint)
-			|| ob->particlesystem.first)
+		if (ob->particlesystem.first ||
+			modifiers_isModifierEnabled(ob, eModifierType_Softbody) ||
+			modifiers_isModifierEnabled(ob, eModifierType_Cloth) ||
+			modifiers_isModifierEnabled(ob, eModifierType_Smoke) ||
+			modifiers_isModifierEnabled(ob, eModifierType_DynamicPaint))
+		{
 			dag_add_collision_field_relation(dag, scene, ob, node);  /* TODO: use effectorweight->group */
+		}
 	}
 	
 	/* object data drivers */
@@ -803,6 +811,9 @@ DagForest *build_dag(Main *bmain, Scene *sce, short mask)
 		dag = dag_init();
 		sce->theDag = dag;
 	}
+	
+	/* clear "LIB_DOIT" flag from all materials, to prevent infinite recursion problems later [#32017] */
+	tag_main_idcode(bmain, ID_MA, FALSE);
 	
 	/* add base node for scene. scene is always the first node in DAG */
 	scenenode = dag_add_node(dag, sce);	
@@ -2586,7 +2597,8 @@ static void dag_id_flush_update(Scene *sce, ID *id)
 	if (id) {
 		idtype = GS(id->name);
 
-		if (ELEM8(idtype, ID_ME, ID_CU, ID_MB, ID_LA, ID_LT, ID_CA, ID_AR, ID_SPK)) {
+
+		if (OB_DATA_SUPPORT_ID(idtype)) {
 			for (obt = bmain->object.first; obt; obt = obt->id.next) {
 				if (!(ob && obt == ob) && obt->data == id) {
 					obt->recalc |= OB_RECALC_DATA;
@@ -2638,7 +2650,7 @@ static void dag_id_flush_update(Scene *sce, ID *id)
 		/* set flags based on ShapeKey */
 		if (idtype == ID_KE) {
 			for (obt = bmain->object.first; obt; obt = obt->id.next) {
-				Key *key = ob_get_key(obt);
+				Key *key = BKE_key_from_object(obt);
 				if (!(ob && obt == ob) && ((ID *)key == id)) {
 					obt->flag |= (OB_RECALC_OB | OB_RECALC_DATA);
 					lib_id_recalc_tag(bmain, &obt->id);
@@ -2832,6 +2844,18 @@ void DAG_id_tag_update(ID *id, short flag)
 						psys->recalc |= (flag & PSYS_RECALC);
 						lib_id_recalc_tag(bmain, &ob->id);
 						lib_id_recalc_data_tag(bmain, &ob->id);
+					}
+				}
+			}
+		}
+		else if (idtype == ID_VF) {
+			/* this is weak still, should be done delayed as well */
+			for (ob = bmain->object.first; ob; ob = ob->id.next) {
+				if (ob->type == OB_FONT) {
+					Curve *cu = ob->data;
+
+					if (ELEM4((struct VFont *)id, cu->vfont, cu->vfontb, cu->vfonti, cu->vfontbi)) {
+						ob->recalc |= (flag & OB_RECALC_ALL);
 					}
 				}
 			}

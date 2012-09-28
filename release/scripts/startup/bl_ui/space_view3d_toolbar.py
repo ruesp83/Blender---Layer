@@ -228,7 +228,7 @@ class VIEW3D_PT_tools_curveedit(View3DPanel, Panel):
 
         col = layout.column(align=True)
         col.operator("transform.tilt", text="Tilt")
-        col.operator("transform.transform", text="Shrink/Fatten").mode = 'CURVE_SHRINKFATTEN'
+        col.operator("transform.transform", text="Scale Feather").mode = 'CURVE_SHRINKFATTEN'
 
         col = layout.column(align=True)
         col.label(text="Curve:")
@@ -633,7 +633,7 @@ class VIEW3D_PT_tools_brush(Panel, View3DPaintPanel):
 
         elif context.image_paint_object and brush:
             col = layout.column()
-            col.template_color(brush, "color", value_slider=True)
+            col.template_color_wheel(brush, "color", value_slider=True)
             col.prop(brush, "color", text="")
 
             row = col.row(align=True)
@@ -681,7 +681,7 @@ class VIEW3D_PT_tools_brush(Panel, View3DPaintPanel):
         # Vertex Paint Mode #
         elif context.vertex_paint_object and brush:
             col = layout.column()
-            col.template_color(brush, "color", value_slider=True)
+            col.template_color_wheel(brush, "color", value_slider=True)
             col.prop(brush, "color", text="")
 
             row = col.row(align=True)
@@ -980,6 +980,7 @@ class VIEW3D_PT_tools_weightpaint_options(Panel, View3DPaintPanel):
 
         col = layout.column()
 
+        col.prop(wpaint, "use_all_faces")
         col.prop(wpaint, "use_normal")
         col.prop(wpaint, "use_spray")
         col.prop(wpaint, "use_group_restrict")
@@ -1124,6 +1125,7 @@ class VIEW3D_MT_tools_projectpaint_clone(Menu):
 
     def draw(self, context):
         layout = self.layout
+
         for i, tex in enumerate(context.active_object.data.uv_textures):
             props = layout.operator("wm.context_set_int", text=tex.name)
             props.data_path = "active_object.data.uv_texture_clone_index"

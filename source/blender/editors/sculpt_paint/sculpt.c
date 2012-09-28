@@ -771,7 +771,7 @@ static float tex_strength(SculptSession *ss, Brush *br, float point[3],
 		if (ss->cache->radial_symmetry_pass)
 			mul_m4_v3(ss->cache->symm_rot_mat_inv, symm_point);
 
-		ED_view3d_project_float_v2(ss->cache->vc->ar, symm_point, point_2d, ss->cache->projection_mat);
+		ED_view3d_project_float_v2_m4(ss->cache->vc->ar, symm_point, point_2d, ss->cache->projection_mat);
 
 		if (mtex->brush_map_mode == MTEX_MAP_MODE_VIEW) {
 			/* keep coordinates relative to mouse */
@@ -2649,7 +2649,7 @@ void sculpt_vertcos_to_key(Object *ob, KeyBlock *kb, float (*vertCos)[3])
 			}
 
 	if (is_basis) {
-		ofs = key_to_vertcos(ob, kb);
+		ofs = BKE_key_convert_to_vertcos(ob, kb);
 
 		/* calculate key coord offsets (from previous location) */
 		for (a = 0; a < me->totvert; a++) {
@@ -2662,7 +2662,7 @@ void sculpt_vertcos_to_key(Object *ob, KeyBlock *kb, float (*vertCos)[3])
 			int apply_offset = ((currkey != kb) && (ob->shapenr - 1 == currkey->relative));
 
 			if (apply_offset)
-				offset_to_key(ob, currkey, ofs);
+				BKE_key_convert_from_offset(ob, currkey, ofs);
 
 			currkey = currkey->next;
 		}
@@ -2683,7 +2683,7 @@ void sculpt_vertcos_to_key(Object *ob, KeyBlock *kb, float (*vertCos)[3])
 	}
 
 	/* apply new coords on active key block */
-	vertcos_to_key(ob, kb, vertCos);
+	BKE_key_convert_from_vertcos(ob, kb, vertCos);
 }
 
 static void do_brush_action(Sculpt *sd, Object *ob, Brush *brush)
@@ -3064,14 +3064,21 @@ static void sculpt_update_tex(const Scene *scene, Sculpt *sd, SculptSession *ss)
 
 void sculpt_update_mesh_elements(Scene *scene, Sculpt *sd, Object *ob, int need_pmap)
 {
-	DerivedMesh *dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
+	DerivedMesh *dm;
 	SculptSession *ss = ob->sculpt;
+	Mesh *me = ob->data;
 	MultiresModifierData *mmd = sculpt_multires_active(scene, ob);
 
 	ss->modifiers_active = sculpt_modifiers_active(scene, sd, ob);
 
-	if (!mmd) ss->kb = ob_get_keyblock(ob);
+	/* BMESH ONLY --- at some point we should move sculpt code to use polygons only - but for now it needs tessfaces */
+	BKE_mesh_tessface_ensure(me);
+
+	if (!mmd) ss->kb = BKE_keyblock_from_object(ob);
 	else ss->kb = NULL;
+
+	/* needs to be called after we ensure tessface */
+	dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
 
 	if (mmd) {
 		ss->multires = mmd;
@@ -3083,7 +3090,6 @@ void sculpt_update_mesh_elements(Scene *scene, Sculpt *sd, Object *ob, int need_
 		ss->face_normals = NULL;
 	}
 	else {
-		Mesh *me = BKE_mesh_from_object(ob);
 		ss->totvert = me->totvert;
 		ss->totpoly = me->totpoly;
 		ss->mvert = me->mvert;
@@ -3094,9 +3100,6 @@ void sculpt_update_mesh_elements(Scene *scene, Sculpt *sd, Object *ob, int need_
 		ss->vmask = CustomData_get_layer(&me->vdata, CD_PAINT_MASK);
 	}
 
-	/* BMESH ONLY --- at some point we should move sculpt code to use polygons only - but for now it needs tessfaces */
-	BKE_mesh_tessface_ensure(ob->data);
-
 	ss->pbvh = dm->getPBVH(ob, dm);
 	ss->pmap = (need_pmap && dm->getPolyMap) ? dm->getPolyMap(ob, dm) : NULL;
 
@@ -3106,21 +3109,21 @@ void sculpt_update_mesh_elements(Scene *scene, Sculpt *sd, Object *ob, int need_
 
 			free_sculptsession_deformMats(ss);
 
-			if (ss->kb) ss->orig_cos = key_to_vertcos(ob, ss->kb);
-			else ss->orig_cos = mesh_getVertexCos(ob->data, NULL);
+			ss->orig_cos = (ss->kb) ? BKE_key_convert_to_vertcos(ob, ss->kb) : mesh_getVertexCos(me, NULL);
 
 			crazyspace_build_sculpt(scene, ob, &ss->deform_imats, &ss->deform_cos);
 			BLI_pbvh_apply_vertCos(ss->pbvh, ss->deform_cos);
 
-			for (a = 0; a < ((Mesh *)ob->data)->totvert; ++a)
+			for (a = 0; a < me->totvert; ++a) {
 				invert_m3(ss->deform_imats[a]);
+			}
 		}
 	}
 	else free_sculptsession_deformMats(ss);
 
 	/* if pbvh is deformed, key block is already applied to it */
 	if (ss->kb && !BLI_pbvh_isDeformed(ss->pbvh)) {
-		float (*vertCos)[3] = key_to_vertcos(ob, ss->kb);
+		float (*vertCos)[3] = BKE_key_convert_to_vertcos(ob, ss->kb);
 
 		if (vertCos) {
 			/* apply shape keys coordinates to PBVH */
@@ -3134,6 +3137,11 @@ int sculpt_mode_poll(bContext *C)
 {
 	Object *ob = CTX_data_active_object(C);
 	return ob && ob->mode & OB_MODE_SCULPT;
+}
+
+int sculpt_mode_poll_view3d(bContext *C)
+{
+	return (sculpt_mode_poll(C) && CTX_wm_region_view3d(C));
 }
 
 int sculpt_poll(bContext *C)
@@ -3254,9 +3262,9 @@ static void sculpt_omp_start(Sculpt *sd, SculptSession *ss)
 	if (ss->multires) {
 		int i, gridsize, array_mem_size;
 		BLI_pbvh_node_get_grids(ss->pbvh, NULL, NULL, NULL, NULL,
-								&gridsize, NULL, NULL);
+		                        &gridsize, NULL, NULL);
 
-		array_mem_size = cache->num_threads * sizeof(void*);
+		array_mem_size = cache->num_threads * sizeof(void *);
 
 		cache->tmpgrid_co = MEM_mallocN(array_mem_size, "tmpgrid_co array");
 		cache->tmprow_co = MEM_mallocN(array_mem_size, "tmprow_co array");
@@ -4194,7 +4202,7 @@ static int sculpt_toggle_mode(bContext *C, wmOperator *UNUSED(op))
 
 		if (flush_recalc)
 			DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
-		
+
 		/* Create persistent sculpt mode data */
 		if (!ts->sculpt) {
 			ts->sculpt = MEM_callocN(sizeof(Sculpt), "sculpt mode data");
@@ -4212,7 +4220,7 @@ static int sculpt_toggle_mode(bContext *C, wmOperator *UNUSED(op))
 		/* Mask layer is required */
 		ED_sculpt_mask_layers_ensure(ob, mmd);
 
-		paint_init(&ts->sculpt->paint, PAINT_CURSOR_SCULPT);
+		BKE_paint_init(&ts->sculpt->paint, PAINT_CURSOR_SCULPT);
 		
 		paint_cursor_start(C, sculpt_poll);
 	}

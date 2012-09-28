@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
- * Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
  * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
  * All rights reserved.
@@ -98,7 +98,7 @@ int paint_convert_bb_to_rect(rcti *rect,
 				vec[1] = j ? bb_min[1] : bb_max[1];
 				vec[2] = k ? bb_min[2] : bb_max[2];
 				/* convert corner to screen space */
-				ED_view3d_project_float_v2(ar, vec, proj, projection_mat);
+				ED_view3d_project_float_v2_m4(ar, vec, proj, projection_mat);
 				/* expand 2D rectangle */
 
 				/* we could project directly to int? */
@@ -137,7 +137,7 @@ void paint_calc_redraw_planes(float planes[4][4],
 	rect.ymin -= 2;
 	rect.ymax += 2;
 
-	ED_view3d_calc_clipping(&bb, planes, &mats, &rect);
+	ED_view3d_clipping_calc(&bb, planes, &mats, &rect);
 	mul_m4_fl(planes, -1.0f);
 }
 
@@ -159,14 +159,12 @@ float paint_calc_object_space_radius(ViewContext *vc, const float center[3],
 {
 	Object *ob = vc->obact;
 	float delta[3], scale, loc[3];
-	float mval_f[2];
+	const float mval_f[2] = {pixel_radius, 0.0f};
 
 	mul_v3_m4v3(loc, ob->obmat, center);
 
 	initgrabz(vc->rv3d, loc[0], loc[1], loc[2]);
 
-	mval_f[0] = pixel_radius;
-	mval_f[1] = 0.0f;
 	ED_view3d_win_to_delta(vc->ar, mval_f, delta);
 
 	scale = fabsf(mat4_to_scale(ob->obmat));
@@ -177,15 +175,10 @@ float paint_calc_object_space_radius(ViewContext *vc, const float center[3],
 
 float paint_get_tex_pixel(Brush *br, float u, float v)
 {
-	TexResult texres;
-	float co[3];
+	TexResult texres = {0};
+	float co[3] = {u, v, 0.0f};
 	int hasrgb;
 
-	co[0] = u;
-	co[1] = v;
-	co[2] = 0;
-
-	memset(&texres, 0, sizeof(TexResult));
 	hasrgb = multitex_ext(br->mtex.tex, co, NULL, NULL, 0, &texres);
 
 	if (hasrgb & TEX_RGB)
@@ -287,7 +280,7 @@ void imapaint_pick_uv(Scene *scene, Object *ob, unsigned int faceindex, const in
 				/* the triangle with the largest absolute values is the one
 				 * with the most negative weights */
 				imapaint_tri_weights(ob, mv[0].co, mv[1].co, mv[3].co, p, w);
-				absw = fabs(w[0]) + fabs(w[1]) + fabs(w[2]);
+				absw = fabsf(w[0]) + fabsf(w[1]) + fabsf(w[2]);
 				if (absw < minabsw) {
 					uv[0] = tf->uv[0][0] * w[0] + tf->uv[1][0] * w[1] + tf->uv[3][0] * w[2];
 					uv[1] = tf->uv[0][1] * w[0] + tf->uv[1][1] * w[1] + tf->uv[3][1] * w[2];
@@ -295,7 +288,7 @@ void imapaint_pick_uv(Scene *scene, Object *ob, unsigned int faceindex, const in
 				}
 
 				imapaint_tri_weights(ob, mv[1].co, mv[2].co, mv[3].co, p, w);
-				absw = fabs(w[0]) + fabs(w[1]) + fabs(w[2]);
+				absw = fabsf(w[0]) + fabsf(w[1]) + fabsf(w[2]);
 				if (absw < minabsw) {
 					uv[0] = tf->uv[1][0] * w[0] + tf->uv[2][0] * w[1] + tf->uv[3][0] * w[2];
 					uv[1] = tf->uv[1][1] * w[0] + tf->uv[2][1] * w[1] + tf->uv[3][1] * w[2];
@@ -304,7 +297,7 @@ void imapaint_pick_uv(Scene *scene, Object *ob, unsigned int faceindex, const in
 			}
 			else {
 				imapaint_tri_weights(ob, mv[0].co, mv[1].co, mv[2].co, p, w);
-				absw = fabs(w[0]) + fabs(w[1]) + fabs(w[2]);
+				absw = fabsf(w[0]) + fabsf(w[1]) + fabsf(w[2]);
 				if (absw < minabsw) {
 					uv[0] = tf->uv[0][0] * w[0] + tf->uv[1][0] * w[1] + tf->uv[2][0] * w[2];
 					uv[1] = tf->uv[0][1] * w[0] + tf->uv[1][1] * w[1] + tf->uv[2][1] * w[2];

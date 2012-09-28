@@ -117,8 +117,8 @@ T_Rigify = 0x1000
 T_Opcns = 0x2000
 T_Symm = 0x4000
 
-toggle = (T_EnforceVersion + T_Mesh + T_Armature + 
-        T_Shapekeys + T_ShapeDrivers + T_Proxy + T_Clothes + T_Rigify)
+toggle = ( T_EnforceVersion + T_Mesh + T_Armature + 
+    T_Shapekeys + T_ShapeDrivers + T_Proxy + T_Clothes + T_Rigify )
 
 #
 #    Dictionaries
@@ -2027,6 +2027,7 @@ def correctRig(args):
     amt = ob.data
     cnslist = []
     for pb in ob.pose.bones:
+        pb.bone.select = False
         for cns in pb.constraints:
             if cns.type == 'CHILD_OF':
                 cnslist.append((pb, cns, cns.influence))
@@ -2887,7 +2888,7 @@ MhxBoolProps = [
     #("crash_safe", "Crash-safe", "Disable features that have caused Blender crashes", T_CrashSafe),
     ("mesh", "Mesh", "Use main mesh", T_Mesh),
     ("proxy", "Proxies", "Use proxies", T_Proxy),
-    ("armature", "Armature", "Use armature", T_Armature),
+    #("armature", "Armature", "Use armature", T_Armature),
     #("replace", "Replace scene", "Replace scene", T_Replace),
     ("cage", "Cage", "Load mesh deform cage", T_Cage),
     ("clothes", "Clothes", "Include clothes", T_Clothes),
@@ -2918,7 +2919,7 @@ class ImportMhx(bpy.types.Operator, ImportHelper):
         
     def execute(self, context):
         global toggle, theScale, MhxBoolProps
-        toggle = 0
+        toggle = T_Armature
         for (prop, name, desc, flag) in MhxBoolProps:
             expr = '(%s if self.%s else 0)' % (flag, prop)
             toggle |=  eval(expr)
@@ -3855,7 +3856,6 @@ def ik2fkLeg(context, suffix):
         matchPoseTranslation(ankleIk, footFk, auto)
     return
    
-"""           
 #
 #   setInverse(rig, pb):
 #
@@ -3873,6 +3873,7 @@ def setInverse(rig, pb):
     return
 
 
+"""           
 def clearInverse(rig, pb):
     rig.data.bones.active = pb.bone
     pb.bone.select = True

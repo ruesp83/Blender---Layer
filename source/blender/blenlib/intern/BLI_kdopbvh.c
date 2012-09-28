@@ -42,7 +42,6 @@
 #endif
 
 #define MAX_TREETYPE 32
-#define DEFAULT_FIND_NEAREST_HEAP_SIZE 1024
 
 typedef struct BVHNode {
 	struct BVHNode **children;
@@ -114,6 +113,8 @@ static float KDOP_AXES[13][3] = {
 	{0, 1.0, -1.0}
 };
 
+#if 0
+
 /*
  * Generic push and pop heap
  */
@@ -153,7 +154,6 @@ static float KDOP_AXES[13][3] = {
 		heap[parent] = element;                                               \
 	} (void)0
 
-#if 0
 static int ADJUST_MEMORY(void *local_memblock, void **memblock, int new_size, int *max_size, int size_per_item)
 {
 	int new_max_size = *max_size * 2;
@@ -648,7 +648,7 @@ static int implicit_leafs_index(BVHBuildHelper *data, int depth, int child_index
 // This functions returns the number of branches needed to have the requested number of leafs.
 static int implicit_needed_branches(int tree_type, int leafs)
 {
-	return MAX2(1, (leafs + tree_type - 3) / (tree_type - 1) );
+	return maxi(1, (leafs + tree_type - 3) / (tree_type - 1) );
 }
 
 /*
@@ -687,7 +687,7 @@ static void split_leafs(BVHNode **leafs_array, int *nth, int partitions, int spl
  * The reason is that we can build level N+1 from level N without any data dependencies.. thus it allows
  * to use multithread building.
  *
- * To archieve this is necessary to find how much leafs are accessible from a certain branch, BVHBuildHelper
+ * To archive this is necessary to find how much leafs are accessible from a certain branch, BVHBuildHelper
  * implicit_needed_branches and implicit_leafs_index are auxiliary functions to solve that "optimal-split".
  */
 static void non_recursive_bvh_div_nodes(BVHTree *tree, BVHNode *branches_array, BVHNode **leafs_array, int num_leafs)
@@ -748,7 +748,7 @@ static void non_recursive_bvh_div_nodes(BVHTree *tree, BVHNode *branches_array, 
 			parent->main_axis = split_axis / 2;
 
 			/* Split the childs along the split_axis, note: its not needed to sort the whole leafs array
-			 * Only to assure that the elements are partioned on a way that each child takes the elements
+			 * Only to assure that the elements are partitioned on a way that each child takes the elements
 			 * it would take in case the whole array was sorted.
 			 * Split_leafs takes care of that "sort" problem. */
 			nth_positions[0] = parent_leafs_begin;
@@ -982,7 +982,7 @@ void BLI_bvhtree_update_tree(BVHTree *tree)
 {
 	/* Update bottom=>top
 	 * TRICKY: the way we build the tree all the childs have an index greater than the parent
-	 * This allows us todo a bottom up update by starting on the biger numbered branch */
+	 * This allows us todo a bottom up update by starting on the bigger numbered branch */
 
 	BVHNode **root  = tree->nodes + tree->totleaf;
 	BVHNode **index = tree->nodes + tree->totleaf + tree->totbranch - 1;
@@ -1000,7 +1000,7 @@ float BLI_bvhtree_getepsilon(BVHTree *tree)
 /*
  * BLI_bvhtree_overlap
  *
- * overlap - is it possbile for 2 bv's to collide ? */
+ * overlap - is it possible for 2 bv's to collide ? */
 static int tree_overlap(BVHNode *node1, BVHNode *node2, int start_axis, int stop_axis)
 {
 	float *bv1 = node1->bv;
@@ -1167,8 +1167,6 @@ typedef struct NodeDistance {
 
 } NodeDistance;
 
-#define NodeDistance_priority(a, b) ( (a).dist < (b).dist)
-
 // TODO: use a priority queue to reduce the number of nodes looked on
 static void dfs_find_nearest_dfs(BVHNearestData *data, BVHNode *node)
 {
@@ -1211,6 +1209,11 @@ static void dfs_find_nearest_begin(BVHNearestData *data, BVHNode *node)
 
 
 #if 0
+
+#define DEFAULT_FIND_NEAREST_HEAP_SIZE 1024
+
+#define NodeDistance_priority(a, b) ( (a).dist < (b).dist)
+
 static void NodeDistance_push_heap(NodeDistance *heap, int heap_size)
 PUSH_HEAP_BODY(NodeDistance, NodeDistance_priority, heap, heap_size)
 

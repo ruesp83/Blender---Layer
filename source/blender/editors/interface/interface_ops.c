@@ -27,7 +27,6 @@
  *  \ingroup edinterface
  */
 
-
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
@@ -59,6 +58,8 @@
 
 #include "UI_interface.h"
 
+#include "IMB_colormanagement.h"
+
 #include "interface_intern.h"
 
 #include "WM_api.h"
@@ -69,11 +70,14 @@
 #include "BKE_main.h"
 #include "BLI_ghash.h"
 
+#include "ED_image.h"  /* for HDR color sampling */
+#include "ED_node.h"   /* for HDR color sampling */
+#include "ED_clip.h"   /* for HDR color sampling */
 
 /* ********************************************************** */
 
 typedef struct Eyedropper {
-	short do_color_management;
+	struct ColorManagedDisplay *display;
 
 	PointerRNA ptr;
 	PropertyRNA *prop;
@@ -87,8 +91,6 @@ typedef struct Eyedropper {
 static int eyedropper_init(bContext *C, wmOperator *op)
 {
 	Scene *scene = CTX_data_scene(C);
-	const int color_manage = scene->r.color_mgt_flag & R_COLOR_MANAGEMENT;
-
 	Eyedropper *eye;
 	
 	op->customdata = eye = MEM_callocN(sizeof(Eyedropper), "Eyedropper");
@@ -104,7 +106,12 @@ static int eyedropper_init(bContext *C, wmOperator *op)
 		return FALSE;
 	}
 
-	eye->do_color_management = (color_manage && RNA_property_subtype(eye->prop) == PROP_COLOR);
+	if (RNA_property_subtype(eye->prop) == PROP_COLOR) {
+		const char *display_device;
+
+		display_device = scene->display_settings.display_device;
+		eye->display = IMB_colormanagement_display_get_named(display_device);
+	}
 
 	return TRUE;
 }
@@ -126,9 +133,59 @@ static int eyedropper_cancel(bContext *C, wmOperator *op)
 
 /* *** eyedropper_color_ helper functions *** */
 
-/* simply get the color from the screen */
-static void eyedropper_color_sample_fl(Eyedropper *UNUSED(eye), int mx, int my, float r_col[3])
+/**
+ * \brief get the color from the screen.
+ *
+ * Special check for image or nodes where we MAY have HDR pixels which don't display.
+ */
+static void eyedropper_color_sample_fl(bContext *C, Eyedropper *UNUSED(eye), int mx, int my, float r_col[3])
 {
+
+	/* we could use some clever */
+	wmWindow *win = CTX_wm_window(C);
+	ScrArea *sa;
+	for (sa = win->screen->areabase.first; sa; sa = sa->next) {
+		if (BLI_rcti_isect_pt(&sa->totrct, mx, my)) {
+			if (sa->spacetype == SPACE_IMAGE) {
+				ARegion *ar = BKE_area_find_region_type(sa, RGN_TYPE_WINDOW);
+				if (BLI_rcti_isect_pt(&ar->winrct, mx, my)) {
+					SpaceImage *sima = sa->spacedata.first;
+					int mval[2] = {mx - ar->winrct.xmin,
+					               my - ar->winrct.ymin};
+
+					if (ED_space_image_color_sample(sima, ar, mval, r_col)) {
+						return;
+					}
+				}
+			}
+			else if (sa->spacetype == SPACE_NODE) {
+				ARegion *ar = BKE_area_find_region_type(sa, RGN_TYPE_WINDOW);
+				if (BLI_rcti_isect_pt(&ar->winrct, mx, my)) {
+					SpaceNode *snode = sa->spacedata.first;
+					int mval[2] = {mx - ar->winrct.xmin,
+					               my - ar->winrct.ymin};
+
+					if (ED_space_node_color_sample(snode, ar, mval, r_col)) {
+						return;
+					}
+				}
+			}
+			else if (sa->spacetype == SPACE_CLIP) {
+				ARegion *ar = BKE_area_find_region_type(sa, RGN_TYPE_WINDOW);
+				if (BLI_rcti_isect_pt(&ar->winrct, mx, my)) {
+					SpaceClip *sc = sa->spacedata.first;
+					int mval[2] = {mx - ar->winrct.xmin,
+					               my - ar->winrct.ymin};
+
+					if (ED_space_clip_color_sample(sc, ar, mval, r_col)) {
+						return;
+					}
+				}
+			}
+		}
+	}
+
+	/* fallback to simple opengl picker */
 	glReadBuffer(GL_FRONT);
 	glReadPixels(mx, my, 1, 1, GL_RGB, GL_FLOAT, r_col);
 	glReadBuffer(GL_BACK);
@@ -142,9 +199,10 @@ static void eyedropper_color_set(bContext *C, Eyedropper *eye, const float col[3
 	/* to maintain alpha */
 	RNA_property_float_get_array(&eye->ptr, eye->prop, col_conv);
 
-	/* convert from screen (srgb) space to linear rgb space */
-	if (eye->do_color_management) {
-		srgb_to_linearrgb_v3_v3(col_conv, col);
+	/* convert from display space to linear rgb space */
+	if (eye->display) {
+		copy_v3_v3(col_conv, col);
+		IMB_colormanagement_display_to_scene_linear_v3(col_conv, eye->display);
 	}
 	else {
 		copy_v3_v3(col_conv, col);
@@ -167,14 +225,14 @@ static void eyedropper_color_set_accum(bContext *C, Eyedropper *eye)
 static void eyedropper_color_sample(bContext *C, Eyedropper *eye, int mx, int my)
 {
 	float col[3];
-	eyedropper_color_sample_fl(eye, mx, my, col);
+	eyedropper_color_sample_fl(C, eye, mx, my, col);
 	eyedropper_color_set(C, eye, col);
 }
 
-static void eyedropper_color_sample_accum(Eyedropper *eye, int mx, int my)
+static void eyedropper_color_sample_accum(bContext *C, Eyedropper *eye, int mx, int my)
 {
 	float col[3];
-	eyedropper_color_sample_fl(eye, mx, my, col);
+	eyedropper_color_sample_fl(C, eye, mx, my, col);
 	/* delay linear conversion */
 	add_v3_v3(eye->accum_col, col);
 	eye->accum_tot++;
@@ -203,13 +261,13 @@ static int eyedropper_modal(bContext *C, wmOperator *op, wmEvent *event)
 			else if (event->val == KM_PRESS) {
 				/* enable accum and make first sample */
 				eye->accum_start = TRUE;
-				eyedropper_color_sample_accum(eye, event->x, event->y);
+				eyedropper_color_sample_accum(C, eye, event->x, event->y);
 			}
 			break;
 		case MOUSEMOVE:
 			if (eye->accum_start) {
 				/* button is pressed so keep sampling */
-				eyedropper_color_sample_accum(eye, event->x, event->y);
+				eyedropper_color_sample_accum(C, eye, event->x, event->y);
 				eyedropper_color_set_accum(C, eye);
 			}
 			break;
@@ -217,7 +275,7 @@ static int eyedropper_modal(bContext *C, wmOperator *op, wmEvent *event)
 			if (event->val == KM_RELEASE) {
 				eye->accum_tot = 0;
 				zero_v3(eye->accum_col);
-				eyedropper_color_sample_accum(eye, event->x, event->y);
+				eyedropper_color_sample_accum(C, eye, event->x, event->y);
 				eyedropper_color_set_accum(C, eye);
 			}
 			break;
@@ -689,10 +747,7 @@ static int ui_editsource_uibut_match(uiBut *but_a, uiBut *but_b)
 	/* this just needs to be a 'good-enough' comparison so we can know beyond
 	 * reasonable doubt that these buttons are the same between redraws.
 	 * if this fails it only means edit-source fails - campbell */
-	if ((but_a->x1 == but_b->x1) &&
-	    (but_a->x2 == but_b->x2) &&
-	    (but_a->y1 == but_b->y1) &&
-	    (but_a->y2 == but_b->y2) &&
+	if (BLI_rctf_compare(&but_a->rect, &but_b->rect, FLT_EPSILON) &&
 	    (but_a->type == but_b->type) &&
 	    (but_a->rnaprop == but_b->rnaprop) &&
 	    (but_a->optype == but_b->optype) &&
@@ -857,23 +912,44 @@ static void UI_OT_editsource(wmOperatorType *ot)
  * Note: this includes utility functions and button matching checks.
  *       this only works in conjunction with a py operator! */
 
-void edittranslation_find_po_file(const char *root, const char *uilng, char *path, const size_t maxlen)
+static void edittranslation_find_po_file(const char *root, const char *uilng, char *path, const size_t maxlen)
 {
-	char t[32]; /* Should be more than enough! */
+	char tstr[32]; /* Should be more than enough! */
+
 	/* First, full lang code. */
-	sprintf(t, "%s.po", uilng);
+	BLI_snprintf(tstr, sizeof(tstr), "%s.po", uilng);
 	BLI_join_dirfile(path, maxlen, root, uilng);
-	BLI_join_dirfile(path, maxlen, path, t);
+	BLI_join_dirfile(path, maxlen, path, tstr);
 	if (BLI_is_file(path))
 		return;
+
 	/* Now try without the second iso code part (_ES in es_ES). */
-	strncpy(t, uilng, 2);
-	strcpy(t + 2, uilng + 5); /* Because of some codes like sr_SR@latin... */
-	BLI_join_dirfile(path, maxlen, root, t);
-	sprintf(t, "%s.po", t);
-	BLI_join_dirfile(path, maxlen, path, t);
-	if (BLI_is_file(path))
-		return;
+	{
+		char *tc = NULL;
+		size_t szt = 0;
+		tstr[0] = '\0';
+
+		tc = strchr(uilng, '_');
+		if (tc) {
+			szt = tc - uilng;
+			if (szt < sizeof(tstr)) /* Paranoid, should always be true! */
+				BLI_strncpy(tstr, uilng, szt + 1); /* +1 for '\0' char! */
+		}
+		if (tstr[0]) {
+			/* Because of some codes like sr_SR@latin... */
+			tc = strchr(uilng, '@');
+			if (tc)
+				BLI_strncpy(tstr + szt, tc, sizeof(tstr) - szt);
+
+			BLI_join_dirfile(path, maxlen, root, tstr);
+			strcat(tstr, ".po");
+			BLI_join_dirfile(path, maxlen, path, tstr);
+			if (BLI_is_file(path))
+				return;
+		}
+	}
+
+	/* Else no po file! */
 	path[0] = '\0';
 }
 
@@ -912,7 +988,7 @@ static int edittranslation_exec(bContext *C, wmOperator *op)
 		}
 		/* Try to find a valid po file for current language... */
 		edittranslation_find_po_file(root, uilng, popath, FILE_MAX);
-		printf("po path: %s\n", popath);
+/*		printf("po path: %s\n", popath);*/
 		if (popath[0] == '\0') {
 			BKE_reportf(op->reports, RPT_ERROR, "No valid po found for language '%s' under %s.", uilng, root);
 			return OPERATOR_CANCELLED;
@@ -966,14 +1042,6 @@ static int edittranslation_exec(bContext *C, wmOperator *op)
 	}
 }
 
-#if 0
-static int edittranslation_poll(bContext *UNUSED(C))
-{
-	/* We need the i18n py addon to be enabled! */
-	return WM_operatortype_find(EDTSRC_I18N_OP_NAME, 0) ? TRUE : FALSE;
-}
-#endif
-
 static void UI_OT_edittranslation_init(wmOperatorType *ot)
 {
 	/* identifiers */
@@ -983,7 +1051,6 @@ static void UI_OT_edittranslation_init(wmOperatorType *ot)
 
 	/* callbacks */
 	ot->exec = edittranslation_exec;
-/*	ot->poll = edittranslation_poll;*/
 }
 
 #endif /* WITH_PYTHON */
@@ -1018,7 +1085,7 @@ void UI_buttons_operatortypes(void)
 	WM_operatortype_append(UI_OT_copy_data_path_button);
 	WM_operatortype_append(UI_OT_reset_default_button);
 	WM_operatortype_append(UI_OT_copy_to_selected_button);
-	WM_operatortype_append(UI_OT_reports_to_textblock); // XXX: temp?
+	WM_operatortype_append(UI_OT_reports_to_textblock);  /* XXX: temp? */
 
 #ifdef WITH_PYTHON
 	WM_operatortype_append(UI_OT_editsource);

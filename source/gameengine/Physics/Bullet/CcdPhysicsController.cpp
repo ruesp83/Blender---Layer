@@ -632,6 +632,8 @@ CcdPhysicsController::~CcdPhysicsController()
 		delete m_MotionState;
 	if (m_bulletMotionState)
 		delete m_bulletMotionState;
+	if (m_characterController)
+		delete m_characterController;
 	delete m_object;
 
 	DeleteControllerShape();
@@ -785,7 +787,7 @@ void		CcdPhysicsController::PostProcessReplica(class PHY_IMotionState* motionsta
 			if (oldbody->getActivationState() == DISABLE_DEACTIVATION)
 				body->setActivationState(DISABLE_DEACTIVATION);
 		}
-	}	
+	}
 	// sensor object are added when needed
 	if (!m_cci.m_bSensor)
 		m_cci.m_physicsEnv->addCcdPhysicsController(this);
@@ -804,7 +806,7 @@ void		CcdPhysicsController::PostProcessReplica(class PHY_IMotionState* motionsta
 	
 	m_sumoObj	=	new SM_Object(
 		orgsumoobject->getShapeHandle(), 
-		orgsumoobject->getMaterialProps(),			
+		orgsumoobject->getMaterialProps(),
 		orgsumoobject->getShapeProps(),
 		dynaparent);
 	
@@ -836,6 +838,11 @@ void	CcdPhysicsController::SetPhysicsEnvironment(class PHY_IPhysicsEnvironment *
 		if (m_cci.m_physicsEnv->removeCcdPhysicsController(this))
 		{
 			physicsEnv->addCcdPhysicsController(this);
+
+			// Set the object to be active so it can at least by evaluated once.
+			// This fixes issues with static objects not having their physics meshes
+			// in the right spot when lib loading.
+			this->GetCollisionObject()->setActivationState(ACTIVE_TAG);
 		}
 		m_cci.m_physicsEnv = physicsEnv;
 	}
@@ -1135,7 +1142,7 @@ void		CcdPhysicsController::ApplyForce(float forceX,float forceY,float forceZ,bo
 		btTransform xform = m_object->getWorldTransform();
 		
 		if (local)
-		{	
+		{
 			force	= xform.getBasis()*force;
 		}
 		btRigidBody* body = GetRigidBody();
@@ -1654,7 +1661,7 @@ bool CcdShapeConstructionInfo::SetMesh(RAS_MeshObject* meshobj, DerivedMesh* dm,
 				}
 				if (vert_tag_array[mf->v3]==true) { /* *** v3 *** */
 					vert_tag_array[mf->v3]= false;
-					*bt++ = v3->co[0];	
+					*bt++ = v3->co[0];
 					*bt++ = v3->co[1];
 					*bt++ = v3->co[2];
 				}
@@ -1686,7 +1693,7 @@ bool CcdShapeConstructionInfo::SetMesh(RAS_MeshObject* meshobj, DerivedMesh* dm,
 					if (vert_tag_array[mf->v4]==true) { /* *** v4 *** */
 						vert_tag_array[mf->v4]= false;
 						*bt++ = v4->co[0];
-						*bt++ = v4->co[1];	
+						*bt++ = v4->co[1];
 						*bt++ = v4->co[2];
 					}
 				}
@@ -2082,7 +2089,7 @@ bool CcdShapeConstructionInfo::SetProxy(CcdShapeConstructionInfo* shapeInfo)
 btCollisionShape* CcdShapeConstructionInfo::CreateBulletShape(btScalar margin, bool useGimpact, bool useBvh)
 {
 	btCollisionShape* collisionShape = 0;
-	btCompoundShape* compoundShape = 0;	
+	btCompoundShape* compoundShape = 0;
 
 	if (m_shapeType == PHY_SHAPE_PROXY && m_shapeProxy != NULL)
 		return m_shapeProxy->CreateBulletShape(margin, useGimpact, useBvh);
@@ -2131,7 +2138,7 @@ btCollisionShape* CcdShapeConstructionInfo::CreateBulletShape(btScalar margin, b
 		// One possible optimization is to use directly the btBvhTriangleMeshShape when the scale is 1,1,1
 		// and btScaledBvhTriangleMeshShape otherwise.
 		if (useGimpact)
-		{				
+		{
 				btTriangleIndexVertexArray* indexVertexArrays = new btTriangleIndexVertexArray(
 						m_polygonIndexArray.size(),
 						&m_triFaceArray[0],

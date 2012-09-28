@@ -50,6 +50,7 @@
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
+#include "IMB_colormanagement.h"
 
 #include "BKE_colortools.h"
 #include "BKE_image.h"
@@ -82,6 +83,8 @@
 
 #include "renderdatabase.h" /* needed for UV */
 
+#include "RE_render_ext.h"
+
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* defined in pipeline.c, is hardcopy of active dynamic allocated Render */
 /* only to be used here in this file, it's for speed */
@@ -93,13 +96,9 @@ extern struct Render R;
 
 static void init_render_texture(Render *re, Tex *tex)
 {
-	int cfra= re->scene->r.cfra;
-	
-	if (re) cfra= re->r.cfra;
-	
 	/* imap test */
 	if (tex->ima && ELEM(tex->ima->source, IMA_SRC_MOVIE, IMA_SRC_SEQUENCE)) {
-		BKE_image_user_frame_calc(&tex->iuser, cfra, re?re->flag & R_SEC_FIELD:0);
+		BKE_image_user_frame_calc(&tex->iuser, re ? re->r.cfra : 0, re ? re->flag & R_SEC_FIELD:0);
 	}
 	
 	else if (tex->type==TEX_ENVMAP) {
@@ -112,7 +111,7 @@ static void init_render_texture(Render *re, Tex *tex)
 				tex->extend= TEX_EXTEND;
 			
 			/* only free envmap when rendermode was set to render envmaps, for previewrender */
-			if (G.rendering && re) {
+			if (G.is_rendering && re) {
 				if (re->r.mode & R_ENVMAP)
 					if (tex->env->stype==ENV_ANIM)
 						BKE_free_envmapdata(tex->env);
@@ -791,9 +790,9 @@ static int cubemap(MTex *mtex, VlakRen *vlr, const float n[3], float x, float y,
 				float nor[3];
 				normal_tri_v3(nor, vlr->v1->orco, vlr->v2->orco, vlr->v3->orco);
 				
-				if ( fabs(nor[0])<fabs(nor[2]) && fabs(nor[1])<fabs(nor[2]) ) vlr->puno |= ME_PROJXY;
-				else if ( fabs(nor[0])<fabs(nor[1]) && fabs(nor[2])<fabs(nor[1]) ) vlr->puno |= ME_PROJXZ;
-				else vlr->puno |= ME_PROJYZ;
+				if      (fabsf(nor[0]) < fabsf(nor[2]) && fabsf(nor[1]) < fabsf(nor[2])) vlr->puno |= ME_PROJXY;
+				else if (fabsf(nor[0]) < fabsf(nor[1]) && fabsf(nor[2]) < fabsf(nor[1])) vlr->puno |= ME_PROJXZ;
+				else                                                                     vlr->puno |= ME_PROJYZ;
 			}
 			else return cubemap_glob(n, x, y, z, adr1, adr2);
 		}
@@ -1225,11 +1224,11 @@ int multitex_nodes(Tex *tex, float *texvec, float *dxt, float *dyt, int osatex, 
 			rgbnor= multitex(tex, texvec, dxt, dyt, osatex, texres, thread, which_output);
 
 			if (mtex->mapto & (MAP_COL+MAP_COLSPEC+MAP_COLMIR)) {
-				ImBuf *ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser, IMA_IBUF_IMA);
+				ImBuf *ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser);
 				
 				/* don't linearize float buffers, assumed to be linear */
-				if (ibuf && !(ibuf->rect_float) && R.r.color_mgt_flag & R_COLOR_MANAGEMENT)
-					srgb_to_linearrgb_v3_v3(&texres->tr, &texres->tr);
+				if (ibuf && !(ibuf->rect_float))
+					IMB_colormanagement_colorspace_to_scene_linear_v3(&texres->tr, ibuf->rect_colorspace);
 			}
 		}
 		else {
@@ -1263,18 +1262,19 @@ int multitex_nodes(Tex *tex, float *texvec, float *dxt, float *dyt, int osatex, 
 }
 
 /* this is called for surface shading */
-int multitex_mtex(ShadeInput *shi, MTex *mtex, float *texvec, float *dxt, float *dyt, TexResult *texres)
+static int multitex_mtex(ShadeInput *shi, MTex *mtex, float *texvec, float *dxt, float *dyt, TexResult *texres)
 {
-	Tex *tex= mtex->tex;
+	Tex *tex = mtex->tex;
 
 	if (tex->use_nodes && tex->nodetree) {
 		/* stupid exception here .. but we have to pass shi and mtex to
 		 * textures nodes for 2d mapping and color management for images */
 		return ntreeTexExecTree(tex->nodetree, texres, texvec, dxt, dyt, shi->osatex, shi->thread,
-			tex, mtex->which_output, R.r.cfra, (R.r.scemode & R_TEXNODE_PREVIEW) != 0, shi, mtex);
+		                        tex, mtex->which_output, R.r.cfra, (R.r.scemode & R_TEXNODE_PREVIEW) != 0, shi, mtex);
 	}
-	else
+	else {
 		return multitex(mtex->tex, texvec, dxt, dyt, shi->osatex, texres, shi->thread, mtex->which_output);
+	}
 }
 
 /* Warning, if the texres's values are not declared zero, check the return value to be sure
@@ -1703,7 +1703,7 @@ static int compatible_bump_compute(CompatibleBump *compat_bump, ShadeInput *shi,
 	if (!shi->osatex && (tex->type == TEX_IMAGE) && tex->ima) {
 		/* in case we have no proper derivatives, fall back to
 		 * computing du/dv it based on image size */
-		ImBuf* ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser, IMA_IBUF_IMA);
+		ImBuf *ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser);
 		if (ibuf) {
 			du = 1.f/(float)ibuf->x;
 			dv = 1.f/(float)ibuf->y;
@@ -1733,7 +1733,7 @@ static int compatible_bump_compute(CompatibleBump *compat_bump, ShadeInput *shi,
 	if (mtex->texco == TEXCO_UV) {
 		/* for the uv case, use the same value for both du/dv,
 		 * since individually scaling the normal derivatives makes them useless... */
-		du = MIN2(du, dv);
+		du = minf(du, dv);
 		idu = (du < 1e-5f) ? bf : (bf/du);
 
 		/* +u val */
@@ -1878,7 +1878,7 @@ static int ntap_bump_compute(NTapBump *ntap_bump, ShadeInput *shi, MTex *mtex, T
 
 	/* resolve image dimensions */
 	if (found_deriv_map || (mtex->texflag&MTEX_BUMP_TEXTURESPACE)!=0) {
-		ImBuf* ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser, IMA_IBUF_IMA);
+		ImBuf *ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser);
 		if (ibuf) {
 			dimx = ibuf->x;
 			dimy = ibuf->y;
@@ -2153,9 +2153,6 @@ void do_material_tex(ShadeInput *shi, Render *re)
 					co= shi->lo; dx= shi->dxlo; dy= shi->dylo;
 				}
 			}
-			else if (mtex->texco==TEXCO_STICKY) {
-				co= shi->sticky; dx= shi->dxsticky; dy= shi->dysticky;
-			}
 			else if (mtex->texco==TEXCO_OBJECT) {
 				Object *ob= mtex->object;
 				if (ob) {
@@ -2377,11 +2374,11 @@ void do_material_tex(ShadeInput *shi, Render *re)
 				/* inverse gamma correction */
 				if (tex->type==TEX_IMAGE) {
 					Image *ima = tex->ima;
-					ImBuf *ibuf = BKE_image_get_ibuf(ima, &tex->iuser, IMA_IBUF_IMA);
+					ImBuf *ibuf = BKE_image_get_ibuf(ima, &tex->iuser);
 					
 					/* don't linearize float buffers, assumed to be linear */
-					if (ibuf && !(ibuf->rect_float) && re->r.color_mgt_flag & R_COLOR_MANAGEMENT)
-						srgb_to_linearrgb_v3_v3(tcol, tcol);
+					if (ibuf && !(ibuf->rect_float))
+						IMB_colormanagement_colorspace_to_scene_linear_v3(tcol, ibuf->rect_colorspace);
 				}
 				
 				if (mtex->mapto & MAP_COL) {
@@ -2760,11 +2757,9 @@ void do_volume_tex(ShadeInput *shi, const float *xyz, int mapto_flag, float col_
 				/* stencil maps on the texture control slider, not texture intensity value */
 				
 				/* convert RGB to intensity if intensity info isn't provided */
-				if (!(rgbnor & TEX_INT)) {
-					if (rgbnor & TEX_RGB) {
-						if (texres.talpha)  texres.tin = texres.ta;
-						else                texres.tin = rgb_to_grayscale(&texres.tr);
-					}
+				if (rgbnor & TEX_RGB) {
+					if (texres.talpha)  texres.tin = texres.ta;
+					else                texres.tin = rgb_to_grayscale(&texres.tr);
 				}
 				
 				if ((mapto_flag & MAP_EMISSION) && (mtex->mapto & MAP_EMISSION)) {
@@ -2889,11 +2884,11 @@ void do_halo_tex(HaloRen *har, float xn, float yn, float col_r[4])
 		/* inverse gamma correction */
 		if (mtex->tex->type==TEX_IMAGE) {
 			Image *ima = mtex->tex->ima;
-			ImBuf *ibuf = BKE_image_get_ibuf(ima, &mtex->tex->iuser, IMA_IBUF_IMA);
+			ImBuf *ibuf = BKE_image_get_ibuf(ima, &mtex->tex->iuser);
 			
 			/* don't linearize float buffers, assumed to be linear */
-			if (ibuf && !(ibuf->rect_float) && R.r.color_mgt_flag & R_COLOR_MANAGEMENT)
-				srgb_to_linearrgb_v3_v3(&texres.tr, &texres.tr);
+			if (ibuf && !(ibuf->rect_float))
+				IMB_colormanagement_colorspace_to_scene_linear_v3(&texres.tr, ibuf->rect_colorspace);
 		}
 
 		fact= texres.tin*mtex->colfac;
@@ -2985,7 +2980,7 @@ void do_sky_tex(const float rco[3], float lo[3], const float dxyview[2], float h
 				}
 				else {
 					/* this value has no angle, the vector is directly along the view.
-					 * avoide divide by zero and use a dummy value. */
+					 * avoid divide by zero and use a dummy value. */
 					tempvec[0]= 1.0f;
 					tempvec[1]= 0.0;
 					tempvec[2]= 0.0;
@@ -3104,11 +3099,11 @@ void do_sky_tex(const float rco[3], float lo[3], const float dxyview[2], float h
 				/* inverse gamma correction */
 				if (tex->type==TEX_IMAGE) {
 					Image *ima = tex->ima;
-					ImBuf *ibuf = BKE_image_get_ibuf(ima, &tex->iuser, IMA_IBUF_IMA);
+					ImBuf *ibuf = BKE_image_get_ibuf(ima, &tex->iuser);
 					
 					/* don't linearize float buffers, assumed to be linear */
-					if (ibuf && !(ibuf->rect_float) && R.r.color_mgt_flag & R_COLOR_MANAGEMENT)
-						srgb_to_linearrgb_v3_v3(tcol, tcol);
+					if (ibuf && !(ibuf->rect_float))
+						IMB_colormanagement_colorspace_to_scene_linear_v3(tcol, ibuf->rect_colorspace);
 				}
 
 				if (mtex->mapto & WOMAP_HORIZ) {
@@ -3318,11 +3313,11 @@ void do_lamp_tex(LampRen *la, const float lavec[3], ShadeInput *shi, float col_r
 				/* inverse gamma correction */
 				if (tex->type==TEX_IMAGE) {
 					Image *ima = tex->ima;
-					ImBuf *ibuf = BKE_image_get_ibuf(ima, &tex->iuser, IMA_IBUF_IMA);
+					ImBuf *ibuf = BKE_image_get_ibuf(ima, &tex->iuser);
 					
 					/* don't linearize float buffers, assumed to be linear */
-					if (ibuf && !(ibuf->rect_float) && R.r.color_mgt_flag & R_COLOR_MANAGEMENT)
-						srgb_to_linearrgb_v3_v3(&texres.tr, &texres.tr);
+					if (ibuf && !(ibuf->rect_float))
+						IMB_colormanagement_colorspace_to_scene_linear_v3(&texres.tr, ibuf->rect_colorspace);
 				}
 
 				/* lamp colors were premultiplied with this */
@@ -3636,7 +3631,7 @@ void RE_sample_material_color(Material *mat, float color[3], float *alpha, const
 					float *uv1, *uv2, *uv3;
 					float l;
 					CustomData *data = &orcoDm->faceData;
-					MTFace *tface = (MTFace*) data->layers[layer_index+i].data;
+					MTFace *tface = (MTFace *) data->layers[layer_index+i].data;
 					float uv[3];
 					/* point layer name from actual layer data */
 					shi.uv[i].name = data->layers[i].name;

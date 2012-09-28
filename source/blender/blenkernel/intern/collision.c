@@ -161,8 +161,6 @@ void bvhtree_update_from_mvert(BVHTree * bvhtree, MFace *faces, int numfaces, MV
 /***********************************
 Collision modifier code end
 ***********************************/
-#define mySWAP(a, b) do { double tmp = b ; b = a ; a = tmp ; } while (0)
-
 
 // w3 is not perfect
 static void collision_compute_barycentric ( float pv[3], float p1[3], float p2[3], float p3[3], float *w1, float *w2, float *w3 )
@@ -414,8 +412,9 @@ static CollPair* cloth_collision(ModifierData *md1, ModifierData *md2,
 				collpair->bp2 = face2->v2;
 				collpair->bp3 = face2->v3;
 			}
-			else
+			else {
 				i++;
+			}
 		}
 		if ( i == 2 ) {
 			if ( face2->v4 ) {
@@ -429,8 +428,9 @@ static CollPair* cloth_collision(ModifierData *md1, ModifierData *md2,
 				collpair->bp2 = face2->v4;
 				collpair->bp3 = face2->v3;
 			}
-			else
+			else {
 				break;
+			}
 		}
 		else if ( i == 3 ) {
 			if ( face1->v4 && face2->v4 ) {
@@ -444,8 +444,9 @@ static CollPair* cloth_collision(ModifierData *md1, ModifierData *md2,
 				collpair->bp2 = face2->v3;
 				collpair->bp3 = face2->v4;
 			}
-			else
+			else {
 				break;
+			}
 		}
 		
 #ifdef USE_BULLET
@@ -464,8 +465,7 @@ static CollPair* cloth_collision(ModifierData *md1, ModifierData *md2,
 			collpair->flag = 0;
 			collpair++;
 		}/*
-		else
-		{
+		else {
 			float w1, w2, w3, u1, u2, u3;
 			float v1[3], v2[3], relativeVelocity[3];
 

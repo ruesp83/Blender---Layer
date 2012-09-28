@@ -149,8 +149,8 @@ static void zbuf_add_to_span(ZSpan *zspan, const float *v1, const float *v2)
 		xs0= dx0*(minv[1]-my2) + minv[0];
 	}
 	else {
-		dx0= 0.0f;
-		xs0= MIN2(minv[0], maxv[0]);
+		dx0 = 0.0f;
+		xs0 = minf(minv[0], maxv[0]);
 	}
 	
 	/* empty span */
@@ -443,7 +443,7 @@ static void zbuflineAc(ZSpan *zspan, int obi, int zvlnr, const float vec1[3], co
 	
 	mask= zspan->mask;
 	
-	if (fabs(dx) > fabs(dy)) {
+	if (fabsf(dx) > fabsf(dy)) {
 
 		/* all lines from left to right */
 		if (vec1[0]<vec2[0]) {
@@ -597,7 +597,7 @@ static void zbufline(ZSpan *zspan, int obi, int zvlnr, const float vec1[3], cons
 	dx= vec2[0]-vec1[0];
 	dy= vec2[1]-vec1[1];
 	
-	if (fabs(dx) > fabs(dy)) {
+	if (fabsf(dx) > fabsf(dy)) {
 
 		/* all lines from left to right */
 		if (vec1[0]<vec2[0]) {
@@ -727,7 +727,7 @@ static void zbufline_onlyZ(ZSpan *zspan, int UNUSED(obi), int UNUSED(zvlnr), con
 	dx= vec2[0]-vec1[0];
 	dy= vec2[1]-vec1[1];
 	
-	if (fabs(dx) > fabs(dy)) {
+	if (fabsf(dx) > fabsf(dy)) {
 		
 		/* all lines from left to right */
 		if (vec1[0]<vec2[0]) {
@@ -1626,7 +1626,7 @@ static void clippyra(float *labda, float *v1, float *v2, int *b2, int *b3, int a
 		v13= clipcrop*v1[3];
 	}	
 	/* according the original article by Liang&Barsky, for clipping of
-	 * homogenous coordinates with viewplane, the value of "0" is used instead of "-w" .
+	 * homogeneous coordinates with viewplane, the value of "0" is used instead of "-w" .
 	 * This differs from the other clipping cases (like left or top) and I considered
 	 * it to be not so 'homogenic'. But later it has proven to be an error,
 	 * who would have thought that of L&B!
@@ -3476,7 +3476,7 @@ void zbuffer_abuf_shadow(Render *re, LampRen *lar, float winmat[][4], APixstr *A
 /* speed pointer NULL = sky, we clear */
 /* else if either alpha is full or no solid was filled in: copy speed */
 /* else fill in minimum speed */
-void add_transp_speed(RenderLayer *rl, int offset, float *speed, float alpha, intptr_t *rdrect)
+static void add_transp_speed(RenderLayer *rl, int offset, float speed[4], float alpha, intptr_t *rdrect)
 {
 	RenderPass *rpass;
 	
@@ -3525,7 +3525,7 @@ static void add_transp_obindex(RenderLayer *rl, int offset, Object *ob)
 
 /* ONLY OSA! merge all shaderesult samples to one */
 /* target should have been cleared */
-void merge_transp_passes(RenderLayer *rl, ShadeResult *shr)
+static void merge_transp_passes(RenderLayer *rl, ShadeResult *shr)
 {
 	RenderPass *rpass;
 	float weight= 1.0f/((float)R.osa);
@@ -3627,7 +3627,7 @@ void merge_transp_passes(RenderLayer *rl, ShadeResult *shr)
 				
 }
 
-void add_transp_passes(RenderLayer *rl, int offset, ShadeResult *shr, float alpha)
+static void add_transp_passes(RenderLayer *rl, int offset, ShadeResult *shr, float alpha)
 {
 	RenderPass *rpass;
 	
@@ -3874,7 +3874,7 @@ static int addtosamp_shr(ShadeResult *samp_shr, ShadeSample *ssamp, int addpassf
 				
 				addAlphaUnderFloat(samp_shr->combined, shr->combined);
 				
-				samp_shr->z= MIN2(samp_shr->z, shr->z);
+				samp_shr->z = minf(samp_shr->z, shr->z);
 
 				if (addpassflag & SCE_PASS_VECTOR) {
 					copy_v4_v4(samp_shr->winspeed, shr->winspeed);
@@ -3975,9 +3975,9 @@ unsigned short *zbuffer_transp_shade(RenderPart *pa, RenderLayer *rl, float *pas
 	if (R.test_break(R.tbh))
 		return NULL;
 	
-	if (R.osa>16) { /* MAX_OSA */
+	if (R.osa > 16) {  /* MAX_OSA */
 		printf("zbuffer_transp_shade: osa too large\n");
-		G.afbreek= 1;
+		G.is_break = TRUE;
 		return NULL;
 	}
 	

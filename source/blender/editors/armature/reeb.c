@@ -24,11 +24,10 @@
  *  \ingroup edarmature
  */
 
- 
 #include <math.h>
-#include <string.h> // for memcpy
+#include <string.h> /* for memcpy */
 #include <stdio.h>
-#include <stdlib.h> // for qsort
+#include <stdlib.h> /* for qsort */
 #include <float.h>
 
 #include "DNA_scene_types.h"
@@ -45,15 +44,7 @@
 #include "BLI_ghash.h"
 #include "BLI_heap.h"
 
-//#include "BDR_editobject.h"
-
-//#include "BIF_interface.h"
-//#include "BIF_toolbox.h"
-//#include "BIF_graphics.h"
-
 #include "BKE_mesh.h"
-
-//#include "blendef.h"
 
 #include "ONL_opennl.h"
 
@@ -3281,7 +3272,7 @@ ReebGraph *BIF_ReebGraphFromEditMesh(void)
 	freeEdgeIndex(&indexed_edges);
 	
 #ifdef DEBUG_REEB
-	weightToVCol(em, 1);
+//	weightToVCol(em, 1);
 #endif
 	
 	rg = generateReebGraph(em, G.scene->toolsettings->skgen_resolution);

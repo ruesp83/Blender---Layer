@@ -52,17 +52,11 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-//XXX #include "BIF_toolbox.h"
-
 #include "BKE_font.h"
-
 
 #include "DNA_vfont_types.h"
 #include "DNA_packedFile_types.h"
 #include "DNA_curve_types.h"
-
-#define myMIN_ASCII     32
-#define myMAX_ASCII     255
 
 /* local variables */
 static FT_Library library;
@@ -296,19 +290,12 @@ static int objchr_to_ftvfontdata(VFont *vfont, FT_ULong charcode)
 {
 	/* Freetype2 */
 	FT_Face face;
-	struct TmpFont *tf;
-
-	/* Find the correct FreeType font */
-	tf = BKE_vfont_find_tmpfont(vfont);
-
-	/* What, no font found. Something strange here */
-	if (!tf) return FALSE;
 
 	/* Load the font to memory */
-	if (tf->pf) {
+	if (vfont->temp_pf) {
 		err = FT_New_Memory_Face(library,
-		                         tf->pf->data,
-		                         tf->pf->size,
+		                         vfont->temp_pf->data,
+		                         vfont->temp_pf->size,
 		                         0,
 		                         &face);
 		if (err) return FALSE;
@@ -559,7 +546,7 @@ typedef struct  FT_Outline_
  * Type1 format.
  *
  * Each arc is described through a series of start, end and control points. Each point of the outline
- * has a specific tag which indicates wether it is used to describe a line segment or an arc.
+ * has a specific tag which indicates whether it is used to describe a line segment or an arc.
  *
  *
  * The following rules are applied to decompose the contour's points into segments and arcs :

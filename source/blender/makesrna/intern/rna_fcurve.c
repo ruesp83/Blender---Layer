@@ -55,7 +55,7 @@ EnumPropertyItem fmodifier_type_items[] = {
 	{FMODIFIER_TYPE_ENVELOPE, "ENVELOPE", 0, "Envelope", ""},
 	{FMODIFIER_TYPE_CYCLES, "CYCLES", 0, "Cycles", ""},
 	{FMODIFIER_TYPE_NOISE, "NOISE", 0, "Noise", ""},
-	{FMODIFIER_TYPE_FILTER, "FILTER", 0, "Filter", ""},
+	/*{FMODIFIER_TYPE_FILTER, "FILTER", 0, "Filter", ""},*/ /* FIXME: not implemented yet! */
 	/*{FMODIFIER_TYPE_PYTHON, "PYTHON", 0, "Python", ""},	 *//* FIXME: not implemented yet! */
 	{FMODIFIER_TYPE_LIMITS, "LIMITS", 0, "Limits", ""},
 	{FMODIFIER_TYPE_STEPPED, "STEPPED", 0, "Stepped Interpolation", ""},
@@ -403,13 +403,13 @@ static void rna_FCurve_group_set(PointerRNA *ptr, PointerRNA value)
 	}
 }
 
-DriverVar *rna_Driver_new_variable(ChannelDriver *driver)
+static DriverVar *rna_Driver_new_variable(ChannelDriver *driver)
 {
 	/* call the API function for this */
 	return driver_add_new_variable(driver);
 }
 
-void rna_Driver_remove_variable(ChannelDriver *driver, ReportList *reports, DriverVar *dvar)
+static void rna_Driver_remove_variable(ChannelDriver *driver, ReportList *reports, DriverVar *dvar)
 {
 	if (BLI_findindex(&driver->variables, dvar) == -1) {
 		BKE_report(reports, RPT_ERROR, "Variable does not exist in this driver");

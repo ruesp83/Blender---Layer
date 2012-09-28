@@ -36,12 +36,13 @@
 
 #include "BKE_modifier.h"
 #include "BKE_ocean.h"
-#include "BKE_utildefines.h"
 
 #include "render_types.h"
 #include "RE_shader_ext.h"
 
 #include "texture.h"
+
+#include "texture_ocean.h"  /* own include */
 
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
@@ -88,7 +89,7 @@ int ocean_texture(Tex *tex, float *texvec, TexResult *texres)
 		}
 		else {	/* non-cached */
 
-			if (G.rendering)
+			if (G.is_rendering)
 				BKE_ocean_eval_uv_catrom(omd->ocean, &ocr, u, v);
 			else
 				BKE_ocean_eval_uv(omd->ocean, &ocr, u, v);

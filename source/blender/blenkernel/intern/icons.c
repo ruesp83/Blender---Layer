@@ -65,7 +65,7 @@ static void icon_free(void *val)
 	Icon *icon = val;
 
 	if (icon) {
-		if (icon->drawinfo_free) {		
+		if (icon->drawinfo_free) {
 			icon->drawinfo_free(icon->drawinfo);
 		}
 		else if (icon->drawinfo) {
@@ -191,9 +191,6 @@ void BKE_previewimg_free_id(ID *id)
 	else if (GS(id->name) == ID_IM) {
 		Image *img  = (Image *)id;
 		BKE_previewimg_free(&img->preview);
-	/*} else if (GS(id->name) == ID_IL) {
-		ImageLayer *iml  = (ImageLayer*)id;
-		BKE_previewimg_free(&iml->preview);*/
 	}
 	else if (GS(id->name) == ID_BR) {
 		Brush *br  = (Brush *)id;
@@ -229,10 +226,6 @@ PreviewImage *BKE_previewimg_get(ID *id)
 		Image *img  = (Image *)id;
 		if (!img->preview) img->preview = BKE_previewimg_create();
 		prv_img = img->preview;
-	/*} else if (GS(id->name) == ID_IL) {
-		ImageLayer *iml  = (ImageLayer*)id;
-		if (!iml->preview) iml->preview = BKE_previewimg_create();
-		prv_img = iml->preview;*/
 	}
 	else if (GS(id->name) == ID_BR) {
 		Brush *br  = (Brush *)id;
@@ -262,7 +255,7 @@ void BKE_icon_changed(int id)
 				prv->changed_timestamp[i]++;
 			}
 		}
-	}	
+	}
 }
 
 int BKE_icon_getid(struct ID *id)

@@ -69,6 +69,7 @@
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
+#include "IMB_colormanagement.h"
 
 #include "GPU_draw.h" /* GPU_free_image */
 
@@ -358,14 +359,14 @@ static int multiresbake_test_break(MultiresBakeRender *bkr)
 		return 0;
 	}
 
-	return G.afbreek;
+	return G.is_break;
 }
 
 static void do_multires_bake(MultiresBakeRender *bkr, Image *ima, MPassKnownData passKnownData,
                              MInitBakeData initBakeData, MApplyBakeData applyBakeData, MFreeBakeData freeBakeData)
 {
 	DerivedMesh *dm = bkr->lores_dm;
-	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
+	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
 	const int lvl = bkr->lvl;
 	const int tot_face = dm->getNumTessFaces(dm);
 	MVert *mvert = dm->getVertArray(dm);
@@ -600,7 +601,7 @@ static void interp_barycentric_mface(DerivedMesh *dm, MFace *mface, const float 
 static void *init_heights_data(MultiresBakeRender *bkr, Image *ima)
 {
 	MHeightBakeData *height_data;
-	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
+	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
 	DerivedMesh *lodm = bkr->lores_dm;
 
 	height_data = MEM_callocN(sizeof(MHeightBakeData), "MultiresBake heightData");
@@ -654,7 +655,7 @@ static void free_normal_data(void *bake_data)
 static void apply_heights_data(void *bake_data)
 {
 	MHeightBakeData *height_data = (MHeightBakeData *)bake_data;
-	ImBuf *ibuf = BKE_image_get_ibuf(height_data->ima, NULL, IMA_IBUF_IMA);
+	ImBuf *ibuf = BKE_image_get_ibuf(height_data->ima, NULL);
 	int x, y, i;
 	float height, *heights = height_data->heights;
 	float min = height_data->height_min, max = height_data->height_max;
@@ -685,7 +686,7 @@ static void apply_heights_data(void *bake_data)
 		}
 	}
 
-	ibuf->userflags = IB_RECT_INVALID;
+	ibuf->userflags = IB_RECT_INVALID | IB_DISPLAY_BUFFER_INVALID;
 }
 
 static void free_heights_data(void *bake_data)
@@ -712,7 +713,7 @@ static void apply_heights_callback(DerivedMesh *lores_dm, DerivedMesh *hires_dm,
 	MTFace *mtface = CustomData_get_layer(&lores_dm->faceData, CD_MTFACE);
 	MFace mface;
 	Image *ima = mtface[face_index].tpage;
-	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
+	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
 	MHeightBakeData *height_data = (MHeightBakeData *)bake_data;
 	float uv[2], *st0, *st1, *st2, *st3;
 	int pixel = ibuf->x * y + x;
@@ -769,6 +770,8 @@ static void apply_heights_callback(DerivedMesh *lores_dm, DerivedMesh *hires_dm,
 		char *rrgb = (char *)ibuf->rect + pixel * 4;
 		rrgb[3] = 255;
 	}
+
+	ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
 }
 
 /* MultiresBake callback for normals' baking
@@ -783,7 +786,7 @@ static void apply_tangmat_callback(DerivedMesh *lores_dm, DerivedMesh *hires_dm,
 	MTFace *mtface = CustomData_get_layer(&lores_dm->faceData, CD_MTFACE);
 	MFace mface;
 	Image *ima = mtface[face_index].tpage;
-	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
+	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
 	MNormalBakeData *normal_data = (MNormalBakeData *)bake_data;
 	float uv[2], *st0, *st1, *st2, *st3;
 	int pixel = ibuf->x * y + x;
@@ -826,6 +829,8 @@ static void apply_tangmat_callback(DerivedMesh *lores_dm, DerivedMesh *hires_dm,
 		rgb_float_to_uchar(rrgb, vec);
 		rrgb[3] = 255;
 	}
+
+	ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
 }
 
 static void count_images(MultiresBakeRender *bkr)
@@ -862,7 +867,7 @@ static void bake_images(MultiresBakeRender *bkr)
 
 	for (link = bkr->image.first; link; link = link->next) {
 		Image *ima = (Image *)link->data;
-		ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
+		ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
 
 		if (ibuf->x > 0 && ibuf->y > 0) {
 			ibuf->userdata = MEM_callocN(ibuf->y * ibuf->x, "MultiresBake imbuf mask");
@@ -888,14 +893,14 @@ static void finish_images(MultiresBakeRender *bkr)
 
 	for (link = bkr->image.first; link; link = link->next) {
 		Image *ima = (Image *)link->data;
-		ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
+		ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
 
 		if (ibuf->x <= 0 || ibuf->y <= 0)
 			continue;
 
 		RE_bake_ibuf_filter(ibuf, (char *)ibuf->userdata, bkr->bake_filter);
 
-		ibuf->userflags |= IB_BITMAPDIRTY;
+		ibuf->userflags |= IB_BITMAPDIRTY | IB_DISPLAY_BUFFER_INVALID;;
 
 		if (ibuf->rect_float)
 			ibuf->userflags |= IB_RECT_INVALID;
@@ -977,7 +982,7 @@ static int multiresbake_check(bContext *C, wmOperator *op)
 					ok = 0;
 				}
 				else {
-					ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
+					ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
 
 					if (!ibuf) {
 						BKE_report(op->reports, RPT_ERROR, "Baking should happend to image with image buffer");
@@ -1066,7 +1071,7 @@ static void clear_images(MTFace *mtface, int totface)
 		Image *ima = mtface[a].tpage;
 
 		if ((ima->id.flag & LIB_DOIT) == 0) {
-			ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
+			ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
 
 			IMB_rectfill(ibuf, (ibuf->planes == R_IMF_PLANES_RGBA) ? vec_alpha : vec_solid);
 			ima->id.flag |= LIB_DOIT;
@@ -1241,7 +1246,7 @@ static int multiresbake_image_exec(bContext *C, wmOperator *op)
 {
 	Scene *scene = CTX_data_scene(C);
 	MultiresBakeJob *bkr;
-	wmJob *steve;
+	wmJob *wm_job;
 
 	if (!multiresbake_check(C, op))
 		return OPERATOR_CANCELLED;
@@ -1255,14 +1260,15 @@ static int multiresbake_image_exec(bContext *C, wmOperator *op)
 	}
 
 	/* setup job */
-	steve = WM_jobs_get(CTX_wm_manager(C), CTX_wm_window(C), scene, "Multires Bake", WM_JOB_EXCL_RENDER | WM_JOB_PRIORITY | WM_JOB_PROGRESS);
-	WM_jobs_customdata(steve, bkr, multiresbake_freejob);
-	WM_jobs_timer(steve, 0.2, NC_IMAGE, 0); /* TODO - only draw bake image, can we enforce this */
-	WM_jobs_callbacks(steve, multiresbake_startjob, NULL, NULL, NULL);
+	wm_job = WM_jobs_get(CTX_wm_manager(C), CTX_wm_window(C), scene, "Multires Bake",
+	                     WM_JOB_EXCL_RENDER | WM_JOB_PRIORITY | WM_JOB_PROGRESS, WM_JOB_TYPE_OBJECT_BAKE_TEXTURE);
+	WM_jobs_customdata_set(wm_job, bkr, multiresbake_freejob);
+	WM_jobs_timer(wm_job, 0.2, NC_IMAGE, 0); /* TODO - only draw bake image, can we enforce this */
+	WM_jobs_callbacks(wm_job, multiresbake_startjob, NULL, NULL, NULL);
 
-	G.afbreek = 0;
+	G.is_break = FALSE;
 
-	WM_jobs_start(CTX_wm_manager(C), steve);
+	WM_jobs_start(CTX_wm_manager(C), wm_job);
 	WM_cursor_wait(0);
 
 	/* add modal handler for ESC */
@@ -1276,7 +1282,7 @@ static int multiresbake_image_exec(bContext *C, wmOperator *op)
 /* threaded break test */
 static int thread_break(void *UNUSED(arg))
 {
-	return G.afbreek;
+	return G.is_break;
 }
 
 typedef struct BakeRender {
@@ -1323,11 +1329,12 @@ static int test_bake_internal(bContext *C, ReportList *reports)
 static void init_bake_internal(BakeRender *bkr, bContext *C)
 {
 	Scene *scene = CTX_data_scene(C);
+	bScreen *sc = CTX_wm_screen(C);
 
 	/* get editmode results */
 	ED_object_exit_editmode(C, 0);  /* 0 = does not exit editmode */
 
-	bkr->sa = BKE_screen_find_big_area(CTX_wm_screen(C), SPACE_IMAGE, 10); /* can be NULL */
+	bkr->sa = sc ? BKE_screen_find_big_area(sc, SPACE_IMAGE, 10) : NULL; /* can be NULL */
 	bkr->main = CTX_data_main(C);
 	bkr->scene = scene;
 	bkr->actob = (scene->r.bake_flag & R_BAKE_TO_ACTIVE) ? OBACT : NULL;
@@ -1346,6 +1353,8 @@ static void init_bake_internal(BakeRender *bkr, bContext *C)
 
 static void finish_bake_internal(BakeRender *bkr)
 {
+	Image *ima;
+
 	RE_Database_Free(bkr->re);
 
 	/* restore raytrace and AO */
@@ -1357,24 +1366,28 @@ static void finish_bake_internal(BakeRender *bkr)
 		if (bkr->prev_r_raytrace == 0)
 			bkr->scene->r.mode &= ~R_RAYTRACE;
 
-	if (bkr->result == BAKE_RESULT_OK) {
-		Image *ima;
-		/* force OpenGL reload and mipmap recalc */
-		for (ima = G.main->image.first; ima; ima = ima->id.next) {
+
+	/* force OpenGL reload and mipmap recalc */
+	for (ima = G.main->image.first; ima; ima = ima->id.next) {
+		ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
+
+		if (bkr->result == BAKE_RESULT_OK) {
 			if (ima->ok == IMA_OK_LOADED) {
-				ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 				if (ibuf) {
 					if (ibuf->userflags & IB_BITMAPDIRTY) {
+						ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
 						GPU_free_image(ima);
 						imb_freemipmapImBuf(ibuf);
 					}
-
-					/* freed when baking is done, but if its canceled we need to free here */
-					if (ibuf->userdata) {
-						MEM_freeN(ibuf->userdata);
-						ibuf->userdata = NULL;
-					}
 				}
+			}
+		}
+
+		/* freed when baking is done, but if its canceled we need to free here */
+		if (ibuf) {
+			if (ibuf->userdata) {
+				MEM_freeN(ibuf->userdata);
+				ibuf->userdata = NULL;
 			}
 		}
 	}
@@ -1401,7 +1414,7 @@ static void bake_startjob(void *bkv, short *stop, short *do_update, float *progr
 	bkr->progress = progress;
 
 	RE_test_break_cb(bkr->re, NULL, thread_break);
-	G.afbreek = 0;   /* blender_test_break uses this global */
+	G.is_break = FALSE;   /* blender_test_break uses this global */
 
 	RE_Database_Baking(bkr->re, bmain, scene, scene->lay, scene->r.bake_mode, bkr->actob);
 
@@ -1431,14 +1444,14 @@ static void bake_freejob(void *bkv)
 		BKE_report(bkr->reports, RPT_WARNING, "Feedback loop detected");
 
 	MEM_freeN(bkr);
-	G.rendering = 0;
+	G.is_rendering = FALSE;
 }
 
 /* catch esc */
 static int objects_bake_render_modal(bContext *C, wmOperator *UNUSED(op), wmEvent *event)
 {
 	/* no running blender, remove handler and pass through */
-	if (0 == WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C)))
+	if (0 == WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_OBJECT_BAKE_TEXTURE))
 		return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
 
 	/* running render */
@@ -1468,7 +1481,7 @@ static int objects_bake_render_invoke(bContext *C, wmOperator *op, wmEvent *UNUS
 	}
 	else {
 		/* only one render job at a time */
-		if (WM_jobs_test(CTX_wm_manager(C), scene))
+		if (WM_jobs_test(CTX_wm_manager(C), scene, WM_JOB_TYPE_OBJECT_BAKE_TEXTURE))
 			return OPERATOR_CANCELLED;
 
 		if (test_bake_internal(C, op->reports) == 0) {
@@ -1476,21 +1489,22 @@ static int objects_bake_render_invoke(bContext *C, wmOperator *op, wmEvent *UNUS
 		}
 		else {
 			BakeRender *bkr = MEM_callocN(sizeof(BakeRender), "render bake");
-			wmJob *steve;
+			wmJob *wm_job;
 
 			init_bake_internal(bkr, C);
 			bkr->reports = op->reports;
 
 			/* setup job */
-			steve = WM_jobs_get(CTX_wm_manager(C), CTX_wm_window(C), scene, "Texture Bake", WM_JOB_EXCL_RENDER | WM_JOB_PRIORITY | WM_JOB_PROGRESS);
-			WM_jobs_customdata(steve, bkr, bake_freejob);
-			WM_jobs_timer(steve, 0.2, NC_IMAGE, 0); /* TODO - only draw bake image, can we enforce this */
-			WM_jobs_callbacks(steve, bake_startjob, NULL, bake_update, NULL);
+			wm_job = WM_jobs_get(CTX_wm_manager(C), CTX_wm_window(C), scene, "Texture Bake",
+			                     WM_JOB_EXCL_RENDER | WM_JOB_PRIORITY | WM_JOB_PROGRESS, WM_JOB_TYPE_OBJECT_BAKE_TEXTURE);
+			WM_jobs_customdata_set(wm_job, bkr, bake_freejob);
+			WM_jobs_timer(wm_job, 0.2, NC_IMAGE, 0); /* TODO - only draw bake image, can we enforce this */
+			WM_jobs_callbacks(wm_job, bake_startjob, NULL, bake_update, NULL);
 
-			G.afbreek = 0;
-			G.rendering = 1;
+			G.is_break = FALSE;
+			G.is_rendering = TRUE;
 
-			WM_jobs_start(CTX_wm_manager(C), steve);
+			WM_jobs_start(CTX_wm_manager(C), wm_job);
 
 			WM_cursor_wait(0);
 
@@ -1528,7 +1542,7 @@ static int bake_image_exec(bContext *C, wmOperator *op)
 			bkr.reports = op->reports;
 
 			RE_test_break_cb(bkr.re, NULL, thread_break);
-			G.afbreek = 0;   /* blender_test_break uses this global */
+			G.is_break = FALSE;   /* blender_test_break uses this global */
 
 			RE_Database_Baking(bkr.re, bmain, scene, scene->lay, scene->r.bake_mode, (scene->r.bake_flag & R_BAKE_TO_ACTIVE) ? OBACT : NULL);
 

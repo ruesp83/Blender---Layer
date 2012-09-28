@@ -32,7 +32,7 @@ bl_info = {
     'category': '3D View'}
 
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix
 
 
 def build_exec(loopfunc, func):
@@ -691,7 +691,7 @@ class MESH_OT_CopyFaceSettings(bpy.types.Operator):
 
     def execute(self, context):
         mode = getattr(self, 'mode', '')
-        if not mode in ('MAT', 'VCOL', 'IMAGE', 'UV'):
+        if not mode in {'MAT', 'VCOL', 'IMAGE', 'UV'}:
             self.report({'ERROR'}, "No mode specified or invalid mode.")
             return self._end(context, {'CANCELLED'})
         layername = getattr(self, 'layer', '')
@@ -747,7 +747,6 @@ class MESH_OT_CopyFaceSettings(bpy.types.Operator):
                         to_data[to_vertex].uv = from_data[from_vertex].uv
 
         return self._end(context, {'FINISHED'})
-
 
     def _end(self, context, retval):
         if context.mode != 'EDIT_MESH':

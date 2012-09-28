@@ -1043,7 +1043,7 @@ static void QMC_initPixel(QMCSampler *qsa, int thread)
 	}
 	else { 	/* SAMP_TYPE_HALTON */
 		
-		/* generate a new randomised halton sequence per pixel
+		/* generate a new randomized halton sequence per pixel
 		 * to alleviate qmc artifacts and make it reproducible 
 		 * between threads/frames */
 		double ht_invprimes[2], ht_nums[2];
@@ -1515,7 +1515,7 @@ void ray_trace(ShadeInput *shi, ShadeResult *shr)
 		if (!(shi->combinedflag & SCE_PASS_REFRACT))
 			sub_v3_v3v3(diff, diff, shr->refr);
 		
-		shr->alpha= MIN2(1.0f, tracol[3]);
+		shr->alpha = minf(1.0f, tracol[3]);
 	}
 	
 	if (do_mir) {

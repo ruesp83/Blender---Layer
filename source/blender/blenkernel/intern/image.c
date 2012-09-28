@@ -47,6 +47,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "IMB_colormanagement.h"
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 
@@ -70,17 +71,16 @@
 #include "BLI_bpath.h"
 
 #include "BKE_bmfont.h"
+#include "BKE_colortools.h"
 #include "BKE_global.h"
 #include "BKE_icons.h"
 #include "BKE_image.h"
-#include "BKE_layer.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_packedFile.h"
 #include "BKE_scene.h"
 #include "BKE_node.h"
 #include "BKE_sequencer.h" /* seq_foreground_frame_get() */
-#include "BKE_utildefines.h"
 
 #include "BLF_api.h"
 
@@ -168,7 +168,7 @@ static void de_interlace_st(struct ImBuf *ibuf) /* standard fields */
 
 void BKE_image_de_interlace(Image *ima, int odd)
 {
-	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
+	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
 	if (ibuf) {
 		if (odd)
 			de_interlace_st(ibuf);
@@ -211,7 +211,6 @@ void BKE_image_free(Image *ima)
 {
 	int a;
 
-	image_free_image_layers(ima);
 	image_free_buffers(ima);
 	if (ima->packedfile) {
 		freePackedFile(ima->packedfile);
@@ -228,7 +227,6 @@ void BKE_image_free(Image *ima)
 			ima->renders[a] = NULL;
 		}
 	}
-	
 }
 
 /* only image block itself */
@@ -247,45 +245,33 @@ static Image *image_alloc(const char *name, short source, short type)
 
 		ima->source = source;
 		ima->type = type;
+
+		if (source == IMA_SRC_VIEWER)
+			ima->flag |= IMA_VIEW_AS_RENDER;
+
+		BKE_color_managed_colorspace_settings_init(&ima->colorspace_settings);
 	}
 	return ima;
 }
 
-
 /* get the ibuf from an image cache, local use here only */
-static ImBuf *image_get_ibuf(Image *ima, int index, int frame, int type_ibuf)
+static ImBuf *image_get_ibuf(Image *ima, int index, int frame)
 {
-	/* unsigned int totsize= 0; */
-
 	/* this function is intended to be thread safe. with IMA_NO_INDEX this
 	 * should be OK, but when iterating over the list this is more tricky
 	 * */
-	if (index == IMA_NO_INDEX) {
-		if (type_ibuf == IMA_IBUF_LAYER) {
-			ImageLayer *layer = imalayer_get_current(ima);
-			if (layer && layer->ibufs.first)
-				return (ImBuf *)layer->ibufs.first;
-		}
-		else {
-			if (ima->imlayers.first) {
-				BLI_lock_thread(LOCK_IMAGE);
-				
-				merge_layers_visible_nd(ima);
-				
-				BLI_unlock_thread(LOCK_IMAGE);
-			}
-			/* Only return "normal" image ibuf if no layer ibuf was found. */
-			return (ImBuf *)ima->ibufs.first;
-		}
-	}
+	if (index == IMA_NO_INDEX)
+		return ima->ibufs.first;
 	else {
 		ImBuf *ibuf;
+
 		index = IMA_MAKE_INDEX(frame, index);
 		for (ibuf = ima->ibufs.first; ibuf; ibuf = ibuf->next)
 			if (ibuf->index == index)
 				return ibuf;
+
+		return NULL;
 	}
-	return NULL;
 }
 
 /* no ima->ibuf anymore, but listbase */
@@ -324,14 +310,6 @@ static void image_assign_ibuf(Image *ima, ImBuf *ibuf, int index, int frame)
 		/* now we don't want copies? */
 		if (link && ibuf->index == link->index)
 			image_remove_ibuf(ima, link);
-
-		if ((ima->source == IMA_SRC_FILE) || (ima->source == IMA_SRC_GENERATED)) {
-			image_add_image_layer_base(ima);
-			if (strlen(ima->name) != 0) {
-				((ImageLayer *)ima->imlayers.last)->background = IMA_LAYER_BG_IMAGE;
-				strcpy(((ImageLayer *)ima->imlayers.last)->file_path, ima->name);
-			}
-		}
 	}
 }
 
@@ -353,6 +331,8 @@ Image *BKE_image_copy(Image *ima)
 
 	nima->aspx = ima->aspx;
 	nima->aspy = ima->aspy;
+
+	BKE_color_managed_colorspace_settings_copy(&nima->colorspace_settings, &ima->colorspace_settings);
 
 	return nima;
 }
@@ -547,7 +527,7 @@ int BKE_image_scale(Image *image, int width, int height)
 	ImBuf *ibuf;
 	void *lock;
 
-	ibuf = BKE_image_acquire_ibuf(image, NULL, &lock, IMA_IBUF_IMA);
+	ibuf = BKE_image_acquire_ibuf(image, NULL, &lock);
 
 	if (ibuf) {
 		IMB_scaleImBuf(ibuf, width, height);
@@ -623,46 +603,8 @@ Image *BKE_image_load_exists(const char *filepath)
 	return BKE_image_load(filepath);
 }
 
-ImageLayer *BKE_add_image_file_as_layer(Image *ima, const char *name)
-{
-	ImageLayer *iml, *layer_act;
-	int file, len;
-	const char *newname;
-	char str[FILE_MAX], strtest[FILE_MAX];
-	
-	BLI_strncpy(str, name, sizeof(str));
-	
-	/* exists? */
-	file= BLI_open(str, O_BINARY|O_RDONLY, 0);
-	if (file== -1) return NULL;
-	close(file);
-	
-	/* create a short library name */
-	len= strlen(name);
-	
-	while (len > 0 && name[len - 1] != '/' && name[len - 1] != '\\') len--;
-	newname= name+len;
-	
-	//iml = image_add_image_layer(ima, newname, alpha ? 32 : 24, color, 2);
-	
-	layer_act = imalayer_get_current(ima);
-	layer_act->select = !IMA_LAYER_SEL_CURRENT;
-	
-	iml = layer_alloc(ima, newname);
-	if (iml) {
-
-		BLI_addhead(&ima->imlayers, iml);
-		ima->Act_Layers = 0;
-		ima->Count_Layers += 1;
-
-		//if (color[3] == 1.0f)
-		//	im_l->background = IMA_LAYER_BG_RGB;
-		//copy_v4_v4(im_l->default_color, color)
-	}
-	return iml;
-}
-
-ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short uvtestgrid, float color[4])
+static ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type,
+                            float color[4], ColorManagedColorspaceSettings *colorspace_settings)
 {
 	ImBuf *ibuf;
 	unsigned char *rect = NULL;
@@ -670,23 +612,37 @@ ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, 
 
 	if (floatbuf) {
 		ibuf = IMB_allocImBuf(width, height, depth, IB_rectfloat);
-		rect_float = (float *)ibuf->rect_float;
-		ibuf->profile = IB_PROFILE_LINEAR_RGB;
+		rect_float = ibuf->rect_float;
+
+		if (colorspace_settings->name[0] == '\0') {
+			const char *colorspace = IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_DEFAULT_FLOAT);
+
+			BLI_strncpy(colorspace_settings->name, colorspace, sizeof(colorspace_settings->name));
+		}
+
+		IMB_colormanagement_check_is_data(ibuf, colorspace_settings->name);
 	}
 	else {
 		ibuf = IMB_allocImBuf(width, height, depth, IB_rect);
 		rect = (unsigned char *)ibuf->rect;
-		ibuf->profile = IB_PROFILE_SRGB;
+
+		if (colorspace_settings->name[0] == '\0') {
+			const char *colorspace = IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_DEFAULT_BYTE);
+
+			BLI_strncpy(colorspace_settings->name, colorspace, sizeof(colorspace_settings->name));
+		}
+
+		IMB_colormanagement_assign_rect_colorspace(ibuf, colorspace_settings->name);
 	}
 
 	BLI_strncpy(ibuf->name, name, sizeof(ibuf->name));
 	ibuf->userflags |= IB_BITMAPDIRTY;
 
-	switch (uvtestgrid) {
-		case 1:
+	switch (gen_type) {
+		case IMA_GENTYPE_GRID:
 			BKE_image_buf_fill_checker(rect, rect_float, width, height);
 			break;
-		case 2:
+		case IMA_GENTYPE_GRID_COLOR:
 			BKE_image_buf_fill_checker_color(rect, rect_float, width, height);
 			break;
 		default:
@@ -697,7 +653,7 @@ ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, 
 }
 
 /* adds new image block, creates ImBuf and initializes color */
-Image *BKE_image_add_generated(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short uvtestgrid, float color[4])
+Image *BKE_image_add_generated(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, float color[4])
 {
 	/* on save, type is changed to FILE in editsima.c */
 	Image *ima = image_alloc(name, IMA_SRC_GENERATED, IMA_TYPE_UV_TEST);
@@ -708,10 +664,10 @@ Image *BKE_image_add_generated(unsigned int width, unsigned int height, const ch
 		/* BLI_strncpy(ima->name, name, FILE_MAX); */ /* don't do this, this writes in ain invalid filepath! */
 		ima->gen_x = width;
 		ima->gen_y = height;
-		ima->gen_type = uvtestgrid;
+		ima->gen_type = gen_type;
 		ima->gen_flag |= (floatbuf ? IMA_GEN_FLOAT : 0);
 
-		ibuf = add_ibuf_size(width, height, ima->name, depth, floatbuf, uvtestgrid, color);
+		ibuf = add_ibuf_size(width, height, ima->name, depth, floatbuf, gen_type, color, &ima->colorspace_settings);
 		image_assign_ibuf(ima, ibuf, IMA_NO_INDEX, 0);
 
 		ima->ok = IMA_OK_LOADED;
@@ -740,7 +696,7 @@ Image *BKE_image_add_from_imbuf(ImBuf *ibuf)
 /* packs rect from memory as PNG */
 void BKE_image_memorypack(Image *ima)
 {
-	ImBuf *ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0, IMA_IBUF_IMA);
+	ImBuf *ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0);
 
 	if (ibuf == NULL)
 		return;
@@ -808,7 +764,7 @@ void free_old_images(void)
 		return;
 
 	/* of course not! */
-	if (G.rendering)
+	if (G.is_rendering)
 		return;
 
 	lasttime = ctime;
@@ -1036,7 +992,6 @@ int BKE_imtype_is_movie(const char imtype)
 	switch (imtype) {
 		case R_IMF_IMTYPE_AVIRAW:
 		case R_IMF_IMTYPE_AVIJPEG:
-		case R_IMF_IMTYPE_AVICODEC:
 		case R_IMF_IMTYPE_QUICKTIME:
 		case R_IMF_IMTYPE_FFMPEG:
 		case R_IMF_IMTYPE_H264:
@@ -1074,6 +1029,19 @@ int BKE_imtype_supports_quality(const char imtype)
 		case R_IMF_IMTYPE_JP2:
 		case R_IMF_IMTYPE_AVIJPEG:
 			return 1;
+	}
+	return 0;
+}
+
+int BKE_imtype_requires_linear_float(const char imtype)
+{
+	switch (imtype) {
+		case R_IMF_IMTYPE_CINEON:
+		case R_IMF_IMTYPE_DPX:
+		case R_IMF_IMTYPE_RADHDR:
+		case R_IMF_IMTYPE_OPENEXR:
+		case R_IMF_IMTYPE_MULTILAYER:
+			return TRUE;
 	}
 	return 0;
 }
@@ -1151,7 +1119,6 @@ char BKE_imtype_from_arg(const char *imtype_arg)
 	else if (!strcmp(imtype_arg, "AVIRAW")) return R_IMF_IMTYPE_AVIRAW;
 	else if (!strcmp(imtype_arg, "AVIJPEG")) return R_IMF_IMTYPE_AVIJPEG;
 	else if (!strcmp(imtype_arg, "PNG")) return R_IMF_IMTYPE_PNG;
-	else if (!strcmp(imtype_arg, "AVICODEC")) return R_IMF_IMTYPE_AVICODEC;
 	else if (!strcmp(imtype_arg, "QUICKTIME")) return R_IMF_IMTYPE_QUICKTIME;
 	else if (!strcmp(imtype_arg, "BMP")) return R_IMF_IMTYPE_BMP;
 #ifdef WITH_HDR
@@ -1247,7 +1214,7 @@ int BKE_add_image_extension(char *string, const char imtype)
 			extension = ".jp2";
 	}
 #endif
-	else { //   R_IMF_IMTYPE_AVICODEC, R_IMF_IMTYPE_AVIRAW, R_IMF_IMTYPE_AVIJPEG, R_IMF_IMTYPE_JPEG90, R_IMF_IMTYPE_QUICKTIME etc
+	else { //   R_IMF_IMTYPE_AVIRAW, R_IMF_IMTYPE_AVIJPEG, R_IMF_IMTYPE_JPEG90, R_IMF_IMTYPE_QUICKTIME etc
 		if (!(BLI_testextensie(string, ".jpg") || BLI_testextensie(string, ".jpeg")))
 			extension = ".jpg";
 	}
@@ -1277,47 +1244,53 @@ void BKE_imformat_defaults(ImageFormatData *im_format)
 	im_format->imtype = R_IMF_IMTYPE_PNG;
 	im_format->quality = 90;
 	im_format->compress = 90;
+
+	BKE_color_managed_display_settings_init(&im_format->display_settings);
+	BKE_color_managed_view_settings_init(&im_format->view_settings);
 }
 
 void BKE_imbuf_to_image_format(struct ImageFormatData *im_format, const ImBuf *imbuf)
 {
+	int ftype        = imbuf->ftype & ~IB_CUSTOM_FLAGS_MASK;
+	int custom_flags = imbuf->ftype & IB_CUSTOM_FLAGS_MASK;
+
 	BKE_imformat_defaults(im_format);
 
 	/* file type */
 
-	if (imbuf->ftype == IMAGIC)
+	if (ftype == IMAGIC)
 		im_format->imtype = R_IMF_IMTYPE_IRIS;
 
 #ifdef WITH_HDR
-	else if (imbuf->ftype == RADHDR)
+	else if (ftype == RADHDR)
 		im_format->imtype = R_IMF_IMTYPE_RADHDR;
 #endif
 
-	else if (imbuf->ftype == PNG)
+	else if (ftype == PNG)
 		im_format->imtype = R_IMF_IMTYPE_PNG;
 
 #ifdef WITH_DDS
-	else if (imbuf->ftype == DDS)
+	else if (ftype == DDS)
 		im_format->imtype = R_IMF_IMTYPE_DDS;
 #endif
 
-	else if (imbuf->ftype == BMP)
+	else if (ftype == BMP)
 		im_format->imtype = R_IMF_IMTYPE_BMP;
 
 #ifdef WITH_TIFF
-	else if (imbuf->ftype & TIF) {
+	else if (ftype == TIF) {
 		im_format->imtype = R_IMF_IMTYPE_TIFF;
-		if (imbuf->ftype & TIF_16BIT)
+		if (custom_flags & TIF_16BIT)
 			im_format->depth = R_IMF_CHAN_DEPTH_16;
 	}
 #endif
 
 #ifdef WITH_OPENEXR
-	else if (imbuf->ftype & OPENEXR) {
+	else if (ftype == OPENEXR) {
 		im_format->imtype = R_IMF_IMTYPE_OPENEXR;
-		if (imbuf->ftype & OPENEXR_HALF)
+		if (custom_flags & OPENEXR_HALF)
 			im_format->depth = R_IMF_CHAN_DEPTH_16;
-		if (imbuf->ftype & OPENEXR_COMPRESS)
+		if (custom_flags & OPENEXR_COMPRESS)
 			im_format->exr_codec = R_IMF_EXR_CODEC_ZIP;  // Can't determine compression
 		if (imbuf->zbuf_float)
 			im_format->flag |= R_IMF_FLAG_ZBUF;
@@ -1325,35 +1298,35 @@ void BKE_imbuf_to_image_format(struct ImageFormatData *im_format, const ImBuf *i
 #endif
 
 #ifdef WITH_CINEON
-	else if (imbuf->ftype == CINEON)
+	else if (ftype == CINEON)
 		im_format->imtype = R_IMF_IMTYPE_CINEON;
-	else if (imbuf->ftype == DPX)
+	else if (ftype == DPX)
 		im_format->imtype = R_IMF_IMTYPE_DPX;
 #endif
 
-	else if (imbuf->ftype == TGA) {
+	else if (ftype == TGA) {
 		im_format->imtype = R_IMF_IMTYPE_TARGA;
 	}
-	else if (imbuf->ftype == RAWTGA) {
+	else if (ftype == RAWTGA) {
 		im_format->imtype = R_IMF_IMTYPE_RAWTGA;
 	}
 
 #ifdef WITH_OPENJPEG
-	else if (imbuf->ftype & JP2) {
+	else if (ftype & JP2) {
 		im_format->imtype = R_IMF_IMTYPE_JP2;
-		im_format->quality = imbuf->ftype & ~JPG_MSK;
+		im_format->quality = custom_flags & ~JPG_MSK;
 
-		if (imbuf->ftype & JP2_16BIT)
+		if (ftype & JP2_16BIT)
 			im_format->depth = R_IMF_CHAN_DEPTH_16;
-		else if (imbuf->ftype & JP2_12BIT)
+		else if (ftype & JP2_12BIT)
 			im_format->depth = R_IMF_CHAN_DEPTH_12;
 
-		if (imbuf->ftype & JP2_YCC)
+		if (ftype & JP2_YCC)
 			im_format->jp2_flag |= R_IMF_JP2_FLAG_YCC;
 
-		if (imbuf->ftype & JP2_CINE) {
+		if (ftype & JP2_CINE) {
 			im_format->jp2_flag |= R_IMF_JP2_FLAG_CINE_PRESET;
-			if (imbuf->ftype & JP2_CINE_48FPS)
+			if (ftype & JP2_CINE_48FPS)
 				im_format->jp2_flag |= R_IMF_JP2_FLAG_CINE_48;
 		}
 	}
@@ -1361,7 +1334,7 @@ void BKE_imbuf_to_image_format(struct ImageFormatData *im_format, const ImBuf *i
 
 	else {
 		im_format->imtype = R_IMF_IMTYPE_JPEG90;
-		im_format->quality = imbuf->ftype & ~JPG_MSK;
+		im_format->quality = custom_flags & ~JPG_MSK;
 	}
 
 	/* planes */
@@ -1511,7 +1484,7 @@ static void stampdata(Scene *scene, Object *camera, StampData *stamp_data, int d
 	}
 
 	if (scene->r.stamp & R_STAMP_SEQSTRIP) {
-		Sequence *seq = seq_foreground_frame_get(scene, scene->r.cfra);
+		Sequence *seq = BKE_sequencer_foreground_frame_get(scene, scene->r.cfra);
 
 		if (seq) BLI_strncpy(text, seq->name + 2, sizeof(text));
 		else BLI_strncpy(text, "<none>", sizeof(text));
@@ -1544,12 +1517,20 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 	int x, y, y_ofs;
 	float h_fixed;
 	const int mono = blf_mono_font_render; // XXX
+	struct ColorManagedDisplay *display;
+	const char *display_device;
+
+	/* this could be an argument if we want to operate on non linear float imbuf's
+	 * for now though this is only used for renders which use scene settings */
 
 #define BUFF_MARGIN_X 2
 #define BUFF_MARGIN_Y 1
 
 	if (!rect && !rectf)
 		return;
+
+	display_device = scene->display_settings.display_device;
+	display = IMB_colormanagement_display_get_named(display_device);
 
 	stampdata(scene, camera, &stamp_data, 1);
 
@@ -1560,7 +1541,7 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 	/* set before return */
 	BLF_size(mono, scene->r.stamp_font_id, 72);
 
-	BLF_buffer(mono, rectf, rect, width, height, channels);
+	BLF_buffer(mono, rectf, rect, width, height, channels, display);
 	BLF_buffer_col(mono, scene->r.fg_stamp[0], scene->r.fg_stamp[1], scene->r.fg_stamp[2], 1.0);
 	pad = BLF_width_max(mono);
 
@@ -1577,7 +1558,8 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		y -= h;
 
 		/* also a little of space to the background. */
-		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
+		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
+						  x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
 
 		/* and draw the text. */
 		BLF_position(mono, x, y + y_ofs, 0.0);
@@ -1593,7 +1575,8 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		y -= h;
 
 		/* and space for background. */
-		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, 0, y - BUFF_MARGIN_Y, w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
+		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
+						  0, y - BUFF_MARGIN_Y, w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
 
 		BLF_position(mono, x, y + y_ofs, 0.0);
 		BLF_draw_buffer(mono, stamp_data.note);
@@ -1608,7 +1591,8 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		y -= h;
 
 		/* and space for background. */
-		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, 0, y - BUFF_MARGIN_Y, w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
+		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
+						  0, y - BUFF_MARGIN_Y, w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
 
 		BLF_position(mono, x, y + y_ofs, 0.0);
 		BLF_draw_buffer(mono, stamp_data.date);
@@ -1623,7 +1607,8 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		y -= h;
 
 		/* and space for background. */
-		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, 0, y - BUFF_MARGIN_Y, w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
+		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
+						  0, y - BUFF_MARGIN_Y, w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
 
 		BLF_position(mono, x, y + y_ofs, 0.0);
 		BLF_draw_buffer(mono, stamp_data.rendertime);
@@ -1637,7 +1622,8 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		BLF_width_and_height(mono, stamp_data.marker, &w, &h); h = h_fixed;
 
 		/* extra space for background. */
-		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
+		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp,  display,
+						  x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
 
 		/* and pad the text. */
 		BLF_position(mono, x, y + y_ofs, 0.0);
@@ -1652,7 +1638,8 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		BLF_width_and_height(mono, stamp_data.time, &w, &h); h = h_fixed;
 
 		/* extra space for background */
-		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, x - BUFF_MARGIN_X, y, x + w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
+		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
+						  x - BUFF_MARGIN_X, y, x + w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
 
 		/* and pad the text. */
 		BLF_position(mono, x, y + y_ofs, 0.0);
@@ -1666,7 +1653,8 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		BLF_width_and_height(mono, stamp_data.frame, &w, &h); h = h_fixed;
 
 		/* extra space for background. */
-		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, x + w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
+		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
+						  x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, x + w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
 
 		/* and pad the text. */
 		BLF_position(mono, x, y + y_ofs, 0.0);
@@ -1680,7 +1668,8 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		BLF_width_and_height(mono, stamp_data.camera, &w, &h); h = h_fixed;
 
 		/* extra space for background. */
-		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, x + w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
+		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
+						  x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, x + w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
 		BLF_position(mono, x, y + y_ofs, 0.0);
 		BLF_draw_buffer(mono, stamp_data.camera);
 
@@ -1692,7 +1681,8 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		BLF_width_and_height(mono, stamp_data.cameralens, &w, &h); h = h_fixed;
 
 		/* extra space for background. */
-		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, x + w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
+		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
+						  x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, x + w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
 		BLF_position(mono, x, y + y_ofs, 0.0);
 		BLF_draw_buffer(mono, stamp_data.cameralens);
 	}
@@ -1704,7 +1694,8 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		x = width - w - 2;
 
 		/* extra space for background. */
-		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, x + w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
+		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
+						  x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, x + w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
 
 		/* and pad the text. */
 		BLF_position(mono, x, y + y_ofs, 0.0);
@@ -1719,14 +1710,15 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		y = height - h;
 
 		/* extra space for background. */
-		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, x + w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
+		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
+						  x - BUFF_MARGIN_X, y - BUFF_MARGIN_Y, x + w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
 
 		BLF_position(mono, x, y + y_ofs, 0.0);
 		BLF_draw_buffer(mono, stamp_data.strip);
 	}
 
 	/* cleanup the buffer. */
-	BLF_buffer(mono, NULL, NULL, 0, 0, 0);
+	BLF_buffer(mono, NULL, NULL, 0, 0, 0, FALSE);
 
 #undef BUFF_MARGIN_X
 #undef BUFF_MARGIN_Y
@@ -1930,12 +1922,12 @@ void BKE_makepicstring(char *string, const char *base, const char *relbase, int 
 }
 
 /* used by sequencer too */
-struct anim *openanim(const char *name, int flags, int streamindex)
+struct anim *openanim(const char *name, int flags, int streamindex, char colorspace[IMA_MAX_SPACE])
 {
 	struct anim *anim;
 	struct ImBuf *ibuf;
 
-	anim = IMB_open_anim(name, flags, streamindex);
+	anim = IMB_open_anim(name, flags, streamindex, colorspace);
 	if (anim == NULL) return NULL;
 
 	ibuf = IMB_anim_absolute(anim, 0, IMB_TC_NONE, IMB_PROXY_NONE);
@@ -2076,7 +2068,7 @@ void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 
 			if (ima->source == IMA_SRC_GENERATED) {
 				if (ima->gen_x == 0 || ima->gen_y == 0) {
-					ImBuf *ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0, IMA_IBUF_IMA);
+					ImBuf *ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0);
 					if (ibuf) {
 						ima->gen_x = ibuf->x;
 						ima->gen_y = ibuf->y;
@@ -2142,29 +2134,10 @@ void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 	}
 }
 
-ImageLayer *BKE_image_multilayer_index(Image *ima, ImageUser *iuser)
-{
-	ImageLayer *iml;
-		
-	if (ima == NULL)
-		return NULL;
-	
-	if (iuser) {
-		short index = 0, iml_index = 0;
-		
-		for (iml = ima->imlayers.last; iml; iml = iml->prev, iml_index++) {
-			if (iuser->layer == iml_index)
-					break;
-		}
-	}
-	
-	return iml;
-}
-
 /* if layer or pass changes, we need an index for the imbufs list */
 /* note it is called for rendered results, but it doesnt use the index! */
 /* and because rendered results use fake layer/passes, don't correct for wrong indices here */
-RenderPass *BKE_render_multilayer_index(RenderResult *rr, ImageUser *iuser)
+RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser)
 {
 	RenderLayer *rl;
 	RenderPass *rpass = NULL;
@@ -2215,7 +2188,9 @@ RenderResult *BKE_image_acquire_renderresult(Scene *scene, Image *ima)
 
 void BKE_image_release_renderresult(Scene *scene, Image *ima)
 {
-	if (ima->rr) ;
+	if (ima->rr) {
+		/* pass */
+	}
 	else if (ima->type == IMA_TYPE_R_RESULT) {
 		if (ima->render_slot == ima->last_render_slot)
 			RE_ReleaseResult(RE_GetRender(scene->id.name));
@@ -2246,8 +2221,10 @@ void BKE_image_backup_render(Scene *scene, Image *ima)
 /* in that case we have to build a render-result */
 static void image_create_multilayer(Image *ima, ImBuf *ibuf, int framenr)
 {
+	const char *colorspace = ima->colorspace_settings.name;
+	int predivide = ima->flag & IMA_CM_PREDIVIDE;
 
-	ima->rr = RE_MultilayerConvert(ibuf->userdata, ibuf->x, ibuf->y);
+	ima->rr = RE_MultilayerConvert(ibuf->userdata, colorspace, predivide, ibuf->x, ibuf->y);
 
 #ifdef WITH_OPENEXR
 	IMB_exr_close(ibuf->userdata);
@@ -2295,7 +2272,7 @@ static ImBuf *image_load_sequence_file(Image *ima, ImageUser *iuser, int frame)
 		flag |= IB_premul;
 
 	/* read ibuf */
-	ibuf = IMB_loadiffname(name, flag);
+	ibuf = IMB_loadiffname(name, flag, ima->colorspace_settings.name);
 
 #if 0
 	if (ibuf) {
@@ -2363,7 +2340,7 @@ static ImBuf *image_load_sequence_multilayer(Image *ima, ImageUser *iuser, int f
 
 	}
 	if (ima->rr) {
-		RenderPass *rpass = BKE_render_multilayer_index(ima->rr, iuser);
+		RenderPass *rpass = BKE_image_multilayer_index(ima->rr, iuser);
 
 		if (rpass) {
 			// printf("load from pass %s\n", rpass->name);
@@ -2373,7 +2350,6 @@ static ImBuf *image_load_sequence_multilayer(Image *ima, ImageUser *iuser, int f
 			ibuf->flags |= IB_rectfloat;
 			ibuf->mall = IB_rectfloat;
 			ibuf->channels = rpass->channels;
-			ibuf->profile = IB_PROFILE_LINEAR_RGB;
 
 			image_initialize_after_load(ima, ibuf);
 			image_assign_ibuf(ima, ibuf, iuser ? iuser->multi_index : 0, frame);
@@ -2403,7 +2379,7 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 		BKE_image_user_file_path(iuser, ima, str);
 
 		/* FIXME: make several stream accessible in image editor, too*/
-		ima->anim = openanim(str, IB_rect, 0);
+		ima->anim = openanim(str, IB_rect, 0, ima->colorspace_settings.name);
 
 		/* let's initialize this user */
 		if (ima->anim && iuser && iuser->frames == 0)
@@ -2454,8 +2430,8 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 		flag = IB_rect | IB_multilayer;
 		if (ima->flag & IMA_DO_PREMUL) flag |= IB_premul;
 
-		ibuf = IMB_ibImageFromMemory((unsigned char *)ima->packedfile->data,
-		                             ima->packedfile->size, flag, "<packed data>");
+		ibuf = IMB_ibImageFromMemory((unsigned char *)ima->packedfile->data, ima->packedfile->size, flag,
+		                             ima->colorspace_settings.name, "<packed data>");
 	}
 	else {
 		flag = IB_rect | IB_multilayer | IB_metadata;
@@ -2467,7 +2443,7 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 		BKE_image_user_file_path(iuser, ima, str);
 
 		/* read ibuf */
-		ibuf = IMB_loadiffname(str, flag);
+		ibuf = IMB_loadiffname(str, flag, ima->colorspace_settings.name);
 	}
 
 	if (ibuf) {
@@ -2514,7 +2490,7 @@ static ImBuf *image_get_ibuf_multilayer(Image *ima, ImageUser *iuser)
 		}
 	}
 	if (ima->rr) {
-		RenderPass *rpass = BKE_render_multilayer_index(ima->rr, iuser);
+		RenderPass *rpass = BKE_image_multilayer_index(ima->rr, iuser);
 
 		if (rpass) {
 			ibuf = IMB_allocImBuf(ima->rr->rectx, ima->rr->recty, 32, 0);
@@ -2524,7 +2500,6 @@ static ImBuf *image_get_ibuf_multilayer(Image *ima, ImageUser *iuser)
 			ibuf->rect_float = rpass->rect;
 			ibuf->flags |= IB_rectfloat;
 			ibuf->channels = rpass->channels;
-			ibuf->profile = IB_PROFILE_LINEAR_RGB;
 
 			image_assign_ibuf(ima, ibuf, iuser ? iuser->multi_index : IMA_NO_INDEX, 0);
 		}
@@ -2581,7 +2556,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 			RE_ReleaseResultImage(re);
 		return NULL;
 	}
-	 
+
 	/* release is done in BKE_image_release_ibuf using lock_r */
 	if (from_render) {
 		BLI_lock_thread(LOCK_VIEWER);
@@ -2595,7 +2570,9 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 	dither = iuser->scene->r.dither_intensity;
 
 	/* combined layer gets added as first layer */
-	if (rres.have_combined && layer == 0) ;
+	if (rres.have_combined && layer == 0) {
+		/* pass */
+	}
 	else if (rres.layers.first) {
 		RenderLayer *rl = BLI_findlink(&rres.layers, layer - (rres.have_combined ? 1 : 0));
 		if (rl) {
@@ -2620,12 +2597,18 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 		}
 	}
 
-	ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0, IMA_IBUF_IMA);
+	ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0);
 
 	/* make ibuf if needed, and initialize it */
 	if (ibuf == NULL) {
 		ibuf = IMB_allocImBuf(rres.rectx, rres.recty, 32, 0);
 		image_assign_ibuf(ima, ibuf, IMA_NO_INDEX, 0);
+	}
+
+	/* invalidate color managed buffers if render result changed */
+	BLI_lock_thread(LOCK_COLORMANAGE);
+	if (ibuf->x != rres.rectx || ibuf->y != rres.recty || ibuf->rect_float != rectf) {
+		ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
 	}
 
 	ibuf->x = rres.rectx;
@@ -2659,8 +2642,8 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 		ibuf->flags &= ~IB_zbuffloat;
 	}
 
-	/* since its possible to access the buffer from the image directly, set the profile [#25073] */
-	ibuf->profile = (iuser->scene->r.color_mgt_flag & R_COLOR_MANAGEMENT) ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_NONE;
+	BLI_unlock_thread(LOCK_COLORMANAGE);
+
 	ibuf->dither = dither;
 
 	if (iuser->scene->r.color_mgt_flag & R_COLOR_MANAGEMENT_PREDIVIDE) {
@@ -2677,7 +2660,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 	return ibuf;
 }
 
-static ImBuf *image_get_ibuf_threadsafe(Image *ima, ImageUser *iuser, int *frame_r, int *index_r, int type_ibuf)
+static ImBuf *image_get_ibuf_threadsafe(Image *ima, ImageUser *iuser, int *frame_r, int *index_r)
 {
 	ImBuf *ibuf = NULL;
 	int frame = 0, index = 0;
@@ -2685,7 +2668,7 @@ static ImBuf *image_get_ibuf_threadsafe(Image *ima, ImageUser *iuser, int *frame
 	/* see if we already have an appropriate ibuf, with image source and type */
 	if (ima->source == IMA_SRC_MOVIE) {
 		frame = iuser ? iuser->framenr : ima->lastframe;
-		ibuf = image_get_ibuf(ima, 0, frame, IMA_IBUF_IMA);
+		ibuf = image_get_ibuf(ima, 0, frame);
 		/* XXX temp stuff? */
 		if (ima->lastframe != frame)
 			ima->tpageflag |= IMA_TPAGE_REFRESH;
@@ -2694,7 +2677,7 @@ static ImBuf *image_get_ibuf_threadsafe(Image *ima, ImageUser *iuser, int *frame
 	else if (ima->source == IMA_SRC_SEQUENCE) {
 		if (ima->type == IMA_TYPE_IMAGE) {
 			frame = iuser ? iuser->framenr : ima->lastframe;
-			ibuf = image_get_ibuf(ima, 0, frame, IMA_IBUF_IMA);
+			ibuf = image_get_ibuf(ima, 0, frame);
 
 			/* XXX temp stuff? */
 			if (ima->lastframe != frame) {
@@ -2705,17 +2688,17 @@ static ImBuf *image_get_ibuf_threadsafe(Image *ima, ImageUser *iuser, int *frame
 		else if (ima->type == IMA_TYPE_MULTILAYER) {
 			frame = iuser ? iuser->framenr : ima->lastframe;
 			index = iuser ? iuser->multi_index : IMA_NO_INDEX;
-			ibuf = image_get_ibuf(ima, index, frame, IMA_IBUF_IMA);
+			ibuf = image_get_ibuf(ima, index, frame);
 		}
 	}
 	else if (ima->source == IMA_SRC_FILE) {
 		if (ima->type == IMA_TYPE_IMAGE)
-			ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0, type_ibuf);
+			ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0);
 		else if (ima->type == IMA_TYPE_MULTILAYER)
-			ibuf = image_get_ibuf(ima, iuser ? iuser->multi_index : IMA_NO_INDEX, 0, IMA_IBUF_IMA);
+			ibuf = image_get_ibuf(ima, iuser ? iuser->multi_index : IMA_NO_INDEX, 0);
 	}
 	else if (ima->source == IMA_SRC_GENERATED) {
-		ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0, type_ibuf);
+		ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0);
 	}
 	else if (ima->source == IMA_SRC_VIEWER) {
 		/* always verify entirely, not that this shouldn't happen
@@ -2732,7 +2715,7 @@ static ImBuf *image_get_ibuf_threadsafe(Image *ima, ImageUser *iuser, int *frame
 /* Checks optional ImageUser and verifies/creates ImBuf. */
 /* use this one if you want to get a render result in progress,
  * if not, use BKE_image_get_ibuf which doesn't require a release */
-ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r, int type_ibuf)
+ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
 {
 	ImBuf *ibuf = NULL;
 	float color[] = {0, 0, 0, 1};
@@ -2763,7 +2746,7 @@ ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r, int t
 		return NULL;
 
 	/* try to get the ibuf without locking */
-	ibuf = image_get_ibuf_threadsafe(ima, iuser, &frame, &index, type_ibuf);
+	ibuf = image_get_ibuf_threadsafe(ima, iuser, &frame, &index);
 
 	if (ibuf == NULL) {
 		/* couldn't get ibuf and image is not ok, so let's lock and try to
@@ -2783,7 +2766,7 @@ ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r, int t
 			return NULL;
 		}
 
-		ibuf = image_get_ibuf_threadsafe(ima, iuser, &frame, &index, type_ibuf);
+		ibuf = image_get_ibuf_threadsafe(ima, iuser, &frame, &index);
 
 		if (ibuf == NULL) {
 			/* we are sure we have to load the ibuf, using source and type */
@@ -2817,7 +2800,8 @@ ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r, int t
 				/* UV testgrid or black or solid etc */
 				if (ima->gen_x == 0) ima->gen_x = 1024;
 				if (ima->gen_y == 0) ima->gen_y = 1024;
-				ibuf = add_ibuf_size(ima->gen_x, ima->gen_y, ima->name, 24, (ima->gen_flag & IMA_GEN_FLOAT) != 0, ima->gen_type, color);
+				ibuf = add_ibuf_size(ima->gen_x, ima->gen_y, ima->name, 24, (ima->gen_flag & IMA_GEN_FLOAT) != 0, ima->gen_type,
+				                     color, &ima->colorspace_settings);
 				image_assign_ibuf(ima, ibuf, IMA_NO_INDEX, 0);
 				ima->ok = IMA_OK_LOADED;
 			}
@@ -2836,7 +2820,7 @@ ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r, int t
 
 						/* XXX anim play for viewer nodes not yet supported */
 						frame = 0; // XXX iuser?iuser->framenr:0;
-						ibuf = image_get_ibuf(ima, 0, frame, IMA_IBUF_IMA);//type_ibuf);
+						ibuf = image_get_ibuf(ima, 0, frame);
 
 						if (!ibuf) {
 							/* Composite Viewer, all handled in compositor */
@@ -2870,10 +2854,10 @@ void BKE_image_release_ibuf(Image *ima, void *lock)
 }
 
 /* warning, this can allocate generated images */
-ImBuf *BKE_image_get_ibuf(Image *ima, ImageUser *iuser, int type_ibuf)
+ImBuf *BKE_image_get_ibuf(Image *ima, ImageUser *iuser)
 {
 	/* here (+fie_ima/2-1) makes sure that division happens correctly */
-	return BKE_image_acquire_ibuf(ima, iuser, NULL, type_ibuf);
+	return BKE_image_acquire_ibuf(ima, iuser, NULL);
 }
 
 int BKE_image_user_frame_get(const ImageUser *iuser, int cfra, int fieldnr, short *r_is_in_range)
@@ -2989,7 +2973,7 @@ int BKE_image_has_alpha(struct Image *image)
 	void *lock;
 	int planes;
 
-	ibuf = BKE_image_acquire_ibuf(image, NULL, &lock, IMA_IBUF_IMA);
+	ibuf = BKE_image_acquire_ibuf(image, NULL, &lock);
 	planes = (ibuf ? ibuf->planes : 0);
 	BKE_image_release_ibuf(image, lock);
 
@@ -2997,4 +2981,44 @@ int BKE_image_has_alpha(struct Image *image)
 		return 1;
 	else
 		return 0;
+}
+
+void BKE_image_get_size(Image *image, ImageUser *iuser, int *width, int *height)
+{
+	ImBuf *ibuf = NULL;
+	void *lock;
+
+	ibuf = BKE_image_acquire_ibuf(image, iuser, &lock);
+
+	if (ibuf && ibuf->x > 0 && ibuf->y > 0) {
+		*width = ibuf->x;
+		*height = ibuf->y;
+	}
+	else {
+		*width  = IMG_SIZE_FALLBACK;
+		*height = IMG_SIZE_FALLBACK;
+	}
+
+	BKE_image_release_ibuf(image, lock);
+}
+
+void BKE_image_get_size_fl(Image *image, ImageUser *iuser, float size[2])
+{
+	int width, height;
+	BKE_image_get_size(image, iuser, &width, &height);
+
+	size[0] = (float)width;
+	size[1] = (float)height;
+
+}
+
+void BKE_image_get_aspect(Image *image, float *aspx, float *aspy)
+{
+	*aspx = 1.0;
+
+	/* x is always 1 */
+	if (image)
+		*aspy = image->aspy / image->aspx;
+	else
+		*aspy = 1.0f;
 }

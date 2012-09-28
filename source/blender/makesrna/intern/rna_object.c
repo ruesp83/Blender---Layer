@@ -231,7 +231,7 @@ void rna_Object_internal_update_data(Main *UNUSED(bmain), Scene *UNUSED(scene), 
 	WM_main_add_notifier(NC_OBJECT | ND_DRAW, ptr->id.data);
 }
 
-void rna_Object_active_shape_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+static void rna_Object_active_shape_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	Object *ob = ptr->id.data;
 
@@ -313,7 +313,7 @@ static void rna_Object_layer_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 	if (!base)
 		return;
 	
-	SWAP(int, base->lay, ob->lay);
+	SWAP(unsigned int, base->lay, ob->lay);
 
 	rna_Object_layer_update__internal(bmain, scene, base, ob);
 	ob->lay = base->lay;
@@ -355,10 +355,14 @@ static void rna_Object_data_set(PointerRNA *ptr, PointerRNA value)
 		set_mesh(ob, (Mesh *)id);
 	}
 	else {
-		if (ob->data)
+		if (ob->data) {
 			id_us_min((ID *)ob->data);
-		if (id)
+		}
+		if (id) {
+			/* no need to type-check here ID. this is done in the _typef() function */
+			BLI_assert(OB_DATA_SUPPORT_ID(GS(id->name)));
 			id_us_plus(id);
+		}
 
 		ob->data = id;
 		test_object_materials(id);
@@ -374,6 +378,7 @@ static StructRNA *rna_Object_data_typef(PointerRNA *ptr)
 {
 	Object *ob = (Object *)ptr->data;
 
+	/* keep in sync with OB_DATA_SUPPORT_ID() macro */
 	switch (ob->type) {
 		case OB_EMPTY: return &RNA_Image;
 		case OB_MESH: return &RNA_Mesh;
@@ -491,7 +496,7 @@ static void rna_Object_dup_group_set(PointerRNA *ptr, PointerRNA value)
 		           "Cannot set dupli-group as object belongs in group being instanced thus causing a cycle");
 }
 
-void rna_VertexGroup_name_set(PointerRNA *ptr, const char *value)
+static void rna_VertexGroup_name_set(PointerRNA *ptr, const char *value)
 {
 	Object *ob = (Object *)ptr->id.data;
 	bDeformGroup *dg = (bDeformGroup *)ptr->data;
@@ -658,7 +663,7 @@ static void rna_Object_active_material_set(PointerRNA *ptr, PointerRNA value)
 	Object *ob = (Object *)ptr->id.data;
 
 	DAG_id_tag_update(value.data, 0);
-	assign_material(ob, value.data, ob->actcol);
+	assign_material(ob, value.data, ob->actcol, BKE_MAT_ASSIGN_USERPREF);
 }
 
 static void rna_Object_active_particle_system_index_range(PointerRNA *ptr, int *min, int *max,
@@ -815,7 +820,7 @@ static void rna_MaterialSlot_material_set(PointerRNA *ptr, PointerRNA value)
 	Object *ob = (Object *)ptr->id.data;
 	int index = (Material **)ptr->data - ob->mat;
 
-	assign_material(ob, value.data, index + 1);
+	assign_material(ob, value.data, index + 1, BKE_MAT_ASSIGN_USERPREF);
 }
 
 static int rna_MaterialSlot_link_get(PointerRNA *ptr)
@@ -1096,7 +1101,7 @@ static void rna_GameObjectSettings_used_state_get(PointerRNA *ptr, int *values)
 static void rna_Object_active_shape_key_index_range(PointerRNA *ptr, int *min, int *max, int *softmin, int *softmax)
 {
 	Object *ob = (Object *)ptr->id.data;
-	Key *key = ob_get_key(ob);
+	Key *key = BKE_key_from_object(ob);
 
 	*min = 0;
 	if (key) {
@@ -1125,7 +1130,7 @@ static void rna_Object_active_shape_key_index_set(PointerRNA *ptr, int value)
 static PointerRNA rna_Object_active_shape_key_get(PointerRNA *ptr)
 {
 	Object *ob = (Object *)ptr->id.data;
-	Key *key = ob_get_key(ob);
+	Key *key = BKE_key_from_object(ob);
 	KeyBlock *kb;
 	PointerRNA keyptr;
 
@@ -1759,11 +1764,11 @@ static void rna_def_object_modifiers(BlenderRNA *brna, PropertyRNA *cprop)
 /*		RNA_def_property_collection_active(prop, prop_act); */
 #endif
 
-	/* add target */
+	/* add modifier */
 	func = RNA_def_function(srna, "new", "rna_Object_modifier_new");
 	RNA_def_function_flag(func, FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
 	RNA_def_function_ui_description(func, "Add a new modifier");
-	parm = RNA_def_string(func, "name", "Name", 0, "", "New name for the bone");
+	parm = RNA_def_string(func, "name", "Name", 0, "", "New name for the modifier");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 	/* modifier to add */
 	parm = RNA_def_enum(func, "type", modifier_type_items, 1, "", "Modifier type to add");
@@ -1772,11 +1777,11 @@ static void rna_def_object_modifiers(BlenderRNA *brna, PropertyRNA *cprop)
 	parm = RNA_def_pointer(func, "modifier", "Modifier", "", "Newly created modifier");
 	RNA_def_function_return(func, parm);
 
-	/* remove target */
+	/* remove modifier */
 	func = RNA_def_function(srna, "remove", "rna_Object_modifier_remove");
 	RNA_def_function_flag(func, FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
 	RNA_def_function_ui_description(func, "Remove an existing modifier from the object");
-	/* target to remove*/
+	/* modifier to remove */
 	parm = RNA_def_pointer(func, "modifier", "Modifier", "", "Modifier to remove");
 	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL);
 

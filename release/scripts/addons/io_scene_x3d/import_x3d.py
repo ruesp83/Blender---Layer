@@ -22,6 +22,7 @@ DEBUG = False
 
 # This should work without a blender at all
 import os
+import shlex
 
 
 def imageConvertCompat(path):
@@ -1173,7 +1174,8 @@ class vrmlNode(object):
                             else:
                                 value += '\n' + l
 
-                    value_all = value.split()
+                    # use shlex so we get '"a b" "b v"' --> '"a b"', '"b v"'
+                    value_all = shlex.split(value, posix=False)
 
                     def iskey(k):
                         if k[0] != '"' and k[0].isalpha() and k.upper() not in {'TRUE', 'FALSE'}:
@@ -1576,7 +1578,8 @@ def importMesh_IndexedFaceSet(geom, bpyima, ancestry):
         coords_tex = geom.getChildBySpec('TextureCoordinate')
 
         if coords_tex:
-            ifs_texpoints = coords_tex.getFieldAsArray('point', 2, ancestry)
+            ifs_texpoints = [(0, 0)] # EEKADOODLE - vertex start at 1
+            ifs_texpoints.extend(coords_tex.getFieldAsArray('point', 2, ancestry))
             ifs_texfaces = geom.getFieldAsArray('texCoordIndex', 0, ancestry)
 
             if not ifs_texpoints:
@@ -2047,6 +2050,7 @@ def importShape(node, ancestry, global_matrix):
         texmtx = None
 
         depth = 0  # so we can set alpha face flag later
+        is_vcol = (geom.getChildBySpec('Color') is not None)
 
         if appr:
 
@@ -2087,6 +2091,8 @@ def importShape(node, ancestry, global_matrix):
                 bpymat.alpha = 1.0 - mat.getFieldAsFloat('transparency', 0.0, ancestry)
                 if bpymat.alpha < 0.999:
                     bpymat.use_transparency = True
+                if is_vcol:
+                    bpymat.use_vertex_color_paint = True
 
             if ima:
                 ima_url = ima.getFieldAsString('url', None, ancestry)

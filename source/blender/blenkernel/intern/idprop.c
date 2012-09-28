@@ -159,12 +159,12 @@ void IDP_ResizeIDPArray(IDProperty *prop, int newlen)
 
 	newarr = MEM_callocN(sizeof(IDProperty) * newsize, "idproperty array resized");
 	if (newlen >= prop->len) {
-		/* newlen is bigger*/
+		/* newlen is bigger */
 		memcpy(newarr, prop->data.pointer, prop->len * sizeof(IDProperty));
 	}
 	else {
 		int i;
-		/* newlen is smaller*/
+		/* newlen is smaller */
 		for (i = newlen; i < prop->len; i++) {
 			IDP_FreeProperty(GETPROP(prop, i));
 		}
@@ -233,12 +233,12 @@ void IDP_ResizeArray(IDProperty *prop, int newlen)
 
 	newarr = MEM_callocN(idp_size_table[(int)prop->subtype] * newsize, "idproperty array resized");
 	if (newlen >= prop->len) {
-		/* newlen is bigger*/
+		/* newlen is bigger */
 		memcpy(newarr, prop->data.pointer, prop->len * idp_size_table[(int)prop->subtype]);
 		idp_resize_group_array(prop, newlen, newarr);
 	}
 	else {
-		/* newlen is smaller*/
+		/* newlen is smaller */
 		idp_resize_group_array(prop, newlen, newarr);
 		memcpy(newarr, prop->data.pointer, newlen * idp_size_table[(int)prop->subtype]);
 	}
@@ -292,18 +292,6 @@ static IDProperty *IDP_CopyArray(IDProperty *prop)
 
 	return newp;
 }
-
-/*taken from readfile.c*/
-#define SWITCH_LONGINT(a) { \
-		char s_i, *p_i; \
-		p_i = (char *)& (a);  \
-		s_i = p_i[0]; p_i[0] = p_i[7]; p_i[7] = s_i; \
-		s_i = p_i[1]; p_i[1] = p_i[6]; p_i[6] = s_i; \
-		s_i = p_i[2]; p_i[2] = p_i[5]; p_i[5] = s_i; \
-		s_i = p_i[3]; p_i[3] = p_i[4]; p_i[4] = s_i; \
-	} (void)0
-
-
 
 /* ---------- String Type ------------ */
 IDProperty *IDP_NewString(const char *st, const char *name, int maxlen)
@@ -496,7 +484,7 @@ void IDP_ReplaceInGroup(IDProperty *group, IDProperty *prop)
 		
 		BLI_remlink(&group->data.group, loop);
 		IDP_FreeProperty(loop);
-		MEM_freeN(loop);			
+		MEM_freeN(loop);
 	}
 	else {
 		group->len++;
@@ -691,10 +679,10 @@ IDProperty *IDP_New(const int type, const IDPropertyTemplate *val, const char *n
 		case IDP_DOUBLE:
 			prop = MEM_callocN(sizeof(IDProperty), "IDProperty float");
 			*(double *)&prop->data.val = val->d;
-			break;		
+			break;
 		case IDP_ARRAY:
 		{
-			/*for now, we only support float and int and double arrays*/
+			/* for now, we only support float and int and double arrays */
 			if ( (val->array.type == IDP_FLOAT) ||
 			     (val->array.type == IDP_INT) ||
 			     (val->array.type == IDP_DOUBLE) ||

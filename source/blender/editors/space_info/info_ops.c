@@ -87,7 +87,7 @@ static int pack_all_invoke(bContext *C, wmOperator *op, wmEvent *UNUSED(event))
 	// first check for dirty images
 	for (ima = bmain->image.first; ima; ima = ima->id.next) {
 		if (ima->ibufs.first) { /* XXX FIX */
-			ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
+			ibuf = BKE_image_get_ibuf(ima, NULL);
 			
 			if (ibuf && (ibuf->userflags & IB_BITMAPDIRTY))
 				break;
@@ -315,7 +315,8 @@ void FILE_OT_find_missing_files(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	WM_operator_properties_filesel(ot, 0, FILE_SPECIAL, FILE_OPENFILE, WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
+	WM_operator_properties_filesel(ot, 0, FILE_SPECIAL, FILE_OPENFILE,
+	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
 }
 
 /********************* report box operator *********************/

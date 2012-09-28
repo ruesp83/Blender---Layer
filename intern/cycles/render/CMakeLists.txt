@@ -9,6 +9,9 @@ set(INC
 	../util
 	${GLEW_INCLUDE_PATH}
 )
+set(INC_SYS
+	${GLEW_INCLUDE_PATH}
+)
 
 set(SRC
 	attribute.cpp
@@ -27,6 +30,7 @@ set(SRC
 	nodes.cpp
 	object.cpp
 	osl.cpp
+	particles.cpp
 	scene.cpp
 	session.cpp
 	shader.cpp
@@ -51,6 +55,7 @@ set(SRC_HEADERS
 	nodes.h
 	object.h
 	osl.h
+	particles.h
 	scene.h
 	session.h
 	shader.h
@@ -62,6 +67,7 @@ set(SRC_HEADERS
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${RTTI_DISABLE_FLAGS}")
 
 include_directories(${INC})
+include_directories(SYSTEM ${INC_SYS})
 
 add_library(cycles_render ${SRC} ${SRC_HEADERS})
 

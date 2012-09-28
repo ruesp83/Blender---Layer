@@ -39,7 +39,7 @@ void fdrawbox(float x1, float y1, float x2, float y2);
 void sdrawline(short x1, short y1, short x2, short y2);
 void sdrawtri(short x1, short y1, short x2, short y2);
 void sdrawtrifill(short x1, short y1, short x2, short y2);
-void sdrawbox(int x1, int y1, int x2, int y2);
+void sdrawbox(short x1, short y1, short x2, short y2);
 
 void sdrawXORline(int x0, int y0, int x1, int y1);
 void sdrawXORline4(int nr, int x0, int y0, int x1, int y1);
@@ -116,8 +116,8 @@ void glaRasterPosSafe2f(float x, float y, float known_good_x, float known_good_y
  *
  * \attention This routine makes many assumptions: the rect data
  * is expected to be in RGBA unsigned byte format, the coordinate
- * (0.375, 0.375) is assumed to be within the view frustum, and the
- * modelview and projection matrices are assumed to define a
+ * (GLA_PIXEL_OFS, GLA_PIXEL_OFS) is assumed to be within the view frustum,
+ * and the modelview and projection matrices are assumed to define a
  * 1-to-1 mapping to screen space.
  * \attention Furthermore, in the case of zoomed or unpixel aligned
  * images extending outside the view frustum, but still within the

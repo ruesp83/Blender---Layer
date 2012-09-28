@@ -79,6 +79,7 @@ class USERPREF_HT_header(Header):
 
     def draw(self, context):
         layout = self.layout
+
         layout.template_header(menus=False)
 
         userpref = context.user_preferences
@@ -137,6 +138,7 @@ class USERPREF_MT_splash(Menu):
 
     def draw(self, context):
         layout = self.layout
+
         split = layout.split()
         row = split.row()
         row.label("")
@@ -195,7 +197,8 @@ class USERPREF_PT_interface(Panel):
 
         col = row.column()
         col.label(text="View Manipulation:")
-        col.prop(view, "use_mouse_auto_depth")
+        col.prop(view, "use_mouse_depth_cursor")
+        col.prop(view, "use_mouse_depth_navigate")
         col.prop(view, "use_zoom_to_mouse")
         col.prop(view, "use_rotate_around_active")
         col.prop(view, "use_global_pivot")
@@ -750,88 +753,6 @@ class USERPREF_PT_theme(Panel):
                 colsub = padding.column()
                 colsub = padding.column()
                 colsub.row().prop(ui, "show_colored_constraints")
-        elif theme.theme_area == 'IMAGE_EDITOR':
-            def theme_generic_recurse(data):
-                col.label(data.rna_type.name)
-                row = col.row()
-                subsplit = row.split(percentage=0.95)
-
-                padding1 = subsplit.split(percentage=0.15)
-                padding1.column()
-
-                subsplit = row.split(percentage=0.85)
-
-                padding2 = subsplit.split(percentage=0.15)
-                padding2.column()
-
-                colsub_pair = padding1.column(), padding2.column()
-
-                props_type = {}
-
-                for i, prop in enumerate(data.rna_type.properties):
-                    if prop.identifier == "rna_type":
-                        continue
-
-                    props_type.setdefault((prop.type, prop.subtype), []).append(prop)
-
-                for props_type, props_ls in sorted(props_type.items()):
-                    if props_type[0] == 'POINTER':
-                        for i, prop in enumerate(props_ls):
-                            theme_generic_recurse(getattr(data, prop.identifier))
-                    else:
-                        for i, prop in enumerate(props_ls):
-                            colsub_pair[i % 2].row().prop(data, prop.identifier)
-
-            data = getattr(theme, theme.theme_area.lower())
-            col = split.column()
-
-            ui = theme.image_editor
-            col.label(text="Theme Image Editor")
-
-            row = col.row()
-
-            subsplit = row.split(percentage=0.95)
-            padding = subsplit.split(percentage=0.15)
-            colsub = padding.column()
-            colsub = padding.column()
-            colsub.row().prop(ui, "editmesh_active")
-            colsub.row().prop(ui, "face_dot")
-            colsub.row().prop(ui, "scope_back")
-            colsub.row().prop(ui, "preview_stitch_edge")
-            colsub.row().prop(ui, "preview_stitch_stitchable")
-            colsub.row().prop(ui, "preview_stitch_vert")
-            colsub.row().prop(ui, "vertex_select")
-            colsub.row().prop(ui, "facedot_size")
-            colsub.row().prop(ui, "col1_boundary_layer")
-            colsub.row().prop(ui, "show_boundary_layer")
-
-            subsplit = row.split(percentage=0.85)
-            padding = subsplit.split(percentage=0.15)
-            colsub = padding.column()
-            colsub = padding.column()
-            colsub.row().prop(ui, "face")
-            colsub.row().prop(ui, "face_select")
-            colsub.row().prop(ui, "scope_back")
-            colsub.row().prop(ui, "preview_stitch_active")
-            colsub.row().prop(ui, "preview_stitch_face")
-            colsub.row().prop(ui, "preview_stitch_unstitchable")
-            colsub.row().prop(ui, "vertex")
-            colsub.row().prop(ui, "vertex_size")
-            colsub.row().prop(ui, "col2_boundary_layer")
-
-            props_type = {}
-
-            for i, prop in enumerate(data.rna_type.properties):
-                if prop.identifier == "rna_type":
-                    continue
-
-                props_type.setdefault((prop.type, prop.subtype), []).append(prop)
-
-            for props_type, props_ls in sorted(props_type.items()):
-                if props_type[0] == 'POINTER':
-                    for i, prop in enumerate(props_ls):
-                        theme_generic_recurse(getattr(data, prop.identifier))
-
         else:
             self._theme_generic(split, getattr(theme, theme.theme_area.lower()))
 
@@ -932,10 +853,12 @@ class USERPREF_MT_ndof_settings(Menu):
 
     def draw(self, context):
         layout = self.layout
+
         input_prefs = context.user_preferences.inputs
 
         layout.separator()
         layout.prop(input_prefs, "ndof_sensitivity")
+        layout.prop(input_prefs, "ndof_orbit_sensitivity")
 
         if context.space_data.type == 'VIEW_3D':
             layout.separator()
@@ -943,11 +866,10 @@ class USERPREF_MT_ndof_settings(Menu):
 
             layout.separator()
             layout.label(text="Orbit options")
-            if input_prefs.view_rotate_method == 'TRACKBALL':
-                layout.prop(input_prefs, "ndof_roll_invert_axis")
+            layout.row().prop(input_prefs, "ndof_view_rotate_method", text="")
+            layout.prop(input_prefs, "ndof_roll_invert_axis")
             layout.prop(input_prefs, "ndof_tilt_invert_axis")
             layout.prop(input_prefs, "ndof_rotate_invert_axis")
-            layout.prop(input_prefs, "ndof_zoom_invert")
 
             layout.separator()
             layout.label(text="Pan options")
@@ -956,6 +878,7 @@ class USERPREF_MT_ndof_settings(Menu):
             layout.prop(input_prefs, "ndof_panz_invert_axis")
 
             layout.label(text="Zoom options")
+            layout.prop(input_prefs, "ndof_zoom_invert")
             layout.prop(input_prefs, "ndof_zoom_updown")
 
             layout.separator()
@@ -1030,6 +953,8 @@ class USERPREF_PT_input(Panel, InputKeyMapPanel):
         sub = col.column()
         sub.label(text="NDOF Device:")
         sub.prop(inputs, "ndof_sensitivity", text="NDOF Sensitivity")
+        sub.prop(inputs, "ndof_orbit_sensitivity", text="NDOF Orbit Sensitivity")
+        sub.row().prop(inputs, "ndof_view_rotate_method", expand=True)
 
         row.separator()
 
@@ -1061,6 +986,7 @@ class USERPREF_MT_addons_dev_guides(Menu):
     # menu to open web-pages with addons development guides
     def draw(self, context):
         layout = self.layout
+
         layout.operator("wm.url_open", text="API Concepts", icon='URL').url = "http://wiki.blender.org/index.php/Dev:2.5/Py/API/Intro"
         layout.operator("wm.url_open", text="Addon Guidelines", icon='URL').url = "http://wiki.blender.org/index.php/Dev:2.5/Py/Scripts/Guidelines/Addons"
         layout.operator("wm.url_open", text="How to share your addon", icon='URL').url = "http://wiki.blender.org/index.php/Dev:Py/Sharing"
@@ -1086,10 +1012,10 @@ class USERPREF_PT_addons(Panel):
     @staticmethod
     def is_user_addon(mod, user_addon_paths):
         if not user_addon_paths:
-            user_script_path = bpy.utils.user_script_path()
-            if user_script_path is not None:
-                user_addon_paths.append(os.path.join(user_script_path, "addons"))
-            user_addon_paths.append(os.path.join(bpy.utils.resource_path('USER'), "scripts", "addons"))
+            for path in (bpy.utils.script_path_user(),
+                         bpy.utils.script_path_pref()):
+                if path is not None:
+                    user_addon_paths.append(os.path.join(path, "addons"))
 
         for path in user_addon_paths:
             if bpy.path.is_subdir(mod.__file__, path):

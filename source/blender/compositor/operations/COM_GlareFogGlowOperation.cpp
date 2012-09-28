@@ -244,7 +244,7 @@ static void fht_convolve(fREAL *d1, fREAL *d2, unsigned int M, unsigned int N)
 }
 //------------------------------------------------------------------------------
 
-void convolve(float *dst, MemoryBuffer *in1, MemoryBuffer *in2)
+static void convolve(float *dst, MemoryBuffer *in1, MemoryBuffer *in2)
 {
 	fREAL *data1, *data2, *fp;
 	unsigned int w2, h2, hw, hh, log2_w, log2_h;
@@ -260,6 +260,7 @@ void convolve(float *dst, MemoryBuffer *in1, MemoryBuffer *in2)
 	float *imageBuffer = in1->getBuffer();
 
 	MemoryBuffer *rdst = new MemoryBuffer(NULL, in1->getRect());
+	memset(rdst->getBuffer(), 0, rdst->getWidth() * rdst->getHeight() * COM_NUMBER_OF_CHANNELS * sizeof(float));
 
 	// convolution result width & height
 	w2 = 2 * kernelWidth - 1;

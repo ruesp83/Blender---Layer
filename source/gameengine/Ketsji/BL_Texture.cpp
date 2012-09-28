@@ -29,6 +29,7 @@
 
 #include "MEM_guardedalloc.h"
 #include "GPU_draw.h"
+#include "GPU_extensions.h"
 
 extern "C" {
 	// envmaps
@@ -46,7 +47,7 @@ static int power_of_2_min_i(int num)
 {
 	while (!is_power_of_2_i(num))
 		num= num&(num-1);
-	return num;	
+	return num;
 }
 
 // Place holder for a full texture manager
@@ -108,7 +109,7 @@ bool BL_Texture::InitFromImage(int unit,  Image *img, bool mipmap)
 		return mOk;
 	}
 
-	ibuf = BKE_image_get_ibuf(img, NULL, IMA_IBUF_IMA);
+	ibuf= BKE_image_get_ibuf(img, NULL);
 	if (ibuf==NULL)
 	{
 		img->ok = 0;
@@ -116,6 +117,7 @@ bool BL_Texture::InitFromImage(int unit,  Image *img, bool mipmap)
 		return mOk;
 	}
 
+	mipmap = mipmap && GPU_get_mipmap();
 
 	mTexture = img->bindcode;
 	mType = GL_TEXTURE_2D;
@@ -169,7 +171,7 @@ bool BL_Texture::InitFromImage(int unit,  Image *img, bool mipmap)
 
 void BL_Texture::InitGLTex(unsigned int *pix,int x,int y,bool mipmap)
 {
-	if (!GLEW_ARB_texture_non_power_of_two && (!is_power_of_2_i(x) || !is_power_of_2_i(y)) ) {
+	if (!GPU_non_power_of_two_support() && (!is_power_of_2_i(x) || !is_power_of_2_i(y)) ) {
 		InitNonPow2Tex(pix, x,y,mipmap);
 		return;
 	}
@@ -182,7 +184,7 @@ void BL_Texture::InitGLTex(unsigned int *pix,int x,int y,bool mipmap)
 	} 
 	else {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_RGBA, GL_UNSIGNED_BYTE, pix );
 	}
 
@@ -191,7 +193,7 @@ void BL_Texture::InitGLTex(unsigned int *pix,int x,int y,bool mipmap)
 	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 }
 
-void BL_Texture::InitGLCompressedTex(ImBuf* ibuf, bool mipmap)
+void BL_Texture::InitGLCompressedTex(ImBuf *ibuf, bool mipmap)
 {
 #ifndef WITH_DDS
 	// Fall back to uncompressed if DDS isn't enabled
@@ -199,11 +201,6 @@ void BL_Texture::InitGLCompressedTex(ImBuf* ibuf, bool mipmap)
 	return;
 #else
 	glBindTexture(GL_TEXTURE_2D, mTexture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-
 	
 	if (GPU_upload_dxt_texture(ibuf) == 0) {
 		InitGLTex(ibuf->rect, ibuf->x, ibuf->y, mipmap);
@@ -254,7 +251,7 @@ bool BL_Texture::InitCubeMap(int unit,  EnvMap *cubemap)
 		return mOk;
 	}
 
-	ImBuf *ibuf= BKE_image_get_ibuf(cubemap->ima, NULL, IMA_IBUF_IMA);
+	ImBuf *ibuf= BKE_image_get_ibuf(cubemap->ima, NULL);
 	if (ibuf==0)
 	{
 		cubemap->ima->ok = 0;
@@ -430,7 +427,7 @@ void BL_Texture::DisableAllTextures()
 		glMatrixMode(GL_TEXTURE);
 		glLoadIdentity();
 		glMatrixMode(GL_MODELVIEW);
-		glDisable(GL_TEXTURE_2D);	
+		glDisable(GL_TEXTURE_2D);
 		glDisable(GL_TEXTURE_GEN_S);
 		glDisable(GL_TEXTURE_GEN_T);
 		glDisable(GL_TEXTURE_GEN_R);
@@ -450,14 +447,14 @@ void BL_Texture::ActivateTexture()
 
 	if (mType == GL_TEXTURE_CUBE_MAP_ARB && GLEW_ARB_texture_cube_map)
 	{
-		glBindTexture( GL_TEXTURE_CUBE_MAP_ARB, mTexture );	
+		glBindTexture( GL_TEXTURE_CUBE_MAP_ARB, mTexture );
 		glEnable(GL_TEXTURE_CUBE_MAP_ARB);
 	}
 	else {
 		if (GLEW_ARB_texture_cube_map )
 			glDisable(GL_TEXTURE_CUBE_MAP_ARB);
 
-		glBindTexture( GL_TEXTURE_2D, mTexture );	
+		glBindTexture( GL_TEXTURE_2D, mTexture );
 		glEnable(GL_TEXTURE_2D);
 	}
 }
@@ -649,7 +646,7 @@ int BL_Texture::GetPow2(int n)
 void BL_Texture::SplitEnvMap(EnvMap *map)
 {
 	if (!map || !map->ima || (map->ima && !map->ima->ok)) return;
-	ImBuf *ibuf= BKE_image_get_ibuf(map->ima, NULL, IMA_IBUF_IMA);
+	ImBuf *ibuf= BKE_image_get_ibuf(map->ima, NULL);
 	if (ibuf)
 		my_envmap_split_ima(map, ibuf);
 }
@@ -662,7 +659,7 @@ void my_envmap_split_ima(EnvMap *env, ImBuf *ibuf)
 {
 	int dx, part;
 	
-	my_free_envmapdata(env);	
+	my_free_envmapdata(env);
 	
 	dx= ibuf->y;
 	dx/= 2;

@@ -46,7 +46,7 @@ static void colorfn(float *out, TexParams *p, bNode *node, bNodeStack **UNUSED(i
 	ImageUser *iuser= (ImageUser *)node->storage;
 	
 	if ( ima ) {
-		ImBuf *ibuf = BKE_image_get_ibuf(ima, iuser, IMA_IBUF_IMA);
+		ImBuf *ibuf = BKE_image_get_ibuf(ima, iuser);
 		if ( ibuf ) {
 			float xsize, ysize;
 			float xoff, yoff;
@@ -86,7 +86,7 @@ static void exec(void *data, bNode *node, bNodeStack **in, bNodeStack **out)
 	tex_output(node, in, out[0], &colorfn, data);
 }
 
-static void init(bNodeTree *UNUSED(ntree), bNode* node, bNodeTemplate *UNUSED(ntemp))
+static void init(bNodeTree *UNUSED(ntree), bNode *node, bNodeTemplate *UNUSED(ntemp))
 {
 	ImageUser *iuser= MEM_callocN(sizeof(ImageUser), "node image user");
 	node->storage= iuser;

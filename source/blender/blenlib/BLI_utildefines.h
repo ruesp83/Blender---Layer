@@ -81,7 +81,7 @@
 #define INIT_MINMAX(min, max) {                                               \
 		(min)[0] = (min)[1] = (min)[2] =  1.0e30f;                            \
 		(max)[0] = (max)[1] = (max)[2] = -1.0e30f;                            \
-	}
+	} (void)0
 #define INIT_MINMAX2(min, max) {                                              \
 		(min)[0] = (min)[1] = 1.0e30f;                                        \
 		(max)[0] = (max)[1] = -1.0e30f;                                       \
@@ -113,8 +113,30 @@
 
 /* some math and copy defines */
 
+/* Causes warning:
+ * incompatible types when assigning to type 'Foo' from type 'Bar'
+ * ... the compiler optimizes away the temp var */
+#ifndef CHECK_TYPE
+#ifdef __GNUC__
+#define CHECK_TYPE(var, type)  {  \
+	__typeof(var) *__tmp;         \
+	__tmp = (type *)NULL;         \
+	(void)__tmp;                  \
+} (void)0
+#else
+#define CHECK_TYPE(var, type)
+#endif
+#endif
+
 #ifndef SWAP
-#  define SWAP(type, a, b)       { type sw_ap; sw_ap = (a); (a) = (b); (b) = sw_ap; } (void)0
+#  define SWAP(type, a, b)  {  \
+	type sw_ap;                \
+	CHECK_TYPE(a, type);       \
+	CHECK_TYPE(b, type);       \
+	sw_ap = (a);               \
+	(a) = (b);                 \
+	(b) = sw_ap;               \
+} (void)0
 #endif
 
 #define ABS(a)          ( (a) < 0 ? (-(a)) : (a) )
@@ -176,7 +198,10 @@
 #define INPR(v1, v2) ( (v1)[0] * (v2)[0] + (v1)[1] * (v2)[1] + (v1)[2] * (v2)[2])
 
 /* some misc stuff.... */
-#define CLAMP(a, b, c)  if ((a) < (b)) (a) = (b); else if ((a) > (c)) (a) = (c)
+#define CLAMP(a, b, c)  {           \
+	if ((a) < (b)) (a) = (b);       \
+	else if ((a) > (c)) (a) = (c);  \
+} (void)0
 
 #define CLAMPIS(a, b, c) ((a) < (b) ? (b) : (a) > (c) ? (c) : (a))
 #define CLAMPTEST(a, b, c)                                                    \
@@ -185,7 +210,7 @@
 	}                                                                         \
 	else {                                                                    \
 		CLAMP(a, c, b);                                                       \
-	} (void)
+	} (void)0
 
 #define IS_EQ(a, b) ((fabs((double)(a) - (b)) >= (double) FLT_EPSILON) ? 0 : 1)
 #define IS_EQF(a, b) ((fabsf((float)(a) - (b)) >= (float) FLT_EPSILON) ? 0 : 1)
@@ -202,30 +227,6 @@
 		(item >= arr_start) &&                                                \
 		(item <= ARRAY_LAST_ITEM(arr_start, arr_dtype, elem_size, tot))       \
 	)
-
-/* This one rotates the bytes in an int64, int (32) and short (16) */
-#define SWITCH_INT64(a) {                                                     \
-		char s_i, *p_i;                                                       \
-		p_i = (char *)&(a);                                                   \
-		s_i = p_i[0]; p_i[0] = p_i[7]; p_i[7] = s_i;                          \
-		s_i = p_i[1]; p_i[1] = p_i[6]; p_i[6] = s_i;                          \
-		s_i = p_i[2]; p_i[2] = p_i[5]; p_i[5] = s_i;                          \
-		s_i = p_i[3]; p_i[3] = p_i[4]; p_i[4] = s_i;                          \
-	} (void)0
-
-#define SWITCH_INT(a) {                                                       \
-		char s_i, *p_i;                                                       \
-		p_i = (char *)&(a);                                                   \
-		s_i = p_i[0]; p_i[0] = p_i[3]; p_i[3] = s_i;                          \
-		s_i = p_i[1]; p_i[1] = p_i[2]; p_i[2] = s_i;                          \
-	} (void)0
-
-#define SWITCH_SHORT(a) {                                                     \
-		char s_i, *p_i;                                                       \
-		p_i = (char *)&(a);                                                   \
-		s_i = p_i[0]; p_i[0] = p_i[1]; p_i[1] = s_i;                          \
-	} (void)0
-
 
 /* Warning-free macros for storing ints in pointers. Use these _only_
  * for storing an int in a pointer, not a pointer in an int (64bit)! */

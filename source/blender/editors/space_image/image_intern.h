@@ -52,7 +52,7 @@ struct ARegion *image_has_scope_region(struct ScrArea *sa);
 extern const char *image_context_dir[]; /* doc access */
 
 /* image_draw.c */
-void draw_image_main(struct SpaceImage *sima, struct ARegion *ar, struct Scene *scene);
+void draw_image_main(const struct bContext *C, struct ARegion *ar);
 void draw_image_grease_pencil(struct bContext *C, short onlyv2d);
 void draw_image_sample_line(struct SpaceImage *sima);
 
@@ -95,22 +95,5 @@ void image_buttons_register(struct ARegionType *art);
 void IMAGE_OT_properties(struct wmOperatorType *ot);
 void IMAGE_OT_scopes(struct wmOperatorType *ot);
 
-/* image layers */
-void IMAGE_OT_image_layer_move(struct wmOperatorType *ot);
-//void IMAGE_OT_image_layer_fill_color(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_remove(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_add(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_add_below(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_add_above(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_duplicate(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_select(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_clean(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_merge(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_flip(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_rotate(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_arbitrary_rot(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_offset(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_scale(struct wmOperatorType *ot);
-
-
 #endif /* __IMAGE_INTERN_H__ */
+

@@ -36,6 +36,8 @@
 
 #include "UI_resources.h"
 
+#include "rna_internal.h"
+
 #ifdef RNA_RUNTIME
 
 static void rna_uiItemR(uiLayout *layout, PointerRNA *ptr, const char *propname, const char *name, int icon,
@@ -125,6 +127,7 @@ void RNA_api_ui_layout(StructRNA *srna)
 		{0, "NONE", 0, "None", ""},
 		{'v', "VECTOR", 0, "Vector", ""},
 		{'c', "COLOR", 0, "Color", ""},
+		{'h', "HUE", 0, "Hue", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 	
@@ -395,14 +398,6 @@ void RNA_api_ui_layout(StructRNA *srna)
 	RNA_def_boolean(func, "lock_luminosity", 0, "", "Keep the color at its original vector length");
 	RNA_def_boolean(func, "cubic", 1, "", "Cubic saturation for picking values close to white");
 
-	func = RNA_def_function(srna, "template_color", "uiTemplateColor");
-	RNA_def_function_ui_description(func, "Item. A color widget to pick colors");
-	api_ui_item_rna_common(func);
-	RNA_def_boolean(func, "value_slider", 0, "", "Display the value slider to the bottom of the color wheel");
-	RNA_def_boolean(func, "lock", 0, "", "Lock the color wheel display to value 1.0 regardless of actual color");
-	RNA_def_boolean(func, "lock_luminosity", 0, "", "Keep the color at its original vector length");
-	RNA_def_boolean(func, "cubic", 1, "", "Cubic saturation for picking values close to white");
-
 	func = RNA_def_function(srna, "template_image_layers", "uiTemplateImageLayers");
 	RNA_def_function_flag(func, FUNC_USE_CONTEXT);
 	parm = RNA_def_pointer(func, "image", "Image", "", "");
@@ -422,6 +417,7 @@ void RNA_api_ui_layout(StructRNA *srna)
 	RNA_def_function_ui_description(func, "User interface for setting image format options");
 	parm = RNA_def_pointer(func, "image_settings", "ImageFormatSettings", "", "");
 	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_RNAPTR | PROP_NEVER_NULL);
+	RNA_def_boolean(func, "color_management", 0, "", "Show color management settings");
 
 	func = RNA_def_function(srna, "template_movieclip", "uiTemplateMovieClip");
 	RNA_def_function_ui_description(func, "Item(s). User interface for selecting movie clips and their source paths");
@@ -504,6 +500,17 @@ void RNA_api_ui_layout(StructRNA *srna)
 	func = RNA_def_function(srna, "introspect", "uiLayoutIntrospect");
 	parm = RNA_def_string(func, "string", "", 1024 * 1024, "Descr", "DESCR");
 	RNA_def_function_return(func, parm);
+
+	/* color management templates */
+	func = RNA_def_function(srna, "template_colorspace_settings", "uiTemplateColorspaceSettings");
+	RNA_def_function_ui_description(func, "Item. A widget to control input color space settings.");
+	api_ui_item_rna_common(func);
+
+	func = RNA_def_function(srna, "template_colormanaged_view_settings", "uiTemplateColormanagedViewSettings");
+	RNA_def_function_ui_description(func, "Item. A widget to control color managed view settings settings.");
+	RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+	api_ui_item_rna_common(func);
+	/* RNA_def_boolean(func, "show_global_settings", 0, "", "Show widgets to control global color management settings"); */
 }
 
 #endif

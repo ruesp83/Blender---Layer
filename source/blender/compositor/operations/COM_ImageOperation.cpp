@@ -23,10 +23,8 @@
 #include "COM_ImageOperation.h"
 
 #include "BLI_listbase.h"
-#include "DNA_scene_types.h"
 #include "DNA_image_types.h"
 #include "BKE_image.h"
-#include "BKE_layer.h"
 #include "BLI_math.h"
 
 extern "C" {
@@ -35,6 +33,7 @@ extern "C" {
 	#include "RE_render_ext.h"
 	#include "IMB_imbuf.h"
 	#include "IMB_imbuf_types.h"
+	#include "IMB_colormanagement.h"
 }
 
 BaseImageOperation::BaseImageOperation() : NodeOperation()
@@ -66,11 +65,7 @@ ImBuf *BaseImageOperation::getImBuf()
 {
 	ImBuf *ibuf;
 	
-	if (this->m_imageUser->use_layer_ima)
-		ibuf = (ImBuf *)imalayer_get_layer_index(this->m_image, this->m_imageUser->layer_ima)->ibufs.first;
-	else
-		ibuf = BKE_image_get_ibuf(this->m_image, this->m_imageUser, IMA_IBUF_IMA);
-
+	ibuf = BKE_image_get_ibuf(this->m_image, this->m_imageUser);
 	if (ibuf == NULL || (ibuf->rect == NULL && ibuf->rect_float == NULL)) {
 		return NULL;
 	}
@@ -100,7 +95,7 @@ void BaseImageOperation::deinitExecution()
 	this->m_imageBuffer = NULL;
 }
 
-void BaseImageOperation::determineResolution(unsigned int resolution[], unsigned int preferredResolution[])
+void BaseImageOperation::determineResolution(unsigned int resolution[2], unsigned int preferredResolution[2])
 {
 	ImBuf *stackbuf = getImBuf();
 
@@ -113,32 +108,32 @@ void BaseImageOperation::determineResolution(unsigned int resolution[], unsigned
 	}
 }
 
-void ImageOperation::executePixel(float *color, float x, float y, PixelSampler sampler)
+void ImageOperation::executePixel(float output[4], float x, float y, PixelSampler sampler)
 {
 	if (this->m_imageBuffer == NULL || x < 0 || y < 0 || x >= this->getWidth() || y >= this->getHeight() ) {
-		zero_v4(color);
+		zero_v4(output);
 	}
 	else {
 		switch (sampler) {
 			case COM_PS_NEAREST:
-				neareast_interpolation_color(this->m_buffer, NULL, color, x, y);
+				neareast_interpolation_color(this->m_buffer, NULL, output, x, y);
 				break;
 			case COM_PS_BILINEAR:
-				bilinear_interpolation_color(this->m_buffer, NULL, color, x, y);
+				bilinear_interpolation_color(this->m_buffer, NULL, output, x, y);
 				break;
 			case COM_PS_BICUBIC:
-				bicubic_interpolation_color(this->m_buffer, NULL, color, x, y);
+				bicubic_interpolation_color(this->m_buffer, NULL, output, x, y);
 				break;
 		}
 	}
 }
 
-void ImageAlphaOperation::executePixel(float *color, float x, float y, PixelSampler sampler)
+void ImageAlphaOperation::executePixel(float output[4], float x, float y, PixelSampler sampler)
 {
 	float tempcolor[4];
 
 	if (this->m_imageBuffer == NULL || x < 0 || y < 0 || x >= this->getWidth() || y >= this->getHeight() ) {
-		color[0] = 0.0f;
+		output[0] = 0.0f;
 	}
 	else {
 		tempcolor[3] = 1.0f;
@@ -153,17 +148,17 @@ void ImageAlphaOperation::executePixel(float *color, float x, float y, PixelSamp
 				bicubic_interpolation_color(this->m_buffer, NULL, tempcolor, x, y);
 				break;
 		}
-		color[0] = tempcolor[3];
+		output[0] = tempcolor[3];
 	}
 }
 
-void ImageDepthOperation::executePixel(float *color, float x, float y, PixelSampler sampler)
+void ImageDepthOperation::executePixel(float output[4], float x, float y, PixelSampler sampler)
 {
 	if (this->m_depthBuffer == NULL || x < 0 || y < 0 || x >= this->getWidth() || y >= this->getHeight() ) {
-		color[0] = 0.0f;
+		output[0] = 0.0f;
 	}
 	else {
 		int offset = y * this->m_width + x;
-		color[0] = this->m_depthBuffer[offset];
+		output[0] = this->m_depthBuffer[offset];
 	}
 }

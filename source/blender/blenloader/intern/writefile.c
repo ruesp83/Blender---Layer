@@ -92,8 +92,6 @@ Any case: direct data is ALWAYS after the lib block
 /* allow writefile to use deprecated functionality (for forward compatibility code) */
 #define DNA_DEPRECATED_ALLOW
 
-#include "IMB_imbuf_types.h"
-
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
 #include "DNA_actuator_types.h"
@@ -106,7 +104,6 @@ Any case: direct data is ALWAYS after the lib block
 #include "DNA_genfile.h"
 #include "DNA_group_types.h"
 #include "DNA_gpencil_types.h"
-//#include "DNA_image_types.h"
 #include "DNA_fileglobal_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
@@ -157,7 +154,6 @@ Any case: direct data is ALWAYS after the lib block
 #include "BKE_report.h"
 #include "BKE_sequencer.h"
 #include "BKE_subsurf.h"
-#include "BKE_utildefines.h"
 #include "BKE_modifier.h"
 #include "BKE_fcurve.h"
 #include "BKE_pointcache.h"
@@ -166,6 +162,7 @@ Any case: direct data is ALWAYS after the lib block
 #include "BLO_writefile.h"
 #include "BLO_readfile.h"
 #include "BLO_undofile.h"
+#include "BLO_blend_defs.h"
 
 #include "readfile.h"
 
@@ -649,13 +646,19 @@ static void write_animdata(WriteData *wd, AnimData *adt)
 	write_nladata(wd, &adt->nla_tracks);
 }
 
-static void write_curvemapping(WriteData *wd, CurveMapping *cumap)
+static void write_curvemapping_curves(WriteData *wd, CurveMapping *cumap)
 {
 	int a;
-	
-	writestruct(wd, DATA, "CurveMapping", 1, cumap);
-	for (a=0; a<CM_TOT; a++)
+
+	for (a = 0; a < CM_TOT; a++)
 		writestruct(wd, DATA, "CurveMapPoint", cumap->cm[a].totpoint, cumap->cm[a].curve);
+}
+
+static void write_curvemapping(WriteData *wd, CurveMapping *cumap)
+{
+	writestruct(wd, DATA, "CurveMapping", 1, cumap);
+
+	write_curvemapping_curves(wd, cumap);
 }
 
 static void write_node_socket(WriteData *wd, bNodeSocket *sock)
@@ -1818,7 +1821,7 @@ static void write_meshs(WriteData *wd, ListBase *idbase)
 				/* backup */
 
 
-				/* now fill in polys to mfaces*/
+				/* now fill in polys to mfaces */
 				mesh->totface = BKE_mesh_mpoly_to_mface(&mesh->fdata, &backup_mesh.ldata, &backup_mesh.pdata,
 				                                        mesh->totface, backup_mesh.totloop, backup_mesh.totpoly);
 
@@ -1920,23 +1923,11 @@ static void write_previews(WriteData *wd, PreviewImage *prv)
 	}
 }
 
-static void write_ibufs(WriteData *wd, ImBuf *ibuf)
-{
-	if (ibuf) {
-		//writestruct(wd, DATA, "ImBuf", 1, ibuf);
-		if (ibuf->rect_float)
-			writedata(wd, DATA, ibuf->x*ibuf->y*sizeof(float), ibuf->rect_float);
-		else if (ibuf->rect)
-			writedata(wd, DATA, ibuf->x*ibuf->y*sizeof(char), ibuf->rect);
-	}
-}
-
 static void write_images(WriteData *wd, ListBase *idbase)
 {
 	Image *ima;
 	PackedFile * pf;
-	ImageLayer *iml;
-	//ImBuf *ibuf;
+
 
 	ima= idbase->first;
 	while (ima) {
@@ -1951,14 +1942,6 @@ static void write_images(WriteData *wd, ListBase *idbase)
 				writedata(wd, DATA, pf->size, pf->data);
 			}
 
-			if (ima->imlayers.first) {
-				for (iml = (ImageLayer *)ima->imlayers.last; iml; iml = iml->prev) {
-					writestruct(wd, DATA, "ImageLayer", 1, iml); 
-					//ibuf = (ImBuf *)iml->ibufs.first;
-					write_ibufs(wd, (ImBuf *)iml->ibufs.first);
-				}
-			}
-			
 			write_previews(wd, ima->preview);
 		}
 		ima= ima->id.next;
@@ -2109,6 +2092,39 @@ static void write_lamps(WriteData *wd, ListBase *idbase)
 	}
 }
 
+static void write_sequence_modifiers(WriteData *wd, ListBase *modbase)
+{
+	SequenceModifierData *smd;
+
+	for (smd = modbase->first; smd; smd = smd->next) {
+		SequenceModifierTypeInfo *smti = BKE_sequence_modifier_type_info_get(smd->type);
+
+		if (smti) {
+			writestruct(wd, DATA, smti->struct_name, 1, smd);
+
+			if (smd->type == seqModifierType_Curves) {
+				CurvesModifierData *cmd = (CurvesModifierData *) smd;
+
+				write_curvemapping(wd, &cmd->curve_mapping);
+			}
+			else if (smd->type == seqModifierType_HueCorrect) {
+				HueCorrectModifierData *hcmd = (HueCorrectModifierData *) smd;
+
+				write_curvemapping(wd, &hcmd->curve_mapping);
+			}
+		}
+		else {
+			writestruct(wd, DATA, "SequenceModifierData", 1, smd);
+		}
+	}
+}
+
+static void write_view_settings(WriteData *wd, ColorManagedViewSettings *view_settings)
+{
+	if (view_settings->curve_mapping) {
+		write_curvemapping(wd, view_settings->curve_mapping);
+	}
+}
 
 static void write_scenes(WriteData *wd, ListBase *scebase)
 {
@@ -2205,9 +2221,6 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 					if (seq->flag & SEQ_USE_PROXY && strip->proxy) {
 						writestruct(wd, DATA, "StripProxy", 1, strip->proxy);
 					}
-					if (seq->flag & SEQ_USE_COLOR_BALANCE && strip->color_balance) {
-						writestruct(wd, DATA, "StripColorBalance", 1, strip->color_balance);
-					}
 					if (seq->type==SEQ_TYPE_IMAGE)
 						writestruct(wd, DATA, "StripElem", MEM_allocN_len(strip->stripdata) / sizeof(struct StripElem), strip->stripdata);
 					else if (seq->type==SEQ_TYPE_MOVIE || seq->type==SEQ_TYPE_SOUND_RAM || seq->type == SEQ_TYPE_SOUND_HD)
@@ -2215,6 +2228,8 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 					
 					strip->done = TRUE;
 				}
+
+				write_sequence_modifiers(wd, &seq->modifiers);
 			}
 			SEQ_END
 				
@@ -2253,7 +2268,9 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 			writestruct(wd, DATA, "bNodeTree", 1, sce->nodetree);
 			write_nodetree(wd, sce->nodetree);
 		}
-		
+
+		write_view_settings(wd, &sce->view_settings);
+
 		sce= sce->id.next;
 	}
 	/* flush helps the compression for undo-save */
@@ -2514,7 +2531,7 @@ static void write_libraries(WriteData *wd, Main *main)
 	}
 }
 
-static void write_bone(WriteData *wd, Bone* bone)
+static void write_bone(WriteData *wd, Bone *bone)
 {
 	Bone*	cbone;
 

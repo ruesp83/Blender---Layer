@@ -27,14 +27,16 @@
 #include "BLI_listbase.h"
 #include "BLI_path_util.h"
 #include "BLI_string.h"
-#include "DNA_scene_types.h"
 #include "BKE_image.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
 
+#include "DNA_color_types.h"
+
 extern "C" {
 	#include "MEM_guardedalloc.h"
 	#include "IMB_imbuf.h"
+	#include "IMB_colormanagement.h"
 	#include "IMB_imbuf_types.h"
 }
 
@@ -92,7 +94,8 @@ static void write_buffer_rect(rcti *rect, const bNodeTree *tree,
 
 
 OutputSingleLayerOperation::OutputSingleLayerOperation(
-    const RenderData *rd, const bNodeTree *tree, DataType datatype, ImageFormatData *format, const char *path)
+    const RenderData *rd, const bNodeTree *tree, DataType datatype, ImageFormatData *format, const char *path,
+    const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings)
 {
 	this->m_rd = rd;
 	this->m_tree = tree;
@@ -105,6 +108,9 @@ OutputSingleLayerOperation::OutputSingleLayerOperation(
 	
 	this->m_format = format;
 	BLI_strncpy(this->m_path, path, sizeof(this->m_path));
+
+	this->m_viewSettings = viewSettings;
+	this->m_displaySettings = displaySettings;
 }
 
 void OutputSingleLayerOperation::initExecution()
@@ -132,9 +138,9 @@ void OutputSingleLayerOperation::deinitExecution()
 		ibuf->mall |= IB_rectfloat; 
 		ibuf->dither = this->m_rd->dither_intensity;
 		
-		if (this->m_rd->color_mgt_flag & R_COLOR_MANAGEMENT)
-			ibuf->profile = IB_PROFILE_LINEAR_RGB;
-		
+		IMB_colormanagement_imbuf_for_write(ibuf, TRUE, FALSE, m_viewSettings, m_displaySettings,
+		                                    this->m_format);
+
 		BKE_makepicstring(filename, this->m_path, bmain->name, this->m_rd->cfra, this->m_format->imtype,
 		                  (this->m_rd->scemode & R_EXTENSION), true);
 		

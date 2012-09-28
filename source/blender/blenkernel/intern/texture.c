@@ -56,7 +56,6 @@
 
 #include "IMB_imbuf.h"
 
-#include "BKE_utildefines.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
 #include "BKE_ocean.h"
@@ -339,7 +338,7 @@ void colorband_table_RGBA(ColorBand *coba, float **array, int *size)
 		do_colorband(coba, (float)a / (float)CM_TABLE, &(*array)[a * 4]);
 }
 
-int vergcband(const void *a1, const void *a2)
+static int vergcband(const void *a1, const void *a2)
 {
 	const CBData *x1 = a1, *x2 = a2;
 
@@ -1292,7 +1291,7 @@ PointDensity *BKE_add_pointdensity(void)
 	pd->falloff_curve->preset = CURVE_PRESET_LINE;
 	pd->falloff_curve->cm->flag &= ~CUMA_EXTEND_EXTRAPOLATE;
 	curvemap_reset(pd->falloff_curve->cm, &pd->falloff_curve->clipr, pd->falloff_curve->preset, CURVEMAP_SLOPE_POSITIVE);
-	curvemapping_changed(pd->falloff_curve, 0);
+	curvemapping_changed(pd->falloff_curve, FALSE);
 
 	return pd;
 } 

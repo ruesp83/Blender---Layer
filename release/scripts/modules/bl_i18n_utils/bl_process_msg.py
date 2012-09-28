@@ -16,7 +16,7 @@
 #
 # ***** END GPL LICENSE BLOCK *****
 
-# <pep8-80 compliant>
+# <pep8 compliant>
 
 # Write out messages.txt from Blender.
 # XXX: This script is meant to be used from inside Blender!
@@ -42,6 +42,7 @@ CONTEXT_DEFAULT = settings.CONTEXT_DEFAULT
 UNDOC_OPS_STR = settings.UNDOC_OPS_STR
 
 NC_ALLOWED = settings.WARN_MSGID_NOT_CAPITALIZED_ALLOWED
+
 
 def check(check_ctxt, messages, key, msgsrc):
     if check_ctxt is None:
@@ -78,7 +79,8 @@ def dump_messages_rna(messages, check_ctxt):
     import bpy
 
     def classBlackList():
-        blacklist_rna_class = [# core classes
+        blacklist_rna_class = [
+                               # core classes
                                "Context", "Event", "Function", "UILayout",
                                "BlendData",
                                # registerable classes
@@ -270,7 +272,6 @@ def dump_messages_rna(messages, check_ctxt):
     walk_keymap_hierarchy(KM_HIERARCHY, "KM_HIERARCHY")
 
 
-
 def dump_messages_pytext(messages, check_ctxt):
     """ dumps text inlined in the python user interface: eg.
 
@@ -291,7 +292,7 @@ def dump_messages_pytext(messages, check_ctxt):
 
     # Break recursive nodes look up on some kind of nodes.
     # E.g. we don’t want to get strings inside subscripts (blah["foo"])!
-    stopper_nodes = {ast.Subscript,}
+    stopper_nodes = {ast.Subscript, }
 
     for func_id, func in bpy.types.UILayout.bl_rna.functions.items():
         # check it has a 'text' argument
