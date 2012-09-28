@@ -1745,6 +1745,24 @@ static void rna_def_userdef_theme_space_image(BlenderRNA *brna)
 	RNA_def_property_array(prop, 4);
 	RNA_def_property_ui_text(prop, "Stitch preview active island", "");
 	RNA_def_property_update(prop, 0, "rna_userdef_update");
+
+	prop= RNA_def_property(srna, "show_boundary_layer", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "show_boundary_layer", TH_IMAGE_LAYER_BOUNDARY);
+	RNA_def_property_ui_text(prop, "Show Layer Boundary", "When enabled, the layer boundary is visible by default");
+	RNA_def_property_update(prop, 0, "rna_userdef_update");
+
+	prop = RNA_def_property(srna, "col1_boundary_layer", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_float_sdna(prop, NULL, "col1_boundary_layer");
+	RNA_def_property_array(prop, 4);
+	RNA_def_property_ui_text(prop, "Color 1 Boundary Layer", "");
+	RNA_def_property_update(prop, 0, "rna_userdef_update");
+
+	prop = RNA_def_property(srna, "col2_boundary_layer", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_float_sdna(prop, NULL, "col2_boundary_layer");
+	RNA_def_property_array(prop, 4);
+	RNA_def_property_ui_text(prop, "Color 2 Boundary Layer", "");
+	RNA_def_property_update(prop, 0, "rna_userdef_update");
+
 }
 
 static void rna_def_userdef_theme_space_seq(BlenderRNA *brna)

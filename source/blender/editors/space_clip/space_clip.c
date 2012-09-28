@@ -49,7 +49,7 @@
 #include "BKE_movieclip.h"
 #include "BKE_tracking.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "ED_mask.h"
 #include "ED_space_api.h"

@@ -33,7 +33,7 @@
 extern "C" {
 	#include "MEM_guardedalloc.h"
 	#include "IMB_imbuf.h"
-	#include "IMB_imbuf_types.h"
+	#include "DNA_imbuf_types.h"
 	#include "IMB_colormanagement.h"
 }
 
@@ -60,7 +60,7 @@ void ViewerBaseOperation::initExecution()
 void ViewerBaseOperation::initImage()
 {
 	Image *anImage = this->m_image;
-	ImBuf *ibuf = BKE_image_acquire_ibuf(anImage, this->m_imageUser, &this->m_lock);
+	ImBuf *ibuf = BKE_image_acquire_ibuf(anImage, this->m_imageUser, &this->m_lock, IMA_IBUF_IMA);
 
 	if (!ibuf) return;
 	BLI_lock_thread(LOCK_DRAW_IMAGE);

@@ -51,7 +51,7 @@
 #include "BKE_screen.h"
 #include "BKE_global.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "UI_interface.h"

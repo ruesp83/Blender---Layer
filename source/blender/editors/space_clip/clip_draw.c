@@ -43,7 +43,7 @@
 #include "BKE_mask.h"
 
 #include "IMB_colormanagement.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "BLI_utildefines.h"

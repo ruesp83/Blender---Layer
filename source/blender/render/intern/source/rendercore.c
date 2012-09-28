@@ -60,7 +60,7 @@
 #include "BKE_node.h"
 #include "BKE_texture.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include "IMB_colormanagement.h"
 
@@ -2464,7 +2464,7 @@ static int get_next_bake_face(BakeShade *bs)
 
 				if (tface && tface->tpage) {
 					Image *ima= tface->tpage;
-					ImBuf *ibuf= BKE_image_get_ibuf(ima, NULL);
+					ImBuf *ibuf= BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 					const float vec_alpha[4]= {0.0f, 0.0f, 0.0f, 0.0f};
 					const float vec_solid[4]= {0.0f, 0.0f, 0.0f, 1.0f};
 					
@@ -2528,7 +2528,7 @@ static void shade_tface(BakeShade *bs)
 	/* check valid zspan */
 	if (ima!=bs->ima) {
 		bs->ima= ima;
-		bs->ibuf= BKE_image_get_ibuf(ima, NULL);
+		bs->ibuf= BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 		/* note, these calls only free/fill contents of zspan struct, not zspan itself */
 		zbuf_free_span(bs->zspan);
 		zbuf_alloc_span(bs->zspan, bs->ibuf->x, bs->ibuf->y, R.clipcrop);
@@ -2643,7 +2643,7 @@ int RE_bake_shade_all_selected(Render *re, int type, Object *actob, short *do_up
 	
 	/* baker uses this flag to detect if image was initialized */
 	for (ima= G.main->image.first; ima; ima= ima->id.next) {
-		ImBuf *ibuf= BKE_image_get_ibuf(ima, NULL);
+		ImBuf *ibuf= BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 		ima->id.flag |= LIB_DOIT;
 		ima->flag&= ~IMA_USED_FOR_RENDER;
 		if (ibuf) {
@@ -2701,7 +2701,7 @@ int RE_bake_shade_all_selected(Render *re, int type, Object *actob, short *do_up
 	/* filter and refresh images */
 	for (ima= G.main->image.first; ima; ima= ima->id.next) {
 		if ((ima->id.flag & LIB_DOIT)==0) {
-			ImBuf *ibuf= BKE_image_get_ibuf(ima, NULL);
+			ImBuf *ibuf= BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 
 			if (ima->flag & IMA_USED_FOR_RENDER)
 				result= BAKE_RESULT_FEEDBACK_LOOP;

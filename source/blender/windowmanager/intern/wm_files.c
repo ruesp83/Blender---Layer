@@ -91,7 +91,7 @@
 #include "RNA_access.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_thumbs.h"
 
 #include "ED_datafiles.h"

@@ -55,7 +55,7 @@
 #include "RE_pipeline.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "ED_gpencil.h"
 #include "ED_image.h"
@@ -365,7 +365,7 @@ static void image_multi_cb(bContext *C, void *rr_v, void *iuser_v)
 {
 	ImageUser *iuser = iuser_v;
 
-	BKE_image_multilayer_index(rr_v, iuser); 
+	BKE_render_multilayer_index(rr_v, iuser); 
 	WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
 }
 static void image_multi_inclay_cb(bContext *C, void *rr_v, void *iuser_v) 
@@ -379,7 +379,7 @@ static void image_multi_inclay_cb(bContext *C, void *rr_v, void *iuser_v)
 
 	if (iuser->layer < tot - 1) {
 		iuser->layer++;
-		BKE_image_multilayer_index(rr, iuser); 
+		BKE_render_multilayer_index(rr, iuser); 
 		WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
 	}
 }
@@ -389,7 +389,7 @@ static void image_multi_declay_cb(bContext *C, void *rr_v, void *iuser_v)
 
 	if (iuser->layer > 0) {
 		iuser->layer--;
-		BKE_image_multilayer_index(rr_v, iuser); 
+		BKE_render_multilayer_index(rr_v, iuser); 
 		WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
 	}
 }
@@ -407,7 +407,7 @@ static void image_multi_incpass_cb(bContext *C, void *rr_v, void *iuser_v)
 
 		if (iuser->pass < tot - 1) {
 			iuser->pass++;
-			BKE_image_multilayer_index(rr, iuser); 
+			BKE_render_multilayer_index(rr, iuser); 
 			WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
 		}
 	}
@@ -418,7 +418,7 @@ static void image_multi_decpass_cb(bContext *C, void *rr_v, void *iuser_v)
 
 	if (iuser->pass > 0) {
 		iuser->pass--;
-		BKE_image_multilayer_index(rr_v, iuser); 
+		BKE_render_multilayer_index(rr_v, iuser); 
 		WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
 	}
 }
@@ -591,7 +591,7 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 		uiBlockSetNFunc(block, rna_update_cb, MEM_dupallocN(cb), NULL);
 
 		if (ima->source == IMA_SRC_VIEWER) {
-			ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock);
+			ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock, IMA_IBUF_IMA);
 			image_info(scene, iuser, ima, ibuf, str);
 			BKE_image_release_ibuf(ima, lock);
 
@@ -624,8 +624,10 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 
 				/* use BKE_image_acquire_renderresult  so we get the correct slot in the menu */
 				rr = BKE_image_acquire_renderresult(scene, ima);
+				printf("1\n");
 				uiblock_layer_pass_arrow_buttons(layout, rr, iuser, &ima->render_slot);
 				BKE_image_release_renderresult(scene, ima);
+				printf("2\n");
 			}
 		}
 		else {
@@ -661,7 +663,7 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 			}
 			else if (ima->source != IMA_SRC_GENERATED) {
 				if (compact == 0) {
-					ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock);
+					ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock, IMA_IBUF_IMA);
 					image_info(scene, iuser, ima, ibuf, str);
 					BKE_image_release_ibuf(ima, lock);
 					uiItemL(layout, str, ICON_NONE);

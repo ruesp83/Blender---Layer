@@ -58,6 +58,7 @@ set(SRC
 	intern/metadata.c
 	intern/module.c
 	intern/moviecache.c
+	intern/offset.c
 	intern/png.c
 	intern/readimage.c
 	intern/rectop.c
@@ -71,7 +72,7 @@ set(SRC
 
 	IMB_colormanagement.h
 	IMB_imbuf.h
-	IMB_imbuf_types.h
+	# IMB_imbuf_types.h
 	IMB_moviecache.h
 	IMB_thumbs.h
 	intern/IMB_allocimbuf.h

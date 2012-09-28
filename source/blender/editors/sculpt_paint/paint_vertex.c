@@ -48,7 +48,7 @@
 #include "BLI_ghash.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "DNA_armature_types.h"
 #include "DNA_mesh_types.h"

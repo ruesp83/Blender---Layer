@@ -86,7 +86,7 @@
 #endif /* _WIN32 || __APPLE__ */
 #endif /* WITH_QUICKTIME */
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "IMB_allocimbuf.h"

@@ -37,7 +37,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "DNA_scene_types.h"
 #include "DNA_mask_types.h"

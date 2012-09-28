@@ -29,9 +29,11 @@
  *  \brief Functions to paint images in 2D and 3D.
  */
 
+#include <stddef.h>
 #include <float.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 
 #include "MEM_guardedalloc.h"
@@ -51,7 +53,7 @@
 #include "PIL_time.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "DNA_brush_types.h"
 #include "DNA_camera_types.h"
@@ -60,15 +62,18 @@
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_screen_types.h"
 #include "DNA_texture_types.h"
 
 #include "BKE_camera.h"
+#include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
 #include "BKE_DerivedMesh.h"
 #include "BKE_idprop.h"
 #include "BKE_brush.h"
 #include "BKE_image.h"
+#include "BKE_layer.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_mesh.h"
@@ -79,6 +84,7 @@
 #include "BKE_scene.h"
 #include "BKE_global.h"
 #include "BKE_deform.h"
+#include "BKE_screen.h"
 
 #include "BKE_tessmesh.h"
 
@@ -90,6 +96,7 @@
 #include "ED_image.h"
 #include "ED_screen.h"
 #include "ED_sculpt.h"
+#include "ED_space_api.h"
 #include "ED_uvedit.h"
 #include "ED_view3d.h"
 #include "ED_mesh.h"
@@ -480,7 +487,7 @@ static void image_undo_restore(bContext *C, ListBase *lb)
 			ima = BLI_findstring(&bmain->image, tile->idname, offsetof(ID, name));
 		}
 
-		ibuf = BKE_image_get_ibuf(ima, NULL);
+		ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_LAYER);
 
 		if (ima && ibuf && strcmp(tile->ibufname, ibuf->name) != 0) {
 			/* current ImBuf filename was changed, probably current frame
@@ -1378,7 +1385,7 @@ static float project_paint_uvpixel_mask(
 		Image *other_tpage = project_paint_face_image(ps, ps->dm_mtface_stencil, face_index);
 		const MTFace *tf_other = ps->dm_mtface_stencil + face_index;
 		
-		if (other_tpage && (ibuf_other = BKE_image_get_ibuf(other_tpage, NULL))) {
+		if (other_tpage && (ibuf_other = BKE_image_get_ibuf(other_tpage, NULL, IMA_IBUF_IMA))) {
 			/* BKE_image_get_ibuf - TODO - this may be slow */
 			unsigned char rgba_ub[4];
 			float rgba_f[4];
@@ -1559,7 +1566,7 @@ static ProjPixel *project_paint_uvpixel_init(
 			Image *other_tpage = project_paint_face_image(ps, ps->dm_mtface_clone, face_index);
 			const MTFace *tf_other = ps->dm_mtface_clone + face_index;
 			
-			if (other_tpage && (ibuf_other = BKE_image_get_ibuf(other_tpage, NULL))) {
+			if (other_tpage && (ibuf_other = BKE_image_get_ibuf(other_tpage, NULL, IMA_IBUF_IMA))) {
 				/* BKE_image_get_ibuf - TODO - this may be slow */
 				
 				if (ibuf->rect_float) {
@@ -3388,7 +3395,7 @@ static void project_paint_begin(ProjPaintState *ps)
 				
 				image_index = BLI_linklist_index(image_LinkList, tpage);
 				
-				if (image_index == -1 && BKE_image_get_ibuf(tpage, NULL)) { /* MemArena dosnt have an append func */
+				if (image_index == -1 && BKE_image_get_ibuf(tpage, NULL, IMA_IBUF_IMA)) { /* MemArena dosnt have an append func */
 					BLI_linklist_append(&image_LinkList, tpage);
 					image_index = ps->image_tot;
 					ps->image_tot++;
@@ -3411,7 +3418,7 @@ static void project_paint_begin(ProjPaintState *ps)
 	for (node = image_LinkList, i = 0; node; node = node->next, i++, projIma++) {
 		projIma->ima = node->link;
 		projIma->touch = 0;
-		projIma->ibuf = BKE_image_get_ibuf(projIma->ima, NULL);
+		projIma->ibuf = BKE_image_get_ibuf(projIma->ima, NULL, IMA_IBUF_IMA);
 		projIma->partRedrawRect =  BLI_memarena_alloc(arena, sizeof(ImagePaintPartialRedraw) * PROJ_BOUNDBOX_SQUARED);
 		memset(projIma->partRedrawRect, 0, sizeof(ImagePaintPartialRedraw) * PROJ_BOUNDBOX_SQUARED);
 	}
@@ -4545,7 +4552,7 @@ static int texpaint_break_stroke(float *prevuv, float *fwuv, float *bkuv, float 
 
 static int imapaint_canvas_set(ImagePaintState *s, Image *ima)
 {
-	ImBuf *ibuf = BKE_image_get_ibuf(ima, s->sima ? &s->sima->iuser : NULL);
+	ImBuf *ibuf = BKE_image_get_ibuf(ima, s->sima ? &s->sima->iuser : NULL, IMA_IBUF_LAYER);
 	
 	/* verify that we can paint and set canvas */
 	if (ima == NULL) {
@@ -4568,7 +4575,7 @@ static int imapaint_canvas_set(ImagePaintState *s, Image *ima)
 	/* set clone canvas */
 	if (s->tool == PAINT_TOOL_CLONE) {
 		ima = s->brush->clone.image;
-		ibuf = BKE_image_get_ibuf(ima, s->sima ? &s->sima->iuser : NULL);
+		ibuf = BKE_image_get_ibuf(ima, s->sima ? &s->sima->iuser : NULL, IMA_IBUF_LAYER);
 		
 		if (!ima || !ibuf || !(ibuf->rect || ibuf->rect_float))
 			return 0;
@@ -4592,7 +4599,7 @@ static void imapaint_canvas_free(ImagePaintState *UNUSED(s))
 
 static int imapaint_paint_sub_stroke(ImagePaintState *s, BrushPainter *painter, Image *image, short texpaint, float *uv, double time, int update, float pressure)
 {
-	ImBuf *ibuf = BKE_image_get_ibuf(image, s->sima ? &s->sima->iuser : NULL);
+	ImBuf *ibuf = BKE_image_get_ibuf(image, s->sima ? &s->sima->iuser : NULL, IMA_IBUF_LAYER);
 	float pos[2];
 	int is_data;
 
@@ -4632,7 +4639,7 @@ static int imapaint_paint_stroke(ViewContext *vc, ImagePaintState *s, BrushPaint
 			ImBuf *ibuf;
 			
 			newimage = imapaint_face_image(s, newfaceindex);
-			ibuf = BKE_image_get_ibuf(newimage, s->sima ? &s->sima->iuser : NULL);
+			ibuf = BKE_image_get_ibuf(newimage, s->sima ? &s->sima->iuser : NULL, IMA_IBUF_LAYER);
 
 			if (ibuf && ibuf->rect)
 				imapaint_pick_uv(s->scene, s->ob, newfaceindex, mval, newuv);
@@ -4720,6 +4727,7 @@ static Brush *uv_sculpt_brush(bContext *C)
 static int image_paint_poll(bContext *C)
 {
 	Object *obact = CTX_data_active_object(C);
+	wmWindow *win= CTX_wm_window(C);
 
 	if (!image_paint_brush(C))
 		return 0;
@@ -4733,10 +4741,13 @@ static int image_paint_poll(bContext *C)
 		if (sima) {
 			ARegion *ar = CTX_wm_region(C);
 
-			if ((sima->mode == SI_MODE_PAINT) && ar->regiontype == RGN_TYPE_WINDOW) {
+			if ((sima->mode == SI_MODE_PAINT) && (ar->regiontype==RGN_TYPE_WINDOW) && (!(imalayer_is_locked(sima->image) & IMA_LAYER_LOCK))) {
+				if ((!(win->modalcursor & BC_NSEW_SCROLLCURSOR)) || (!(win->modalcursor & BC_EYEDROPPER_CURSOR)))
+					WM_cursor_modal(win, BC_PAINTBRUSHCURSOR);
 				return 1;
 			}
 		}
+		WM_cursor_restore(CTX_wm_window(C));
 	}
 
 	return 0;
@@ -5502,23 +5513,170 @@ void PAINT_OT_grab_clone(wmOperatorType *ot)
 
 /******************** sample color operator ********************/
 
+typedef struct SampleColorInfo {
+	ARegionType *art;
+	void *draw_handle;
+	int x, y;
+	int channels;
+
+	unsigned char col[4];
+	float colf[4];
+	int z;
+	float zf;
+
+	unsigned char *colp;
+	float *colfp;
+	int *zp;
+	float *zfp;
+
+	int draw;
+	int color_manage;
+	int use_default_view;
+} SampleColorInfo;
+	
+
+
+static void sample_color_draw(const bContext *C, ARegion *ar, void *arg_info)
+{
+	SampleColorInfo *info= arg_info;
+	if(info->draw) {
+		Scene *scene = CTX_data_scene(C);
+		/* no color management needed for images (color_manage=0) */
+		ED_image_draw_info(scene, ar, info->color_manage, 0, info->channels, info->x, info->y, info->colp, info->colfp, info->zp, info->zfp, 2);
+	}
+}
+
 static int sample_color_exec(bContext *C, wmOperator *op)
 {
+	SpaceImage *sima = CTX_wm_space_image(C);
 	Brush *brush = image_paint_brush(C);
 	ARegion *ar = CTX_wm_region(C);
+	//wmWindow *win= CTX_wm_window(C);
+	void *lock;
+	ImBuf *ibuf= ED_space_image_acquire_buffer(sima, &lock);
+	SampleColorInfo *info= op->customdata;
 	int location[2];
+	float fx, fy;
 
+	if(ibuf == NULL) {
+		ED_space_image_release_buffer(sima, lock);
+		return OPERATOR_CANCELLED;
+	}
+
+	//WM_cursor_modal(win, BC_EYEDROPPER_CURSOR);
 	RNA_int_get_array(op->ptr, "location", location);
 	paint_sample_color(C, ar, location[0], location[1]);
+
+
+	UI_view2d_region_to_view(&ar->v2d, location[0], location[1], &fx, &fy);
+
+	if(fx>=0.0f && fy>=0.0f && fx<1.0f && fy<1.0f) {
+		float *fp;
+		unsigned char *cp;
+		int x= (int)(fx*ibuf->x), y= (int)(fy*ibuf->y);
+
+		CLAMP(x, 0, ibuf->x-1);
+		CLAMP(y, 0, ibuf->y-1);
+
+		info->x= x;
+		info->y= y;
+		info->draw= 1;
+		info->channels= ibuf->channels;
+
+		info->colp= NULL;
+		info->colfp= NULL;
+		info->zp= NULL;
+		info->zfp= NULL;
+		
+		if(ibuf->rect) {
+			cp= (unsigned char *)(ibuf->rect + y*ibuf->x + x);
+
+			info->col[0]= cp[0];
+			info->col[1]= cp[1];
+			info->col[2]= cp[2];
+			info->col[3]= cp[3];
+			info->colp= info->col;
+
+			info->colf[0]= (float)cp[0]/255.0f;
+			info->colf[1]= (float)cp[1]/255.0f;
+			info->colf[2]= (float)cp[2]/255.0f;
+			info->colf[3]= (float)cp[3]/255.0f;
+			info->colfp= info->colf;
+		}
+		if(ibuf->rect_float) {
+			fp= (ibuf->rect_float + (ibuf->channels)*(y*ibuf->x + x));
+
+			info->colf[0]= fp[0];
+			info->colf[1]= fp[1];
+			info->colf[2]= fp[2];
+			info->colf[3]= fp[3];
+			info->colfp= info->colf;
+		}
+
+		if(ibuf->zbuf) {
+			info->z= ibuf->zbuf[y*ibuf->x + x];
+			info->zp= &info->z;
+		}
+		if(ibuf->zbuf_float) {
+			info->zf= ibuf->zbuf_float[y*ibuf->x + x];
+			info->zfp= &info->zf;
+		}
+		
+		if(sima->cumap && ibuf->channels==4) {
+			/* we reuse this callback for set curves point operators */
+			if(RNA_struct_find_property(op->ptr, "point")) {
+				int point= RNA_enum_get(op->ptr, "point");
+
+				if(point == 1) {
+					curvemapping_set_black_white(sima->cumap, NULL, info->colfp);
+					if(ibuf->rect_float)
+						curvemapping_do_ibuf(sima->cumap, ibuf);
+				}
+				else if(point == 0) {
+					curvemapping_set_black_white(sima->cumap, info->colfp, NULL);
+					if(ibuf->rect_float)
+						curvemapping_do_ibuf(sima->cumap, ibuf);
+				}
+			}
+		}
+	}
+	else
+		info->draw= 0;
+
+	ED_space_image_release_buffer(sima, lock);
+	ED_area_tag_redraw(CTX_wm_area(C));
+
 
 	WM_event_add_notifier(C, NC_BRUSH | NA_EDITED, brush);
 	
 	return OPERATOR_FINISHED;
 }
 
+static void sample_color_exit(bContext *C, wmOperator *op)
+{
+	SampleColorInfo *info= op->customdata;
+
+	ED_region_draw_cb_exit(info->art, info->draw_handle);
+	ED_area_tag_redraw(CTX_wm_area(C));
+	MEM_freeN(info);
+}
+
 static int sample_color_invoke(bContext *C, wmOperator *op, wmEvent *event)
 {
+	SpaceImage *sima= CTX_wm_space_image(C);
+	ARegion *ar= CTX_wm_region(C);
+	SampleColorInfo *info;
+
+	if(!ED_space_image_has_buffer(sima))
+		return OPERATOR_CANCELLED;
+
+	info= MEM_callocN(sizeof(SampleColorInfo), "ImageSampleInfo");
+	info->art= ar->type;
+	info->draw_handle = ED_region_draw_cb_activate(ar->type, sample_color_draw, info, REGION_DRAW_POST_PIXEL);
+	op->customdata= info;
+
 	RNA_int_set_array(op->ptr, "location", event->mval);
+
 	sample_color_exec(C, op);
 
 	WM_event_add_modal_handler(C, op);
@@ -5531,6 +5689,7 @@ static int sample_color_modal(bContext *C, wmOperator *op, wmEvent *event)
 	switch (event->type) {
 		case LEFTMOUSE:
 		case RIGHTMOUSE: // XXX hardcoded
+			sample_color_exit(C, op);
 			return OPERATOR_FINISHED;
 		case MOUSEMOVE:
 			RNA_int_set_array(op->ptr, "location", event->mval);
@@ -5767,7 +5926,7 @@ static int texture_paint_camera_project_exec(bContext *C, wmOperator *op)
 	}
 
 	ps.reproject_image = image;
-	ps.reproject_ibuf = BKE_image_get_ibuf(image, NULL);
+	ps.reproject_ibuf = BKE_image_get_ibuf(image, NULL, IMA_IBUF_IMA);
 
 	if (ps.reproject_ibuf == NULL || ps.reproject_ibuf->rect == NULL) {
 		BKE_report(op->reports, RPT_ERROR, "Image data could not be found");

@@ -7,7 +7,7 @@
 #include "DNA_texture_types.h"
 #include "DNA_image_types.h"
 #include "DNA_mesh_types.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 MTex* getImageFromMaterial(Material *mat, int index)

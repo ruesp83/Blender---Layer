@@ -45,11 +45,11 @@
 
 #include "WM_types.h"
 
-#include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #ifdef RNA_RUNTIME
 
+#include "DNA_imbuf_types.h"
 #include "DNA_mask_types.h"
 #include "DNA_movieclip_types.h"
 

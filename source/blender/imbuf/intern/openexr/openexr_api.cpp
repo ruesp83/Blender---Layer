@@ -59,7 +59,7 @@ _CRTIMP void __cdecl _invalid_parameter_noinfo(void)
 #include "BLI_math_color.h"
 #include "BLI_threads.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include "IMB_allocimbuf.h"
 #include "IMB_metadata.h"

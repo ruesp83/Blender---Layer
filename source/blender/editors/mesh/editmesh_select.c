@@ -45,7 +45,7 @@
 #include "BKE_paint.h"
 #include "BKE_tessmesh.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "WM_api.h"

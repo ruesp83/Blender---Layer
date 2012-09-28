@@ -44,7 +44,7 @@
 #include "BLI_threads.h"
 #include "BLI_listbase.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include <math.h>
 
@@ -143,7 +143,7 @@ void bicubic_interpolation_color(struct ImBuf *in, unsigned char *outI, float *o
 	b = v - j;
 
 	outR = outG = outB = outA = 0.0f;
-	
+
 /* Optimized and not so easy to read */
 	
 	/* avoid calling multiple times */
@@ -163,7 +163,6 @@ void bicubic_interpolation_color(struct ImBuf *in, unsigned char *outI, float *o
 			/* w = P(n-a) * P(b-m); */
 			/* except that would call P() 16 times per pixel therefor pow() 64 times, better precalc these */
 			w = wx * wy[m + 1];
-
 			if (outF) {
 				dataF = in->rect_float + in->x * y1 * 4 + 4 * x1;
 				outR += dataF[0] * w;
@@ -180,7 +179,6 @@ void bicubic_interpolation_color(struct ImBuf *in, unsigned char *outI, float *o
 			}
 		}
 	}
-
 /* Done with optimized part */
 	
 #if 0 
@@ -208,7 +206,6 @@ void bicubic_interpolation_color(struct ImBuf *in, unsigned char *outI, float *o
 		}
 	}
 #endif
-	
 	if (outI) {
 		outI[0] = (int)outR;
 		outI[1] = (int)outG;

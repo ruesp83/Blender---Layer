@@ -52,6 +52,8 @@
 /* allow readfile to use deprecated functionality */
 #define DNA_DEPRECATED_ALLOW
 
+#include "DNA_imbuf_types.h"
+
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
 #include "DNA_actuator_types.h"
@@ -66,6 +68,7 @@
 #include "DNA_genfile.h"
 #include "DNA_group_types.h"
 #include "DNA_gpencil_types.h"
+//#include "DNA_image_types.h"
 #include "DNA_ipo_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
@@ -1715,6 +1718,29 @@ static PreviewImage *direct_link_preview_image(FileData *fd, PreviewImage *old_p
 	return prv;
 }
 
+/* ************ READ IMBUF *************** */
+
+static ImBuf *direct_link_ibufs(FileData *fd, ImBuf *ibuf)
+{
+	//ImBuf *imbuf= newdataadr(fd, imbuf_old);
+
+	if (ibuf) {
+		/*int i;
+		for (i=0; i < ibuf->x+ibuf->y; ++i) {
+			if (ibuf->rect[i]) {
+				ibuf->rect[i] = newdataadr(fd, ibuf->rect[i]);
+			}
+		}*/
+		if (ibuf->rect_float)
+			ibuf->rect_float = newdataadr(fd, ibuf->rect_float);
+		if (ibuf->rect)
+			ibuf->rect = newdataadr(fd, ibuf->rect);
+	}
+
+	return ibuf;
+}
+
+
 /* ************ READ ANIMATION STUFF ***************** */
 
 /* Legacy Data Support (for Version Patching) ----------------------------- */
@@ -2989,8 +3015,29 @@ static void link_ibuf_list(FileData *fd, ListBase *lb)
 	lb->last = prev;
 }
 
+static ImageLayer *link_ibuf(FileData *fd, ImageLayer *list)
+{
+	ImageLayer *iml;
+	//Link *ln, *prev;
+	ImBuf *ibuf, *ib;
+	
+	for (iml = list; iml; iml = iml->next) 
+		link_list(fd, &iml->ibufs);
+
+	for (iml = list; iml; iml = iml->next) {
+		ibuf = (ImBuf *)iml->ibufs.first;
+		for (ib = ibuf; ib; ib = ib->next) {
+			ib->rect_float = newdataadr(fd, ib->rect_float);
+			ib->rect = newdataadr(fd, ib->rect);
+		}
+	}
+	return list;
+}
+
 static void direct_link_image(FileData *fd, Image *ima)
 {
+	ImageLayer *iml;
+	ImBuf * ibuf;
 	/* for undo system, pointers could be restored */
 	if (fd->imamap)
 		link_ibuf_list(fd, &ima->ibufs);
@@ -3020,6 +3067,19 @@ static void direct_link_image(FileData *fd, Image *ima)
 	}
 	
 	ima->packedfile = direct_link_packedfile(fd, ima->packedfile);
+
+	link_list(fd, &ima->imlayers);
+
+	for (iml = (ImageLayer *)ima->imlayers.first; iml; iml = iml->next) 
+		link_list(fd, &iml->ibufs);
+
+	for (iml = (ImageLayer *)ima->imlayers.first; iml; iml = iml->next) {
+		for (ibuf = (ImBuf *)iml->ibufs.first; ibuf; ibuf = ibuf->next) {
+			ibuf->rect_float = newdataadr(fd, ibuf->rect_float);
+			ibuf->rect = newdataadr(fd, ibuf->rect);
+		}
+	}
+
 	ima->preview = direct_link_preview_image(fd, ima->preview);
 	ima->ok = 1;
 }

@@ -261,22 +261,22 @@ void sdrawtrifill(short x1, short y1, short x2, short y2)
 	glEnd();
 }
 
-void sdrawbox(short x1, short y1, short x2, short y2)
+void sdrawbox(int x1, int y1, int x2, int y2)
 {
-	short v[2];
+	int v[2];
 	
 	glBegin(GL_LINE_STRIP);
 	
 	v[0] = x1; v[1] = y1;
-	glVertex2sv(v);
+	glVertex2iv(v);
 	v[0] = x1; v[1] = y2;
-	glVertex2sv(v);
+	glVertex2iv(v);
 	v[0] = x2; v[1] = y2;
-	glVertex2sv(v);
+	glVertex2iv(v);
 	v[0] = x2; v[1] = y1;
-	glVertex2sv(v);
+	glVertex2iv(v);
 	v[0] = x1; v[1] = y1;
-	glVertex2sv(v);
+	glVertex2iv(v);
 	
 	glEnd();
 }

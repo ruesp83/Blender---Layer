@@ -34,6 +34,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
+#include "BKE_image.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -41,7 +42,7 @@
 
 #include "BLI_math.h"
 #include "imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "IMB_allocimbuf.h"
@@ -154,6 +155,37 @@ struct ImBuf *IMB_offset(struct ImBuf *ibuf, float x, float y, int half, int wra
 				}
 			}
 		}
+	}
+
+	IMB_freeImBuf(ibuf);
+	return ibuf_2;
+}
+
+struct ImBuf *IMB_size(struct ImBuf *ibuf, int width, int height, int off_x, int off_y, int centre, float default_color[4])
+{
+	struct ImBuf *ibuf_2;
+	int off_x_n = 0, off_y_n = 0;
+
+	if (ibuf == NULL) return NULL;
+
+	if (ibuf->rect_float)
+		ibuf_2 = IMB_allocImBuf(width, height, ibuf->planes, IB_rectfloat);
+	else
+		ibuf_2 = IMB_allocImBuf(width, height, ibuf->planes, IB_rect);
+
+	if (ibuf_2 == NULL) return NULL;
+
+	if ((width != 0) || (height != 0)) {
+		if ((width > ibuf->x) || (height > ibuf->y))
+			BKE_image_buf_fill_color((unsigned char*)ibuf_2->rect, ibuf_2->rect_float, width, height, default_color);
+	
+		if (centre) {
+			printf("1\n");
+			off_x = (width - ibuf->x) / 2;
+			off_y = (height - ibuf->y) / 2;
+		}
+
+		IMB_rectcpy(ibuf_2, ibuf, off_x, off_y, 0, 0, ibuf->x, ibuf->y);
 	}
 
 	IMB_freeImBuf(ibuf);

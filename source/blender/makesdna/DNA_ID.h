@@ -183,6 +183,7 @@ typedef struct PreviewImage {
 #define ID_MA		MAKE_ID2('M', 'A') /* Material */
 #define ID_TE		MAKE_ID2('T', 'E') /* Texture */
 #define ID_IM		MAKE_ID2('I', 'M') /* Image */
+//#define ID_IL		MAKE_ID2('I', 'L') /* ImageLayer */
 #define ID_LT		MAKE_ID2('L', 'T') /* Lattice */
 #define ID_LA		MAKE_ID2('L', 'A') /* Lamp */
 #define ID_CA		MAKE_ID2('C', 'A') /* Camera */

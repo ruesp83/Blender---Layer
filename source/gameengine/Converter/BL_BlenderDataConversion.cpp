@@ -142,7 +142,7 @@ extern "C" {
 #include "BKE_DerivedMesh.h"
 #include "BKE_material.h" /* give_current_material */
 #include "BKE_image.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 extern Material defmaterial;	/* material.c */
 }

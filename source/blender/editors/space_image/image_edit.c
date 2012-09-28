@@ -28,6 +28,7 @@
  *  \ingroup spimage
  */
 
+#include "DNA_imbuf_types.h"
 #include "DNA_mask_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -40,8 +41,6 @@
 #include "BKE_image.h"
 #include "BKE_main.h"
 #include "BKE_tessmesh.h"
-
-#include "IMB_imbuf_types.h"
 
 #include "ED_image.h"  /* own include */
 #include "ED_mesh.h"
@@ -115,7 +114,10 @@ ImBuf *ED_space_image_acquire_buffer(SpaceImage *sima, void **lock_r)
 			return BIF_render_spare_imbuf();
 		else
 #endif
-		ibuf = BKE_image_acquire_ibuf(sima->image, &sima->iuser, lock_r);
+		if (sima->mode == SI_MODE_PAINT)
+			ibuf = BKE_image_acquire_ibuf(sima->image, &sima->iuser, lock_r, IMA_IBUF_LAYER);
+		else 
+			ibuf = BKE_image_acquire_ibuf(sima->image, &sima->iuser, lock_r, IMA_IBUF_IMA);
 
 		if (ibuf && (ibuf->rect || ibuf->rect_float))
 			return ibuf;

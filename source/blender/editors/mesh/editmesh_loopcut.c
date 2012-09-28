@@ -67,7 +67,7 @@
 #include "BIF_gl.h"
 #include "BIF_glutil.h" /* for paint cursor */
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "ED_screen.h"
 #include "ED_space_api.h"
