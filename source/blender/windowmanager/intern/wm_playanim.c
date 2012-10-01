@@ -56,7 +56,7 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "BKE_blender.h"

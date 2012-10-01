@@ -57,7 +57,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "node_intern.h"  /* own include */
 
