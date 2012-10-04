@@ -569,7 +569,7 @@ if(UNIX AND NOT APPLE)
 		# lame, but until we have proper find module for ffmpeg
 		set(FFMPEG_INCLUDE_DIRS ${FFMPEG}/include)
 		if(EXISTS "${FFMPEG}/include/ffmpeg/")
-			set(FFMPEG_INCLUDE_DIRS "${FFMPEG_INCLUDE_DIRS} ${FFMPEG}/include/ffmpeg")
+			list(APPEND FFMPEG_INCLUDE_DIRS "${FFMPEG}/include/ffmpeg")
 		endif()
 		# end lameness
 
@@ -1648,12 +1648,13 @@ elseif(APPLE)
 
 	set(CMAKE_C_FLAGS_DEBUG "-fno-strict-aliasing -g")
 	set(CMAKE_CXX_FLAGS_DEBUG "-fno-strict-aliasing -g")
-	if(CMAKE_OSX_ARCHITECTURES MATCHES "i386")
-		set(CMAKE_CXX_FLAGS_RELEASE "-O2 -mdynamic-no-pic -ftree-vectorize -msse -msse2 -fvariable-expansion-in-unroller")
-		set(CMAKE_C_FLAGS_RELEASE "-O2 -mdynamic-no-pic -ftree-vectorize -msse -msse2 -fvariable-expansion-in-unroller")
-	elseif(CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
-		set(CMAKE_CXX_FLAGS_RELEASE "-O2 -mdynamic-no-pic -ftree-vectorize -msse -msse2 -msse3 -mssse3 -fvariable-expansion-in-unroller")
-		set(CMAKE_C_FLAGS_RELEASE "-O2 -mdynamic-no-pic -ftree-vectorize -msse -msse2 -msse3 -mssse3 -fvariable-expansion-in-unroller")
+	if(CMAKE_OSX_ARCHITECTURES MATCHES "x86_64" OR CMAKE_OSX_ARCHITECTURES MATCHES "i386")
+		set(CMAKE_CXX_FLAGS_RELEASE "-O2 -mdynamic-no-pic -msse -msse2 -msse3 -mssse3")
+		set(CMAKE_C_FLAGS_RELEASE "-O2 -mdynamic-no-pic  -msse -msse2 -msse3 -mssse3")
+		if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+			set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -ftree-vectorize  -fvariable-expansion-in-unroller")
+			set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -ftree-vectorize  -fvariable-expansion-in-unroller")
+		endif()
 	else()
 		set(CMAKE_C_FLAGS_RELEASE "-mdynamic-no-pic -fno-strict-aliasing")
 		set(CMAKE_CXX_FLAGS_RELEASE "-mdynamic-no-pic -fno-strict-aliasing")
@@ -1827,9 +1828,6 @@ if(CMAKE_COMPILER_IS_GNUCC)
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_MISSING_INCLUDE_DIRS -Wmissing-include-dirs)
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_NO_DIV_BY_ZERO -Wno-div-by-zero)
 
-	# # this causes too many warnings, disable
-	# ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_UNDEFINED -Wundef)
-
 	# disable because it gives warnings for printf() & friends.
 	# ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_DOUBLE_PROMOTION -Wdouble-promotion -Wno-error=double-promotion)
 
@@ -1840,14 +1838,17 @@ if(CMAKE_COMPILER_IS_GNUCC)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_ALL -Wall)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_INVALID_OFFSETOF -Wno-invalid-offsetof)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_SIGN_COMPARE -Wno-sign-compare)
-	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_MISSING_DECLARATIONS -Wmissing-declarations)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_LOGICAL_OP -Wlogical-op)
-	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_UNDEF -Wundef)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_UNINITIALIZED -Wuninitialized)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_INIT_SELF -Winit-self)  # needs -Wuninitialized
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_MISSING_INCLUDE_DIRS -Wmissing-include-dirs)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_DIV_BY_ZERO -Wno-div-by-zero)
-	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_UNDEFINED -Wundef)
+
+	# causes too many warnings
+	if(NOT APPLE)
+		ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_UNDEF -Wundef)
+		ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_MISSING_DECLARATIONS -Wmissing-declarations)
+	endif()
 
 	# flags to undo strict flags
 	ADD_CHECK_C_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS C_WARN_NO_DEPRECATED_DECLARATIONS -Wno-deprecated-declarations)
