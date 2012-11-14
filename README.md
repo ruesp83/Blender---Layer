@@ -11,11 +11,11 @@ Each phase addresses a particular aspect, such as: layer management, operations,
 Status Funding
 --------------
 Donors who have contributed to this project are listed here:[Funding][3]
-![Bar](http://ruesp83.files.wordpress.com/2012/06/striscia.png)
+![Bar](http://ruesp83.files.wordpress.com/2012/11/striscia.png)
 
 Phases
 ------
-Current Status: WIP Phase 2 70%
+Current Status: WIP Phase 3
 
 ### Phase 1:
     Stage    : Management
@@ -130,13 +130,13 @@ Current Status: WIP Phase 2 70%
 
 Video
 -----
-  - [Image Layer Phase 1][video]
+  - [Image Layer Phase 2][video]
 
 Contact
 -------
 Fabio Russo (ruesp83)
 
-- http://ruesp83.wordpress.com/
+- http://ruesp83.com/
 - https://github.com/ruesp83
 - https://twitter.com/ruesp83
 - https://www.facebook.com/ruesp83
@@ -152,4 +152,4 @@ See the COPYING file for more info.
 [1]: http://en.wikipedia.org/wiki/Layers_%28digital_image_editing%29
 [2]: http://wiki.blender.org/index.php?title=User:Kwk/Gsoc2010/ImageLayers
 [3]: http://ruesp83.wordpress.com/image-layer/funding/
-[video]: https://vimeo.com/40404889
+[video]: http://vimeo.com/50590714
