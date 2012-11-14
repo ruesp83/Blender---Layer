@@ -33,7 +33,7 @@
 extern "C" {
 	#include "MEM_guardedalloc.h"
 	#include "IMB_imbuf.h"
-	#include "DNA_imbuf_types.h"
+	#include "IMB_imbuf_types.h"
 	#include "IMB_colormanagement.h"
 }
 
@@ -60,7 +60,7 @@ void ViewerBaseOperation::initExecution()
 void ViewerBaseOperation::initImage()
 {
 	Image *anImage = this->m_image;
-	ImBuf *ibuf = BKE_image_acquire_ibuf(anImage, this->m_imageUser, &this->m_lock, IMA_IBUF_IMA);
+	ImBuf *ibuf = BKE_image_acquire_ibuf(anImage, this->m_imageUser, &this->m_lock);
 
 	if (!ibuf) return;
 	BLI_lock_thread(LOCK_DRAW_IMAGE);
@@ -79,8 +79,7 @@ void ViewerBaseOperation::initImage()
 		BLI_unlock_thread(LOCK_DRAW_IMAGE);
 	}
 
-	if (m_doDepthBuffer) 
-	{
+	if (m_doDepthBuffer) {
 		addzbuffloatImBuf(ibuf);
 	}
 	BLI_unlock_thread(LOCK_DRAW_IMAGE);
@@ -96,8 +95,7 @@ void ViewerBaseOperation::initImage()
 	 */
 	this->m_ibuf = ibuf;
 
-	if (m_doDepthBuffer)
-	{
+	if (m_doDepthBuffer) {
 		this->m_depthBuffer = ibuf->zbuf_float;
 	}
 
@@ -107,7 +105,7 @@ void ViewerBaseOperation:: updateImage(rcti *rect)
 {
 	IMB_partial_display_buffer_update(this->m_ibuf, this->m_outputBuffer, NULL, getWidth(), 0, 0,
 	                                  this->m_viewSettings, this->m_displaySettings,
-	                                  rect->xmin, rect->ymin, rect->xmax, rect->ymax);
+	                                  rect->xmin, rect->ymin, rect->xmax, rect->ymax, FALSE);
 
 	WM_main_add_notifier(NC_WINDOW | ND_DRAW, NULL);
 }

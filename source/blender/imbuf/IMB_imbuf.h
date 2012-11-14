@@ -103,7 +103,7 @@ struct ImBuf *IMB_ibImageFromMemory(unsigned char *mem, size_t size, int flags, 
  *
  * \attention Defined in readimage.c
  */
-struct ImBuf *IMB_testiffname(const char *filepath, int flags, char colorspace[IM_MAX_SPACE]);
+struct ImBuf *IMB_testiffname(const char *filepath, int flags);
 
 /**
  *
@@ -371,7 +371,7 @@ void IMB_interlace(struct ImBuf *ibuf);
 void IMB_rect_from_float(struct ImBuf *ibuf);
 /* Create char buffer for part of the image, color corrected if necessary,
  * Changed part will be stored in buffer. This is expected to be used for texture painting updates */
-void IMB_partial_rect_from_float(struct ImBuf *ibuf, float *buffer, int x, int y, int w, int h);
+void IMB_partial_rect_from_float(struct ImBuf *ibuf, float *buffer, int x, int y, int w, int h, int is_data);
 void IMB_float_from_rect(struct ImBuf *ibuf);
 void IMB_float_from_rect_simple(struct ImBuf *ibuf); /* no profile conversion */
 /* note, check that the conversion exists, only some are supported */
@@ -463,24 +463,10 @@ struct ImBuf *IMB_double_y(struct ImBuf *ibuf1);
  */
 void IMB_flipx(struct ImBuf *ibuf);
 void IMB_flipy(struct ImBuf *ibuf);
-struct ImBuf *IMB_rotation(struct ImBuf *ibuf, float x, float y, float angle, int filter_type, float default_color[4]);
 
 /* Premultiply alpha */
 
 void IMB_premultiply_alpha(struct ImBuf *ibuf);
-
-/**
- *
- * \attention Defined in offset.c
- */
-struct ImBuf *IMB_offset(struct ImBuf *ibuf, float x, float y, int half, int wrap, float default_color[4]);
-
-/**
- *
- * \attention Defined in offset.c
- */
-struct ImBuf *IMB_size(struct ImBuf *ibuf, int width, int height, int off_x, int off_y, int centre, float default_color[4]);
-
 
 /**
  *

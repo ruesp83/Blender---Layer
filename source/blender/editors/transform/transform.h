@@ -197,6 +197,7 @@ typedef struct TransDataSlideVert {
 
 	float edge_len;
 
+	/* add origvert.co to get the original locations */
 	float upvec[3], downvec[3];
 
 	int loop_nr;
@@ -322,7 +323,7 @@ typedef struct TransInfo {
 	float		auto_values[4];
 	float		axis[3];
 	float		axis_orig[3];	/* TransCon can change 'axis', store the original value here */
-
+	
 	void		*view;
 	struct bContext *context; /* Only valid (non null) during an operator called function. */
 	struct ScrArea	*sa;

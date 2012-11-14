@@ -59,7 +59,7 @@ static void node_composit_exec_viewer(void *data, bNode *node, bNodeStack **in, 
 		BKE_image_user_frame_calc(node->storage, rd->cfra, 0);
 
 		/* always returns for viewer image, but we check nevertheless */
-		ibuf = BKE_image_acquire_ibuf(ima, node->storage, &lock, IMA_IBUF_IMA);
+		ibuf = BKE_image_acquire_ibuf(ima, node->storage, &lock);
 		if (ibuf == NULL) {
 			printf("node_composit_exec_viewer error\n");
 			BKE_image_release_ibuf(ima, lock);
@@ -149,7 +149,7 @@ void register_node_type_cmp_viewer(bNodeTreeType *ttype)
 	node_type_exec(&ntype, node_composit_exec_viewer);
 #endif
 
-	node_type_internal_connect(&ntype, NULL);
+	node_type_internal_links(&ntype, NULL);
 
 	nodeRegisterType(ttype, &ntype);
 }

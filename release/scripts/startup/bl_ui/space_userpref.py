@@ -92,7 +92,7 @@ class USERPREF_HT_header(Header):
             layout.operator("wm.keyconfig_import")
             layout.operator("wm.keyconfig_export")
         elif userpref.active_section == 'ADDONS':
-            layout.operator("wm.addon_install")
+            layout.operator("wm.addon_install", icon="FILESEL")
             layout.menu("USERPREF_MT_addons_dev_guides")
         elif userpref.active_section == 'THEMES':
             layout.operator("ui.reset_default_theme")
@@ -248,7 +248,7 @@ class USERPREF_PT_interface(Panel):
         col.prop(view, "show_splash")
 
         if os.name == "nt":
-            col.prop(view, "quit_dialog")
+            col.prop(view, "use_quit_dialog")
 
 
 class USERPREF_PT_edit(Panel):
@@ -299,9 +299,9 @@ class USERPREF_PT_edit(Panel):
         col.label(text="Grease Pencil:")
         col.prop(edit, "grease_pencil_manhattan_distance", text="Manhattan Distance")
         col.prop(edit, "grease_pencil_euclidean_distance", text="Euclidean Distance")
-        #~ col.prop(edit, "use_grease_pencil_simplify_stroke", text="Simplify Stroke")
         col.prop(edit, "grease_pencil_eraser_radius", text="Eraser Radius")
         col.prop(edit, "use_grease_pencil_smooth_stroke", text="Smooth Stroke")
+        col.prop(edit, "use_grease_pencil_simplify_stroke", text="Simplify Stroke")
         col.separator()
         col.separator()
         col.separator()
@@ -324,6 +324,7 @@ class USERPREF_PT_edit(Panel):
         col.separator()
 
         col.prop(edit, "use_auto_keying", text="Auto Keyframing:")
+        col.prop(edit, "use_auto_keying_warning")
 
         sub = col.column()
 
@@ -421,7 +422,7 @@ class USERPREF_PT_system(Panel):
         col.separator()
         col.separator()
 
-        if hasattr(system, "compute_device"):
+        if hasattr(system, "compute_device_type"):
             col.label(text="Compute Device:")
             col.row().prop(system, "compute_device_type", expand=True)
             sub = col.row()
@@ -445,6 +446,7 @@ class USERPREF_PT_system(Panel):
         #~ col.prop(system, "use_antialiasing")
         col.label(text="Window Draw Method:")
         col.prop(system, "window_draw_method", text="")
+        col.prop(system, "multi_sample", text="")
         col.label(text="Text Draw Options:")
         col.prop(system, "use_text_antialiasing")
         col.label(text="Textures:")
@@ -727,6 +729,29 @@ class USERPREF_PT_theme(Panel):
             colsub = padding.column()
             colsub.row().prop(ui, "header")
 
+            col.separator()
+            col.separator()
+
+            ui = theme.user_interface
+            col.label("Axis Colors:")
+
+            row = col.row()
+
+            subsplit = row.split(percentage=0.95)
+
+            padding = subsplit.split(percentage=0.15)
+            colsub = padding.column()
+            colsub = padding.column()
+            colsub.row().prop(ui, "axis_x")
+            colsub.row().prop(ui, "axis_y")
+            colsub.row().prop(ui, "axis_z")
+            
+            subsplit = row.split(percentage=0.85)
+
+            padding = subsplit.split(percentage=0.15)
+            colsub = padding.column()
+            colsub = padding.column()
+            
             layout.separator()
             layout.separator()
         elif theme.theme_area == 'BONE_COLOR_SETS':
@@ -752,88 +777,6 @@ class USERPREF_PT_theme(Panel):
                 colsub = padding.column()
                 colsub = padding.column()
                 colsub.row().prop(ui, "show_colored_constraints")
-        elif theme.theme_area == 'IMAGE_EDITOR':
-            def theme_generic_recurse(data):
-                col.label(data.rna_type.name)
-                row = col.row()
-                subsplit = row.split(percentage=0.95)
-
-                padding1 = subsplit.split(percentage=0.15)
-                padding1.column()
-
-                subsplit = row.split(percentage=0.85)
-
-                padding2 = subsplit.split(percentage=0.15)
-                padding2.column()
-
-                colsub_pair = padding1.column(), padding2.column()
-
-                props_type = {}
-
-                for i, prop in enumerate(data.rna_type.properties):
-                    if prop.identifier == "rna_type":
-                        continue
-
-                    props_type.setdefault((prop.type, prop.subtype), []).append(prop)
-
-                for props_type, props_ls in sorted(props_type.items()):
-                    if props_type[0] == 'POINTER':
-                        for i, prop in enumerate(props_ls):
-                            theme_generic_recurse(getattr(data, prop.identifier))
-                    else:
-                        for i, prop in enumerate(props_ls):
-                            colsub_pair[i % 2].row().prop(data, prop.identifier)
-
-            data = getattr(theme, theme.theme_area.lower())
-            col = split.column()
-
-            ui = theme.image_editor
-            col.label(text="Theme Image Editor")
-
-            row = col.row()
-
-            subsplit = row.split(percentage=0.95)
-            padding = subsplit.split(percentage=0.15)
-            colsub = padding.column()
-            colsub = padding.column()
-            colsub.row().prop(ui, "editmesh_active")
-            colsub.row().prop(ui, "face_dot")
-            colsub.row().prop(ui, "scope_back")
-            colsub.row().prop(ui, "preview_stitch_edge")
-            colsub.row().prop(ui, "preview_stitch_stitchable")
-            colsub.row().prop(ui, "preview_stitch_vert")
-            colsub.row().prop(ui, "vertex_select")
-            colsub.row().prop(ui, "facedot_size")
-            colsub.row().prop(ui, "col1_boundary_layer")
-            colsub.row().prop(ui, "show_boundary_layer")
-
-            subsplit = row.split(percentage=0.85)
-            padding = subsplit.split(percentage=0.15)
-            colsub = padding.column()
-            colsub = padding.column()
-            colsub.row().prop(ui, "face")
-            colsub.row().prop(ui, "face_select")
-            colsub.row().prop(ui, "scope_back")
-            colsub.row().prop(ui, "preview_stitch_active")
-            colsub.row().prop(ui, "preview_stitch_face")
-            colsub.row().prop(ui, "preview_stitch_unstitchable")
-            colsub.row().prop(ui, "vertex")
-            colsub.row().prop(ui, "vertex_size")
-            colsub.row().prop(ui, "col2_boundary_layer")
-
-            props_type = {}
-
-            for i, prop in enumerate(data.rna_type.properties):
-                if prop.identifier == "rna_type":
-                    continue
-
-                props_type.setdefault((prop.type, prop.subtype), []).append(prop)
-
-            for props_type, props_ls in sorted(props_type.items()):
-                if props_type[0] == 'POINTER':
-                    for i, prop in enumerate(props_ls):
-                        theme_generic_recurse(getattr(data, prop.identifier))
-
         else:
             self._theme_generic(split, getattr(theme, theme.theme_area.lower()))
 
@@ -904,6 +847,7 @@ class USERPREF_PT_file(Panel):
         col.prop(paths, "use_filter_files")
         col.prop(paths, "show_hidden_files_datablocks")
         col.prop(paths, "hide_recent_locations")
+        col.prop(paths, "hide_system_bookmarks")
         col.prop(paths, "show_thumbnails")
 
         col.separator()
@@ -1121,6 +1065,9 @@ class USERPREF_PT_addons(Panel):
         userpref = context.user_preferences
         used_ext = {ext.module for ext in userpref.addons}
 
+        userpref_addons_folder = os.path.join(userpref.filepaths.script_directory, "addons")
+        scripts_addons_folder  = bpy.utils.user_resource('SCRIPTS', "addons")
+        
         # collect the categories that can be filtered on
         addons = [(mod, addon_utils.module_bl_info(mod)) for mod in addon_utils.modules(addon_utils.addons_fake_modules)]
 
@@ -1166,10 +1113,12 @@ class USERPREF_PT_addons(Panel):
                 continue
 
             # check if addon should be visible with current filters
-            if ((filter == "All") or
-                (filter == info["category"]) or
-                (filter == "Enabled" and is_enabled) or
-                (filter == "Disabled" and not is_enabled)):
+            if     ((filter == "All") or
+                    (filter == info["category"]) or
+                    (filter == "Enabled" and is_enabled) or
+                    (filter == "Disabled" and not is_enabled) or
+                    (filter == "User" and (mod.__file__.startswith((scripts_addons_folder, userpref_addons_folder))))
+                   ):
 
                 if search and search not in info["name"].lower():
                     if info["author"]:

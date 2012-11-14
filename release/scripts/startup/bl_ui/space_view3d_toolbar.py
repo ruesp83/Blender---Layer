@@ -464,56 +464,6 @@ class View3DPaintPanel(UnifiedPaintPanel):
     bl_region_type = 'TOOLS'
 
 
-class IMAGE_PT_image_layers(Panel, View3DPaintPanel):
-    bl_label = "Image Layers"
-
-    @classmethod
-    def poll(cls, context):
-        return (context.image_paint_object and context.tool_settings.image_paint)
-
-    def draw(self, context):
-        layout = self.layout
-        sima = context.space_data
-        ima = sima.image
-        layers = ima.image_layers
-
-        if ima:
-            row = layout.row()
-            row.template_list(ima, "image_layers", ima.image_layers, "active_image_layer_index", 
-                              rows=5, maxrows=5)
-
-            col = row.column(align=True)
-            col.operator("image.image_layer_add", text="", icon='NEW')
-
-            if layers.active_image_layer:
-                col.operator("image.image_layer_duplicate", text="", icon='GHOST')
-                sub = col.column()
-
-                if (layers.active_image_layer.type == 'BASE'):
-                    sub.enabled = False
-                else:
-                    sub.enabled = True
-                sub.operator("image.image_layer_remove", text="", icon='CANCEL').action = 'SELECTED'
-                col.operator("image.image_layer_move", text="", icon='TRIA_UP').type = 'UP'
-                col.operator("image.image_layer_move", text="", icon='TRIA_DOWN').type = 'DOWN'
-                split = layout.split(percentage=0.35)
-                col = split.column()
-                col.label(text="Name")
-                col.label(text="Opacity:")
-                col.label(text="Blend Modes:")
-                col = split.column()
-                col.prop(layers.active_image_layer, "name", text="")
-                sub = col.column()
-                if (((layers.active_image_layer.background != 'ALPHA') and 
-                    (layers.active_image_layer.type == 'BASE')) or
-                    (not layers.active_image_layer.visible)):
-                    sub.enabled = False
-                else:
-                    sub.enabled = True
-                sub.prop(layers.active_image_layer, "opacity", text="")
-                sub.prop(layers.active_image_layer, "blend_type", text="")
-
-
 class VIEW3D_PT_tools_brush(Panel, View3DPaintPanel):
     bl_label = "Brush"
 
@@ -570,8 +520,8 @@ class VIEW3D_PT_tools_brush(Panel, View3DPaintPanel):
             row = col.row(align=True)
 
             ups = toolsettings.unified_paint_settings
-            if ((ups.use_unified_size and ups.use_locked_size) or
-                ((not ups.use_unified_size) and brush.use_locked_size)):
+            if     ((ups.use_unified_size and ups.use_locked_size) or
+                    ((not ups.use_unified_size) and brush.use_locked_size)):
                 self.prop_unified_size(row, context, brush, "use_locked_size", icon='LOCKED')
                 self.prop_unified_size(row, context, brush, "unprojected_radius", slider=True, text="Radius")
             else:
@@ -683,7 +633,7 @@ class VIEW3D_PT_tools_brush(Panel, View3DPaintPanel):
 
         elif context.image_paint_object and brush:
             col = layout.column()
-            col.template_color(brush, "color", value_slider=True)
+            col.template_color_picker(brush, "color", value_slider=True)
             col.prop(brush, "color", text="")
 
             row = col.row(align=True)
@@ -731,7 +681,7 @@ class VIEW3D_PT_tools_brush(Panel, View3DPaintPanel):
         # Vertex Paint Mode #
         elif context.vertex_paint_object and brush:
             col = layout.column()
-            col.template_color(brush, "color", value_slider=True)
+            col.template_color_picker(brush, "color", value_slider=True)
             col.prop(brush, "color", text="")
 
             row = col.row(align=True)
@@ -757,8 +707,8 @@ class VIEW3D_PT_tools_brush_texture(Panel, View3DPaintPanel):
     @classmethod
     def poll(cls, context):
         settings = cls.paint_settings(context)
-        return (settings and settings.brush and (context.sculpt_object or
-                             context.image_paint_object))
+        return (settings and settings.brush and
+                (context.sculpt_object or context.image_paint_object))
 
     def draw(self, context):
         layout = self.layout
@@ -797,10 +747,12 @@ class VIEW3D_PT_tools_brush_stroke(Panel, View3DPaintPanel):
     @classmethod
     def poll(cls, context):
         settings = cls.paint_settings(context)
-        return (settings and settings.brush and (context.sculpt_object or
-                             context.vertex_paint_object or
-                             context.weight_paint_object or
-                             context.image_paint_object))
+        return (settings and
+                settings.brush and
+                (context.sculpt_object or
+                 context.vertex_paint_object or
+                 context.weight_paint_object or
+                 context.image_paint_object))
 
     def draw(self, context):
         layout = self.layout
@@ -926,6 +878,7 @@ class VIEW3D_PT_sculpt_options(Panel, View3DPaintPanel):
         layout.prop(sculpt, "show_low_resolution")
         layout.prop(sculpt, "show_brush")
         layout.prop(sculpt, "use_deform_only")
+        layout.prop(sculpt, "show_diffuse_color")
 
         layout.prop(sculpt, "input_samples")
 
@@ -1015,6 +968,8 @@ class VIEW3D_PT_tools_weightpaint(View3DPanel, Panel):
         col.operator("object.vertex_group_clean", text="Clean")
         col.operator("object.vertex_group_levels", text="Levels")
         col.operator("object.vertex_group_blend", text="Blend")
+        col.operator("object.vertex_group_transfer_weight", text="Transfer Weights")
+        col.operator("object.vertex_group_limit_total", text="Limit Total")
         col.operator("object.vertex_group_fix", text="Fix Deforms")
 
 
@@ -1093,7 +1048,7 @@ class VIEW3D_PT_tools_projectpaint(View3DPanel, Panel):
     @classmethod
     def poll(cls, context):
         brush = context.tool_settings.image_paint.brush
-        return (brush and brush.image_tool != 'SOFTEN')
+        return (brush is not None)
 
     def draw_header(self, context):
         ipaint = context.tool_settings.image_paint

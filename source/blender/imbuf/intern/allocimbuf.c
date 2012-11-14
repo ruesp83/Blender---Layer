@@ -36,7 +36,7 @@
 #include <stddef.h>
 
 #include "IMB_imbuf.h"
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 
 #include "IMB_allocimbuf.h"
 #include "IMB_filetype.h"
@@ -357,7 +357,7 @@ ImBuf *IMB_allocImBuf(unsigned int x, unsigned int y, uchar planes, unsigned int
 		ibuf->planes = planes;
 		ibuf->ftype = TGA;
 		ibuf->channels = 4;  /* float option, is set to other values when buffers get assigned */
-		ibuf->ppm[0] = ibuf->ppm[1] = IMB_DPI_DEFAULT / 0.0254; /* IMB_DPI_DEFAULT -> pixels-per-meter */
+		ibuf->ppm[0] = ibuf->ppm[1] = IMB_DPI_DEFAULT / 0.0254f; /* IMB_DPI_DEFAULT -> pixels-per-meter */
 
 		if (flags & IB_rect) {
 			if (imb_addrectImBuf(ibuf) == FALSE) {

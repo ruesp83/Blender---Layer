@@ -57,7 +57,7 @@
 #include "MEM_guardedalloc.h"
 #include "BLI_blenlib.h"
 #include "BKE_global.h"
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 
 #include "BKE_bmfont.h"
 #include "BKE_bmfont_types.h"

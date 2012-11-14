@@ -39,7 +39,7 @@
 
 #include "BKE_global.h"
 
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include "IMB_thumbs.h"
 
@@ -166,7 +166,7 @@ void IMB_overlayblend_thumb(unsigned int *thumb, int width, int height, float as
 		margin_t = height - margin_b;
 	}
 
-	{	
+	{
 		int x, y;
 		int stride_x = (margin_r - margin_l) - 2;
 		

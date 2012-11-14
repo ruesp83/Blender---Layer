@@ -64,7 +64,6 @@
 #include "BKE_colortools.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
-#include "BKE_layer.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_movieclip.h"
@@ -77,7 +76,7 @@
 
 #include "node_util.h"
 
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "RE_pipeline.h"

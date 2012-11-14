@@ -37,7 +37,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "imbuf.h"
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include "IMB_allocimbuf.h"
 #include "IMB_filetype.h"
@@ -408,7 +408,7 @@ struct ImBuf *imb_loadiris(unsigned char *mem, size_t size, int flags, char colo
 		}
 		
 		MEM_freeN(starttab);
-		MEM_freeN(lengthtab);	
+		MEM_freeN(lengthtab);
 
 	}
 	else {
@@ -613,7 +613,7 @@ static void expandrow2(float *optr, unsigned char *iptr, int z)
 				optr += 4;
 			}
 		}
-	}	
+	}
 }
 
 static void expandrow(unsigned char *optr, unsigned char *iptr, int z)

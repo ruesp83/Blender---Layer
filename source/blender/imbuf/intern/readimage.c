@@ -50,7 +50,7 @@
 #include "BLI_utildefines.h"
 
 #include "imbuf.h"
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include "IMB_filetype.h"
 
@@ -100,7 +100,8 @@ ImBuf *IMB_ibImageFromMemory(unsigned char *mem, size_t size, int flags, char co
 		}
 	}
 
-	fprintf(stderr, "%s: unknown fileformat (%s)\n", __func__, descr);
+	if ((flags & IB_test) == 0)
+		fprintf(stderr, "%s: unknown fileformat (%s)\n", __func__, descr);
 
 	return NULL;
 }
@@ -170,11 +171,12 @@ ImBuf *IMB_loadiffname(const char *filepath, int flags, char colorspace[IM_MAX_S
 	return ibuf;
 }
 
-ImBuf *IMB_testiffname(const char *filepath, int flags, char colorspace[IM_MAX_SPACE])
+ImBuf *IMB_testiffname(const char *filepath, int flags)
 {
 	ImBuf *ibuf;
 	int file;
 	char filepath_tx[IB_FILENAME_SIZE];
+	char colorspace[IM_MAX_SPACE] = "\0";
 
 	imb_cache_filename(filepath_tx, filepath, flags);
 

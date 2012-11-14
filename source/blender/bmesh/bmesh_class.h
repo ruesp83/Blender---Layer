@@ -225,9 +225,8 @@ enum {
 
 	BM_ELEM_DRAW    = (1 << 5), /* edge display */
 
-	/* we have 1 spare flag which is awesome but since we're limited to 8
-	 * only add new flags with care! - campbell */
-	/* BM_ELEM_SPARE  = (1 << 6), */
+	/* spare tag, assumed dirty, use define in each function to name based on use */
+	// _BM_ELEM_TAG_ALT = (1 << 6),  // UNUSED
 
 	BM_ELEM_INTERNAL_TAG = (1 << 7) /* for low level internal API tagging,
                                      * since tools may want to tag verts and
@@ -244,10 +243,16 @@ enum {
 #  define BM_FACE_FIRST_LOOP(p) ((p)->l_first)
 #endif
 
-/* size to use for static arrays when dealing with NGons,
+/**
+ * size to use for stack arrays when dealing with NGons,
  * alloc after this limit is reached.
  * this value is rather arbitrary */
-#define BM_NGON_STACK_SIZE 32
+#define BM_DEFAULT_NGON_STACK_SIZE 32
+/**
+ * size to use for stack arrays dealing with connected mesh data
+ * verts of faces, edges of vert - etc.
+ * often used with #BM_iter_as_arrayN() */
+#define BM_DEFAULT_ITER_STACK_SIZE 16
 
 /* avoid inf loop, this value is arbitrary
  * but should not error on valid cases */

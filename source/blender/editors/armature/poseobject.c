@@ -105,7 +105,7 @@ void ED_armature_enter_posemode(bContext *C, Base *base)
 	Object *ob = base->object;
 	
 	if (ob->id.lib) {
-		BKE_report(reports, RPT_WARNING, "Can't pose libdata");
+		BKE_report(reports, RPT_WARNING, "Cannot pose libdata");
 		return;
 	}
 	
@@ -134,7 +134,7 @@ void ED_armature_exit_posemode(bContext *C, Base *base)
 		ob->mode &= ~OB_MODE_POSE;
 		
 		WM_event_add_notifier(C, NC_SCENE | ND_MODE | NS_MODE_OBJECT, NULL);
-	}	
+	}
 }
 
 /* if a selected or active bone is protected, throw error (oonly if warn == 1) and return 1 */
@@ -492,7 +492,7 @@ static int pose_select_hierarchy_exec(bContext *C, wmOperator *op)
 					if (pchan->parent == NULL) continue;
 					else pabone = pchan->parent->bone;
 					
-					if (PBONE_VISIBLE(arm, pabone)) {
+					if (PBONE_SELECTABLE(arm, pabone)) {
 						if (!add_to_sel) curbone->flag &= ~BONE_SELECTED;
 						pabone->flag |= BONE_SELECTED;
 						arm->act_bone = pabone;
@@ -500,7 +500,7 @@ static int pose_select_hierarchy_exec(bContext *C, wmOperator *op)
 						found = 1;
 						break;
 					}
-				} 
+				}
 				else { /* direction == BONE_SELECT_CHILD */
 					/* the child member is only assigned to connected bones, see [#30340] */
 #if 0
@@ -514,7 +514,7 @@ static int pose_select_hierarchy_exec(bContext *C, wmOperator *op)
 
 						for (pchan_child = ob->pose->chanbase.first; pchan_child; pchan_child = pchan_child->next) {
 							/* possible we have multiple children, some invisible */
-							if (PBONE_VISIBLE(arm, pchan_child->bone)) {
+							if (PBONE_SELECTABLE(arm, pchan_child->bone)) {
 								if (pchan_child->parent == pchan) {
 									chbone = pchan_child->bone;
 									break;
@@ -526,7 +526,7 @@ static int pose_select_hierarchy_exec(bContext *C, wmOperator *op)
 					if (chbone == NULL) continue;
 #endif
 					
-					if (PBONE_VISIBLE(arm, chbone)) {
+					if (PBONE_SELECTABLE(arm, chbone)) {
 						if (!add_to_sel) curbone->flag &= ~BONE_SELECTED;
 						chbone->flag |= BONE_SELECTED;
 						arm->act_bone = chbone;
@@ -719,9 +719,7 @@ static int pose_select_same_keyingset(bContext *C, Object *ob, short extend)
 					
 					if (pchan) {
 						/* select if bone is visible and can be affected */
-						if ((PBONE_VISIBLE(arm, pchan->bone)) && 
-						    (pchan->bone->flag & BONE_UNSELECTABLE) == 0)
-						{
+						if (PBONE_SELECTABLE(arm, pchan->bone)) {
 							pchan->bone->flag |= BONE_SELECTED;
 							changed = 1;
 						}
@@ -888,16 +886,16 @@ static void pose_copy_menu(Scene *scene)
 	if (pose_has_protected_selected(ob, 0)) {
 		i = BLI_countlist(&(pchanact->constraints)); /* if there are 24 or less, allow for the user to select constraints */
 		if (i < 25)
-			nr = pupmenu("Copy Pose Attributes %t|Local Location%x1|Local Rotation%x2|Local Size%x3|%l|Visual Location %x9|Visual Rotation%x10|Visual Size%x11|%l|Constraints (All)%x4|Constraints...%x5");
+			nr = pupmenu("Copy Pose Attributes %t|Local Location %x1|Local Rotation %x2|Local Size %x3|%l|Visual Location %x9|Visual Rotation %x10|Visual Size %x11|%l|Constraints (All) %x4|Constraints... %x5");
 		else
-			nr = pupmenu("Copy Pose Attributes %t|Local Location%x1|Local Rotation%x2|Local Size%x3|%l|Visual Location %x9|Visual Rotation%x10|Visual Size%x11|%l|Constraints (All)%x4");
+			nr = pupmenu("Copy Pose Attributes %t|Local Location %x1|Local Rotation %x2|Local Size %x3|%l|Visual Location %x9|Visual Rotation %x10|Visual Size %x11|%l|Constraints (All) %x4");
 	}
 	else {
 		i = BLI_countlist(&(pchanact->constraints)); /* if there are 24 or less, allow for the user to select constraints */
 		if (i < 25)
-			nr = pupmenu("Copy Pose Attributes %t|Local Location%x1|Local Rotation%x2|Local Size%x3|%l|Visual Location %x9|Visual Rotation%x10|Visual Size%x11|%l|Constraints (All)%x4|Constraints...%x5|%l|Transform Locks%x6|IK Limits%x7|Bone Shape%x8");
+			nr = pupmenu("Copy Pose Attributes %t|Local Location %x1|Local Rotation %x2|Local Size %x3|%l|Visual Location %x9|Visual Rotation %x10|Visual Size %x11|%l|Constraints (All) %x4|Constraints... %x5|%l|Transform Locks %x6|IK Limits %x7|Bone Shape %x8");
 		else
-			nr = pupmenu("Copy Pose Attributes %t|Local Location%x1|Local Rotation%x2|Local Size%x3|%l|Visual Location %x9|Visual Rotation%x10|Visual Size%x11|%l|Constraints (All)%x4|%l|Transform Locks%x6|IK Limits%x7|Bone Shape%x8");
+			nr = pupmenu("Copy Pose Attributes %t|Local Location %x1|Local Rotation %x2|Local Size %x3|%l|Visual Location %x9|Visual Rotation %x10|Visual Size %x11|%l|Constraints (All) %x4|%l|Transform Locks %x6|IK Limits %x7|Bone Shape %x8");
 	}
 	
 	if (nr <= 0) 
@@ -994,7 +992,7 @@ static void pose_copy_menu(Scene *scene)
 				}
 			}
 		}
-	} 
+	}
 	else { /* constraints, optional (note: max we can have is 24 constraints) */
 		bConstraint *con, *con_back;
 		int const_toggle[24] = {0}; /* XXX, initialize as 0 to quiet errors */
@@ -1020,7 +1018,7 @@ static void pose_copy_menu(Scene *scene)
 				con_back = con->next;
 				BLI_freelinkN(&const_copy, con);
 				con = con_back;
-			} 
+			}
 			else
 				con = con->next;
 		}
@@ -1037,7 +1035,7 @@ static void pose_copy_menu(Scene *scene)
 				 * appending to list of constraints for this channel
 				 */
 				copy_constraints(&tmp_constraints, &const_copy, TRUE);
-				if ((ob->proxy) && (pchan->bone->layer & arm->layer_protected)) {					
+				if ((ob->proxy) && (pchan->bone->layer & arm->layer_protected)) {
 					/* add proxy-local tags */
 					for (con = tmp_constraints.first; con; con = con->next)
 						con->flag |= CONSTRAINT_PROXY_LOCAL;
@@ -1099,7 +1097,7 @@ static void set_pose_keys(Object *ob)
 		for (chan = ob->pose->chanbase.first; chan; chan = chan->next) {
 			Bone *bone = chan->bone;
 			if ((bone) && (bone->flag & BONE_SELECTED) && (arm->layer & bone->layer))
-				chan->flag |= POSE_KEY;	
+				chan->flag |= POSE_KEY;
 			else
 				chan->flag &= ~POSE_KEY;
 		}
@@ -1238,7 +1236,7 @@ static int pose_copy_exec(bContext *C, wmOperator *op)
 	
 	/* sanity checking */
 	if (ELEM(NULL, ob, ob->pose)) {
-		BKE_report(op->reports, RPT_ERROR, "No Pose to Copy");
+		BKE_report(op->reports, RPT_ERROR, "No pose to copy");
 		return OPERATOR_CANCELLED;
 	}
 
@@ -1401,7 +1399,7 @@ void POSE_OT_group_remove(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Remove Bone Group";
 	ot->idname = "POSE_OT_group_remove";
-	ot->description = "Removes the active bone group";
+	ot->description = "Remove the active bone group";
 	
 	/* api callbacks */
 	ot->exec = pose_group_remove_exec;
@@ -1513,7 +1511,7 @@ void POSE_OT_group_assign(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* properties */
-	RNA_def_int(ot->srna, "type", 0, 0, 10, "Bone Group Index", "", 0, INT_MAX);
+	RNA_def_int(ot->srna, "type", 0, 0, INT_MAX, "Bone Group Index", "", 0, 10);
 }
 
 
@@ -1918,7 +1916,7 @@ static int pose_bone_rotmode_exec(bContext *C, wmOperator *op)
 	Object *ob = CTX_data_active_object(C);
 	int mode = RNA_enum_get(op->ptr, "type");
 	
-	/* set rotation mode of selected bones  */	
+	/* set rotation mode of selected bones  */
 	CTX_DATA_BEGIN (C, bPoseChannel *, pchan, selected_pose_bones)
 	{
 		pchan->rotmode = mode;
@@ -2102,7 +2100,7 @@ static int pose_bone_layers_invoke(bContext *C, wmOperator *op, wmEvent *evt)
 {
 	int layers[32] = {0}; /* hardcoded for now - we can only have 32 armature layers, so this should be fine... */
 	
-	/* get layers that are active already */	
+	/* get layers that are active already */
 	CTX_DATA_BEGIN (C, bPoseChannel *, pchan, selected_pose_bones)
 	{
 		short bit;
@@ -2301,10 +2299,10 @@ static int pose_clear_user_transforms_exec(bContext *C, wmOperator *op)
 		 * just pose values should change, so this should be fine 
 		 */
 		bPose *dummyPose = NULL;
-		Object workob = {{0}}; 
+		Object workob = {{0}};
 		bPoseChannel *pchan;
 		
-		/* execute animation step for current frame using a dummy copy of the pose */		
+		/* execute animation step for current frame using a dummy copy of the pose */
 		BKE_pose_copy_data(&dummyPose, ob->pose, 0);
 		
 		BLI_strncpy(workob.id.name, "OB<ClearTfmWorkOb>", sizeof(workob.id.name));

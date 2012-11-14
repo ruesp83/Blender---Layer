@@ -57,7 +57,7 @@
 #include "BKE_scene.h"
 #include "BKE_texture.h"
 
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 
 #include "GPU_extensions.h"
 #include "GPU_material.h"
@@ -780,7 +780,9 @@ static void shade_one_light(GPUShadeInput *shi, GPUShadeResult *shr, GPULamp *la
 		}
 	}
 
-	if (mat->scene->gm.flag & GAME_GLSL_NO_SHADERS);
+	if (mat->scene->gm.flag & GAME_GLSL_NO_SHADERS) {
+		/* pass */
+	}
 	else if (!(lamp->mode & LA_NO_SPEC) && !(lamp->mode & LA_ONLYSHADOW) &&
 	         (GPU_link_changed(shi->spec) || ma->spec != 0.0f))
 	{
@@ -841,7 +843,7 @@ static void material_lights(GPUShadeInput *shi, GPUShadeResult *shr)
 
 		if (ob->transflag & OB_DUPLI) {
 			DupliObject *dob;
-			ListBase *lb = object_duplilist(shi->gpumat->scene, ob);
+			ListBase *lb = object_duplilist(shi->gpumat->scene, ob, FALSE);
 			
 			for (dob=lb->first; dob; dob=dob->next) {
 				Object *ob_iter = dob->ob;
@@ -1127,7 +1129,7 @@ static void do_material_tex(GPUShadeInput *shi)
 							newnor = tnor;
 						}
 						
-						norfac = minf(fabsf(mtex->norfac), 1.0f);
+						norfac = min_ff(fabsf(mtex->norfac), 1.0f);
 						
 						if (norfac == 1.0f && !GPU_link_changed(stencil)) {
 							shi->vn = newnor;
@@ -1163,7 +1165,7 @@ static void do_material_tex(GPUShadeInput *shi)
 
 						// resolve texture resolution
 						if ( (mtex->texflag & MTEX_BUMP_TEXTURESPACE) || found_deriv_map ) {
-							ImBuf *ibuf= BKE_image_get_ibuf(tex->ima, &tex->iuser, IMA_IBUF_IMA);
+							ImBuf *ibuf= BKE_image_get_ibuf(tex->ima, &tex->iuser);
 							ima_x= 512.0f; ima_y= 512.f;		// prevent calling textureSize, glsl 1.3 only
 							if (ibuf) {
 								ima_x= ibuf->x;
@@ -1587,8 +1589,8 @@ void GPU_lamp_update_distance(GPULamp *lamp, float distance, float att1, float a
 
 void GPU_lamp_update_spot(GPULamp *lamp, float spotsize, float spotblend)
 {
-	lamp->spotsi= cos(M_PI*spotsize/360.0);
-	lamp->spotbl= (1.0f - lamp->spotsi)*spotblend;
+	lamp->spotsi= cosf((float)M_PI * spotsize / 360.0f);
+	lamp->spotbl= (1.0f - lamp->spotsi) * spotblend;
 }
 
 static void gpu_lamp_from_blender(Scene *scene, Object *ob, Object *par, Lamp *la, GPULamp *lamp)
@@ -1879,7 +1881,7 @@ GPUShaderExport *GPU_shader_export(struct Scene *scene, struct Material *ma)
 		GPUBuiltin gputype;
 		GPUDynamicType dynamictype;
 		GPUDataType datatype;
-	} builtins[] = { 
+	} builtins[] = {
 		{ GPU_VIEW_MATRIX, GPU_DYNAMIC_OBJECT_VIEWMAT, GPU_DATA_16F },
 		{ GPU_INVERSE_VIEW_MATRIX, GPU_DYNAMIC_OBJECT_VIEWIMAT, GPU_DATA_16F },
 		{ GPU_OBJECT_MATRIX, GPU_DYNAMIC_OBJECT_MAT, GPU_DATA_16F },

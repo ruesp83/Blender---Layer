@@ -127,29 +127,25 @@ enum {
 #define IMA_SIGNAL_SRC_CHANGE       5
 /* image-user gets a new image, check settings */
 #define IMA_SIGNAL_USER_NEW_IMAGE   6
+#define IMA_SIGNAL_COLORMANAGE      7
 
 #define IMA_CHAN_FLAG_BW    1
 #define IMA_CHAN_FLAG_RGB   2
 #define IMA_CHAN_FLAG_ALPHA 4
 
-#define IMA_IBUF_IMA	1
-#define IMA_IBUF_LAYER	2
-
 /* depending Image type, and (optional) ImageUser setting it returns ibuf */
 /* always call to make signals work */
-struct ImBuf *BKE_image_get_ibuf(struct Image *ima, struct ImageUser *iuser, int type_ibuf);
+struct ImBuf *BKE_image_get_ibuf(struct Image *ima, struct ImageUser *iuser);
 
 /* same as above, but can be used to retrieve images being rendered in
  * a thread safe way, always call both acquire and release */
-struct ImBuf *BKE_image_acquire_ibuf(struct Image *ima, struct ImageUser *iuser, void **lock_r, int type_ibuf);
+struct ImBuf *BKE_image_acquire_ibuf(struct Image *ima, struct ImageUser *iuser, void **lock_r);
 void BKE_image_release_ibuf(struct Image *ima, void *lock);
 
 /* returns a new image or NULL if it can't load */
 struct Image *BKE_image_load(const char *filepath);
 /* returns existing Image when filename/type is same (frame optional) */
 struct Image *BKE_image_load_exists(const char *filepath);
-struct ImageLayer *BKE_add_image_file_as_layer(struct Image *ima, const char *name);
-struct ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, float color[4],struct ColorManagedColorspaceSettings *colorspace_settings);
 
 /* adds image, adds ibuf, generates color or pattern */
 struct Image *BKE_image_add_generated(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short uvtestgrid, float color[4]);
@@ -175,9 +171,7 @@ int  BKE_image_user_frame_get(const struct ImageUser *iuser, int cfra, int field
 void BKE_image_user_file_path(struct ImageUser *iuser, struct Image *ima, char *path); 
 
 /* sets index offset for multilayer files */
-struct RenderPass *BKE_render_multilayer_index(struct RenderResult *rr, struct ImageUser *iuser);
-
-struct ImageLayer *BKE_image_multilayer_index(struct Image *ima, struct ImageUser *iuser);
+struct RenderPass *BKE_image_multilayer_index(struct RenderResult *rr, struct ImageUser *iuser);
 
 /* for multilayer images as well as for render-viewer */
 struct RenderResult *BKE_image_acquire_renderresult(struct Scene *scene, struct Image *ima);

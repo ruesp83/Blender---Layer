@@ -37,7 +37,7 @@
 #ifdef RNA_RUNTIME
 
 #include "IMB_imbuf.h"
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 #include "DNA_scene_types.h"
 #include "BKE_context.h"
 #include "BKE_global.h"
@@ -120,10 +120,10 @@ void RNA_api_environment_map(StructRNA *srna)
 
 	RNA_def_pointer(func, "scene", "Scene", "", "Overrides the scene from which image parameters are taken");
 
-	RNA_def_float_array(func, "layout", 12, default_layout, 0.0f, 0.0f, "File layout",
+	RNA_def_float_array(func, "layout", 12, default_layout, 0.0f, 1000.0f, "File layout",
 	                    "Flat array describing the X,Y position of each cube face in the "
 	                    "output image, where 1 is the size of a face - order is [+Z -Z +Y -X -Y +X] "
-	                    "(use -1 to skip a face)", 0.0f, 0.0f);
+	                    "(use -1 to skip a face)", 0.0f, 1000.0f);
 }
 
 #endif

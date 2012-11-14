@@ -15,7 +15,7 @@
 
 #include "DNA_texture_types.h"
 #include "DNA_image_types.h"
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 #include "BKE_image.h"
 #include "BLI_blenlib.h"
 
@@ -109,7 +109,7 @@ bool BL_Texture::InitFromImage(int unit,  Image *img, bool mipmap)
 		return mOk;
 	}
 
-	ibuf = BKE_image_get_ibuf(img, NULL, IMA_IBUF_IMA);
+	ibuf= BKE_image_get_ibuf(img, NULL);
 	if (ibuf==NULL)
 	{
 		img->ok = 0;
@@ -251,7 +251,7 @@ bool BL_Texture::InitCubeMap(int unit,  EnvMap *cubemap)
 		return mOk;
 	}
 
-	ImBuf *ibuf= BKE_image_get_ibuf(cubemap->ima, NULL, IMA_IBUF_IMA);
+	ImBuf *ibuf= BKE_image_get_ibuf(cubemap->ima, NULL);
 	if (ibuf==0)
 	{
 		cubemap->ima->ok = 0;
@@ -562,7 +562,7 @@ void BL_Texture::setTexEnv(BL_Material *mat, bool modulate)
 		using_alpha = true;
 	}
 
-	switch( mat->blend_mode[mUnit] ) {
+	switch (mat->blend_mode[mUnit]) {
 		case BLEND_MIX:
 			{
 				// ------------------------------
@@ -646,7 +646,7 @@ int BL_Texture::GetPow2(int n)
 void BL_Texture::SplitEnvMap(EnvMap *map)
 {
 	if (!map || !map->ima || (map->ima && !map->ima->ok)) return;
-	ImBuf *ibuf= BKE_image_get_ibuf(map->ima, NULL, IMA_IBUF_IMA);
+	ImBuf *ibuf= BKE_image_get_ibuf(map->ima, NULL);
 	if (ibuf)
 		my_envmap_split_ima(map, ibuf);
 }
@@ -670,7 +670,7 @@ void my_envmap_split_ima(EnvMap *env, ImBuf *ibuf)
 	}
 	else {
 		for (part=0; part<6; part++) {
-			env->cube[part]= IMB_allocImBuf(dx, dx, 24, IB_rect);
+			env->cube[part] = IMB_allocImBuf(dx, dx, 24, IB_rect);
 		}
 		IMB_rectcpy(env->cube[0], ibuf, 
 			0, 0, 0, 0, dx, dx);
@@ -698,7 +698,7 @@ void my_free_envmapdata(EnvMap *env)
 		ImBuf *ibuf= env->cube[part];
 		if (ibuf) {
 			IMB_freeImBuf(ibuf);
-			env->cube[part]= NULL;
+			env->cube[part] = NULL;
 		}
 	}
 	env->ok= 0;

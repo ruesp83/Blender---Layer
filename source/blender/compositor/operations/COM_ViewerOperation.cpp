@@ -34,7 +34,7 @@
 extern "C" {
 	#include "MEM_guardedalloc.h"
 	#include "IMB_imbuf.h"
-	#include "DNA_imbuf_types.h"
+	#include "IMB_imbuf_types.h"
 }
 
 
@@ -96,7 +96,7 @@ void ViewerOperation::executeRegion(rcti *rect, unsigned int tileNumber)
 			if (m_depthInput) {
 				this->m_depthInput->read(depth, x, y, COM_PS_NEAREST);
 				depthbuffer[offset] = depth[0];
-			} 
+			}
 
 			offset ++;
 			offset4 += 4;

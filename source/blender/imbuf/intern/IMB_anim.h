@@ -62,7 +62,9 @@
 
 #include "imbuf.h"
 
-#include "AVI_avi.h"
+#ifdef WITH_AVI
+#  include "AVI_avi.h"
+#endif
 
 #ifdef WITH_QUICKTIME
 #  if defined(_WIN32) || defined(__APPLE__)
@@ -84,7 +86,7 @@
 #  endif
 #endif
 
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "IMB_allocimbuf.h"

@@ -41,7 +41,9 @@
 #include "RNA_define.h"
 #include "RNA_access.h"
 
+#include "BLI_array.h"
 #include "BLI_blenlib.h"
+#include "BLI_noise.h"
 #include "BLI_math.h"
 #include "BLI_rand.h"
 
@@ -49,6 +51,7 @@
 #include "BKE_context.h"
 #include "BKE_cdderivedmesh.h"
 #include "BKE_depsgraph.h"
+#include "BKE_mesh.h"
 #include "BKE_object.h"
 #include "BKE_report.h"
 #include "BKE_texture.h"
@@ -71,6 +74,8 @@
 #include "UI_interface.h"
 
 #include "mesh_intern.h"
+
+#define MVAL_PIXEL_MARGIN  5.0f
 
 /* allow accumulated normals to form a new direction but don't
  * accept direct opposite directions else they will cancel each other out */
@@ -153,19 +158,67 @@ void MESH_OT_subdivide(wmOperatorType *ot)
 }
 
 
-void EMBM_project_snap_verts(bContext *C, ARegion *ar, Object *obedit, BMEditMesh *em)
+static int edbm_unsubdivide_exec(bContext *C, wmOperator *op)
 {
+	Object *obedit = CTX_data_edit_object(C);
+	BMEditMesh *em = BMEdit_FromObject(obedit);
+	BMOperator bmop;
+
+	int iterations = RNA_int_get(op->ptr, "iterations");
+
+	EDBM_op_init(em, &bmop, op,
+	             "unsubdivide verts=%hv iterations=%i", BM_ELEM_SELECT, iterations);
+
+	BMO_op_exec(em->bm, &bmop);
+
+	if (!EDBM_op_finish(em, &bmop, op, TRUE)) {
+		return 0;
+	}
+
+	if ((em->selectmode & SCE_SELECT_VERTEX) == 0) {
+		EDBM_selectmode_flush_ex(em, SCE_SELECT_VERTEX);  /* need to flush vert->face first */
+	}
+	EDBM_selectmode_flush(em);
+
+	EDBM_update_generic(C, em, TRUE);
+
+	return OPERATOR_FINISHED;
+}
+
+void MESH_OT_unsubdivide(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Un-Subdivide";
+	ot->description = "UnSubdivide selected edges & faces";
+	ot->idname = "MESH_OT_unsubdivide";
+
+	/* api callbacks */
+	ot->exec = edbm_unsubdivide_exec;
+	ot->poll = ED_operator_editmesh;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	/* props */
+	RNA_def_int(ot->srna, "iterations", 2, 1, INT_MAX, "Iterations", "Number of times to unsubdivide", 1, 100);
+}
+
+void EMBM_project_snap_verts(bContext *C, ARegion *ar, BMEditMesh *em)
+{
+	Object *obedit = em->ob;
 	BMIter iter;
 	BMVert *eve;
 
+	ED_view3d_init_mats_rv3d(obedit, ar->regiondata);
+
 	BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
 		if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
-			float mval[2], vec[3], no_dummy[3];
+			float mval[2], co_proj[3], no_dummy[3];
 			int dist_dummy;
-			mul_v3_m4v3(vec, obedit->obmat, eve->co);
-			ED_view3d_project_float_noclip(ar, vec, mval);
-			if (snapObjectsContext(C, mval, &dist_dummy, vec, no_dummy, SNAP_NOT_OBEDIT)) {
-				mul_v3_m4v3(eve->co, obedit->imat, vec);
+			if (ED_view3d_project_float_object(ar, eve->co, mval, V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK) {
+				if (snapObjectsContext(C, mval, &dist_dummy, co_proj, no_dummy, SNAP_NOT_OBEDIT)) {
+					mul_v3_m4v3(eve->co, obedit->imat, co_proj);
+				}
 			}
 		}
 	}
@@ -202,7 +255,7 @@ static short edbm_extrude_discrete_faces(BMEditMesh *em, wmOperator *op, const c
 		return 0;
 	}
 
-	return 's'; // s is shrink/fatten
+	return 's';  /* s is shrink/fatten */
 }
 
 /* extrudes individual edges */
@@ -222,7 +275,7 @@ static short edbm_extrude_edges_indiv(BMEditMesh *em, wmOperator *op, const char
 		return 0;
 	}
 
-	return 'n'; // n is normal grab
+	return 'n';  /* n is normal grab */
 }
 
 /* extrudes individual vertices */
@@ -242,7 +295,7 @@ static short edbm_extrude_verts_indiv(BMEditMesh *em, wmOperator *op, const char
 		return 0;
 	}
 
-	return 'g'; // g is grab
+	return 'g';  /* g is grab */
 }
 
 static short edbm_extrude_edge(Object *obedit, BMEditMesh *em, const char hflag, float nor[3])
@@ -426,8 +479,8 @@ void MESH_OT_extrude_repeat(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* props */
-	RNA_def_float(ot->srna, "offset", 2.0f, 0.0f, 100.0f, "Offset", "", 0.0f, FLT_MAX);
-	RNA_def_int(ot->srna, "steps", 10, 0, 180, "Steps", "", 0, INT_MAX);
+	RNA_def_float(ot->srna, "offset", 2.0f, 0.0f, FLT_MAX, "Offset", "", 0.0f, 100.0f);
+	RNA_def_int(ot->srna, "steps", 10, 0, INT_MAX, "Steps", "", 0, 180);
 }
 
 /* generic extern called extruder */
@@ -439,16 +492,17 @@ static int edbm_extrude_mesh(Scene *scene, Object *obedit, BMEditMesh *em, wmOpe
 
 	zero_v3(nor);
 
+	/* XXX If those popup menus were to be enabled again, please get rid of this "menu string" syntax! */
 	if (em->selectmode & SCE_SELECT_VERTEX) {
 		if (em->bm->totvertsel == 0) nr = 0;
 		else if (em->bm->totvertsel == 1) nr = 4;
 		else if (em->bm->totedgesel == 0) nr = 4;
 		else if (em->bm->totfacesel == 0)
-			nr = 3;  // pupmenu("Extrude %t|Only Edges%x3|Only Vertices%x4");
+			nr = 3;  /* pupmenu("Extrude %t|Only Edges %x3|Only Vertices %x4"); */
 		else if (em->bm->totfacesel == 1)
-			nr = 1;  // pupmenu("Extrude %t|Region %x1|Only Edges%x3|Only Vertices%x4");
+			nr = 1;  /* pupmenu("Extrude %t|Region %x1|Only Edges% x3|Only Vertices %x4"); */
 		else
-			nr = 1;  // pupmenu("Extrude %t|Region %x1||Individual Faces %x2|Only Edges%x3|Only Vertices%x4");
+			nr = 1;  /* pupmenu("Extrude %t|Region %x1|Individual Faces %x2|Only Edges %x3|Only Vertices %x4"); */
 	}
 	else if (em->selectmode & SCE_SELECT_EDGE) {
 		if (em->bm->totedgesel == 0) nr = 0;
@@ -458,16 +512,16 @@ static int edbm_extrude_mesh(Scene *scene, Object *obedit, BMEditMesh *em, wmOpe
 		else if (em->totedgesel == 1) nr = 3;
 		else if (em->totfacesel == 0) nr = 3;
 		else if (em->totfacesel == 1)
-			nr = 1;  // pupmenu("Extrude %t|Region %x1|Only Edges%x3");
+			nr = 1;  /* pupmenu("Extrude %t|Region %x1|Only Edges %x3"); */
 		else
-			nr = 1;  // pupmenu("Extrude %t|Region %x1||Individual Faces %x2|Only Edges%x3");
+			nr = 1;  /* pupmenu("Extrude %t|Region %x1|Individual Faces %x2|Only Edges %x3"); */
 #endif
 	}
 	else {
 		if (em->bm->totfacesel == 0) nr = 0;
 		else if (em->bm->totfacesel == 1) nr = 1;
 		else
-			nr = 1;  // pupmenu("Extrude %t|Region %x1||Individual Faces %x2");
+			nr = 1;  /* pupmenu("Extrude %t|Region %x1|Individual Faces %x2"); */
 	}
 
 	if (nr < 1) return 'g';
@@ -730,7 +784,10 @@ static int edbm_dupli_extrude_cursor_invoke(bContext *C, wmOperator *op, wmEvent
 	short use_proj;
 	
 	em_setup_viewcontext(C, &vc);
-	
+
+	ED_view3d_init_mats_rv3d(vc.obedit, vc.rv3d);
+
+
 	use_proj = ((vc.scene->toolsettings->snap_flag & SCE_SNAP) &&
 	            (vc.scene->toolsettings->snap_mode == SCE_SNAP_MODE_FACE));
 
@@ -758,27 +815,27 @@ static int edbm_dupli_extrude_cursor_invoke(bContext *C, wmOperator *op, wmEvent
 		done = FALSE;
 		BM_ITER_MESH (eed, &iter, vc.em->bm, BM_EDGES_OF_MESH) {
 			if (BM_elem_flag_test(eed, BM_ELEM_SELECT)) {
-				float co1[3], co2[3];
-				mul_v3_m4v3(co1, vc.obedit->obmat, eed->v1->co);
-				mul_v3_m4v3(co2, vc.obedit->obmat, eed->v2->co);
-				ED_view3d_project_float_noclip(vc.ar, co1, co1);
-				ED_view3d_project_float_noclip(vc.ar, co2, co2);
+				float co1[2], co2[2];
 
-				/* 2D rotate by 90d while adding.
-				 *  (x, y) = (y, -x)
-				 *
-				 * accumulate the screenspace normal in 2D,
-				 * with screenspace edge length weighting the result. */
-				if (line_point_side_v2(co1, co2, mval_f) >= 0.0f) {
-					nor[0] +=  (co1[1] - co2[1]);
-					nor[1] += -(co1[0] - co2[0]);
-				}
-				else {
-					nor[0] +=  (co2[1] - co1[1]);
-					nor[1] += -(co2[0] - co1[0]);
+				if ((ED_view3d_project_float_object(vc.ar, eed->v1->co, co1, V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK) &&
+				    (ED_view3d_project_float_object(vc.ar, eed->v2->co, co2, V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK))
+				{
+					/* 2D rotate by 90d while adding.
+					 *  (x, y) = (y, -x)
+					 *
+					 * accumulate the screenspace normal in 2D,
+					 * with screenspace edge length weighting the result. */
+					if (line_point_side_v2(co1, co2, mval_f) >= 0.0f) {
+						nor[0] +=  (co1[1] - co2[1]);
+						nor[1] += -(co1[0] - co2[0]);
+					}
+					else {
+						nor[0] +=  (co2[1] - co1[1]);
+						nor[1] += -(co2[0] - co1[0]);
+					}
+					done = TRUE;
 				}
 			}
-			done = TRUE;
 		}
 
 		if (done) {
@@ -835,7 +892,7 @@ static int edbm_dupli_extrude_cursor_invoke(bContext *C, wmOperator *op, wmEvent
 
 			/* also project the source, for retopo workflow */
 			if (use_proj)
-				EMBM_project_snap_verts(C, vc.ar, vc.obedit, vc.em);
+				EMBM_project_snap_verts(C, vc.ar, vc.em);
 		}
 
 		edbm_extrude_edge(vc.obedit, vc.em, BM_ELEM_SELECT, nor);
@@ -868,7 +925,7 @@ static int edbm_dupli_extrude_cursor_invoke(bContext *C, wmOperator *op, wmEvent
 	}
 
 	if (use_proj)
-		EMBM_project_snap_verts(C, vc.ar, vc.obedit, vc.em);
+		EMBM_project_snap_verts(C, vc.ar, vc.em);
 
 	/* This normally happens when pushing undo but modal operators
 	 * like this one don't push undo data until after modal mode is
@@ -1208,10 +1265,13 @@ static int edbm_vert_connect(bContext *C, wmOperator *op)
 	if (!EDBM_op_finish(em, &bmop, op, TRUE)) {
 		return OPERATOR_CANCELLED;
 	}
-	
-	EDBM_update_generic(C, em, TRUE);
+	else {
+		EDBM_selectmode_flush(em);  /* so newly created edges get the selection state from the vertex */
 
-	return len ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
+		EDBM_update_generic(C, em, TRUE);
+
+		return len ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
+	}
 }
 
 void MESH_OT_vert_connect(wmOperatorType *ot)
@@ -1600,10 +1660,92 @@ void MESH_OT_vertices_smooth(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_int(ot->srna, "repeat", 1, 1, 100, "Number of times to smooth the mesh", "", 1, INT_MAX);
+	RNA_def_int(ot->srna, "repeat", 1, 1, 1000, "Number of times to smooth the mesh", "", 1, 100);
 	RNA_def_boolean(ot->srna, "xaxis", 1, "X-Axis", "Smooth along the X axis");
 	RNA_def_boolean(ot->srna, "yaxis", 1, "Y-Axis", "Smooth along the Y axis");
 	RNA_def_boolean(ot->srna, "zaxis", 1, "Z-Axis", "Smooth along the Z axis");
+}
+
+static int edbm_do_smooth_laplacian_vertex_exec(bContext *C, wmOperator *op)
+{
+	Object *obedit = CTX_data_edit_object(C);
+	BMEditMesh *em = BMEdit_FromObject(obedit);
+	int usex = TRUE, usey = TRUE, usez = TRUE, volume_preservation = TRUE;
+	int i, repeat;
+	float lambda;
+	float lambda_border;
+	BMIter fiter;
+	BMFace *f;
+
+	/* Check if select faces are triangles	*/
+	BM_ITER_MESH (f, &fiter, em->bm, BM_FACES_OF_MESH) {
+		if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
+			if (f->len > 4) {
+				BKE_report(op->reports, RPT_WARNING, "Selected faces must be triangles or quads");
+				return OPERATOR_CANCELLED;
+			}	
+		}
+	}
+
+	/* mirror before smooth */
+	if (((Mesh *)obedit->data)->editflag & ME_EDIT_MIRROR_X) {
+		EDBM_verts_mirror_cache_begin(em, TRUE);
+	}
+
+	repeat = RNA_int_get(op->ptr, "repeat");
+	lambda = RNA_float_get(op->ptr, "lambda");
+	lambda_border = RNA_float_get(op->ptr, "lambda_border");
+	usex = RNA_boolean_get(op->ptr, "use_x");
+	usey = RNA_boolean_get(op->ptr, "use_y");
+	usez = RNA_boolean_get(op->ptr, "use_z");
+	volume_preservation = RNA_boolean_get(op->ptr, "volume_preservation");
+	if (!repeat)
+		repeat = 1;
+	
+	for (i = 0; i < repeat; i++) {
+		if (!EDBM_op_callf(em, op,
+		                   "smooth_laplacian_vert verts=%hv lambda=%f lambda_border=%f use_x=%b use_y=%b use_z=%b volume_preservation=%b",
+		                   BM_ELEM_SELECT, lambda, lambda_border, usex, usey, usez, volume_preservation))
+		{
+			return OPERATOR_CANCELLED;
+		}
+	}
+
+	/* apply mirror */
+	if (((Mesh *)obedit->data)->editflag & ME_EDIT_MIRROR_X) {
+		EDBM_verts_mirror_apply(em, BM_ELEM_SELECT, 0);
+		EDBM_verts_mirror_cache_end(em);
+	}
+
+	EDBM_update_generic(C, em, TRUE);
+
+	return OPERATOR_FINISHED;
+}
+
+void MESH_OT_vertices_smooth_laplacian(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Laplacian Smooth Vertex";
+	ot->description = "Laplacian smooth of selected vertices";
+	ot->idname = "MESH_OT_vertices_smooth_laplacian";
+	
+	/* api callbacks */
+	ot->exec = edbm_do_smooth_laplacian_vertex_exec;
+	ot->poll = ED_operator_editmesh;
+	
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	RNA_def_int(ot->srna, "repeat", 1, 1, 200,
+	            "Number of iterations to smooth the mesh", "", 1, 200);
+	RNA_def_float(ot->srna, "lambda", 0.00005f, 0.0000001f, 1000.0f,
+	              "Lambda factor", "", 0.0000001f, 1000.0f);
+	RNA_def_float(ot->srna, "lambda_border", 0.00005f, 0.0000001f, 1000.0f,
+	              "Lambda factor in border", "", 0.0000001f, 1000.0f);
+	RNA_def_boolean(ot->srna, "use_x", 1, "Smooth X Axis", "Smooth object along	X axis");
+	RNA_def_boolean(ot->srna, "use_y", 1, "Smooth Y Axis", "Smooth object along	Y axis");
+	RNA_def_boolean(ot->srna, "use_z", 1, "Smooth Z Axis", "Smooth object along	Z axis");
+	RNA_def_boolean(ot->srna, "volume_preservation", 1, "Preserve Volume", "Apply volume preservation after smooth");
 }
 
 /********************** Smooth/Solid Operators *************************/
@@ -2041,7 +2183,7 @@ static int edbm_remove_doubles_exec(bContext *C, wmOperator *op)
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BMEdit_FromObject(obedit);
 	BMOperator bmop;
-	const float mergedist = RNA_float_get(op->ptr, "mergedist");
+	const float threshold = RNA_float_get(op->ptr, "threshold");
 	int use_unselected = RNA_boolean_get(op->ptr, "use_unselected");
 	int totvert_orig = em->bm->totvert;
 	int count;
@@ -2049,7 +2191,7 @@ static int edbm_remove_doubles_exec(bContext *C, wmOperator *op)
 	if (use_unselected) {
 		EDBM_op_init(em, &bmop, op,
 		             "automerge verts=%hv dist=%f",
-		             BM_ELEM_SELECT, mergedist);
+		             BM_ELEM_SELECT, threshold);
 		BMO_op_exec(em->bm, &bmop);
 
 		if (!EDBM_op_finish(em, &bmop, op, TRUE)) {
@@ -2059,7 +2201,7 @@ static int edbm_remove_doubles_exec(bContext *C, wmOperator *op)
 	else {
 		EDBM_op_init(em, &bmop, op,
 		             "find_doubles verts=%hv dist=%f",
-		             BM_ELEM_SELECT, mergedist);
+		             BM_ELEM_SELECT, threshold);
 		BMO_op_exec(em->bm, &bmop);
 
 		if (!EDBM_op_callf(em, op, "weld_verts targetmap=%s", &bmop, "targetmapout")) {
@@ -2073,7 +2215,7 @@ static int edbm_remove_doubles_exec(bContext *C, wmOperator *op)
 	}
 	
 	count = totvert_orig - em->bm->totvert;
-	BKE_reportf(op->reports, RPT_INFO, "Removed %d vert%s", count, (count == 1) ? "ex" : "ices");
+	BKE_reportf(op->reports, RPT_INFO, "Removed %d vertices", count);
 
 	EDBM_update_generic(C, em, TRUE);
 
@@ -2094,8 +2236,7 @@ void MESH_OT_remove_doubles(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_float(ot->srna, "mergedist", 0.0001f, 0.000001f, 50.0f, 
-	              "Merge Distance",
+	RNA_def_float(ot->srna, "threshold", 0.0001f, 0.000001f, 50.0f,  "Merge Distance",
 	              "Minimum distance between elements to merge", 0.00001, 10.0);
 	RNA_def_boolean(ot->srna, "use_unselected", 0, "Unselected", "Merge selected to other unselected vertices");
 }
@@ -2140,7 +2281,7 @@ static int edbm_select_vertex_path_exec(bContext *C, wmOperator *op)
 	}
 
 	/* if those are not found, because vertices where selected by e.g.
-	   border or circle select, find two selected vertices */
+	 * border or circle select, find two selected vertices */
 	if (svert == NULL) {
 		BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
 			if (!BM_elem_flag_test(eve, BM_ELEM_SELECT) || BM_elem_flag_test(eve, BM_ELEM_HIDDEN))
@@ -2150,7 +2291,7 @@ static int edbm_select_vertex_path_exec(bContext *C, wmOperator *op)
 			else if (evert == NULL) evert = eve;
 			else {
 				/* more than two vertices are selected,
-				   show warning message and cancel operator */
+				 * show warning message and cancel operator */
 				svert = evert = NULL;
 				break;
 			}
@@ -2158,7 +2299,7 @@ static int edbm_select_vertex_path_exec(bContext *C, wmOperator *op)
 	}
 
 	if (svert == NULL || evert == NULL) {
-		BKE_report(op->reports, RPT_WARNING, "Path Selection requires that two vertices be selected");
+		BKE_report(op->reports, RPT_WARNING, "Path selection requires two vertices to be selected");
 		return OPERATOR_CANCELLED;
 	}
 
@@ -2297,7 +2438,7 @@ static int edbm_blend_from_shape_exec(bContext *C, wmOperator *op)
 	totshape = CustomData_number_of_layers(&em->bm->vdata, CD_SHAPEKEY);
 	if (totshape == 0 || shape < 0 || shape >= totshape)
 		return OPERATOR_CANCELLED;
-	
+
 	/* get shape key - needed for finding reference shape (for add mode only) */
 	if (key) {
 		kb = BLI_findlink(&key->block, shape);
@@ -2376,7 +2517,7 @@ void MESH_OT_blend_from_shape(wmOperatorType *ot)
 
 	/* api callbacks */
 	ot->exec = edbm_blend_from_shape_exec;
-	ot->invoke = WM_operator_props_popup;
+	ot->invoke = WM_operator_props_popup_call;
 	ot->poll = ED_operator_editmesh;
 
 	/* flags */
@@ -2526,11 +2667,6 @@ void MESH_OT_solidify(wmOperatorType *ot)
 	RNA_def_property_ui_range(prop, -10, 10, 0.1, 4);
 }
 
-typedef struct CutCurve {
-	float x;
-	float y;
-} CutCurve;
-
 /* ******************************************************************** */
 /* Knife Subdivide Tool.  Subdivides edges intersected by a mouse trail
  * drawn by user.
@@ -2564,15 +2700,14 @@ static EnumPropertyItem knife_items[] = {
 
 /* bm_edge_seg_isect() Determines if and where a mouse trail intersects an BMEdge */
 
-static float bm_edge_seg_isect(BMEdge *e, CutCurve *c, int len, char mode,
-                               struct GHash *gh, int *isected)
+static float bm_edge_seg_isect(const float sco_a[2], const float sco_b[2],
+                               float (*mouse_path)[2], int len, char mode, int *isected)
 {
 #define MAXSLOPE 100000
 	float x11, y11, x12 = 0, y12 = 0, x2max, x2min, y2max;
 	float y2min, dist, lastdist = 0, xdiff2, xdiff1;
 	float m1, b1, m2, b2, x21, x22, y21, y22, xi;
 	float yi, x1min, x1max, y1max, y1min, perc = 0;
-	float  *scr;
 	float threshold = 0.0;
 	int i;
 	
@@ -2580,13 +2715,11 @@ static float bm_edge_seg_isect(BMEdge *e, CutCurve *c, int len, char mode,
 	// XXX threshold = scene->toolsettings->select_thresh / 100;
 	
 	/* Get screen coords of verts */
-	scr = BLI_ghash_lookup(gh, e->v1);
-	x21 = scr[0];
-	y21 = scr[1];
+	x21 = sco_a[0];
+	y21 = sco_a[1];
 	
-	scr = BLI_ghash_lookup(gh, e->v2);
-	x22 = scr[0];
-	y22 = scr[1];
+	x22 = sco_b[0];
+	y22 = sco_b[1];
 	
 	xdiff2 = (x22 - x21);
 	if (xdiff2) {
@@ -2608,11 +2741,11 @@ static float bm_edge_seg_isect(BMEdge *e, CutCurve *c, int len, char mode,
 				y11 = y12;
 			}
 			else {
-				x11 = c[i].x;
-				y11 = c[i].y;
+				x11 = mouse_path[i][0];
+				y11 = mouse_path[i][1];
 			}
-			x12 = c[i].x;
-			y12 = c[i].y;
+			x12 = mouse_path[i][0];
+			y12 = mouse_path[i][1];
 			
 			/* test e->v1 */
 			if ((x11 == x21 && y11 == y21) || (x12 == x21 && y12 == y21)) {
@@ -2636,11 +2769,11 @@ static float bm_edge_seg_isect(BMEdge *e, CutCurve *c, int len, char mode,
 			y11 = y12;
 		}
 		else {
-			x11 = c[i].x;
-			y11 = c[i].y;
+			x11 = mouse_path[i][0];
+			y11 = mouse_path[i][1];
 		}
-		x12 = c[i].x;
-		y12 = c[i].y;
+		x12 = mouse_path[i][0];
+		y12 = mouse_path[i][1];
 		
 		/* Perp. Distance from point to line */
 		if (m2 != MAXSLOPE) dist = (y12 - m2 * x12 - b2);  /* /sqrt(m2 * m2 + 1); Only looking for */
@@ -2660,21 +2793,21 @@ static float bm_edge_seg_isect(BMEdge *e, CutCurve *c, int len, char mode,
 				m1 = MAXSLOPE;
 				b1 = x12;
 			}
-			x2max = maxf(x21, x22) + 0.001f; /* prevent missed edges   */
-			x2min = minf(x21, x22) - 0.001f; /* due to round off error */
-			y2max = maxf(y21, y22) + 0.001f;
-			y2min = minf(y21, y22) - 0.001f;
+			x2max = max_ff(x21, x22) + 0.001f; /* prevent missed edges   */
+			x2min = min_ff(x21, x22) - 0.001f; /* due to round off error */
+			y2max = max_ff(y21, y22) + 0.001f;
+			y2min = min_ff(y21, y22) - 0.001f;
 			
 			/* Found an intersect,  calc intersect point */
 			if (m1 == m2) { /* co-incident lines */
 				/* cut at 50% of overlap area */
-				x1max = maxf(x11, x12);
-				x1min = minf(x11, x12);
-				xi = (minf(x2max, x1max) + maxf(x2min, x1min)) / 2.0f;
+				x1max = max_ff(x11, x12);
+				x1min = min_ff(x11, x12);
+				xi = (min_ff(x2max, x1max) + max_ff(x2min, x1min)) / 2.0f;
 				
-				y1max = maxf(y11, y12);
-				y1min = minf(y11, y12);
-				yi = (minf(y2max, y1max) + maxf(y2min, y1min)) / 2.0f;
+				y1max = max_ff(y11, y12);
+				y1min = min_ff(y11, y12);
+				yi = (min_ff(y2max, y1max) + max_ff(y2min, y1min)) / 2.0f;
 			}
 			else if (m2 == MAXSLOPE) {
 				xi = x22;
@@ -2714,13 +2847,13 @@ static float bm_edge_seg_isect(BMEdge *e, CutCurve *c, int len, char mode,
 				
 				break;
 			}
-		}	
+		}
 		lastdist = dist;
 	}
 	return perc;
-} 
+}
 
-#define MAX_CUTS 2048
+#define ELE_EDGE_CUT 1
 
 static int edbm_knife_cut_exec(bContext *C, wmOperator *op)
 {
@@ -2732,76 +2865,93 @@ static int edbm_knife_cut_exec(bContext *C, wmOperator *op)
 	BMIter iter;
 	BMEdge *be;
 	BMOperator bmop;
-	CutCurve curve[MAX_CUTS];
-	struct GHash *gh;
 	float isect = 0.0f;
-	float  *scr, co[4];
-	int len = 0, isected;
+	int len = 0, isected, i;
 	short numcuts = 1, mode = RNA_int_get(op->ptr, "type");
+
+	/* allocd vars */
+	float (*screen_vert_coords)[2], (*sco)[2], (*mouse_path)[2];
 	
 	/* edit-object needed for matrix, and ar->regiondata for projections to work */
 	if (ELEM3(NULL, obedit, ar, ar->regiondata))
 		return OPERATOR_CANCELLED;
 	
 	if (bm->totvertsel < 2) {
-		//error("No edges are selected to operate on");
+		BKE_report(op->reports, RPT_ERROR, "No edges are selected to operate on");
 		return OPERATOR_CANCELLED;
 	}
+
+	len = RNA_collection_length(op->ptr, "path");
+
+	if (len < 2) {
+		BKE_report(op->reports, RPT_ERROR, "Mouse path too short");
+		return OPERATOR_CANCELLED;
+	}
+
+	mouse_path = MEM_mallocN(len * sizeof(*mouse_path), __func__);
 
 	/* get the cut curve */
 	RNA_BEGIN(op->ptr, itemptr, "path")
 	{
-		RNA_float_get_array(&itemptr, "loc", (float *)&curve[len]);
-		len++;
-		if (len >= MAX_CUTS) {
-			break;
-		}
+		RNA_float_get_array(&itemptr, "loc", (float *)&mouse_path[len]);
 	}
 	RNA_END;
-	
-	if (len < 2) {
-		return OPERATOR_CANCELLED;
-	}
+
+	/* for ED_view3d_project_float_object */
+	ED_view3d_init_mats_rv3d(obedit, ar->regiondata);
+
+	/* TODO, investigate using index lookup for screen_vert_coords() rather then a hash table */
 
 	/* the floating point coordinates of verts in screen space will be stored in a hash table according to the vertices pointer */
-	gh = BLI_ghash_ptr_new("knife cut exec");
-	for (bv = BM_iter_new(&iter, bm, BM_VERTS_OF_MESH, NULL); bv; bv = BM_iter_step(&iter)) {
-		scr = MEM_mallocN(sizeof(float) * 2, "Vertex Screen Coordinates");
-		copy_v3_v3(co, bv->co);
-		co[3] = 1.0f;
-		mul_m4_v4(obedit->obmat, co);
-		ED_view3d_project_float(ar, co, scr);
-		BLI_ghash_insert(gh, bv, scr);
+	screen_vert_coords = sco = MEM_mallocN(bm->totvert * sizeof(float) * 2, __func__);
+
+	BM_ITER_MESH_INDEX (bv, &iter, bm, BM_VERTS_OF_MESH, i) {
+		if (ED_view3d_project_float_object(ar, bv->co, *sco, V3D_PROJ_TEST_NOP) != V3D_PROJ_RET_OK) {
+			copy_v2_fl(*sco, FLT_MAX);  /* set error value */
+		}
+		BM_elem_index_set(bv, i); /* set_ok */
+		sco++;
+
 	}
+	bm->elem_index_dirty &= ~BM_VERT; /* clear dirty flag */
 
 	if (!EDBM_op_init(em, &bmop, op, "subdivide_edges")) {
+		MEM_freeN(mouse_path);
+		MEM_freeN(screen_vert_coords);
 		return OPERATOR_CANCELLED;
 	}
 
 	/* store percentage of edge cut for KNIFE_EXACT here.*/
 	for (be = BM_iter_new(&iter, bm, BM_EDGES_OF_MESH, NULL); be; be = BM_iter_step(&iter)) {
+		int is_cut = FALSE;
 		if (BM_elem_flag_test(be, BM_ELEM_SELECT)) {
-			isect = bm_edge_seg_isect(be, curve, len, mode, gh, &isected);
-			
-			if (isect != 0.0f) {
-				if (mode != KNIFE_MULTICUT && mode != KNIFE_MIDPOINT) {
-					BMO_slot_map_float_insert(bm, &bmop,
-					                          "edgepercents",
-					                          be, isect);
+			const float *sco_a = screen_vert_coords[BM_elem_index_get(be->v1)];
+			const float *sco_b = screen_vert_coords[BM_elem_index_get(be->v2)];
 
+			/* check for error value (vert cant be projected) */
+			if ((sco_a[0] != FLT_MAX) && (sco_b[0] != FLT_MAX)) {
+				isect = bm_edge_seg_isect(sco_a, sco_b, mouse_path, len, mode, &isected);
+
+				if (isect != 0.0f) {
+					if (mode != KNIFE_MULTICUT && mode != KNIFE_MIDPOINT) {
+						BMO_slot_map_float_insert(bm, &bmop,
+						                          "edgepercents",
+						                          be, isect);
+					}
 				}
-				BMO_elem_flag_enable(bm, be, 1);
-			}
-			else {
-				BMO_elem_flag_disable(bm, be, 1);
 			}
 		}
-		else {
-			BMO_elem_flag_disable(bm, be, 1);
-		}
+
+		BMO_elem_flag_set(bm, be, ELE_EDGE_CUT, is_cut);
 	}
-	
-	BMO_slot_buffer_from_enabled_flag(bm, &bmop, "edges", BM_EDGE, 1);
+
+
+	/* free all allocs */
+	MEM_freeN(screen_vert_coords);
+	MEM_freeN(mouse_path);
+
+
+	BMO_slot_buffer_from_enabled_flag(bm, &bmop, "edges", BM_EDGE, ELE_EDGE_CUT);
 
 	if (mode == KNIFE_MIDPOINT) numcuts = 1;
 	BMO_slot_int_set(&bmop, "numcuts", numcuts);
@@ -2816,13 +2966,13 @@ static int edbm_knife_cut_exec(bContext *C, wmOperator *op)
 	if (!EDBM_op_finish(em, &bmop, op, TRUE)) {
 		return OPERATOR_CANCELLED;
 	}
-	
-	BLI_ghash_free(gh, NULL, (GHashValFreeFP)MEM_freeN);
 
 	EDBM_update_generic(C, em, TRUE);
 
 	return OPERATOR_FINISHED;
 }
+
+#undef ELE_EDGE_CUT
 
 void MESH_OT_knife_cut(wmOperatorType *ot)
 {
@@ -3062,7 +3212,7 @@ static int edbm_separate_exec(bContext *C, wmOperator *op)
 	}
 	else {
 		if (type == 0) {
-			BKE_report(op->reports, RPT_ERROR, "Selecton not supported in object mode");
+			BKE_report(op->reports, RPT_ERROR, "Selection not supported in object mode");
 			return OPERATOR_CANCELLED;
 		}
 
@@ -3343,7 +3493,8 @@ static int edbm_dissolve_limited_exec(bContext *C, wmOperator *op)
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BMEdit_FromObject(obedit);
 	BMesh *bm = em->bm;
-	float angle_limit = RNA_float_get(op->ptr, "angle_limit");
+	const float angle_limit = RNA_float_get(op->ptr, "angle_limit");
+	const int use_dissolve_boundaries = RNA_boolean_get(op->ptr, "use_dissolve_boundaries");
 
 	char dissolve_flag;
 
@@ -3379,8 +3530,8 @@ static int edbm_dissolve_limited_exec(bContext *C, wmOperator *op)
 	}
 
 	if (!EDBM_op_callf(em, op,
-	                   "dissolve_limit edges=%he verts=%hv angle_limit=%f",
-	                   dissolve_flag, dissolve_flag, angle_limit))
+	                   "dissolve_limit edges=%he verts=%hv angle_limit=%f use_dissolve_boundaries=%b",
+	                   dissolve_flag, dissolve_flag, angle_limit, use_dissolve_boundaries))
 	{
 		return OPERATOR_CANCELLED;
 	}
@@ -3407,8 +3558,10 @@ void MESH_OT_dissolve_limited(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	prop = RNA_def_float_rotation(ot->srna, "angle_limit", 0, NULL, 0.0f, DEG2RADF(180.0f),
-	                              "Max Angle", "Angle Limit in Degrees", 0.0f, DEG2RADF(180.0f));
+	                              "Max Angle", "Angle limit", 0.0f, DEG2RADF(180.0f));
 	RNA_def_property_float_default(prop, DEG2RADF(15.0f));
+	RNA_def_boolean(ot->srna, "use_dissolve_boundaries", 0, "All Boundaries",
+	                "Dissolve all vertices inbetween face boundaries");
 }
 
 static int edbm_split_exec(bContext *C, wmOperator *op)
@@ -3526,7 +3679,7 @@ void MESH_OT_spin(wmOperatorType *ot)
 	RNA_def_float(ot->srna, "degrees", 90.0f, -FLT_MAX, FLT_MAX, "Degrees", "Degrees", -360.0f, 360.0f);
 
 	RNA_def_float_vector(ot->srna, "center", 3, NULL, -FLT_MAX, FLT_MAX, "Center", "Center in global view space", -FLT_MAX, FLT_MAX);
-	RNA_def_float_vector(ot->srna, "axis", 3, NULL, -1.0f, 1.0f, "Axis", "Axis in global view space", -FLT_MAX, FLT_MAX);
+	RNA_def_float_vector(ot->srna, "axis", 3, NULL, -FLT_MAX, FLT_MAX, "Axis", "Axis in global view space", -1.0f, 1.0f);
 
 }
 
@@ -3650,34 +3803,40 @@ void MESH_OT_screw(wmOperatorType *ot)
 
 	RNA_def_float_vector(ot->srna, "center", 3, NULL, -FLT_MAX, FLT_MAX,
 	                     "Center", "Center in global view space", -FLT_MAX, FLT_MAX);
-	RNA_def_float_vector(ot->srna, "axis", 3, NULL, -1.0f, 1.0f,
-	                     "Axis", "Axis in global view space", -FLT_MAX, FLT_MAX);
+	RNA_def_float_vector(ot->srna, "axis", 3, NULL, -FLT_MAX, FLT_MAX,
+	                     "Axis", "Axis in global view space", -1.0f, 1.0f);
 }
 
-static int edbm_select_by_number_vertices_exec(bContext *C, wmOperator *op)
+static int edbm_select_face_by_sides_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BMEdit_FromObject(obedit);
 	BMFace *efa;
 	BMIter iter;
-	int numverts = RNA_int_get(op->ptr, "number");
-	int type = RNA_enum_get(op->ptr, "type");
+	const int numverts = RNA_int_get(op->ptr, "number");
+	const int type = RNA_enum_get(op->ptr, "type");
 
 	BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
 
-		int select = 0;
+		int select;
 
-		if (type == 0 && efa->len < numverts) {
-			select = 1;
-		}
-		else if (type == 1 && efa->len == numverts) {
-			select = 1;
-		}
-		else if (type == 2 && efa->len > numverts) {
-			select = 1;
-		}
-		else if (type == 3 && efa->len != numverts) {
-			select = 1;
+		switch (type) {
+			case 0:
+				select = (efa->len < numverts);
+				break;
+			case 1:
+				select = (efa->len == numverts);
+				break;
+			case 2:
+				select = (efa->len > numverts);
+				break;
+			case 3:
+				select = (efa->len != numverts);
+				break;
+			default:
+				BLI_assert(0);
+				select = FALSE;
+				break;
 		}
 
 		if (select) {
@@ -3691,7 +3850,7 @@ static int edbm_select_by_number_vertices_exec(bContext *C, wmOperator *op)
 	return OPERATOR_FINISHED;
 }
 
-void MESH_OT_select_by_number_vertices(wmOperatorType *ot)
+void MESH_OT_select_face_by_sides(wmOperatorType *ot)
 {
 	static const EnumPropertyItem type_items[] = {
 		{0, "LESS", 0, "Less Than", ""},
@@ -3702,12 +3861,12 @@ void MESH_OT_select_by_number_vertices(wmOperatorType *ot)
 	};
 
 	/* identifiers */
-	ot->name = "Select by Number of Vertices";
-	ot->description = "Select vertices or faces by vertex count";
-	ot->idname = "MESH_OT_select_by_number_vertices";
+	ot->name = "Select Faces by Sides";
+	ot->description = "Select vertices or faces by the number of polygon sides";
+	ot->idname = "MESH_OT_select_face_by_sides";
 	
 	/* api callbacks */
-	ot->exec = edbm_select_by_number_vertices_exec;
+	ot->exec = edbm_select_face_by_sides_exec;
 	ot->poll = ED_operator_editmesh;
 	
 	/* flags */
@@ -3835,8 +3994,8 @@ static void sort_bmelem_flag(Scene *scene, Object *ob,
 	char *pblock[3] = {NULL, NULL, NULL}, *pb;
 	BMElemSort *sblock[3] = {NULL, NULL, NULL}, *sb;
 	int *map[3] = {NULL, NULL, NULL}, *mp;
-	int totelem[3] = {0, 0, 0}, tot;
-	int affected[3] = {0, 0, 0}, aff;
+	int totelem[3] = {0, 0, 0};
+	int affected[3] = {0, 0, 0};
 	int i, j;
 
 	if (!(types && flag && action))
@@ -4211,8 +4370,8 @@ static void sort_bmelem_flag(Scene *scene, Object *ob,
 		if (pb && sb && !map[j]) {
 			char *p_blk;
 			BMElemSort *s_blk;
-			tot = totelem[j];
-			aff = affected[j];
+			int tot = totelem[j];
+			int aff = affected[j];
 
 			qsort(sb, aff, sizeof(BMElemSort), bmelemsort_comp);
 
@@ -4261,7 +4420,7 @@ static int edbm_sort_elements_exec(bContext *C, wmOperator *op)
 
 	if (ELEM(action, SRT_VIEW_ZAXIS, SRT_VIEW_XAXIS)) {
 		if (rv3d == NULL) {
-			BKE_report(op->reports, RPT_ERROR, "View not found, can't sort by view axis");
+			BKE_report(op->reports, RPT_ERROR, "View not found, cannot sort by view axis");
 			return OPERATOR_CANCELLED;
 		}
 	}
@@ -4442,13 +4601,18 @@ void MESH_OT_noise(wmOperatorType *ot)
 	RNA_def_float(ot->srna, "factor", 0.1f, -FLT_MAX, FLT_MAX, "Factor", "", 0.0f, 1.0f);
 }
 
+#define NEW_BEVEL 1
+
 typedef struct {
 	BMEditMesh *em;
 	BMBackup mesh_backup;
+#ifndef NEW_BEVEL
 	float *weights;
 	int li;
+#endif
 	int mcenter[2];
 	float initial_length;
+	float pixel_size;  /* use when mouse input is interpreted as spatial distance */
 	int is_modal;
 	NumInput num_input;
 	float shift_factor; /* The current factor when shift is pressed. Negative when shift not active. */
@@ -4458,13 +4622,25 @@ typedef struct {
 
 static void edbm_bevel_update_header(wmOperator *op, bContext *C)
 {
+#ifdef NEW_BEVEL
+	static char str[] = "Confirm: Enter/LClick, Cancel: (Esc/RMB), offset: %s, segments: %d";
+#else
 	static char str[] = "Confirm: Enter/LClick, Cancel: (Esc/RMB), factor: %s, Use Dist (D): %s: Use Even (E): %s";
+	BevelData *opdata = op->customdata;
+#endif
 
 	char msg[HEADER_LENGTH];
 	ScrArea *sa = CTX_wm_area(C);
-	BevelData *opdata = op->customdata;
 
 	if (sa) {
+#ifdef NEW_BEVEL
+		char offset_str[NUM_STR_REP_LEN];
+		BLI_snprintf(offset_str, NUM_STR_REP_LEN, "%f", RNA_float_get(op->ptr, "offset"));
+		BLI_snprintf(msg, HEADER_LENGTH, str,
+		             offset_str,
+		             RNA_int_get(op->ptr, "segments")
+		            );
+#else
 		char factor_str[NUM_STR_REP_LEN];
 		if (hasNumInput(&opdata->num_input))
 			outputNumInput(&opdata->num_input, factor_str);
@@ -4475,11 +4651,13 @@ static void edbm_bevel_update_header(wmOperator *op, bContext *C)
 		             RNA_boolean_get(op->ptr, "use_dist") ? "On" : "Off",
 		             RNA_boolean_get(op->ptr, "use_even") ? "On" : "Off"
 		            );
+#endif
 
 		ED_area_headerprint(sa, msg);
 	}
 }
 
+#ifndef NEW_BEVEL
 static void edbm_bevel_recalc_weights(wmOperator *op)
 {
 	float df, s, ftot;
@@ -4507,15 +4685,20 @@ static void edbm_bevel_recalc_weights(wmOperator *op)
 
 	mul_vn_fl(opdata->weights, recursion, 1.0f / (float)ftot);
 }
+#endif
 
 static int edbm_bevel_init(bContext *C, wmOperator *op, int is_modal)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BMEdit_FromObject(obedit);
+#ifdef NEW_BEVEL
+	BevelData *opdata;
+#else
 	BMIter iter;
 	BMEdge *eed;
 	BevelData *opdata;
 	int li;
+#endif
 	
 	if (em == NULL) {
 		return 0;
@@ -4523,6 +4706,7 @@ static int edbm_bevel_init(bContext *C, wmOperator *op, int is_modal)
 
 	op->customdata = opdata = MEM_mallocN(sizeof(BevelData), "beveldata_mesh_operator");
 
+#ifndef NEW_BEVEL
 	BM_data_layer_add(em->bm, &em->bm->edata, CD_PROP_FLT);
 	li = CustomData_number_of_layers(&em->bm->edata, CD_PROP_FLT) - 1;
 	
@@ -4532,10 +4716,12 @@ static int edbm_bevel_init(bContext *C, wmOperator *op, int is_modal)
 		
 		*dv = d;
 	}
-	
-	opdata->em = em;
+
 	opdata->li = li;
 	opdata->weights = NULL;
+#endif
+	
+	opdata->em = em;
 	opdata->is_modal = is_modal;
 	opdata->shift_factor = -1.0f;
 
@@ -4545,7 +4731,9 @@ static int edbm_bevel_init(bContext *C, wmOperator *op, int is_modal)
 	/* avoid the cost of allocating a bm copy */
 	if (is_modal)
 		opdata->mesh_backup = EDBM_redo_state_store(em);
+#ifndef NEW_BEVEL
 	edbm_bevel_recalc_weights(op);
+#endif
 
 	return 1;
 }
@@ -4555,6 +4743,26 @@ static int edbm_bevel_calc(bContext *C, wmOperator *op)
 	BevelData *opdata = op->customdata;
 	BMEditMesh *em = opdata->em;
 	BMOperator bmop;
+#ifdef NEW_BEVEL
+	float offset = RNA_float_get(op->ptr, "offset");
+	int segments = RNA_int_get(op->ptr, "segments");
+
+	/* revert to original mesh */
+	if (opdata->is_modal) {
+		EDBM_redo_state_restore(opdata->mesh_backup, em, FALSE);
+	}
+
+	if (!EDBM_op_init(em, &bmop, op,
+		              "bevel geom=%hev offset=%f segments=%i",
+		              BM_ELEM_SELECT, offset, segments))
+		{
+			return 0;
+		}
+		
+	BMO_op_exec(em->bm, &bmop);
+	if (!EDBM_op_finish(em, &bmop, op, TRUE))
+		return 0;
+#else
 	int i;
 
 	float factor = RNA_float_get(op->ptr, "percent") /*, dfac */ /* UNUSED */;
@@ -4582,6 +4790,7 @@ static int edbm_bevel_calc(bContext *C, wmOperator *op)
 		if (!EDBM_op_finish(em, &bmop, op, TRUE))
 			return 0;
 	}
+#endif
 	
 	EDBM_mesh_normals_update(opdata->em);
 	
@@ -4599,10 +4808,12 @@ static void edbm_bevel_exit(bContext *C, wmOperator *op)
 	if (sa) {
 		ED_area_headerprint(sa, NULL);
 	}
+#ifndef NEW_BEVEL
 	BM_data_layer_free_n(opdata->em->bm, &opdata->em->bm->edata, CD_PROP_FLT, opdata->li);
 
 	if (opdata->weights)
 		MEM_freeN(opdata->weights);
+#endif
 	if (opdata->is_modal) {
 		EDBM_redo_state_free(&opdata->mesh_backup, NULL, FALSE);
 	}
@@ -4646,8 +4857,10 @@ static int edbm_bevel_exec(bContext *C, wmOperator *op)
 static int edbm_bevel_invoke(bContext *C, wmOperator *op, wmEvent *event)
 {
 	/* TODO make modal keymap (see fly mode) */
+	RegionView3D *rv3d = CTX_wm_region_view3d(C);
 	BevelData *opdata;
 	float mlen[2];
+	float center_3d[3];
 
 	if (!edbm_bevel_init(C, op, TRUE)) {
 		return OPERATOR_CANCELLED;
@@ -4656,7 +4869,7 @@ static int edbm_bevel_invoke(bContext *C, wmOperator *op, wmEvent *event)
 	opdata = op->customdata;
 
 	/* initialize mouse values */
-	if (!calculateTransformCenter(C, V3D_CENTROID, NULL, opdata->mcenter)) {
+	if (!calculateTransformCenter(C, V3D_CENTROID, center_3d, opdata->mcenter)) {
 		/* in this case the tool will likely do nothing,
 		 * ideally this will never happen and should be checked for above */
 		opdata->mcenter[0] = opdata->mcenter[1] = 0;
@@ -4664,6 +4877,7 @@ static int edbm_bevel_invoke(bContext *C, wmOperator *op, wmEvent *event)
 	mlen[0] = opdata->mcenter[0] - event->mval[0];
 	mlen[1] = opdata->mcenter[1] - event->mval[1];
 	opdata->initial_length = len_v2(mlen);
+	opdata->pixel_size = rv3d ? ED_view3d_pixel_size(rv3d, center_3d) : 1.0f;
 
 	edbm_bevel_update_header(op, C);
 
@@ -4677,12 +4891,66 @@ static int edbm_bevel_invoke(bContext *C, wmOperator *op, wmEvent *event)
 	return OPERATOR_RUNNING_MODAL;
 }
 
+static float edbm_bevel_mval_factor(wmOperator *op, wmEvent *event)
+{
+	BevelData *opdata = op->customdata;
+#ifdef NEW_BEVEL
+	int use_dist = TRUE;
+#else
+	int use_dist =  RNA_boolean_get(op->ptr, "use_dist");
+#endif
+	float mdiff[2];
+	float factor;
+
+	mdiff[0] = opdata->mcenter[0] - event->mval[0];
+	mdiff[1] = opdata->mcenter[1] - event->mval[1];
+
+	if (use_dist) {
+		factor = ((len_v2(mdiff) - MVAL_PIXEL_MARGIN) - opdata->initial_length) * opdata->pixel_size;
+	}
+	else {
+		factor = (len_v2(mdiff) - MVAL_PIXEL_MARGIN) / opdata->initial_length;
+		factor = factor - 1.0f;  /* a different kind of buffer where nothing happens */
+	}
+
+	/* Fake shift-transform... */
+	if (event->shift) {
+		if (opdata->shift_factor < 0.0f)
+			opdata->shift_factor = RNA_float_get(op->ptr, "percent");
+		factor = (factor - opdata->shift_factor) * 0.1f + opdata->shift_factor;
+	}
+	else if (opdata->shift_factor >= 0.0f)
+		opdata->shift_factor = -1.0f;
+
+	/* clamp differently based on distance/factor */
+	if (use_dist) {
+		if (factor < 0.0f) factor = 0.0f;
+	}
+	else {
+		CLAMP(factor, 0.0f, 1.0f);
+	}
+
+	return factor;
+}
+
 static int edbm_bevel_modal(bContext *C, wmOperator *op, wmEvent *event)
 {
 	BevelData *opdata = op->customdata;
+	int segments = RNA_int_get(op->ptr, "segments");
 
 	if (event->val == KM_PRESS) {
 		/* Try to handle numeric inputs... */
+#ifdef NEW_BEVEL
+		float value;
+
+		if (handleNumInput(&opdata->num_input, event)) {
+			applyNumInput(&opdata->num_input, &value);
+			RNA_float_set(op->ptr, "offset", value);
+			edbm_bevel_calc(C, op);
+			edbm_bevel_update_header(op, C);
+			return OPERATOR_RUNNING_MODAL;
+		}
+#else
 		float factor;
 
 		if (handleNumInput(&opdata->num_input, event)) {
@@ -4694,6 +4962,7 @@ static int edbm_bevel_modal(bContext *C, wmOperator *op, wmEvent *event)
 			edbm_bevel_update_header(op, C);
 			return OPERATOR_RUNNING_MODAL;
 		}
+#endif
 	}
 
 	switch (event->type) {
@@ -4704,26 +4973,12 @@ static int edbm_bevel_modal(bContext *C, wmOperator *op, wmEvent *event)
 
 		case MOUSEMOVE:
 			if (!hasNumInput(&opdata->num_input)) {
-				float factor;
-				float mdiff[2];
-
-				mdiff[0] = opdata->mcenter[0] - event->mval[0];
-				mdiff[1] = opdata->mcenter[1] - event->mval[1];
-
-				factor = opdata->initial_length / -len_v2(mdiff) + 1.0f;
-
-				/* Fake shift-transform... */
-				if (event->shift) {
-					if (opdata->shift_factor < 0.0f)
-						opdata->shift_factor = RNA_float_get(op->ptr, "percent");
-					factor = (factor - opdata->shift_factor) * 0.1f + opdata->shift_factor;
-				}
-				else if (opdata->shift_factor >= 0.0f)
-					opdata->shift_factor = -1.0f;
-
-				CLAMP(factor, 0.0f, 1.0f);
-
+				const float factor = edbm_bevel_mval_factor(op, event);
+#ifdef NEW_BEVEL
+				RNA_float_set(op->ptr, "offset", factor);
+#else
 				RNA_float_set(op->ptr, "percent", factor);
+#endif
 
 				edbm_bevel_calc(C, op);
 				edbm_bevel_update_header(op, C);
@@ -4737,6 +4992,28 @@ static int edbm_bevel_modal(bContext *C, wmOperator *op, wmEvent *event)
 			edbm_bevel_exit(C, op);
 			return OPERATOR_FINISHED;
 
+#ifdef NEW_BEVEL
+		case WHEELUPMOUSE:  /* change number of segments */
+			if (event->val == KM_RELEASE)
+				break;
+
+			segments++;
+			RNA_int_set(op->ptr, "segments", segments);
+			edbm_bevel_calc(C, op);
+			edbm_bevel_update_header(op, C);
+			break;
+
+		case WHEELDOWNMOUSE:  /* change number of segments */
+			if (event->val == KM_RELEASE)
+				break;
+
+			segments = max_ii(segments - 1, 1);
+			RNA_int_set(op->ptr, "segments", segments);
+			edbm_bevel_calc(C, op);
+			edbm_bevel_update_header(op, C);
+			break;
+
+#else
 		case EKEY:
 			if (event->val == KM_PRESS) {
 				int use_even =  RNA_boolean_get(op->ptr, "use_even");
@@ -4752,10 +5029,16 @@ static int edbm_bevel_modal(bContext *C, wmOperator *op, wmEvent *event)
 				int use_dist =  RNA_boolean_get(op->ptr, "use_dist");
 				RNA_boolean_set(op->ptr, "use_dist", !use_dist);
 
+				{
+					const float factor = edbm_bevel_mval_factor(op, event);
+					RNA_float_set(op->ptr, "percent", factor);
+				}
+
 				edbm_bevel_calc(C, op);
 				edbm_bevel_update_header(op, C);
 			}
 			break;
+#endif
 	}
 
 	return OPERATOR_RUNNING_MODAL;
@@ -4778,12 +5061,18 @@ void MESH_OT_bevel(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_GRAB_POINTER | OPTYPE_BLOCKING;
 
+#ifdef NEW_BEVEL
+	RNA_def_float(ot->srna, "offset", 0.0f, -FLT_MAX, FLT_MAX, "Offset", "", 0.0f, 1.0f);
+	RNA_def_int(ot->srna, "segments", 1, 1, 50, "Segments", "Segments for curved edge", 1, 8);
+#else
+	/* take note, used as a factor _and_ a distance depending on 'use_dist' */
 	RNA_def_float(ot->srna, "percent", 0.0f, -FLT_MAX, FLT_MAX, "Percentage", "", 0.0f, 1.0f);
 	/* XXX, disabled for 2.63 release, needs to work much better without overlap before we can give to users. */
 /*	RNA_def_int(ot->srna, "recursion", 1, 1, 50, "Recursion Level", "Recursion Level", 1, 8); */
 
 	RNA_def_boolean(ot->srna, "use_even", FALSE, "Even",     "Calculate evenly spaced bevel");
 	RNA_def_boolean(ot->srna, "use_dist", FALSE, "Distance", "Interpret the percent in blender units");
+#endif
 
 }
 
@@ -4842,8 +5131,9 @@ typedef struct {
 	float old_depth;
 	int mcenter[2];
 	int modify_depth;
-	int is_modal;
 	float initial_length;
+	float pixel_size;  /* use when mouse input is interpreted as spatial distance */
+	int is_modal;
 	int shift;
 	float shift_amount;
 	BMBackup backup;
@@ -5009,15 +5299,17 @@ static int edbm_inset_exec(bContext *C, wmOperator *op)
 
 static int edbm_inset_invoke(bContext *C, wmOperator *op, wmEvent *event)
 {
+	RegionView3D *rv3d = CTX_wm_region_view3d(C);
 	InsetData *opdata;
 	float mlen[2];
+	float center_3d[3];
 
 	edbm_inset_init(C, op, TRUE);
 
 	opdata = op->customdata;
 
 	/* initialize mouse values */
-	if (!calculateTransformCenter(C, V3D_CENTROID, NULL, opdata->mcenter)) {
+	if (!calculateTransformCenter(C, V3D_CENTROID, center_3d, opdata->mcenter)) {
 		/* in this case the tool will likely do nothing,
 		 * ideally this will never happen and should be checked for above */
 		opdata->mcenter[0] = opdata->mcenter[1] = 0;
@@ -5025,6 +5317,7 @@ static int edbm_inset_invoke(bContext *C, wmOperator *op, wmEvent *event)
 	mlen[0] = opdata->mcenter[0] - event->mval[0];
 	mlen[1] = opdata->mcenter[1] - event->mval[1];
 	opdata->initial_length = len_v2(mlen);
+	opdata->pixel_size = rv3d ? ED_view3d_pixel_size(rv3d, center_3d) : 1.0f;
 
 	edbm_inset_calc(C, op);
 
@@ -5044,7 +5337,7 @@ static int edbm_inset_modal(bContext *C, wmOperator *op, wmEvent *event)
 
 		if (handleNumInput(&opdata->num_input, event)) {
 			applyNumInput(&opdata->num_input, amounts);
-			amounts[0] = maxf(amounts[0], 0.0f);
+			amounts[0] = max_ff(amounts[0], 0.0f);
 			RNA_float_set(op->ptr, "thickness", amounts[0]);
 			RNA_float_set(op->ptr, "depth", amounts[1]);
 
@@ -5074,9 +5367,9 @@ static int edbm_inset_modal(bContext *C, wmOperator *op, wmEvent *event)
 				mdiff[1] = opdata->mcenter[1] - event->mval[1];
 
 				if (opdata->modify_depth)
-					amount = opdata->old_depth + opdata->initial_length / len_v2(mdiff) - 1.0f;
+					amount = opdata->old_depth     + ((len_v2(mdiff) - opdata->initial_length) * opdata->pixel_size);
 				else
-					amount = opdata->old_thickness - opdata->initial_length / len_v2(mdiff) + 1.0f;
+					amount = opdata->old_thickness - ((len_v2(mdiff) - opdata->initial_length) * opdata->pixel_size);
 
 				/* Fake shift-transform... */
 				if (opdata->shift)
@@ -5085,7 +5378,7 @@ static int edbm_inset_modal(bContext *C, wmOperator *op, wmEvent *event)
 				if (opdata->modify_depth)
 					RNA_float_set(op->ptr, "depth", amount);
 				else {
-					amount = maxf(amount, 0.0f);
+					amount = max_ff(amount, 0.0f);
 					RNA_float_set(op->ptr, "thickness", amount);
 				}
 
@@ -5283,6 +5576,7 @@ void MESH_OT_wireframe(wmOperatorType *ot)
 	RNA_def_boolean(ot->srna, "use_replace",         TRUE, "Replace", "Remove original faces");
 }
 
+#ifdef WITH_BULLET
 static int edbm_convex_hull_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
@@ -5375,4 +5669,56 @@ void MESH_OT_convex_hull(wmOperatorType *ot)
 	                "Merge adjacent triangles into quads");
 
 	join_triangle_props(ot);
+}
+#endif
+
+static int mesh_symmetrize_exec(bContext *C, wmOperator *op)
+{
+	Object *obedit = CTX_data_edit_object(C);
+	BMEditMesh *em = BMEdit_FromObject(obedit);
+	BMOperator bmop;
+
+	EDBM_op_init(em, &bmop, op, "symmetrize input=%hvef direction=%i",
+	             BM_ELEM_SELECT, RNA_enum_get(op->ptr, "direction"));
+	BMO_op_exec(em->bm, &bmop);
+
+	if (!EDBM_op_finish(em, &bmop, op, TRUE)) {
+		return OPERATOR_CANCELLED;
+	}
+	else {
+		EDBM_update_generic(C, em, TRUE);
+		EDBM_selectmode_flush(em);
+		return OPERATOR_FINISHED;
+	}
+}
+
+void MESH_OT_symmetrize(struct wmOperatorType *ot)
+{
+	static EnumPropertyItem axis_direction_items[] = {
+		{BMO_SYMMETRIZE_NEGATIVE_X, "NEGATIVE_X", 0, "-X to +X", ""},
+		{BMO_SYMMETRIZE_POSITIVE_X, "POSITIVE_X", 0, "+X to -X", ""},
+
+		{BMO_SYMMETRIZE_NEGATIVE_Y, "NEGATIVE_Y", 0, "-Y to +Y", ""},
+		{BMO_SYMMETRIZE_POSITIVE_Y, "POSITIVE_Y", 0, "+Y to -Y", ""},
+
+		{BMO_SYMMETRIZE_NEGATIVE_Z, "NEGATIVE_Z", 0, "-Z to +Z", ""},
+		{BMO_SYMMETRIZE_POSITIVE_Z, "POSITIVE_Z", 0, "+Z to -Z", ""},
+		{0, NULL, 0, NULL, NULL},
+	};
+
+	/* identifiers */
+	ot->name = "Symmetrize";
+	ot->description = "Enforce symmetry (both form and topological) across an axis";
+	ot->idname = "MESH_OT_symmetrize";
+
+	/* api callbacks */
+	ot->exec = mesh_symmetrize_exec;
+	ot->poll = ED_operator_editmesh;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	ot->prop = RNA_def_enum(ot->srna, "direction", axis_direction_items,
+	                        BMO_SYMMETRIZE_NEGATIVE_X,
+	                        "Direction", "Which sides to copy from and to");
 }

@@ -51,7 +51,7 @@
 
 #include "MEM_guardedalloc.h"
 #include "BKE_global.h"
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 
 #include "BKE_bmfont.h"
 #include "BKE_bmfont_types.h"
@@ -102,7 +102,7 @@ void readBitmapFontVersion0(ImBuf * ibuf, unsigned char * rect, int step)
 		
 		buffer = MEM_mallocN(bytes, "readBitmapFontVersion0:buffer");
 		
-		index = 0;	
+		index = 0;
 		for (i = 0; i < bytes; i++) {
 			buffer[i] = rect[index];
 			index += step;
@@ -247,12 +247,13 @@ int locateGlyph(bmFont *bmfont, unsigned short unicode)
 	return(current);
 }
 
-void matrixGlyph(ImBuf * ibuf, unsigned short unicode,
-		float *centerx, float *centery,
-		float *sizex,   float *sizey,
-		float *transx,  float *transy,
-		float *movex,   float *movey,
-		float *advance)
+void matrixGlyph(
+        ImBuf * ibuf, unsigned short unicode,
+        float *centerx, float *centery,
+        float *sizex,   float *sizey,
+        float *transx,  float *transy,
+        float *movex,   float *movey,
+        float *advance)
 {
 	int index;
 	bmFont *bmfont;

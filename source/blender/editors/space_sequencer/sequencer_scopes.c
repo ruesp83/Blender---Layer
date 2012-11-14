@@ -32,7 +32,7 @@
 #include "BLI_math_color.h"
 #include "BLI_utildefines.h"
 
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "sequencer_intern.h"

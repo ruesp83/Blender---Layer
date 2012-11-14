@@ -27,7 +27,7 @@
 #include "COM_NodeOperation.h"
 #include "DNA_movieclip_types.h"
 #include "BLI_listbase.h"
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 
 /**
  * Base class for all renderlayeroperations

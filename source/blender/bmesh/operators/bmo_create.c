@@ -84,7 +84,7 @@ static int count_edge_faces(BMesh *bm, BMEdge *e);
 BLI_INLINE BMDiskLink *rs_edge_link_get(BMEdge *e, BMVert *v, EdgeData *e_data)
 {
 	return v == ((BMEdge *)e)->v1 ? &(((EdgeData *)e_data)->v1_disk_link) :
-	                                &(((EdgeData *)e_data)->v2_disk_link) ;
+	                                &(((EdgeData *)e_data)->v2_disk_link);
 }
 
 static int rotsys_append_edge(BMEdge *e, BMVert *v,
@@ -168,7 +168,7 @@ static void rotsys_reverse(BMEdge *UNUSED(e), BMVert *v, EdgeData *edata, VertDa
 	BMEdge **edges = NULL;
 	BMEdge *e_first;
 	BMEdge *e;
-	BLI_array_staticdeclare(edges, BM_NGON_STACK_SIZE);
+	BLI_array_staticdeclare(edges, BM_DEFAULT_NGON_STACK_SIZE);
 	int i, totedge;
 	
 	e = e_first = vdata[BM_elem_index_get(v)].e;
@@ -359,10 +359,10 @@ static void init_rotsys(BMesh *bm, EdgeData *edata, VertData *vdata)
 	BMIter iter;
 	BMEdge *e;
 	BMEdge **edges = NULL;
-	BLI_array_staticdeclare(edges, BM_NGON_STACK_SIZE);
+	BLI_array_staticdeclare(edges, BM_DEFAULT_NGON_STACK_SIZE);
 	BMVert *v;
 	/* BMVert **verts = NULL; */
-	/* BLI_array_staticdeclare(verts, BM_NGON_STACK_SIZE); */ /* UNUSE */
+	/* BLI_array_staticdeclare(verts, BM_DEFAULT_NGON_STACK_SIZE); */ /* UNUSE */
 	int i;
 	
 	BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
@@ -1177,10 +1177,10 @@ void bmo_edgenet_prepare(BMesh *bm, BMOperator *op)
 	}
 
 	if (edges1 && BLI_array_count(edges1) > 2 &&
-	    BM_edge_share_vert_count(edges1[0], edges1[BLI_array_count(edges1) - 1]))
+	    BM_edge_share_vert_check(edges1[0], edges1[BLI_array_count(edges1) - 1]))
 	{
 		if (edges2 && BLI_array_count(edges2) > 2 &&
-		    BM_edge_share_vert_count(edges2[0], edges2[BLI_array_count(edges2) - 1]))
+		    BM_edge_share_vert_check(edges2[0], edges2[BLI_array_count(edges2) - 1]))
 		{
 			BLI_array_free(edges1);
 			BLI_array_free(edges2);
@@ -1193,7 +1193,7 @@ void bmo_edgenet_prepare(BMesh *bm, BMOperator *op)
 	}
 
 	if (edges2 && BLI_array_count(edges2) > 2 &&
-	    BM_edge_share_vert_count(edges2[0], edges2[BLI_array_count(edges2) - 1]))
+	    BM_edge_share_vert_check(edges2[0], edges2[BLI_array_count(edges2) - 1]))
 	{
 		edges2 = NULL;
 	}

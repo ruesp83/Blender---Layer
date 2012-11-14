@@ -95,7 +95,7 @@ static int text_font_draw_character(SpaceText *st, int x, int y, char c)
 static int text_font_draw_character_utf8(SpaceText *st, int x, int y, const char *c)
 {
 	char str[BLI_UTF8_MAX + 1];
-	size_t len = BLI_str_utf8_size(c);
+	size_t len = BLI_str_utf8_size_safe(c);
 	memcpy(str, c, len);
 	str[len] = '\0';
 
@@ -158,7 +158,7 @@ int flatten_string(SpaceText *st, FlattenString *fs, const char *in)
 			in++;
 		}
 		else {
-			size_t len = BLI_str_utf8_size(in);
+			size_t len = BLI_str_utf8_size_safe(in);
 			flatten_string_append(fs, in, r, len);
 			in += len;
 			total++;
@@ -342,7 +342,7 @@ static void txt_format_line(SpaceText *st, TextLine *line, int do_next)
 		if (*str == '\\') {
 			*fmt = prev; fmt++; str++;
 			if (*str == '\0') break;
-			*fmt = prev; fmt++; str += BLI_str_utf8_size(str);
+			*fmt = prev; fmt++; str += BLI_str_utf8_size_safe(str);
 			continue;
 		}
 		/* Handle continuations */
@@ -363,14 +363,14 @@ static void txt_format_line(SpaceText *st, TextLine *line, int do_next)
 			}
 
 			*fmt = 'l';
-			str += BLI_str_utf8_size(str) - 1;
+			str += BLI_str_utf8_size_safe(str) - 1;
 		}
 		/* Not in a string... */
 		else {
 			/* Deal with comments first */
 			if (prev == '#' || *str == '#') {
 				*fmt = '#';
-				str += BLI_str_utf8_size(str) - 1;
+				str += BLI_str_utf8_size_safe(str) - 1;
 			}
 			else if (*str == '"' || *str == '\'') {
 				/* Strings */
@@ -399,7 +399,7 @@ static void txt_format_line(SpaceText *st, TextLine *line, int do_next)
 					*fmt = 'n';
 				}
 				else {
-					str += BLI_str_utf8_size(str) - 1;
+					str += BLI_str_utf8_size_safe(str) - 1;
 					*fmt = 'q';
 				}
 			/* Punctuation */
@@ -407,7 +407,7 @@ static void txt_format_line(SpaceText *st, TextLine *line, int do_next)
 				*fmt = '!';
 			/* Identifiers and other text (no previous ws. or delims. so text continues) */
 			else if (prev == 'q') {
-				str += BLI_str_utf8_size(str) - 1;
+				str += BLI_str_utf8_size_safe(str) - 1;
 				*fmt = 'q';
 			}
 			/* Not ws, a digit, punct, or continuing text. Must be new, check for special words */
@@ -427,7 +427,7 @@ static void txt_format_line(SpaceText *st, TextLine *line, int do_next)
 					*fmt = prev;
 				}
 				else {
-					str += BLI_str_utf8_size(str) - 1;
+					str += BLI_str_utf8_size_safe(str) - 1;
 					*fmt = 'q';
 				}
 			}
@@ -575,7 +575,7 @@ void wrap_offset(SpaceText *st, ARegion *ar, TextLine *linein, int cursin, int *
 		end = max;
 		chop = 1;
 		*offc = 0;
-		for (i = 0, j = 0; linep->line[j]; j += BLI_str_utf8_size(linep->line + j)) {
+		for (i = 0, j = 0; linep->line[j]; j += BLI_str_utf8_size_safe(linep->line + j)) {
 			int chars;
 
 			/* Mimic replacement of tabs */
@@ -640,7 +640,7 @@ void wrap_offset_in_line(SpaceText *st, ARegion *ar, TextLine *linein, int cursi
 	*offc = 0;
 	cursin = txt_utf8_offset_to_index(linein->line, cursin);
 
-	for (i = 0, j = 0; linein->line[j]; j += BLI_str_utf8_size(linein->line + j)) {
+	for (i = 0, j = 0; linein->line[j]; j += BLI_str_utf8_size_safe(linein->line + j)) {
 
 		/* Mimic replacement of tabs */
 		ch = linein->line[j];
@@ -685,7 +685,7 @@ int text_get_char_pos(SpaceText *st, const char *line, int cur)
 {
 	int a = 0, i;
 	
-	for (i = 0; i < cur && line[i]; i += BLI_str_utf8_size(line + i)) {
+	for (i = 0; i < cur && line[i]; i += BLI_str_utf8_size_safe(line + i)) {
 		if (line[i] == '\t')
 			a += st->tabnumber - a % st->tabnumber;
 		else
@@ -698,7 +698,7 @@ static const char *txt_utf8_get_nth(const char *str, int n)
 {
 	int pos = 0;
 	while (str[pos] && n--) {
-		pos += BLI_str_utf8_size(str + pos);
+		pos += BLI_str_utf8_size_safe(str + pos);
 	}
 	return str + pos;
 }
@@ -719,7 +719,7 @@ static int text_draw_wrapped(SpaceText *st, const char *str, int x, int y, int w
 	start = 0; mstart = 0;
 	end = max; mend = txt_utf8_get_nth(str, max) - str;
 	
-	for (i = 0, mi = 0; str[mi]; i++, mi += BLI_str_utf8_size(str + mi)) {
+	for (i = 0, mi = 0; str[mi]; i++, mi += BLI_str_utf8_size_safe(str + mi)) {
 		if (i - start >= max) {
 			/* skip hidden part of line */
 			if (skip) {
@@ -730,7 +730,7 @@ static int text_draw_wrapped(SpaceText *st, const char *str, int x, int y, int w
 			}
 
 			/* Draw the visible portion of text on the overshot line */
-			for (a = start, ma = mstart; a < end; a++, ma += BLI_str_utf8_size(str + ma)) {
+			for (a = start, ma = mstart; a < end; a++, ma += BLI_str_utf8_size_safe(str + ma)) {
 				if (st->showsyntax && format) format_draw_color(format[a]);
 				x += text_font_draw_character_utf8(st, x, y, str + ma);
 			}
@@ -748,7 +748,7 @@ static int text_draw_wrapped(SpaceText *st, const char *str, int x, int y, int w
 	}
 
 	/* Draw the remaining text */
-	for (a = start, ma = mstart; str[ma] && y > 0; a++, ma += BLI_str_utf8_size(str + ma)) {
+	for (a = start, ma = mstart; str[ma] && y > 0; a++, ma += BLI_str_utf8_size_safe(str + ma)) {
 		if (st->showsyntax && format)
 			format_draw_color(format[a]);
 
@@ -786,7 +786,7 @@ static int text_draw(SpaceText *st, char *str, int cshift, int maxwidth, int dra
 			for (a = 0; a < amount; a++) {
 				format_draw_color(format[a]);
 				x += text_font_draw_character_utf8(st, x, y, in + str_shift);
-				str_shift += BLI_str_utf8_size(in + str_shift);
+				str_shift += BLI_str_utf8_size_safe(in + str_shift);
 			}
 		}
 		else text_font_draw(st, x, y, in);
@@ -1016,7 +1016,7 @@ int text_get_visible_lines(SpaceText *st, ARegion *ar, const char *str)
 	lines = 1;
 	start = 0;
 	end = max;
-	for (i = 0, j = 0; str[j]; j += BLI_str_utf8_size(str + j)) {
+	for (i = 0, j = 0; str[j]; j += BLI_str_utf8_size_safe(str + j)) {
 		/* Mimic replacement of tabs */
 		ch = str[j];
 		if (ch == '\t') {
@@ -1139,7 +1139,7 @@ static void calc_text_rcts(SpaceText *st, ARegion *ar, rcti *scroll, rcti *back)
 	barheight = (ltexth > 0) ? (st->viewlines * pix_available) / ltexth : 0;
 	pix_bardiff = 0;
 	if (barheight < 20) {
-		pix_bardiff = 20 - barheight; /* take into account the now non-linear sizing of the bar */	
+		pix_bardiff = 20 - barheight; /* take into account the now non-linear sizing of the bar */
 		barheight = 20;
 	}
 	barstart = (ltexth > 0) ? ((pix_available - pix_bardiff) * st->top) / ltexth : 0;
@@ -1166,9 +1166,9 @@ static void calc_text_rcts(SpaceText *st, ARegion *ar, rcti *scroll, rcti *back)
 		/* the scrollbar is non-linear sized */
 		if (pix_bardiff > 0) {
 			/* the start of the highlight is in the current viewport */
-			if (ltexth && st->viewlines && lhlstart >= st->top && lhlstart <= st->top + st->viewlines) { 
+			if (ltexth && st->viewlines && lhlstart >= st->top && lhlstart <= st->top + st->viewlines) {
 				/* speed the progresion of the start of the highlight through the scrollbar */
-				hlstart = ( ( (pix_available - pix_bardiff) * lhlstart) / ltexth) + (pix_bardiff * (lhlstart - st->top) / st->viewlines); 	
+				hlstart = ( ( (pix_available - pix_bardiff) * lhlstart) / ltexth) + (pix_bardiff * (lhlstart - st->top) / st->viewlines);
 			}
 			else if (lhlstart > st->top + st->viewlines && hlstart < barstart + barheight && hlstart > barstart) {
 				/* push hl start down */
@@ -1179,35 +1179,35 @@ static void calc_text_rcts(SpaceText *st, ARegion *ar, rcti *scroll, rcti *back)
 				hlstart = barstart;
 			}
 
-			if (hlend <= hlstart) { 
+			if (hlend <= hlstart) {
 				hlend = hlstart + 2;
 			}
 
 			/* the end of the highlight is in the current viewport */
-			if (ltexth && st->viewlines && lhlend >= st->top && lhlend <= st->top + st->viewlines) { 
+			if (ltexth && st->viewlines && lhlend >= st->top && lhlend <= st->top + st->viewlines) {
 				/* speed the progresion of the end of the highlight through the scrollbar */
 				hlend = (((pix_available - pix_bardiff) * lhlend) / ltexth) + (pix_bardiff * (lhlend - st->top) / st->viewlines);
 			}
 			else if (lhlend < st->top && hlend >= barstart - 2 && hlend < barstart + barheight) {
 				/* push hl end up */
 				hlend = barstart;
-			}					
+			}
 			else if (lhlend > st->top + st->viewlines && lhlstart < st->top + st->viewlines && hlend < barstart + barheight) {
 				/* fill out end */
 				hlend = barstart + barheight;
 			}
 
-			if (hlend <= hlstart) { 
+			if (hlend <= hlstart) {
 				hlstart = hlend - 2;
-			}	
-		}	
+			}
+		}
 	}
 	else {
 		hlstart = 0;
 		hlend = 0;
 	}
 
-	if (hlend - hlstart < 2) { 
+	if (hlend - hlstart < 2) {
 		hlend = hlstart + 2;
 	}
 	
@@ -1232,7 +1232,7 @@ static void draw_textscroll(SpaceText *st, rcti *scroll, rcti *back)
 	uiWidgetScrollDraw(&wcol, scroll, &st->txtbar, (st->flags & ST_SCROLL_SELECT) ? UI_SCROLL_PRESSED : 0);
 
 	uiSetRoundBox(UI_CNR_ALL);
-	rad = 0.4f * mini(BLI_rcti_size_x(&st->txtscroll), BLI_rcti_size_y(&st->txtscroll));
+	rad = 0.4f * min_ii(BLI_rcti_size_x(&st->txtscroll), BLI_rcti_size_y(&st->txtscroll));
 	UI_GetThemeColor3ubv(TH_HILITE, col);
 	col[3] = 48;
 	glColor4ubv(col);
@@ -1355,7 +1355,7 @@ static void draw_documentation(SpaceText *st, ARegion *ar)
 		x += SUGG_LIST_WIDTH * st->cwidth + 50;
 	}
 
-	/* top= */ /* UNUSED */ y = ar->winy - st->lheight * l - 2;
+	/* top = */ /* UNUSED */ y = ar->winy - st->lheight * l - 2;
 	boxw = DOC_WIDTH * st->cwidth + 20;
 	boxh = (DOC_HEIGHT + 1) * st->lheight;
 
@@ -1639,7 +1639,7 @@ static void draw_brackets(SpaceText *st, ARegion *ar)
 	if (b > 0) {
 		/* opening bracket, search forward for close */
 		fc++;
-		c += BLI_str_utf8_size(linep->line + c);
+		c += BLI_str_utf8_size_safe(linep->line + c);
 		while (linep) {
 			while (c < linep->len) {
 				if (linep->format && linep->format[fc] != 'l' && linep->format[fc] != '#') {
@@ -1657,7 +1657,7 @@ static void draw_brackets(SpaceText *st, ARegion *ar)
 					}
 				}
 				fc++;
-				c += BLI_str_utf8_size(linep->line + c);
+				c += BLI_str_utf8_size_safe(linep->line + c);
 			}
 			if (endl) break;
 			linep = linep->next;
@@ -1702,7 +1702,7 @@ static void draw_brackets(SpaceText *st, ARegion *ar)
 	if (!endl || endc == -1)
 		return;
 
-	UI_ThemeColor(TH_HILITE);	
+	UI_ThemeColor(TH_HILITE);
 	x = st->showlinenrs ? TXT_OFFSET + TEXTXLOC : TXT_OFFSET;
 	y = ar->winy - st->lheight;
 
@@ -1741,6 +1741,7 @@ void draw_text_main(SpaceText *st, ARegion *ar)
 	char linenr[12];
 	int i, x, y, winx, linecount = 0, lineno = 0;
 	int wraplinecount = 0, wrap_skip = 0;
+	int margin_column_x;
 
 	if (st->lheight) st->viewlines = (int)ar->winy / st->lheight;
 	else st->viewlines = 0;
@@ -1788,7 +1789,7 @@ void draw_text_main(SpaceText *st, ARegion *ar)
 
 	text_font_begin(st);
 	st->cwidth = BLF_fixed_width(mono);
-	st->cwidth = MAX2(st->cwidth, 1);
+	st->cwidth = MAX2(st->cwidth, (char)1);
 
 	/* draw line numbers background */
 	if (st->showlinenrs) {
@@ -1845,10 +1846,14 @@ void draw_text_main(SpaceText *st, ARegion *ar)
 	if (st->flags & ST_SHOW_MARGIN) {
 		UI_ThemeColor(TH_HILITE);
 
-		glBegin(GL_LINES);
-		glVertex2i(x + st->cwidth * st->margin_column, 0);
-		glVertex2i(x + st->cwidth * st->margin_column, ar->winy - 2);
-		glEnd();
+		margin_column_x = x + st->cwidth * (st->margin_column - st->left);
+		
+		if (margin_column_x >= x) {
+			glBegin(GL_LINES);
+			glVertex2i(margin_column_x, 0);
+			glVertex2i(margin_column_x, ar->winy - 2);
+			glEnd();
+		}
 	}
 
 	/* draw other stuff */
@@ -1868,7 +1873,7 @@ void text_update_character_width(SpaceText *st)
 {
 	text_font_begin(st);
 	st->cwidth = BLF_fixed_width(mono);
-	st->cwidth = MAX2(st->cwidth, 1);
+	st->cwidth = MAX2(st->cwidth, (char)1);
 	text_font_end(st);
 }
 

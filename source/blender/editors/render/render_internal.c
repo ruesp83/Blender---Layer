@@ -63,7 +63,7 @@
 #include "RE_pipeline.h"
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf.h"
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -80,11 +80,10 @@ void image_buffer_rect_update(Scene *scene, RenderResult *rr, ImBuf *ibuf, volat
 	float *rectf = NULL;
 	int ymin, ymax, xmin, xmax;
 	int rymin, rxmin;
-	/* unsigned char *rectc; */  /* UNUSED */
 
 	/* if renrect argument, we only refresh scanlines */
 	if (renrect) {
-		/* if ymax==recty, rendering of layer is ready, we should not draw, other things happen... */
+		/* if (ymax == recty), rendering of layer is ready, we should not draw, other things happen... */
 		if (rr->renlay == NULL || renrect->ymax >= rr->recty)
 			return;
 
@@ -143,11 +142,10 @@ void image_buffer_rect_update(Scene *scene, RenderResult *rr, ImBuf *ibuf, volat
 		imb_addrectImBuf(ibuf);
 	
 	rectf += 4 * (rr->rectx * ymin + xmin);
-	/* rectc = (unsigned char *)(ibuf->rect + ibuf->x * rymin + rxmin); */  /* UNUSED */
 
 	IMB_partial_display_buffer_update(ibuf, rectf, NULL, rr->rectx, rxmin, rymin,
 	                                  &scene->view_settings, &scene->display_settings,
-	                                  rxmin, rymin, rxmin + xmax, rymin + ymax);
+	                                  rxmin, rymin, rxmin + xmax, rymin + ymax, TRUE);
 }
 
 /* ****************************** render invoking ***************** */
@@ -204,7 +202,7 @@ static int screen_render_exec(bContext *C, wmOperator *op)
 	screen_render_scene_layer_set(op, mainp, &scene, &srl);
 
 	if (!is_animation && is_write_still && BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-		BKE_report(op->reports, RPT_ERROR, "Can't write a single file with an animation format selected");
+		BKE_report(op->reports, RPT_ERROR, "Cannot write a single file with an animation format selected");
 		return OPERATOR_CANCELLED;
 	}
 
@@ -215,7 +213,6 @@ static int screen_render_exec(bContext *C, wmOperator *op)
 	RE_test_break_cb(re, NULL, (int (*)(void *))blender_test_break);
 
 	ima = BKE_image_verify_viewer(IMA_TYPE_R_RESULT, "Render Result");
-
 	BKE_image_signal(ima, NULL, IMA_SIGNAL_FREE);
 	BKE_image_backup_render(scene, ima);
 
@@ -224,6 +221,7 @@ static int screen_render_exec(bContext *C, wmOperator *op)
 	 * the output rendering. We can't put that into RE_BlenderFrame,
 	 * since sequence rendering can call that recursively... (peter) */
 	BKE_sequencer_cache_cleanup();
+
 	RE_SetReports(re, op->reports);
 
 	if (is_animation)
@@ -297,7 +295,11 @@ static void make_renderinfo_string(RenderStats *rs, Scene *scene, char *str)
 		if (rs->tothalo) spos += sprintf(spos, "Ha:%d ", rs->tothalo);
 		if (rs->totstrand) spos += sprintf(spos, "St:%d ", rs->totstrand);
 		if (rs->totlamp) spos += sprintf(spos, "La:%d ", rs->totlamp);
-		spos += sprintf(spos, "Mem:%.2fM (%.2fM, peak %.2fM) ", megs_used_memory, mmap_used_memory, megs_peak_memory);
+
+		if (rs->mem_peak == 0.0f)
+			spos += sprintf(spos, "Mem:%.2fM (%.2fM, peak %.2fM) ", megs_used_memory, mmap_used_memory, megs_peak_memory);
+		else
+			spos += sprintf(spos, "Mem:%.2fM, Peak: %.2fM ", rs->mem_used, rs->mem_peak);
 
 		if (rs->curfield)
 			spos += sprintf(spos, "Field %d ", rs->curfield);
@@ -366,7 +368,7 @@ static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrec
 	if (ima->render_slot != ima->last_render_slot)
 		return;
 
-	ibuf = BKE_image_acquire_ibuf(ima, &rj->iuser, &lock, IMA_IBUF_LAYER);
+	ibuf = BKE_image_acquire_ibuf(ima, &rj->iuser, &lock);
 	if (ibuf) {
 		image_buffer_rect_update(rj->scene, rr, ibuf, renrect);
 
@@ -485,7 +487,7 @@ static int screen_render_invoke(bContext *C, wmOperator *op, wmEvent *event)
 	const short is_write_still = RNA_boolean_get(op->ptr, "write_still");
 	struct Object *camera_override = v3d ? V3D_CAMERA_LOCAL(v3d) : NULL;
 	const char *name;
-
+	
 	/* only one render job at a time */
 	if (WM_jobs_test(CTX_wm_manager(C), scene, WM_JOB_TYPE_RENDER))
 		return OPERATOR_CANCELLED;
@@ -495,12 +497,12 @@ static int screen_render_invoke(bContext *C, wmOperator *op, wmEvent *event)
 	}
 
 	if (!is_animation && is_write_still && BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-		BKE_report(op->reports, RPT_ERROR, "Can't write a single file with an animation format selected");
+		BKE_report(op->reports, RPT_ERROR, "Cannot write a single file with an animation format selected");
 		return OPERATOR_CANCELLED;
-	}	
+	}
 	
-	/* stop all running jobs, currently previews frustrate Render */
-	WM_jobs_stop_all(CTX_wm_manager(C));
+	/* stop all running jobs, except screen one. currently previews frustrate Render */
+	WM_jobs_kill_all_except(CTX_wm_manager(C), CTX_wm_screen(C));
 
 	/* get main */
 	if (G.debug_value == 101) {

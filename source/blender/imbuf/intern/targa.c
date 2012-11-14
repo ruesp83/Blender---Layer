@@ -40,7 +40,7 @@
 
 #include "imbuf.h"
 
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "IMB_allocimbuf.h"
@@ -55,9 +55,9 @@
 /***/
 
 typedef struct TARGA {
-	unsigned char numid;	
+	unsigned char numid;
 	unsigned char maptyp;
-	unsigned char imgtyp;	
+	unsigned char imgtyp;
 	short maporig;
 	short mapsize;
 	unsigned char mapbits;

@@ -49,7 +49,7 @@
 #include "BLI_utildefines.h"
 
 #include "IMB_imbuf.h"
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 #include "IMB_colormanagement.h"
 
 #include "intern/openexr/openexr_multi.h"
@@ -786,7 +786,7 @@ int RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *file
 	}
 	else {
 		/* TODO, get the error from openexr's exception */
-		BKE_report(reports, RPT_ERROR, "Error Writing Render Result, see console");
+		BKE_report(reports, RPT_ERROR, "Error writing render result (see console)");
 		success = FALSE;
 	}
 	IMB_exr_close(exrhandle);

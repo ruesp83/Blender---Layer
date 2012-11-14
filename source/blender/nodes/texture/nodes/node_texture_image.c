@@ -33,7 +33,7 @@
 #include "node_texture_util.h"
 #include "NOD_texture.h"
 
-static bNodeSocketTemplate outputs[]= {
+static bNodeSocketTemplate outputs[] = {
 	{ SOCK_RGBA, 0, N_("Image")},
 	{ -1, 0, "" }
 };
@@ -46,7 +46,7 @@ static void colorfn(float *out, TexParams *p, bNode *node, bNodeStack **UNUSED(i
 	ImageUser *iuser= (ImageUser *)node->storage;
 	
 	if ( ima ) {
-		ImBuf *ibuf = BKE_image_get_ibuf(ima, iuser, IMA_IBUF_IMA);
+		ImBuf *ibuf = BKE_image_get_ibuf(ima, iuser);
 		if ( ibuf ) {
 			float xsize, ysize;
 			float xoff, yoff;

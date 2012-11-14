@@ -33,7 +33,7 @@
 #include "node_composite_util.h"
 
 /* **************** SPLIT VIEWER ******************** */
-static bNodeSocketTemplate cmp_node_splitviewer_in[]= {
+static bNodeSocketTemplate cmp_node_splitviewer_in[] = {
 	{	SOCK_RGBA, 1, N_("Image"),		0.0f, 0.0f, 0.0f, 1.0f},
 	{	SOCK_RGBA, 1, N_("Image"),		0.0f, 0.0f, 0.0f, 1.0f},
 	{	-1, 0, ""	}
@@ -74,7 +74,7 @@ static void node_composit_exec_splitviewer(void *data, bNode *node, bNodeStack *
 		BKE_image_user_frame_calc(node->storage, rd->cfra, 0);
 		
 		/* always returns for viewer image, but we check nevertheless */
-		ibuf= BKE_image_acquire_ibuf(ima, node->storage, &lock, IMA_IBUF_IMA);
+		ibuf= BKE_image_acquire_ibuf(ima, node->storage, &lock);
 		if (ibuf==NULL) {
 			printf("node_composit_exec_viewer error\n");
 			BKE_image_release_ibuf(ima, lock);
@@ -167,7 +167,7 @@ void register_node_type_cmp_splitviewer(bNodeTreeType *ttype)
 #endif
 
 	/* Do not allow muting for this node. */
-	node_type_internal_connect(&ntype, NULL);
+	node_type_internal_links(&ntype, NULL);
 
 	nodeRegisterType(ttype, &ntype);
 }

@@ -37,7 +37,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 
 #include "DNA_scene_types.h"
 #include "DNA_mask_types.h"
@@ -285,8 +285,8 @@ static void drawmeta_contents(Scene *scene, Sequence *seqm, float x1, float y1, 
 		drawmeta_stipple(1);
 
 	for (seq = seqm->seqbase.first; seq; seq = seq->next) {
-		chan_min = MIN2(chan_min, seq->machine);
-		chan_max = MAX2(chan_max, seq->machine);
+		chan_min = min_ii(chan_min, seq->machine);
+		chan_max = max_ii(chan_max, seq->machine);
 	}
 
 	chan_range = (chan_max - chan_min) + 1;
@@ -355,7 +355,7 @@ static void draw_seq_handle(View2D *v2d, Sequence *seq, const float handsize_cla
 	y2 = seq->machine + SEQ_STRIP_OFSTOP;
 
 	/* set up co-ordinates/dimensions for either left or right handle */
-	if (direction == SEQ_LEFTHANDLE) {	
+	if (direction == SEQ_LEFTHANDLE) {
 		rx1 = x1;
 		rx2 = x1 + handsize_clamped * 0.75f;
 		
@@ -415,7 +415,7 @@ static void draw_seq_handle(View2D *v2d, Sequence *seq, const float handsize_cla
 			y1 = y2 + 0.05f;
 		}
 		UI_view2d_text_cache_add(v2d, x1, y1, numstr, col);
-	}	
+	}
 }
 
 static void draw_seq_extensions(Scene *scene, ARegion *ar, Sequence *seq)
@@ -747,7 +747,7 @@ static void draw_seq_strip(Scene *scene, ARegion *ar, Sequence *seq, int outline
 		glDisable(GL_BLEND);
 	}
 
-	if (!BKE_seqence_is_valid_check(seq)) {
+	if (!BKE_sequence_is_valid_check(seq)) {
 		glEnable(GL_POLYGON_STIPPLE);
 
 		/* panic! */
@@ -810,7 +810,7 @@ static void UNUSED_FUNCTION(set_special_seq_update) (int val)
 
 	/* if mouse over a sequence && LEFTMOUSE */
 	if (val) {
-// XXX		special_seq_update= find_nearest_seq(&x);
+// XXX		special_seq_update = find_nearest_seq(&x);
 	}
 	else special_seq_update = NULL;
 }
@@ -912,6 +912,13 @@ void draw_image_seq(const bContext *C, Scene *scene, ARegion *ar, SpaceSeq *sseq
 	GLuint last_texid;
 	unsigned char *display_buffer;
 	void *cache_handle = NULL;
+
+	if (G.is_rendering == FALSE) {
+		/* stop all running jobs, except screen one. currently previews frustrate Render
+		 * needed to make so sequencer's rendering doesn't conflict with compositor
+		 */
+		WM_jobs_kill_all_except(CTX_wm_manager(C), CTX_wm_screen(C));
+	}
 
 	render_size = sseq->render_size;
 	if (render_size == 0) {
@@ -1189,7 +1196,7 @@ static void draw_seq_backdrop(View2D *v2d)
 	glRectf(v2d->cur.xmin,  -1.0,  v2d->cur.xmax,  1.0);
 
 	/* Alternating horizontal stripes */
-	i = maxi(1, ((int)v2d->cur.ymin) - 1);
+	i = max_ii(1, ((int)v2d->cur.ymin) - 1);
 
 	glBegin(GL_QUADS);
 	while (i < v2d->cur.ymax) {
@@ -1208,7 +1215,7 @@ static void draw_seq_backdrop(View2D *v2d)
 	glEnd();
 	
 	/* Darker lines separating the horizontal bands */
-	i = maxi(1, ((int)v2d->cur.ymin) - 1);
+	i = max_ii(1, ((int)v2d->cur.ymin) - 1);
 	UI_ThemeColor(TH_GRID);
 	
 	glBegin(GL_LINES);
@@ -1240,8 +1247,8 @@ static void draw_seq_strips(const bContext *C, Editing *ed, ARegion *ar)
 			/* boundbox and selection tests for NOT drawing the strip... */
 			if ((seq->flag & SELECT) != sel) continue;
 			else if (seq == last_seq) continue;
-			else if (MIN2(seq->startdisp, seq->start) > v2d->cur.xmax) continue;
-			else if (MAX2(seq->enddisp, seq->start + seq->len) < v2d->cur.xmin) continue;
+			else if (min_ii(seq->startdisp, seq->start) > v2d->cur.xmax) continue;
+			else if (max_ii(seq->enddisp, seq->start + seq->len) < v2d->cur.xmin) continue;
 			else if (seq->machine + 1.0f < v2d->cur.ymin) continue;
 			else if (seq->machine > v2d->cur.ymax) continue;
 			

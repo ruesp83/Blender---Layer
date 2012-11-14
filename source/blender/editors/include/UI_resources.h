@@ -199,10 +199,6 @@ enum {
 	TH_STITCH_PREVIEW_UNSTITCHABLE,
 	TH_STITCH_PREVIEW_ACTIVE,
 
-	TH_SHOW_BOUNDARY_LAYER,
-	TH_COL1_BOUNDARY_LAYER,
-	TH_COL2_BOUNDARY_LAYER,
-
 	TH_MATCH,           /* highlight color for search matches */
 	TH_SELECT_HIGHLIGHT, /* highlight color for selected outliner item */
 
@@ -219,7 +215,11 @@ enum {
 	TH_NLA_META,
 	TH_NLA_META_SEL,
 	TH_NLA_SOUND,
-	TH_NLA_SOUND_SEL
+	TH_NLA_SOUND_SEL,
+	
+	TH_AXIS_X,		/* X/Y/Z Axis */
+	TH_AXIS_Y,
+	TH_AXIS_Z
 };
 /* XXX WARNING: previous is saved in file, so do not change order! */
 

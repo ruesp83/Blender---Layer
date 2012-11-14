@@ -28,7 +28,6 @@
  *  \ingroup spimage
  */
 
-#include "DNA_imbuf_types.h"
 #include "DNA_mask_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -41,6 +40,8 @@
 #include "BKE_image.h"
 #include "BKE_main.h"
 #include "BKE_tessmesh.h"
+
+#include "IMB_imbuf_types.h"
 
 #include "ED_image.h"  /* own include */
 #include "ED_mesh.h"
@@ -78,7 +79,7 @@ void ED_space_image_set(SpaceImage *sima, Scene *scene, Object *obedit, Image *i
 		BKE_image_signal(sima->image, &sima->iuser, IMA_SIGNAL_USER_NEW_IMAGE);
 
 	if (sima->image && ID_REAL_USERS(sima->image) <= 0)
-		sima->image->id.us = MAX2(sima->image->id.us, 0) + 1;
+		sima->image->id.us = max_ii(sima->image->id.us, 0) + 1;
 
 	if (obedit)
 		WM_main_add_notifier(NC_GEOM | ND_DATA, obedit->data);
@@ -97,7 +98,7 @@ void ED_space_image_set_mask(bContext *C, SpaceImage *sima, Mask *mask)
 
 	/* weak, but same as image/space */
 	if (sima->mask_info.mask && ID_REAL_USERS(sima->mask_info.mask) <= 0)
-		sima->mask_info.mask->id.us = MAX2(sima->mask_info.mask->id.us, 0) + 1;
+		sima->mask_info.mask->id.us = max_ii(sima->mask_info.mask->id.us, 0) + 1;
 
 	if (C) {
 		WM_event_add_notifier(C, NC_MASK | NA_SELECTED, mask);
@@ -114,14 +115,13 @@ ImBuf *ED_space_image_acquire_buffer(SpaceImage *sima, void **lock_r)
 			return BIF_render_spare_imbuf();
 		else
 #endif
-		if (sima->mode == SI_MODE_PAINT)
-			ibuf = BKE_image_acquire_ibuf(sima->image, &sima->iuser, lock_r, IMA_IBUF_LAYER);
-		else 
-			ibuf = BKE_image_acquire_ibuf(sima->image, &sima->iuser, lock_r, IMA_IBUF_IMA);
+		ibuf = BKE_image_acquire_ibuf(sima->image, &sima->iuser, lock_r);
 
 		if (ibuf && (ibuf->rect || ibuf->rect_float))
 			return ibuf;
 	}
+	else
+		*lock_r = NULL;
 
 	return NULL;
 }

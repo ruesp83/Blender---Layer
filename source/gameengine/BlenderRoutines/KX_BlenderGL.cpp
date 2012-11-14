@@ -70,7 +70,7 @@
 #include "BLI_path_util.h"
 
 extern "C" {
-#include "DNA_imbuf_types.h"
+#include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include "WM_api.h"
 #include "WM_types.h"

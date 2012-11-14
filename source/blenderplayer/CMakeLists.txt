@@ -148,6 +148,7 @@ endif()
 		extern_recastnavigation
 		bf_intern_raskter
 		bf_intern_opencolorio
+		bf_intern_opennl
 	)
 
 	if(WITH_MOD_CLOTH_ELTOPO)
@@ -169,10 +170,6 @@ endif()
 
 	list(APPEND BLENDER_SORTED_LIBS extern_colamd)
 
-	if(WITH_MOD_DECIMATE)
-		list(APPEND BLENDER_SORTED_LIBS bf_intern_decimate)
-	endif()
-
 	if(WITH_MOD_BOOLEAN)
 		list(APPEND BLENDER_SORTED_LIBS bf_intern_bsp)
 		list(APPEND BLENDER_SORTED_LIBS bf_intern_moto)
@@ -192,6 +189,10 @@ endif()
 
 	if(WITH_CXX_GUARDEDALLOC)
 		list(APPEND BLENDER_SORTED_LIBS bf_intern_guardedalloc_cpp)
+	endif()
+
+	if(WITH_INTERNATIONAL)
+		list(APPEND BLENDER_SORTED_LIBS bf_intern_locale)
 	endif()
 
 	foreach(SORTLIB ${BLENDER_SORTED_LIBS})

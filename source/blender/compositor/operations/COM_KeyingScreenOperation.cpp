@@ -29,12 +29,12 @@
 #include "BLI_math.h"
 #include "BLI_math_color.h"
 
-#include "DNA_imbuf_types.h"
 extern "C" {
 	#include "BKE_movieclip.h"
 	#include "BKE_tracking.h"
 
-	#include "IMB_imbuf.h"	
+	#include "IMB_imbuf.h"
+	#include "IMB_imbuf_types.h"
 }
 
 KeyingScreenOperation::KeyingScreenOperation() : NodeOperation()
@@ -151,21 +151,24 @@ KeyingScreenOperation::TriangulationData *KeyingScreenOperation::buildVoronoiTri
 		pattern_ibuf = BKE_tracking_get_pattern_imbuf(ibuf, track, marker, TRUE, FALSE);
 
 		zero_v3(site->color);
-		for (j = 0; j < pattern_ibuf->x * pattern_ibuf->y; j++) {
-			if (pattern_ibuf->rect_float) {
-				add_v3_v3(site->color, &pattern_ibuf->rect_float[4 * j]);
-			}
-			else {
-				unsigned char *rrgb = (unsigned char *)pattern_ibuf->rect;
 
-				site->color[0] += srgb_to_linearrgb((float)rrgb[4 * j + 0] / 255.0f);
-				site->color[1] += srgb_to_linearrgb((float)rrgb[4 * j + 1] / 255.0f);
-				site->color[2] += srgb_to_linearrgb((float)rrgb[4 * j + 2] / 255.0f);
+		if (pattern_ibuf) {
+			for (j = 0; j < pattern_ibuf->x * pattern_ibuf->y; j++) {
+				if (pattern_ibuf->rect_float) {
+					add_v3_v3(site->color, &pattern_ibuf->rect_float[4 * j]);
+				}
+				else {
+					unsigned char *rrgb = (unsigned char *)pattern_ibuf->rect;
+
+					site->color[0] += srgb_to_linearrgb((float)rrgb[4 * j + 0] / 255.0f);
+					site->color[1] += srgb_to_linearrgb((float)rrgb[4 * j + 1] / 255.0f);
+					site->color[2] += srgb_to_linearrgb((float)rrgb[4 * j + 2] / 255.0f);
+				}
 			}
+
+			mul_v3_fl(site->color, 1.0f / (pattern_ibuf->x * pattern_ibuf->y));
+			IMB_freeImBuf(pattern_ibuf);
 		}
-
-		mul_v3_fl(site->color, 1.0f / (pattern_ibuf->x * pattern_ibuf->y));
-		IMB_freeImBuf(pattern_ibuf);
 
 		site->co[0] = pos[0] * width;
 		site->co[1] = pos[1] * height;
