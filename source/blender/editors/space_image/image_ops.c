@@ -1782,7 +1782,6 @@ static int image_op_layer_invoke(bContext *C, wmOperator *op, wmEvent *UNUSED(ev
 void IMAGE_OT_new(wmOperatorType *ot)
 {
 	PropertyRNA *prop;
-	short background;
 	
 	static float default_color[4]= {0.0f, 0.0f, 0.0f, 1.0f};
 
@@ -2036,8 +2035,6 @@ void IMAGE_OT_image_layer_add_below(wmOperatorType *ot)
 
 void IMAGE_OT_image_layer_add_default(wmOperatorType *ot)
 {
-	PropertyRNA *prop;
-
 	/* identifiers */
 	ot->name= "Default layer";
 	ot->idname= "IMAGE_OT_image_layer_add_default";
@@ -2738,7 +2735,7 @@ static int image_layer_offset_exec(bContext *C, wmOperator *op)
 	Image *ima= CTX_data_edit_image(C);
 	ImageLayer *layer;
 	struct ImBuf *ibuf;
-	int x, y, half, wrap, background;
+	int x, y, half, wrap;
 	static float alpha_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 	static float white_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 	float col[4];

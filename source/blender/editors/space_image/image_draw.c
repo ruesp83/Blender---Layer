@@ -830,7 +830,7 @@ void draw_image_main(const bContext *C, ARegion *ar)
 	ImBuf *ibuf;
 	ImBuf *next_ibuf, *result_ibuf;
 	float zoomx, zoomy, sp_x, sp_y;
-	int show_viewer, show_render, show_composite;
+	int show_viewer, show_render;
 	int first = 0;
 	int x, y, b_x, b_y, bg_x, bg_y;
 	void *lock;

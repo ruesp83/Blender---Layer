@@ -58,10 +58,10 @@ void ImagesExporter::export_UV_Image(Image *image, bool use_copies)
 	std::string name(id_name(image));
 	std::string translated_name(translate_id(name));
 	bool not_yet_exported = find(mImages.begin(), mImages.end(), translated_name) == mImages.end();
-
+ 
 	if (not_yet_exported) {
 
-		ImBuf *imbuf       = BKE_image_get_ibuf(image, NULL);
+		ImBuf *imbuf       = BKE_image_get_ibuf(image, NULL, IMA_IBUF_IMA);
 		if (!imbuf) {
 			fprintf(stderr, "Collada export: image does not exist:\n%s\n", image->name);
 			return;

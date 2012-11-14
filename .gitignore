@@ -5,3 +5,5 @@ addons_contrib
 user-config.py
 user-cycles.py
 user-linux.py
+
+.DS_Store
