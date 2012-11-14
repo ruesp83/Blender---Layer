@@ -260,11 +260,19 @@ typedef struct ThemeSpace {
 	char preview_stitch_stitchable[4];
 	char preview_stitch_unstitchable[4];
 	char preview_stitch_active[4];
+
+	char b_pad[3];
+	char show_boundary_layer;
+	char col1_boundary_layer[4];
+	char col2_boundary_layer[4];
 	
+
 	char match[4];				/* outliner - filter match */
 	char selected_highlight[4];	/* outliner - selected item */
 
 	char skin_root[4]; /* Skin modifier root color */
+	
+	float pad4;
 	
 	/* NLA */
 	char anim_active[4];	 /* Active Action + Summary Channel */
@@ -663,6 +671,9 @@ typedef enum eTheme_DrawTypes {
 	TH_OLDSKOOL 	= 3,
 	TH_SHADED   	= 4
 } eTheme_DrawTypes;
+
+/* Active boundarie_layer */
+#define TH_IMAGE_LAYER_BOUNDARY (1<<0)
 
 /* ndof_flag (3D mouse options) */
 typedef enum eNdof_Flag {

@@ -319,250 +319,135 @@ int image_remove_layer(Image *ima, const int action)
 	return TRUE;
 }
 
-static char blend_normal(const char B, const char L, float O)
+static float blend_normal_f(float B, float L, float O)
 {	
-	return (char)(O * (L) + (1.0f - O) * B);
-}
-
-static char blend_lighten(const char B, const char L, float O)
-{	
-	return (char)(O * ((L > B) ? L : B) + (1.0f - O) * B);
-}
-
-static char blend_darken(const char B, const char L, float O)
-{	
-	return (char)(O * ((L > B) ? B : L) + (1.0f - O) * B);
-}
-
-static char blend_multiply(const char B, const char L, float O)
-{	
-	return (char)(O * ((B * L) / 255) + (1.0f - O) * B);
-}
-
-static char blend_average(const char B, const char L, float O)
-{	
-	return (char)(O * ((B + L) / 2) + (1.0f - O) * B);
-}
-
-static char blend_add(const char B, const char L, float O)
-{	
-	return (char)(O * (MIN2(255, (B + L))) + (1.0f - O) * B);
-}
-
-static char blend_subtract(const char B, const char L, float O)
-{	
-	return (char)(O * ((B + L < 255) ? 0 : (B + L - 255)) + (1.0f - O) * B);
-}
-
-static char blend_difference(const char B, const char L, float O)
-{	
-	return (char)(O * (abs(B - L)) + (1.0f - O) * B);
-}
-
-static char blend_negation(const char B, const char L, float O)
-{	
-	return (char)(O * (255 - abs(255 - B - L)) + (1.0f - O) * B);
-}
-
-static char blend_screen(const char B, const char L, float O)
-{	
-	return (char)(O * (255 - (((255 - B) * (255 - L)) >> 8)) + (1.0f - O) * B);
-}
-
-static char blend_exclusion(const char B, const char L, float O)
-{	
-	return (char)(O * (B + L - 2 * B * L / 255) + (1.0f - O) * B);
-}
-
-static char blend_overlay(const char B, const char L, float O)
-{	
-	return (char)(O * ((L < 128) ? (2 * B * L / 255) : (255 - 2 * (255 - B) * (255 - L) / 255)) + (1.0f - O) * B);
-}
-
-static char blend_soft_light(const char B, const char L, float O)
-{	
-	return (char)(O * ((L < 128) ? (2 * ((B >> 1) + 64)) * ((float)L / 255) : (255 - (2 * (255 - ((B >> 1) + 64)) * (float)(255 - L) / 255))) + (1.0f - O) * B);
-}
-
-static char blend_hard_light(const char B, const char L, float O)
-{	
-	return (char)(O * ((B < 128) ? (2 * L * B / 255) : (255 - 2 * (255 - L) * (255 - B) / 255)) + (1.0f - O) * B);
-}
-
-static char blend_color_dodge(const char B, const char L, float O)
-{	
-	return (char)(O * ((L == 255) ? L : MIN2(255, ((B << 8 ) / (255 - L)))) + (1.0f - O) * B);
-}
-
-static char blend_color_burn(const char B, const char L, float O)
-{	
-	return (char)(O * ((L == 0) ? L : MAX2(0, (255 - ((255 - B) << 8 ) / L))) + (1.0f - O) * B);
-}
-
-static char blend_linear_dodge(const char B, const char L, float O)
-{	
-	return (char)(O * (MIN2(255, (B + L))) + (1.0f - O) * B);
-}
-
-static char blend_linear_burn(const char B, const char L, float O)
-{	
-	return (char)(O * ((B + L < 255) ? 0 : (B + L - 255)) + (1.0f - O) * B);
-}
-
-static char blend_linear_light(const char B, const char L, float O)
-{	
-	return (char)(O * ((2 * L) < 128) ? ((B + (2 * L) < 255) ? 0 : (B + (2 * L) - 255)) : (MIN2(255, (B + (2 * (L - 128))))) + (1.0f - O) * B);
-}
-
-static char blend_vivid_light(const char B, const char L, float O)
-{	
-	return (char)(O * (L < 128) ? (((2 * L) == 0) ? (2 * L) : MAX2(0, (255 - ((255 - B) << 8 ) / (2 * L)))) : (MIN2(255, (B + (2 * (L - 128))))) + (1.0f - O) * B);
-}
-
-static char blend_pin_light(const char B, const char L, float O)
-{	
-	return (char)(O * (L < 128) ? (((2 * L) > B) ? B : (2 * L)) : (((2 * (L - 128)) > B) ? (2 * (L - 128)) : B) + (1.0f - O) * B);
-}
-
-static char blend_hard_mix(const char B, const char L, float O)
-{	
-	return (char)(O * (((L < 128) ? (((2 * L) == 0) ? (2 * L) : MAX2(0, (255 - ((255 - B) << 8 ) / (2 * L)))) : (MIN2(255, (B + (2 * (L - 128))))) < 128) ? 0 : 255) + (1.0f - O) * B);
-}
-
-/*static float blend_normal_f(const float B, const float L, float O)
-{	
-	return (float)(O * (L) + (1.0f - O) * B);
+	return (O * (L) + (1.0f - O) * B);
 }
 
 static float blend_lighten_f(const float B, const float L, float O)
 {	
-	return (float)(O * ((L > B) ? L : B) + (1.0f - O) * B);
+	return (O * ((L > B) ? L : B) + (1.0f - O) * B);
 }
 
 static float blend_darken_f(const float B, const float L, float O)
 {	
-	return (float)(O * ((L > B) ? B : L) + (1.0f - O) * B);
+	return (O * ((L > B) ? B : L) + (1.0f - O) * B);
 }
 
 static float blend_multiply_f(const float B, const float L, float O)
 {	
-	return (float)(O * ((B * L) / 255) + (1.0f - O) * B);
+	return (O * ((B * L) / 1.0f) + (1.0f - O) * B);
 }
 
 static float blend_average_f(const float B, const float L, float O)
 {	
-	return (float)(O * ((B + L) / 2) + (1.0f - O) * B);
+	return (O * ((B + L) / 2) + (1.0f - O) * B);
 }
 
 static float blend_add_f(const float B, const float L, float O)
 {	
-	return (float)(O * (MIN2(255, (B + L))) + (1.0f - O) * B);
+	return (O * (MIN2(1.0f, (B + L))) + (1.0f - O) * B);
 }
 
 static float blend_subtract_f(const float B, const float L, float O)
 {	
-	return (float)(O * ((B + L < 255) ? 0 : (B + L - 255)) + (1.0f - O) * B);
+	return (O * ((B + L < 1.0f) ? 0 : (B + L - 1.0f)) + (1.0f - O) * B);
 }
 
 static float blend_difference_f(const float B, const float L, float O)
 {	
-	return (float)(O * (abs(B - L)) + (1.0f - O) * B);
+	return (O * (abs(B - L)) + (1.0f - O) * B);
 }
 
 static float blend_negation_f(const float B, const float L, float O)
 {	
-	return (float)(O * (255 - abs(255 - B - L)) + (1.0f - O) * B);
+	return (O * (1.0f - abs(1.0f - B - L)) + (1.0f - O) * B);
 }
 
 static float blend_screen_f(const float B, const float L, float O)
 {	
-	return (float)(O * (255 - (FTOCHAR((255 - B) * (255 - L)) >> 8)) + (1.0f - O) * B);
+	return (O * (1.0f - ((1.0f - B) * (1 - L))) + (1.0f - O) * B);
 }
 
 static float blend_exclusion_f(const float B, const float L, float O)
 {	
-	return (float)(O * (B + L - 2 * B * L / 255) + (1.0f - O) * B);
+	return (O * (B + L - 2 * B * L) + (1.0f - O) * B);
 }
 
 static float blend_overlay_f(const float B, const float L, float O)
 {	
-	return (float)(O * ((L < 128) ? (2 * B * L / 255) : (255 - 2 * (255 - B) * (255 - L) / 255)) + (1.0f - O) * B);
+	return (O * ((L < 0.5f) ? (2 * B * L) : (1.0f - 2 * (1.0f - B) * (1.0f - L))) + (1.0f - O) * B);
 }
 
 static float blend_soft_light_f(const float B, const float L, float O)
 {	
-	return (float)(O * ((L < 128) ? (2 * ((B >> 1) + 64)) * ((float)L / 255) : (255 - (2 * (255 - ((B >> 1) + 64)) * (float)(255 - L) / 255))) + (1.0f - O) * B);
+	/* TODO */
+	//return (O * ((L < 0.5f) ? (2 * ((B >> 1) + 64)) * L : (1.0f - (2 * (1.0f - ((B >> 1) + 64)) * (1.0f - L)))) + (1.0f - O) * B);
+	return L;
 }
 
 static float blend_hard_light_f(const float B, const float L, float O)
 {	
-	return (float)(O * ((B < 128) ? (2 * L * B / 255) : (255 - 2 * (255 - L) * (255 - B) / 255)) + (1.0f - O) * B);
+	return (O * ((B < 0.5f) ? (2 * L * B) : (1.0f - 2 * (1.0f - L) * (1.0f - B))) + (1.0f - O) * B);
 }
 
 static float blend_color_dodge_f(const float B, const float L, float O)
 {	
-	return (float)(O * ((L == 255) ? L : minf(255, ((B << 8 ) / (255 - L)))) + (1.0f - O) * B);
+	/* TODO */
+	//return (O * ((L == 1.0f) ? L : min_ff(1.0f, ((B << 8 ) / (1.0f - L)))) + (1.0f - O) * B);
+	return L;
 }
 
 static float blend_color_burn_f(const float B, const float L, float O)
 {	
-	return (float)(O * ((L == 0) ? L : maxf(0, (255 - ((255 - B) << 8 ) / L))) + (1.0f - O) * B);
+	/* TODO */
+	//return (O * ((L == 0) ? L : max_ff(0, (1.0f - ((1.0f - B) << 8 ) / L))) + (1.0f - O) * B);
+	return L;
 }
 
 static float blend_linear_dodge_f(const float B, const float L, float O)
 {	
-	return (float)(O * (minf(255, (B + L))) + (1.0f - O) * B);
+	return (O * (min_ff(1.0f, (B + L))) + (1.0f - O) * B);
 }
 
 static float blend_linear_burn_f(const float B, const float L, float O)
 {	
-	return (float)(O * ((B + L < 255) ? 0 : (B + L - 255)) + (1.0f - O) * B);
+	return (O * ((B + L < 1.0f) ? 0 : (B + L - 1.0f)) + (1.0f - O) * B);
 }
 
 static float blend_linear_light_f(const float B, const float L, float O)
 {	
-	return (float)(O * ((2 * L) < 128) ? ((B + (2 * L) < 255) ? 0 : (B + (2 * L) - 255)) : (minf(255, (B + (2 * (L - 128))))) + (1.0f - O) * B);
+	return (O * ((2 * L) < 0.5f) ? ((B + (2 * L) < 1.0f) ? 0 : (B + (2 * L) - 1.0f)) : (min_ff(1.0f, (B + (2 * (L - 0.5f))))) + (1.0f - O) * B);
 }
 
 static float blend_vivid_light_f(const float B, const float L, float O)
 {	
-	return (float)(O * (L < 128) ? (((2 * L) == 0) ? (2 * L) : maxf(0, (255 - ((255 - B) << 8 ) / (2 * L)))) : (minf(255, (B + (2 * (L - 128))))) + (1.0f - O) * B);
+	/* TODO */
+	//return (O * (L < 0.5f) ? (((2 * L) == 0) ? (2 * L) : max_ff(0, (1.0f - ((1.0f - B) << 8 ) / (2 * L)))) : (min_ff(1.0f, (B + (2 * (L - 0.5f))))) + (1.0f - O) * B);
+	return L;
 }
 
 static float blend_pin_light_f(const float B, const float L, float O)
 {	
-	return (float)(O * (L < 128) ? (((2 * L) > B) ? B : (2 * L)) : (((2 * (L - 128)) > B) ? (2 * (L - 128)) : B) + (1.0f - O) * B);
+	return (O * (L < 0.5f) ? (((2 * L) > B) ? B : (2 * L)) : (((2 * (L - 0.5f)) > B) ? (2 * (L - 0.5f)) : B) + (1.0f - O) * B);
 }
 
 static float blend_hard_mix_f(const float B, const float L, float O)
 {	
-	return (float)(O * (((L < 128) ? (((2 * L) == 0) ? (2 * L) : maxf(0, (255 - ((255 - B) << 8 ) / (2 * L)))) : (minf(255, (B + (2 * (L - 128))))) < 128) ? 0 : 255) + (1.0f - O) * B);
-}*/
-
-/*static float blend_normal_f(const float B, const float L, const float O)
-{	
-	return (char)(O * (L) + (1.0f - O) * B);
+	/* TODO */
+	//return (O * (((L < 0.5f) ? (((2 * L) == 0) ? (2 * L) : max_ff(0, (1.0f - ((1.0f - B) << 8 ) / (2 * L)))) : (min_ff(1.0f, (B + (2 * (L - 0.5f))))) < 0.5f) ? 0 : 1.0f) + (1.0f - O) * B);
+	return L;
 }
 
-static float blend_multiply_f(const float B, const float L, const float O)
-{	
-	return (float)(O * ((B * L) / 1.0f) + (1.0f - O) * B);
-}
+static float clipcolour(float col) 
+{
+	if (col < 0) 
+		col = 0;
 
-static float blend_subtract_f(const float B, const float L, const float O)
-{	
-	return (char)(O * ((B + L < 255) ? 0 : (B + L - 255)) + (1.0f - O) * B);
+	if (col > 1)
+		col = 1;
+	return col;
 }
-
-static float blend_difference_f(const float B, const float L, const float O)
-{	
-	return (float)(O * (fabs(B - L)) + (1.0f - O) * B);
-}
-
-static float blend_overlay_f(float B, float L, float O)
-{	
-	return (float)(O * ((L < 0.5f) ? (2 * B * L / 1.0f) : (1.0f - 2 * (1.0f - B) * (1.0f - L) / 1.0f)) + (1.0f - O) * B);
-}*/
 
 static char pixel_is_transparent(const char pix[4])
 {	
@@ -576,8 +461,14 @@ ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode)
 	ImBuf *dest;
 	int i, y;
 	int bg_x, bg_y, diff_x;
-	//float (*blend_callback_f)(const float B, const float L, const float O) = NULL;	//Mode callback
-	char (*blend_callback)(const char B, const char L, const float O) = NULL;		//Mode callback
+	float (*blend_callback)(float B, float L, float O) = NULL;	//Mode callback
+
+	float as, ab, ao, co, aoco;
+	float *fp_b, *fp_l, *fp_d;
+	char *cp_b, *cp_l, *cp_d;
+	float f_br, f_bg, f_bb, f_ba;
+	float f_lr, f_lg, f_lb, f_la;
+	
 
 	if (!base)
 		return IMB_dupImBuf(layer);
@@ -598,127 +489,196 @@ ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode)
 
 	switch(mode) {
 	case IMA_LAYER_NORMAL:
-		blend_callback = blend_normal;
+		blend_callback = blend_normal_f;
 		break;
 
 	case IMA_LAYER_MULTIPLY:
-		blend_callback = blend_multiply;
+		blend_callback = blend_multiply_f;
 		break;
 
 	case IMA_LAYER_SCREEN:
-		blend_callback = blend_screen;
+		blend_callback = blend_screen_f;
 		break;
 
 	case IMA_LAYER_OVERLAY:
-		blend_callback = blend_overlay;
+		blend_callback = blend_overlay_f;
 		break;
 
 	case IMA_LAYER_SOFT_LIGHT:
-		blend_callback = blend_soft_light;
+		blend_callback = blend_soft_light_f;
 		break;
 
 	case IMA_LAYER_HARD_LIGHT:
-		blend_callback = blend_hard_light;
+		blend_callback = blend_hard_light_f;
 		break;
 
 	case IMA_LAYER_COLOR_DODGE:
-		blend_callback = blend_color_dodge;
+		blend_callback = blend_color_dodge_f;
 		break;
 
 	case IMA_LAYER_LINEAR_DODGE:
-		blend_callback = blend_linear_dodge;
+		blend_callback = blend_linear_dodge_f;
 		break;
 		
 	case IMA_LAYER_COLOR_BURN:
-		blend_callback = blend_color_burn;
+		blend_callback = blend_color_burn_f;
 		break;
 
 	case IMA_LAYER_LINEAR_BURN:
-		blend_callback = blend_linear_burn;
+		blend_callback = blend_linear_burn_f;
 		break;
 
-	case IMA_LAYER_AVERAGE: 
-		blend_callback = blend_average;
+	case IMA_LAYER_AVERAGE:
+		blend_callback = blend_average_f;
 		break;       
 
-	case IMA_LAYER_ADD: 
-		blend_callback = blend_add;
+	case IMA_LAYER_ADD:
+		blend_callback = blend_add_f;
 		break;
 
-	case IMA_LAYER_SUBTRACT: 
-		blend_callback = blend_subtract;
+	case IMA_LAYER_SUBTRACT:
+		blend_callback = blend_subtract_f;
 		break;       
 
-	case IMA_LAYER_DIFFERENCE: 
-		blend_callback = blend_difference;
-		break;
-	
-	case IMA_LAYER_LIGHTEN: 
-		blend_callback = blend_lighten;
-		break;       
-
-	case IMA_LAYER_DARKEN: 
-		blend_callback = blend_darken;
+	case IMA_LAYER_DIFFERENCE:
+		blend_callback = blend_difference_f;
 		break;
 	
-	case IMA_LAYER_NEGATION: 
-		blend_callback = blend_negation;
+	case IMA_LAYER_LIGHTEN:
+		blend_callback = blend_lighten_f;
 		break;       
 
-	case IMA_LAYER_EXCLUSION: 
-		blend_callback = blend_exclusion;
+	case IMA_LAYER_DARKEN:
+		blend_callback = blend_darken_f;
 		break;
 	
-	case IMA_LAYER_LINEAR_LIGHT: 
-		blend_callback = blend_linear_light;
+	case IMA_LAYER_NEGATION:
+		blend_callback = blend_negation_f;
 		break;       
 
-	case IMA_LAYER_VIVID_LIGHT: 
-		blend_callback = blend_vivid_light;
+	case IMA_LAYER_EXCLUSION:
+		blend_callback = blend_exclusion_f;
 		break;
 	
-	case IMA_LAYER_PIN_LIGHT: 
-		blend_callback = blend_pin_light;
+	case IMA_LAYER_LINEAR_LIGHT:
+		blend_callback = blend_linear_light_f;
 		break;       
 
-	case IMA_LAYER_HARD_MIX: 
-		blend_callback = blend_hard_mix;
+	case IMA_LAYER_VIVID_LIGHT:
+		blend_callback = blend_vivid_light_f;
+		break;
+	
+	case IMA_LAYER_PIN_LIGHT:
+		blend_callback = blend_pin_light_f;
+		break;       
+
+	case IMA_LAYER_HARD_MIX:
+		blend_callback = blend_hard_mix_f;
 		break;
 	}
+
+	/* 
+	* Ao*Co = As * (1 - Ab) * Cs + As * Ab * B(Cb, Cs) + (1 - As) * Ab * Cb
+	* Ao = As + Ab * (1 - As)
+	* Co = Co / Ao
+	*/
+
+	fp_b = NULL;
+	fp_l = fp_d = fp_b;
+	cp_b = NULL;
+	cp_l = cp_d = cp_b;
 
 	if (base->rect_float) {
-		
-		float *fp_b = (float *) base->rect_float;
-		float *fp_l = (float *) layer->rect_float;
-		float *fp_d = (float *) dest->rect_float;
-		for( i = bg_x * bg_y; i > 0; i--, fp_b+=4, fp_l+=4, fp_d+=4 ) {
-			if (fp_l[3] != 0.0f) {
-				fp_d[0] = (float) blend_callback(FTOCHAR(fp_b[0]), FTOCHAR(fp_l[0]), opacity) / 255.0f;
-				fp_d[1] = (float) blend_callback(FTOCHAR(fp_b[1]), FTOCHAR(fp_l[1]), opacity) / 255.0f;
-				fp_d[2] = (float) blend_callback(FTOCHAR(fp_b[2]), FTOCHAR(fp_l[2]), opacity) / 255.0f;
-			}
-		}
-
-		if(base->rect) {
-			IMB_rect_from_float(base);
-		}
+		fp_b = (float *) base->rect_float;
+		fp_l = (float *) layer->rect_float;
+		fp_d = (float *) dest->rect_float;
 	}
-	else if(base->rect) {
-		
-		char *cp_b = (char *) base->rect;
-		char *cp_l = (char *) layer->rect;
-		char *cp_d = (char *) dest->rect;
 
-		for( i = bg_x * bg_y; i > 0; i--) {
-			if ((!pixel_is_transparent(cp_b)) && (!pixel_is_transparent(cp_l))) {
-				if (cp_l[3] != 0) {
-					cp_d[0] = blend_callback(cp_b[0], cp_l[0], opacity);
-					cp_d[1] = blend_callback(cp_b[1], cp_l[1], opacity);
-					cp_d[2] = blend_callback(cp_b[2], cp_l[2], opacity);
-					cp_d[3] = blend_callback(cp_b[3], cp_l[3], opacity);
-				}
+	if (base->rect) {
+		cp_b = (char *) base->rect;
+		cp_l = (char *) layer->rect;
+		cp_d = (char *) dest->rect;
+	}
+
+	for( i = bg_x * bg_y; i > 0; i--) {
+		if (base->rect_float) {
+			f_ba = fp_b[3];
+			f_la = fp_l[3];
+		}
+
+		if (base->rect) {
+			f_ba = ((float)cp_b[3]) / 255.0f;
+			f_la = ((float)cp_l[3]) / 255.0f;
+		}
+
+		if ((f_la != 0.0f) && (f_ba != 0.0f)) {
+			if (base->rect_float) {
+				f_br = fp_b[0];
+				f_bg = fp_b[1];
+				f_bb = fp_b[2];
+			
+				f_lr = fp_l[0];
+				f_lg = fp_l[1];
+				f_lb = fp_l[2];
 			}
 
+			if (base->rect) {
+				f_br = (((float)cp_b[0]) / 255.0f);
+				f_bg = (((float)cp_b[1]) / 255.0f);
+				f_bb = (((float)cp_b[2]) / 255.0f);
+			
+				f_lr = (((float)cp_l[0]) / 255.0f);
+				f_lg = (((float)cp_l[1]) / 255.0f);
+				f_lb = (((float)cp_l[2]) / 255.0f);
+			}
+
+			as = f_la;
+			ab = f_ba;
+			ao = as + ab * (1 - as);
+			
+			if (base->rect_float)
+				fp_d[3] = ao;
+			if (base->rect)
+				cp_d[3] = round(ao * 255);
+
+			/* ...p_d[0] */
+			aoco = as * (1 - ab) * f_lr + as * ab * blend_callback(f_br, f_lr, opacity) + (1 - as) * ab * f_br;
+			co = clipcolour(aoco / ao);
+			if (base->rect_float)
+				fp_d[0] = co;
+			if (base->rect)
+				cp_d[0] = round(co * 255);
+
+			/* ...p_d[1] */
+			aoco = as * (1 - ab) * f_lg + as * ab * blend_callback(f_bg, f_lg, opacity) + (1 - as) * ab * f_bg;
+			co = clipcolour(aoco / ao);
+			if (base->rect_float)
+				fp_d[1] = co;
+			if (base->rect)
+				cp_d[1] = round(co * 255);
+
+			/* ...p_d[2] */
+			aoco = as * (1 - ab) * f_lb + as * ab * blend_callback(f_bb, f_lb, opacity) + (1 - as) * ab * f_bb;
+			co = clipcolour(aoco / ao);
+			if (base->rect_float)
+				fp_d[2] = co;
+			if (base->rect)
+				cp_d[2] = round(co * 255);
+		}
+		if (base->rect_float) {
+			if (((i % bg_x) == 0) && (i != (bg_x * bg_y))) {
+				if (base->x > layer->x) {
+					fp_b = fp_b + diff_x * 4;
+					fp_d = fp_d + diff_x * 4;
+				}
+				else
+					fp_l = fp_l + diff_x * 4;
+			}
+			fp_b += 4;
+			fp_l += 4; 
+			fp_d += 4;
+		}
+		if (base->rect) {
 			if (((i % bg_x) == 0) && (i != (bg_x * bg_y))) {
 				if (base->x > layer->x) {
 					cp_b = cp_b + diff_x * 4;

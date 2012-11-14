@@ -62,7 +62,7 @@
 #include "BKE_writeavi.h"
 #include "BKE_scene.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #ifdef WITH_QUICKTIME

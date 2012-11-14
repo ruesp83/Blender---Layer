@@ -61,7 +61,7 @@
 #include "BKE_icons.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
@@ -1134,6 +1134,9 @@ int ui_id_icon_get(bContext *C, ID *id, int big)
 			/* checks if not exists, or changed */
 			ui_id_icon_render(C, id, big);
 			break;
+		/*case ID_IL: 
+			iconid= BKE_icon_getid(id);
+			break;*/
 		default:
 			break;
 	}

@@ -15,7 +15,7 @@
 
 #include "DNA_texture_types.h"
 #include "DNA_image_types.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "BKE_image.h"
 #include "BLI_blenlib.h"
 
@@ -109,7 +109,7 @@ bool BL_Texture::InitFromImage(int unit,  Image *img, bool mipmap)
 		return mOk;
 	}
 
-	ibuf= BKE_image_get_ibuf(img, NULL);
+	ibuf = BKE_image_get_ibuf(img, NULL, IMA_IBUF_IMA);
 	if (ibuf==NULL)
 	{
 		img->ok = 0;
@@ -251,7 +251,7 @@ bool BL_Texture::InitCubeMap(int unit,  EnvMap *cubemap)
 		return mOk;
 	}
 
-	ImBuf *ibuf= BKE_image_get_ibuf(cubemap->ima, NULL);
+	ImBuf *ibuf= BKE_image_get_ibuf(cubemap->ima, NULL, IMA_IBUF_IMA);
 	if (ibuf==0)
 	{
 		cubemap->ima->ok = 0;
@@ -646,7 +646,7 @@ int BL_Texture::GetPow2(int n)
 void BL_Texture::SplitEnvMap(EnvMap *map)
 {
 	if (!map || !map->ima || (map->ima && !map->ima->ok)) return;
-	ImBuf *ibuf= BKE_image_get_ibuf(map->ima, NULL);
+	ImBuf *ibuf= BKE_image_get_ibuf(map->ima, NULL, IMA_IBUF_IMA);
 	if (ibuf)
 		my_envmap_split_ima(map, ibuf);
 }

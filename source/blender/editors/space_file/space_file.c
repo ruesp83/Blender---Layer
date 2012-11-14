@@ -54,7 +54,7 @@
 #include "ED_screen.h"
 #include "ED_fileselect.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_thumbs.h"
 
 #include "WM_api.h"

@@ -128,7 +128,7 @@ static int gpu_shader_texture(GPUMaterial *mat, bNode *node, GPUNodeStack *in, G
 		int ret = GPU_stack_link(mat, "texture_image", in, out, texlink);
 
 		if (ret) {
-			ImBuf *ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser);
+			ImBuf *ibuf = BKE_image_get_ibuf(tex->ima, &tex->iuser, IMA_IBUF_IMA);
 			if (ibuf && (ibuf->colormanage_flag & IMB_COLORMANAGE_IS_DATA) ==0 &&
 			    GPU_material_do_color_management(mat))
 			{

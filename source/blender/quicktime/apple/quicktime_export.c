@@ -50,7 +50,7 @@
 #include "BLO_sys_types.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "MEM_guardedalloc.h"
 

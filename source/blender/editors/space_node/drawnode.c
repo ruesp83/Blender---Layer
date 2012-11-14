@@ -65,7 +65,7 @@
 
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "node_intern.h"  /* own include */
 
@@ -1232,6 +1232,9 @@ static void node_buts_image_user(uiLayout *layout, bContext *C, PointerRNA *ptr,
                                  PointerRNA *imaptr, PointerRNA *iuserptr)
 {
 	uiLayout *col;
+	PointerRNA op_ptr;
+	PropertyRNA *prop;
+	const char *layer_name;
 	int source;
 
 	if (!imaptr->data)
@@ -1266,6 +1269,15 @@ static void node_buts_image_user(uiLayout *layout, bContext *C, PointerRNA *ptr,
 
 	if (RNA_enum_get(imaptr, "type") == IMA_TYPE_MULTILAYER)
 		uiItemR(col, ptr, "layer", 0, NULL, ICON_NONE);
+	if ((source == IMA_SRC_GENERATED) || (source == IMA_SRC_FILE)) {
+		int act_lay;
+		uiItemR(col, ptr, "use_layer_ima", 0, NULL, ICON_NONE);
+		act_lay = ((ImageUser *)iuserptr->data)->use_layer_ima;
+		if (act_lay) {
+			uiItemR(col, ptr, "layer_ima", 0, "", ICON_NONE);
+		}
+	}
+
 }
 
 static void node_shader_buts_material(uiLayout *layout, bContext *C, PointerRNA *ptr)
@@ -1593,7 +1605,8 @@ static void node_composit_buts_image(uiLayout *layout, bContext *C, PointerRNA *
 {
 	bNode *node = ptr->data;
 	PointerRNA imaptr, iuserptr;
-	
+	PointerRNA op_ptr;
+
 	uiTemplateID(layout, C, ptr, "image", NULL, "IMAGE_OT_open", NULL);
 	
 	if (!node->id) return;
@@ -3201,7 +3214,7 @@ void draw_nodespace_back_pix(const bContext *C, ARegion *ar, SpaceNode *snode)
 	if ((snode->flag & SNODE_BACKDRAW) && snode->treetype == NTREE_COMPOSIT) {
 		Image *ima = BKE_image_verify_viewer(IMA_TYPE_COMPOSITE, "Viewer Node");
 		void *lock;
-		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock);
+		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock, IMA_IBUF_IMA);
 		if (ibuf) {
 			float x, y; 
 			unsigned char *display_buffer;
@@ -3315,7 +3328,7 @@ static void draw_nodespace_back_tex(ScrArea *sa, SpaceNode *snode)
 	
 	if (snode->flag & SNODE_BACKDRAW) {
 		Image *ima = BKE_image_verify_viewer(IMA_TYPE_COMPOSITE, "Viewer Node");
-		ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL);
+		ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
 		if (ibuf) {
 			int x, y;
 			float zoom = 1.0;

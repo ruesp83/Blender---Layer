@@ -41,7 +41,7 @@
 #include "BLI_fileops.h"
 
 #include "imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include "IMB_metadata.h"
 #include "IMB_filetype.h"

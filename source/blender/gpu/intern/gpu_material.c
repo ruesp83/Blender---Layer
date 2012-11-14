@@ -57,7 +57,7 @@
 #include "BKE_scene.h"
 #include "BKE_texture.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "GPU_extensions.h"
 #include "GPU_material.h"
@@ -1165,7 +1165,7 @@ static void do_material_tex(GPUShadeInput *shi)
 
 						// resolve texture resolution
 						if ( (mtex->texflag & MTEX_BUMP_TEXTURESPACE) || found_deriv_map ) {
-							ImBuf *ibuf= BKE_image_get_ibuf(tex->ima, &tex->iuser);
+							ImBuf *ibuf= BKE_image_get_ibuf(tex->ima, &tex->iuser, IMA_IBUF_IMA);
 							ima_x= 512.0f; ima_y= 512.f;		// prevent calling textureSize, glsl 1.3 only
 							if (ibuf) {
 								ima_x= ibuf->x;

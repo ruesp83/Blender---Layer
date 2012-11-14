@@ -43,7 +43,7 @@
 #include "DNA_image_types.h"
 #include "DNA_meshdata_types.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "GPU_draw.h"
 

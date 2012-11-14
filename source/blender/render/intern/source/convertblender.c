@@ -98,7 +98,7 @@
 #include "BKE_world.h"
 
 #include "PIL_time.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "envmap.h"
 #include "occlusion.h"

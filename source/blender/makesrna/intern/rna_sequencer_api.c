@@ -58,7 +58,7 @@
 #include "BKE_sound.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "WM_api.h"
 

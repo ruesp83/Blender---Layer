@@ -63,7 +63,7 @@
 #include "RE_pipeline.h"
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -213,6 +213,7 @@ static int screen_render_exec(bContext *C, wmOperator *op)
 	RE_test_break_cb(re, NULL, (int (*)(void *))blender_test_break);
 
 	ima = BKE_image_verify_viewer(IMA_TYPE_R_RESULT, "Render Result");
+
 	BKE_image_signal(ima, NULL, IMA_SIGNAL_FREE);
 	BKE_image_backup_render(scene, ima);
 
@@ -221,7 +222,6 @@ static int screen_render_exec(bContext *C, wmOperator *op)
 	 * the output rendering. We can't put that into RE_BlenderFrame,
 	 * since sequence rendering can call that recursively... (peter) */
 	BKE_sequencer_cache_cleanup();
-
 	RE_SetReports(re, op->reports);
 
 	if (is_animation)
@@ -368,7 +368,7 @@ static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrec
 	if (ima->render_slot != ima->last_render_slot)
 		return;
 
-	ibuf = BKE_image_acquire_ibuf(ima, &rj->iuser, &lock);
+	ibuf = BKE_image_acquire_ibuf(ima, &rj->iuser, &lock, IMA_IBUF_LAYER);
 	if (ibuf) {
 		image_buffer_rect_update(rj->scene, rr, ibuf, renrect);
 
@@ -487,7 +487,7 @@ static int screen_render_invoke(bContext *C, wmOperator *op, wmEvent *event)
 	const short is_write_still = RNA_boolean_get(op->ptr, "write_still");
 	struct Object *camera_override = v3d ? V3D_CAMERA_LOCAL(v3d) : NULL;
 	const char *name;
-	
+
 	/* only one render job at a time */
 	if (WM_jobs_test(CTX_wm_manager(C), scene, WM_JOB_TYPE_RENDER))
 		return OPERATOR_CANCELLED;

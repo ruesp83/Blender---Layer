@@ -24,7 +24,7 @@
 #include "COM_MultilayerImageOperation.h"
 extern "C" {
 	#include "IMB_imbuf.h"
-	#include "IMB_imbuf_types.h"
+	#include "DNA_imbuf_types.h"
 }
 
 MultilayerBaseOperation::MultilayerBaseOperation(int pass) : BaseImageOperation()
@@ -37,7 +37,7 @@ ImBuf *MultilayerBaseOperation::getImBuf()
 	rpass = (RenderPass *)BLI_findlink(&this->m_renderlayer->passes, this->m_passId);
 	if (rpass) {
 		this->m_imageUser->pass = this->m_passId;
-		BKE_image_multilayer_index(this->m_image->rr, this->m_imageUser);
+		BKE_render_multilayer_index(this->m_image->rr, this->m_imageUser);
 		return BaseImageOperation::getImBuf();
 	}
 	return NULL;

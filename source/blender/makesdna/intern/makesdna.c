@@ -80,6 +80,7 @@ static const char *includefiles[] = {
 	"DNA_lamp_types.h",
 	"DNA_material_types.h",
 	"DNA_vfont_types.h",
+	"DNA_imbuf_types.h",
 	/* if you add files here, please add them at the end
 	 * of makesdna.c (this file) as well */
 	"DNA_meta_types.h",
@@ -1216,6 +1217,7 @@ int main(int argc, char **argv)
 #include "DNA_packedFile_types.h"
 #include "DNA_camera_types.h"
 #include "DNA_image_types.h"
+#include "DNA_imbuf_types.h"
 #include "DNA_texture_types.h"
 #include "DNA_lamp_types.h"
 #include "DNA_material_types.h"

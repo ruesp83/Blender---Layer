@@ -78,7 +78,7 @@
 #include "RNA_enum_types.h"
 
 /* for image output	*/
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 /* to read material/texture color	*/

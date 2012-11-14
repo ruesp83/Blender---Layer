@@ -26,9 +26,9 @@
 
 
 #include "COM_NodeOperation.h"
+#include "DNA_imbuf_types.h"
 #include "DNA_mask_types.h"
 #include "BLI_listbase.h"
-#include "IMB_imbuf_types.h"
 
 /**
  * Class with implementation of mask rasterization

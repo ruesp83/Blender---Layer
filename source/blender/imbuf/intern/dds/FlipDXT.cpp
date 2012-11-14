@@ -32,7 +32,7 @@
 // This file comes from the chromium project, adapted to Blender to add DDS
 // flipping to OpenGL convention for Blender
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include <string.h>
 

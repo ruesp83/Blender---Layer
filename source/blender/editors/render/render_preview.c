@@ -81,7 +81,7 @@
 #include "BKE_world.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_colormanagement.h"
 
 #include "BIF_gl.h"
@@ -934,7 +934,7 @@ static void icon_preview_startjob(void *customdata, short *stop, short *do_updat
 		/* elubie: this needs to be changed: here image is always loaded if not
 		 * already there. Very expensive for large images. Need to find a way to 
 		 * only get existing ibuf */
-		ibuf = BKE_image_get_ibuf(ima, &iuser);
+		ibuf = BKE_image_get_ibuf(ima, &iuser, IMA_IBUF_IMA);
 		if (ibuf == NULL || ibuf->rect == NULL)
 			return;
 		

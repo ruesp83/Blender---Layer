@@ -62,7 +62,7 @@
 #include "BKE_icons.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "RE_render_ext.h" /* externtex */
 #include "RE_shader_ext.h"
@@ -1287,7 +1287,7 @@ unsigned int *BKE_brush_gen_texture_cache(Brush *br, int half_side)
 
 		texcache = MEM_callocN(sizeof(int) * side * side, "Brush texture cache");
 
-		BKE_image_get_ibuf(mtex->tex->ima, NULL);
+		BKE_image_get_ibuf(mtex->tex->ima, NULL, IMA_IBUF_IMA);
 		
 		/*do normalized cannonical view coords for texture*/
 		for (y = -1.0, iy = 0; iy < side; iy++, y += step) {

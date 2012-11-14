@@ -445,6 +445,15 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 				case TH_STITCH_PREVIEW_ACTIVE:
 					cp = ts->preview_stitch_active;
 					break;
+				case TH_SHOW_BOUNDARY_LAYER:
+					cp = &ts->show_boundary_layer;
+					break;
+				case TH_COL1_BOUNDARY_LAYER:
+					cp = ts->col1_boundary_layer;
+					break;
+				case TH_COL2_BOUNDARY_LAYER:
+					cp = ts->col2_boundary_layer;
+					break;
 				case TH_MARKER_OUTLINE:
 					cp = ts->marker_outline; break;
 				case TH_MARKER:
@@ -860,6 +869,9 @@ void ui_theme_init_default(void)
 	rgba_char_args_set_fl(btheme->tima.preview_stitch_vert, 0.0, 0.0, 1.0, 0.2);
 	rgba_char_args_set_fl(btheme->tima.preview_stitch_stitchable, 0.0, 1.0, 0.0, 1.0);
 	rgba_char_args_set_fl(btheme->tima.preview_stitch_unstitchable, 1.0, 0.0, 0.0, 1.0);
+	btheme->tima.show_boundary_layer = TH_IMAGE_LAYER_BOUNDARY;
+	rgba_char_args_set(btheme->tima.col1_boundary_layer, 255, 255, 0, 255);
+	rgba_char_args_set(btheme->tima.col2_boundary_layer, 255, 0, 255, 255);
 
 	/* space text */
 	btheme->text = btheme->tv3d;
@@ -1889,8 +1901,9 @@ void init_userdef_do_versions(void)
 
 	if (bmain->versionfile < 263 || (bmain->versionfile == 263 && bmain->subversionfile < 6)) {
 		bTheme *btheme;
-		for (btheme = U.themes.first; btheme; btheme = btheme->next)
+		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_set(btheme->tv3d.skin_root, 180, 77, 77, 255);
+		}
 	}
 	
 	if (bmain->versionfile < 263 || (bmain->versionfile == 263 && bmain->subversionfile < 7)) {
@@ -1924,7 +1937,14 @@ void init_userdef_do_versions(void)
 			}
 		}
 	}
-
+	if (bmain->versionfile < 263 || (bmain->versionfile == 263 && bmain->subversionfile < 13)) {
+		bTheme *btheme;
+		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
+			btheme->tima.show_boundary_layer = TH_IMAGE_LAYER_BOUNDARY;
+			rgba_char_args_set_fl(btheme->tima.col1_boundary_layer, 1.0, 1.0, 0.0, 1.0);
+			rgba_char_args_set_fl(btheme->tima.col2_boundary_layer, 1.0, 0.0, 1.0, 1.0);
+		}
+	}
 	if (bmain->versionfile < 263 || (bmain->versionfile == 263 && bmain->subversionfile < 15)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {

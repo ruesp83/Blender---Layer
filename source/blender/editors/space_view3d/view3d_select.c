@@ -57,7 +57,7 @@
 #include "BLI_utildefines.h"
 
 /* vertex box select */
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include "BKE_global.h"
 

@@ -46,7 +46,7 @@ static void colorfn(float *out, TexParams *p, bNode *node, bNodeStack **UNUSED(i
 	ImageUser *iuser= (ImageUser *)node->storage;
 	
 	if ( ima ) {
-		ImBuf *ibuf = BKE_image_get_ibuf(ima, iuser);
+		ImBuf *ibuf = BKE_image_get_ibuf(ima, iuser, IMA_IBUF_IMA);
 		if ( ibuf ) {
 			float xsize, ysize;
 			float xoff, yoff;

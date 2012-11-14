@@ -175,7 +175,7 @@ static void cmp_node_image_create_outputs(bNodeTree *ntree, bNode *node)
 		ImageUser *iuser= node->storage;
 		
 		/* make sure ima->type is correct */
-		BKE_image_get_ibuf(ima, iuser);
+		BKE_image_get_ibuf(ima, iuser, IMA_IBUF_IMA);
 		
 		if (ima->rr) {
 			RenderLayer *rl= BLI_findlink(&ima->rr->layers, iuser->layer);
@@ -322,7 +322,13 @@ static CompBuf *node_composit_get_image(RenderData *rd, Image *ima, ImageUser *i
 	float *rect;
 	int alloc= FALSE;
 
-	ibuf= BKE_image_get_ibuf(ima, iuser);
+	if (iuser->use_layer_ima) {
+		imalayer_set_current_act(ima, iuser->layer_ima);
+		ibuf = BKE_image_get_ibuf(ima, iuser, IMA_IBUF_LAYER);
+	}
+	else
+		ibuf = BKE_image_get_ibuf(ima, iuser, IMA_IBUF_IMA);
+
 	if (ibuf==NULL || (ibuf->rect==NULL && ibuf->rect_float==NULL)) {
 		return NULL;
 	}
@@ -334,27 +340,27 @@ static CompBuf *node_composit_get_image(RenderData *rd, Image *ima, ImageUser *i
 	/* now we need a float buffer from the image with matching color management */
 	/* XXX weak code, multilayer is excluded from this */
 	if (ibuf->channels == 4 && ima->rr==NULL) {
-		rect= node_composit_get_float_buffer(rd, ibuf, &alloc);
+		rect = node_composit_get_float_buffer(rd, ibuf, &alloc);
 	}
 	else {
 		/* non-rgba passes can't use color profiles */
-		rect= ibuf->rect_float;
+		rect = ibuf->rect_float;
 	}
 	/* done coercing into the correct color management */
 
 
-	type= ibuf->channels;
+	type = ibuf->channels;
 	
 	if (rd->scemode & R_COMP_CROP) {
-		stackbuf= get_cropped_compbuf(&rd->disprect, rect, ibuf->x, ibuf->y, type);
+		stackbuf = get_cropped_compbuf(&rd->disprect, rect, ibuf->x, ibuf->y, type);
 		if (alloc)
 			MEM_freeN(rect);
 	}
 	else {
 		/* we put imbuf copy on stack, cbuf knows rect is from other ibuf when freed! */
-		stackbuf= alloc_compbuf(ibuf->x, ibuf->y, type, FALSE);
-		stackbuf->rect= rect;
-		stackbuf->malloc= alloc;
+		stackbuf = alloc_compbuf(ibuf->x, ibuf->y, type, FALSE);
+		stackbuf->rect = rect;
+		stackbuf->malloc = alloc;
 	}
 	
 	/* code to respect the premul flag of images; I'm
@@ -379,7 +385,7 @@ static CompBuf *node_composit_get_image(RenderData *rd, Image *ima, ImageUser *i
 
 static CompBuf *node_composit_get_zimage(bNode *node, RenderData *rd)
 {
-	ImBuf *ibuf= BKE_image_get_ibuf((Image *)node->id, node->storage);
+	ImBuf *ibuf= BKE_image_get_ibuf((Image *)node->id, node->storage, IMA_IBUF_IMA);
 	CompBuf *zbuf= NULL;
 	
 	if (ibuf && ibuf->zbuf_float) {
@@ -402,7 +408,7 @@ static CompBuf *compbuf_multilayer_get(RenderData *rd, RenderLayer *rl, Image *i
 		CompBuf *cbuf;
 		
 		iuser->pass = passindex;
-		BKE_image_multilayer_index(ima->rr, iuser);
+		BKE_render_multilayer_index(ima->rr, iuser);
 		cbuf = node_composit_get_image(rd, ima, iuser);
 		
 		return cbuf;
@@ -424,10 +430,10 @@ static void node_composit_exec_image(void *data, bNode *node, bNodeStack **UNUSE
 		
 		/* force a load, we assume iuser index will be set OK anyway */
 		if (ima->type==IMA_TYPE_MULTILAYER)
-			BKE_image_get_ibuf(ima, iuser);
+			BKE_image_get_ibuf(ima, iuser, IMA_IBUF_IMA);
 		
 		if (ima->type==IMA_TYPE_MULTILAYER && ima->rr) {
-			RenderLayer *rl= BLI_findlink(&ima->rr->layers, iuser->layer);
+			RenderLayer *rl = BLI_findlink(&ima->rr->layers, iuser->layer);
 			
 			if (rl) {
 				bNodeSocket *sock;

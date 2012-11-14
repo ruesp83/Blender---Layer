@@ -37,7 +37,7 @@
 #ifdef RNA_RUNTIME
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "DNA_scene_types.h"
 #include "BKE_context.h"
 #include "BKE_global.h"

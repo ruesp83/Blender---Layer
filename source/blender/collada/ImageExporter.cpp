@@ -42,7 +42,7 @@ extern "C" {
 #include "BLI_fileops.h"
 #include "BLI_path_util.h"
 #include "BLI_string.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 }
 
 #include "ImageExporter.h"

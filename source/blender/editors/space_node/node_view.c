@@ -57,7 +57,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "node_intern.h"  /* own include */
 
@@ -238,7 +238,7 @@ static int snode_bg_viewmove_invoke(bContext *C, wmOperator *op, wmEvent *event)
 	void *lock;
 
 	ima = BKE_image_verify_viewer(IMA_TYPE_COMPOSITE, "Viewer Node");
-	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock);
+	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock, IMA_IBUF_IMA);
 
 	if (ibuf == NULL) {
 		BKE_image_release_ibuf(ima, lock);
@@ -343,7 +343,7 @@ static void sample_draw(const bContext *C, ARegion *ar, void *arg_info)
 	if (info->draw) {
 		ED_image_draw_info(scene, ar, info->color_manage, FALSE, info->channels,
 		                   info->x, info->y, info->col, info->colf,
-		                   NULL, NULL /* zbuf - unused for nodes */
+		                   NULL, NULL /* zbuf - unused for nodes */, 2
 		                   );
 	}
 }
@@ -366,7 +366,7 @@ int ED_space_node_color_sample(SpaceNode *snode, ARegion *ar, int mval[2], float
 	}
 
 	ima = BKE_image_verify_viewer(IMA_TYPE_COMPOSITE, "Viewer Node");
-	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock);
+	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock, IMA_IBUF_IMA);
 	if (!ibuf) {
 		return FALSE;
 	}
@@ -414,7 +414,7 @@ static void sample_apply(bContext *C, wmOperator *op, wmEvent *event)
 	float fx, fy, bufx, bufy;
 
 	ima = BKE_image_verify_viewer(IMA_TYPE_COMPOSITE, "Viewer Node");
-	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock);
+	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock, IMA_IBUF_IMA);
 	if (!ibuf) {
 		info->draw = 0;
 		return;

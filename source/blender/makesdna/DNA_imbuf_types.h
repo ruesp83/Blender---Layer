@@ -29,8 +29,8 @@
 #define __IMB_IMBUF_TYPES_H__
 
 /**
- * \file IMB_imbuf_types.h
- * \ingroup imbuf
+ * \file DNA_imbuf_types.h
+ * \ingroup DNA
  * \brief Contains defines and structs used throughout the imbuf module.
  * \todo Clean up includes.
  *
@@ -105,8 +105,8 @@ typedef struct ImBuf {
 
 	/* parameters used by conversion between byte and float */
 	float dither;				/* random dither value, for conversion from float -> byte rect */
-	short profile;				/* color space/profile preset that the byte rect buffer represents */
-	unsigned short pad3;
+	//short profile;				/* color space/profile preset that the byte rect buffer represents */
+	int pad3;
 	/* mipmapping */
 	struct ImBuf *mipmap[20]; /* MipMap levels, a series of halved images */
 	int miptot, miplevel;
@@ -208,6 +208,10 @@ typedef struct ImBuf {
 #ifdef WITH_CINEON
 #define CINEON			(1 << 21)
 #define DPX				(1 << 20)
+#define CINEON_LOG		(1 << 8)
+#define CINEON_16BIT	(1 << 7)
+#define CINEON_12BIT	(1 << 6)
+#define CINEON_10BIT	(1 << 5)
 #endif
 
 #ifdef WITH_DDS

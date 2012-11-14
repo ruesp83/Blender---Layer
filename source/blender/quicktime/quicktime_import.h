@@ -40,7 +40,7 @@
 #define __AIFF__
 
 #include "../imbuf/IMB_imbuf.h"
-#include "../imbuf/IMB_imbuf_types.h"
+#include "../makesdna/DNA_imbuf_types.h"
 
 #ifndef USE_QTKIT
 #  ifndef __MOVIES__

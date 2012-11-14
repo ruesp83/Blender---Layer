@@ -35,7 +35,7 @@ http://www.gnu.org/copyleft/lesser.txt.
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_image_types.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "KX_PolygonMaterial.h"
 
 #include "MEM_guardedalloc.h"

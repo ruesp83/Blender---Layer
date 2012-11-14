@@ -48,7 +48,7 @@
 #include "ED_space_api.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_colormanagement.h"
 
 #include "UI_view2d.h"
@@ -81,7 +81,7 @@ static void sample_draw(const bContext *C, ARegion *ar, void *arg_info)
 
 	if (info->draw) {
 		ED_image_draw_info(scene, ar, info->color_manage, FALSE, info->channels,
-		                   info->x, info->y, info->colp, info->colfp, NULL, NULL);
+		                   info->x, info->y, info->colp, info->colfp, NULL, NULL, 2);
 	}
 }
 

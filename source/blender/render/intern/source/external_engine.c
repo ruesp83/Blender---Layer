@@ -46,7 +46,7 @@
 #include "BKE_scene.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #ifdef WITH_PYTHON
 #include "BPY_extern.h"

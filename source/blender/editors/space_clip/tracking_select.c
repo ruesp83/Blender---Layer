@@ -34,6 +34,7 @@
 #include "DNA_camera_types.h"
 #include "DNA_constraint_types.h"
 #include "DNA_gpencil_types.h"
+#include "DNA_imbuf_types.h"
 #include "DNA_movieclip_types.h"
 #include "DNA_object_types.h"   /* SELECT */
 #include "DNA_scene_types.h"
@@ -65,7 +66,6 @@
 #include "ED_clip.h"
 #include "ED_keyframing.h"
 
-#include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "UI_interface.h"

@@ -45,7 +45,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include <math.h>
 

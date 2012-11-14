@@ -25,6 +25,7 @@
 #include "BLI_listbase.h"
 #include "DNA_image_types.h"
 #include "BKE_image.h"
+#include "BKE_layer.h"
 #include "BLI_math.h"
 
 extern "C" {
@@ -32,7 +33,7 @@ extern "C" {
 	#include "RE_shader_ext.h"
 	#include "RE_render_ext.h"
 	#include "IMB_imbuf.h"
-	#include "IMB_imbuf_types.h"
+	#include "DNA_imbuf_types.h"
 	#include "IMB_colormanagement.h"
 }
 
@@ -65,7 +66,11 @@ ImBuf *BaseImageOperation::getImBuf()
 {
 	ImBuf *ibuf;
 	
-	ibuf = BKE_image_get_ibuf(this->m_image, this->m_imageUser);
+	if (this->m_imageUser->use_layer_ima)
+		ibuf = (ImBuf *)imalayer_get_layer_index(this->m_image, this->m_imageUser->layer_ima)->ibufs.first;
+	else
+		ibuf = BKE_image_get_ibuf(this->m_image, this->m_imageUser, IMA_IBUF_IMA);
+
 	if (ibuf == NULL || (ibuf->rect == NULL && ibuf->rect_float == NULL)) {
 		return NULL;
 	}

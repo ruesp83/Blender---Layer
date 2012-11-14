@@ -73,7 +73,7 @@
 #include "BKE_tessmesh.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
@@ -530,7 +530,7 @@ void drawaxes(float size, char drawtype)
 static void draw_empty_image(Object *ob, const short dflag, const unsigned char ob_wire_col[4])
 {
 	Image *ima = (Image *)ob->data;
-	ImBuf *ibuf = ima ? BKE_image_get_ibuf(ima, NULL) : NULL;
+	ImBuf *ibuf = ima ? BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA) : NULL;
 
 	float scale, ofs_x, ofs_y, sca_x, sca_y;
 	int ima_x, ima_y;

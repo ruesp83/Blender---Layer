@@ -49,7 +49,7 @@
 
 #include "GPU_extensions.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "ED_screen.h"

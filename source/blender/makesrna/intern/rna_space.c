@@ -152,7 +152,7 @@ EnumPropertyItem clip_editor_mode_items[] = {
 #include "ED_sequencer.h"
 #include "ED_clip.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 
 static StructRNA *rna_Space_refine(struct PointerRNA *ptr)
 {
