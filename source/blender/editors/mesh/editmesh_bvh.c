@@ -29,9 +29,6 @@
  *  \ingroup edmesh
  */
 
-#define IN_EDITMESHBVH
-
-
 #include "MEM_guardedalloc.h"
 
 #include "DNA_scene_types.h"
@@ -39,17 +36,17 @@
 #include "DNA_screen_types.h"
 #include "DNA_view3d_types.h"
 
-
 #include "BLI_math.h"
 #include "BLI_smallhash.h"
 
 #include "BKE_DerivedMesh.h"
 #include "BKE_tessmesh.h"
 
-#include "ED_mesh.h"
 #include "ED_view3d.h"
 
+#define IN_EDITMESHBVH     /* needed for typedef workaround */
 #include "editmesh_bvh.h"  /* own include */
+
 
 typedef struct BMBVHTree {
 	BMEditMesh *em;
@@ -399,7 +396,7 @@ int BMBVH_EdgeVisible(BMBVHTree *tree, BMEdge *e, ARegion *ar, View3D *v3d, Obje
 	const float mval_f[2] = {ar->winx / 2.0f,
 	                         ar->winy / 2.0f};
 
-	ED_view3d_win_to_segment_clip(ar, v3d, mval_f, origin, end);
+	ED_view3d_win_to_segment(ar, v3d, mval_f, origin, end);
 	
 	invert_m4_m4(invmat, obedit->obmat);
 	mul_m4_v3(invmat, origin);

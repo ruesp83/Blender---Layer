@@ -21,7 +21,7 @@
 bl_info = {
     "name": "Wavefront OBJ format",
     "author": "Campbell Barton",
-    "blender": (2, 5, 8),
+    "blender": (2, 58, 0),
     "location": "File > Import-Export",
     "description": "Import-Export OBJ, Import OBJ mesh, UV's, "
                    "materials and textures",
@@ -221,7 +221,7 @@ class ExportOBJ(bpy.types.Operator, ExportHelper):
             )
 
     # object group
-    use_apply_modifiers = BoolProperty(
+    use_mesh_modifiers = BoolProperty(
             name="Apply Modifiers",
             description="Apply modifiers (preview resolution)",
             default=True,

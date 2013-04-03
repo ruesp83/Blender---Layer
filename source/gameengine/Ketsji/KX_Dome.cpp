@@ -1,25 +1,27 @@
 /*
- * -----------------------------------------------------------------------------
+ * ***** BEGIN GPL LICENSE BLOCK *****
  *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License as published by the Free Software
- * Foundation; either version 2 of the License, or (at your option) any later
- * version.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License along with
- * this program; if not, write to the Free Software Foundation, Inc., 59 Temple
- * Place - Suite 330, Boston, MA 02111-1307, USA, or go to
- * http://www.gnu.org/copyleft/lesser.txt.
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software  Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
  * Contributor(s): Dalai Felinto
  *
  * This code is originally inspired on some of the ideas and codes from Paul Bourke.
- * Developed as part of a Research and Development project for SAT - La Société des arts technologiques.
- * -----------------------------------------------------------------------------
+ * Developed as part of a Research and Development project for
+ * SAT - La Société des arts technologiques.
+ *
+ * ***** END GPL LICENSE BLOCK *****
  */
 
 /** \file gameengine/Ketsji/KX_Dome.cpp
@@ -197,7 +199,7 @@ void KX_Dome::CreateGLImages(void)
 	for (int j=0;j<m_numfaces;j++) {
 		glBindTexture(GL_TEXTURE_2D, domefacesId[j]);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, m_imagesize, m_imagesize, 0, GL_RGB8,
-				GL_UNSIGNED_BYTE, 0);
+		             GL_UNSIGNED_BYTE, NULL);
 		glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 0, 0, m_imagesize, m_imagesize, 0);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -207,7 +209,7 @@ void KX_Dome::CreateGLImages(void)
 	if (warp.usemesh) {
 		glBindTexture(GL_TEXTURE_2D, domefacesId[m_numfaces]);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, warp.imagesize, warp.imagesize, 0, GL_RGB8,
-				GL_UNSIGNED_BYTE, 0);
+		             GL_UNSIGNED_BYTE, NULL);
 		glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 0, 0, warp.imagesize, warp.imagesize, 0);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -1433,7 +1435,7 @@ void KX_Dome::SplitFace(vector <DomeFace>& face, int *nfaces)
 	*nfaces = n2;
 }
 
-void KX_Dome::CalculateFrustum(KX_Camera * cam)
+void KX_Dome::CalculateFrustum(KX_Camera *cam)
 {
 #if 0
 	// manually creating a 90deg Field of View Frustum 

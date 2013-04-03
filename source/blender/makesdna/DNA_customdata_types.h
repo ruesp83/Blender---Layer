@@ -27,6 +27,8 @@
 
 /** \file DNA_customdata_types.h
  *  \ingroup DNA
+ *
+ * Used for custom mesh data types (stored per vert/edge/loop/face)
  */
 
 #ifndef __DNA_CUSTOMDATA_TYPES_H__
@@ -46,7 +48,7 @@ typedef struct CustomDataLayer {
 	int active_clone; /* number of the layer to render*/
 	int active_mask; /* number of the layer to render*/
 	int uid;        /* shape keyblock unique id reference*/
-	char name[64];  /* layer name, MAX_CUSTOMDATA_LAYER_AAME */
+	char name[64];  /* layer name, MAX_CUSTOMDATA_LAYER_NAME */
 	void *data;     /* layer data */
 } CustomDataLayer;
 
@@ -177,4 +179,4 @@ typedef struct CustomData {
 }
 #endif
 
-#endif
+#endif  /* __DNA_CUSTOMDATA_TYPES_H__ */

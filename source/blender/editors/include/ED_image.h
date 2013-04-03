@@ -49,7 +49,7 @@ void          ED_space_image_set_mask(struct bContext *C, struct SpaceImage *sim
 
 int ED_space_image_color_sample(struct SpaceImage *sima, struct ARegion *ar, int mval[2], float r_col[3]);
 struct ImBuf *ED_space_image_acquire_buffer(struct SpaceImage *sima, void **lock_r);
-void ED_space_image_release_buffer(struct SpaceImage *sima, void *lock);
+void ED_space_image_release_buffer(struct SpaceImage *sima, struct ImBuf *ibuf, void *lock);
 int ED_space_image_has_buffer(struct SpaceImage *sima);
 
 void ED_space_image_get_size(struct SpaceImage *sima, int *width, int *height);
@@ -79,7 +79,11 @@ int ED_space_image_maskedit_mask_poll(struct bContext *C);
 void ED_image_update_frame(const struct Main *mainp, int cfra);
 
 void ED_image_draw_info(struct Scene *scene, struct ARegion *ar, int color_manage, int use_default_view, int channels, int x, int y,
+<<<<<<< .mine
                         const unsigned char cp[4], const float fp[4], int *zp, float *zpf, const char type);
+=======
+                        const unsigned char cp[4], const float fp[4], const float linearcol[4], int *zp, float *zpf);
+>>>>>>> .r55757
 
 #endif /* __ED_IMAGE_H__ */
 

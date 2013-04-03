@@ -84,6 +84,7 @@ set(SRC
 	composite/nodes/node_composite_lummaMatte.c
 	composite/nodes/node_composite_mapUV.c
 	composite/nodes/node_composite_mapValue.c
+	composite/nodes/node_composite_mapRange.c
 	composite/nodes/node_composite_math.c
 	composite/nodes/node_composite_mask.c
 	composite/nodes/node_composite_mixrgb.c
@@ -168,11 +169,13 @@ set(SRC
 	shader/nodes/node_shader_mix_shader.c
 	shader/nodes/node_shader_normal_map.c
 	shader/nodes/node_shader_object_info.c
+	shader/nodes/node_shader_hair_info.c
 	shader/nodes/node_shader_output_lamp.c
 	shader/nodes/node_shader_output_material.c
 	shader/nodes/node_shader_output_world.c
 	shader/nodes/node_shader_particle_info.c
 	shader/nodes/node_shader_script.c
+	shader/nodes/node_shader_subsurface_scattering.c
 	shader/nodes/node_shader_tangent.c
 	shader/nodes/node_shader_tex_brick.c
 	shader/nodes/node_shader_tex_checker.c
@@ -226,10 +229,12 @@ set(SRC
 	shader/node_shader_util.h
 	texture/node_texture_util.h
 
+	NOD_common.h
 	NOD_composite.h
 	NOD_shader.h
 	NOD_texture.h
 	NOD_socket.h
+	NOD_static_types.h
 	intern/node_util.h
 	intern/node_exec.h
 	intern/node_common.h
@@ -258,10 +263,6 @@ if(WITH_COMPOSITOR)
 		../compositor
 	)
 	add_definitions(-DWITH_COMPOSITOR)
-endif()
-
-if(WITH_COMPOSITOR_LEGACY)
-	add_definitions(-DWITH_COMPOSITOR_LEGACY)
 endif()
 
 blender_add_lib(bf_nodes "${SRC}" "${INC}" "${INC_SYS}")

@@ -62,6 +62,7 @@
 #include "ED_gpencil.h"
 #include "ED_markers.h"
 #include "ED_mask.h"
+#include "ED_sequencer.h"
 #include "ED_types.h"
 #include "ED_space_api.h"
 
@@ -812,7 +813,9 @@ static void UNUSED_FUNCTION(set_special_seq_update) (int val)
 	if (val) {
 // XXX		special_seq_update = find_nearest_seq(&x);
 	}
-	else special_seq_update = NULL;
+	else {
+		special_seq_update = NULL;
+	}
 }
 
 ImBuf *sequencer_ibuf_get(struct Main *bmain, Scene *scene, SpaceSeq *sseq, int cfra, int frame_ofs)
@@ -822,6 +825,7 @@ ImBuf *sequencer_ibuf_get(struct Main *bmain, Scene *scene, SpaceSeq *sseq, int 
 	int rectx, recty;
 	float render_size = 0.0;
 	float proxy_size = 100.0;
+	short is_break = G.is_break;
 
 	render_size = sseq->render_size;
 	if (render_size == 0) {
@@ -840,12 +844,20 @@ ImBuf *sequencer_ibuf_get(struct Main *bmain, Scene *scene, SpaceSeq *sseq, int 
 
 	context = BKE_sequencer_new_render_data(bmain, scene, rectx, recty, proxy_size);
 
+	/* sequencer could start rendering, in this case we need to be sure it wouldn't be canceled
+	 * by Esc pressed somewhere in the past
+	 */
+	G.is_break = FALSE;
+
 	if (special_seq_update)
 		ibuf = BKE_sequencer_give_ibuf_direct(context, cfra + frame_ofs, special_seq_update);
 	else if (!U.prefetchframes) // XXX || (G.f & G_PLAYANIM) == 0) {
 		ibuf = BKE_sequencer_give_ibuf(context, cfra + frame_ofs, sseq->chanshown);
 	else
 		ibuf = BKE_sequencer_give_ibuf_threaded(context, cfra + frame_ofs, sseq->chanshown);
+
+	/* restore state so real rendering would be canceled (if needed) */
+	G.is_break = is_break;
 
 	return ibuf;
 }
@@ -884,11 +896,9 @@ static ImBuf *sequencer_make_scope(Scene *scene, ImBuf *ibuf, ImBuf *(*make_scop
 {
 	ImBuf *display_ibuf = IMB_dupImBuf(ibuf);
 	ImBuf *scope;
-
-	if (display_ibuf->rect_float) {
-		IMB_colormanagement_imbuf_make_display_space(display_ibuf, &scene->view_settings,
+	
+	IMB_colormanagement_imbuf_make_display_space(display_ibuf, &scene->view_settings,
 		                                             &scene->display_settings);
-	}
 
 	scope = make_scope_cb(display_ibuf);
 
@@ -912,12 +922,20 @@ void draw_image_seq(const bContext *C, Scene *scene, ARegion *ar, SpaceSeq *sseq
 	GLuint last_texid;
 	unsigned char *display_buffer;
 	void *cache_handle = NULL;
+	const int is_imbuf = ED_space_sequencer_check_show_imbuf(sseq);
 
-	if (G.is_rendering == FALSE) {
+	if (G.is_rendering == FALSE && (scene->r.seq_flag & R_SEQ_GL_PREV) == 0) {
 		/* stop all running jobs, except screen one. currently previews frustrate Render
 		 * needed to make so sequencer's rendering doesn't conflict with compositor
 		 */
-		WM_jobs_kill_all_except(CTX_wm_manager(C), CTX_wm_screen(C));
+		WM_jobs_kill_type(CTX_wm_manager(C), WM_JOB_TYPE_COMPOSITE);
+
+		if ((scene->r.seq_flag & R_SEQ_GL_PREV) == 0) {
+			/* in case of final rendering used for preview, kill all previews,
+			 * otherwise threading conflict will happen in rendering module
+			 */
+			WM_jobs_kill_type(CTX_wm_manager(C), WM_JOB_TYPE_RENDER_PREVIEW);
+		}
 	}
 
 	render_size = sseq->render_size;
@@ -1030,6 +1048,17 @@ void draw_image_seq(const bContext *C, Scene *scene, ARegion *ar, SpaceSeq *sseq
 	/* setting up the view - actual drawing starts here */
 	UI_view2d_view_ortho(v2d);
 
+	/* only draw alpha for main buffer */
+	if (sseq->mainb == SEQ_DRAW_IMG_IMBUF) {
+		if (sseq->flag & SEQ_USE_ALPHA) {
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+			fdrawcheckerboard(v2d->tot.xmin, v2d->tot.ymin, v2d->tot.xmax, v2d->tot.ymax);
+			glColor4f(1.0, 1.0, 1.0, 1.0);
+		}
+	}
+
 	last_texid = glaGetOneInteger(GL_TEXTURE_2D);
 	glEnable(GL_TEXTURE_2D);
 	glGenTextures(1, (GLuint *)&texid);
@@ -1040,6 +1069,7 @@ void draw_image_seq(const bContext *C, Scene *scene, ARegion *ar, SpaceSeq *sseq
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, ibuf->x, ibuf->y, 0, GL_RGBA, GL_UNSIGNED_BYTE, display_buffer);
+
 	glBegin(GL_QUADS);
 
 	if (draw_overlay) {
@@ -1071,6 +1101,8 @@ void draw_image_seq(const bContext *C, Scene *scene, ARegion *ar, SpaceSeq *sseq
 	glEnd();
 	glBindTexture(GL_TEXTURE_2D, last_texid);
 	glDisable(GL_TEXTURE_2D);
+	if (sseq->mainb == SEQ_DRAW_IMG_IMBUF && sseq->flag & SEQ_USE_ALPHA)
+		glDisable(GL_BLEND);
 	glDeleteTextures(1, &texid);
 
 	if (sseq->mainb == SEQ_DRAW_IMG_IMBUF) {
@@ -1116,8 +1148,12 @@ void draw_image_seq(const bContext *C, Scene *scene, ARegion *ar, SpaceSeq *sseq
 		setlinestyle(0);
 	}
 	
-	/* draw grease-pencil (image aligned) */
-	draw_gpencil_2dimage(C);
+	if (sseq->flag & SEQ_SHOW_GPENCIL) {
+		if (is_imbuf) {
+			/* draw grease-pencil (image aligned) */
+			draw_gpencil_2dimage(C);
+		}
+	}
 
 	if (!scope)
 		IMB_freeImBuf(ibuf);
@@ -1125,9 +1161,12 @@ void draw_image_seq(const bContext *C, Scene *scene, ARegion *ar, SpaceSeq *sseq
 	/* ortho at pixel level */
 	UI_view2d_view_restore(C);
 	
-	/* draw grease-pencil (screen aligned) */
-	draw_gpencil_view2d(C, 0);
-
+	if (sseq->flag & SEQ_SHOW_GPENCIL) {
+		if (is_imbuf) {
+			/* draw grease-pencil (screen aligned) */
+			draw_gpencil_view2d(C, 0);
+		}
+	}
 
 
 	/* NOTE: sequencer mask editing isnt finished, the draw code is working but editing not,

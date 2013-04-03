@@ -84,6 +84,7 @@ set(SRC
 	KX_FontObject.cpp
 	KX_GameActuator.cpp
 	KX_GameObject.cpp
+	KX_IpoConvert.cpp
 	KX_IPO_SGController.cpp
 	KX_IPhysicsController.cpp
 	KX_IpoActuator.cpp
@@ -101,7 +102,6 @@ set(SRC
 	KX_ObstacleSimulation.cpp
 	KX_OrientationInterpolator.cpp
 	KX_ParentActuator.cpp
-	KX_PhysicsObjectWrapper.cpp
 	KX_PolyProxy.cpp
 	KX_PolygonMaterial.cpp
 	KX_PositionInterpolator.cpp
@@ -162,6 +162,7 @@ set(SRC
 	KX_GameActuator.h
 	KX_GameObject.h
 	KX_IInterpolator.h
+	KX_IpoConvert.h
 	KX_IPOTransform.h
 	KX_IPO_SGController.h
 	KX_IPhysicsController.h
@@ -184,7 +185,6 @@ set(SRC
 	KX_OrientationInterpolator.h
 	KX_ParentActuator.h
 	KX_PhysicsEngineEnums.h
-	KX_PhysicsObjectWrapper.h
 	KX_PhysicsPropertiesobsolete.h
 	KX_PolyProxy.h
 	KX_PolygonMaterial.h
@@ -222,6 +222,18 @@ set(SRC
 	KX_VisibilityActuator.h
 	KX_WorldInfo.h
 	KX_WorldIpoController.h
+
+	# orphan headers (not apart of a library)
+	../Physics/common/PHY_DynamicTypes.h
+	../Physics/common/PHY_ICharacter.h
+	../Physics/common/PHY_IController.h
+	../Physics/common/PHY_IGraphicController.h
+	../Physics/common/PHY_IMotionState.h
+	../Physics/common/PHY_IPhysicsController.h
+	../Physics/common/PHY_IPhysicsEnvironment.h
+	../Physics/common/PHY_IVehicle.h
+	../Physics/common/PHY_Pro.h
+
 )
 
 add_definitions(-DGLEW_STATIC)
@@ -254,9 +266,9 @@ if(WITH_BULLET)
 		../Physics/Bullet
 	)
 	list(APPEND INC
-		../../../extern/bullet2/src
+		${BULLET_INCLUDE_DIRS}
 	)
-	add_definitions(-DUSE_BULLET)
+	add_definitions(-DWITH_BULLET)
 endif()
 
 blender_add_lib(ge_logic_ketsji "${SRC}" "${INC}" "${INC_SYS}")

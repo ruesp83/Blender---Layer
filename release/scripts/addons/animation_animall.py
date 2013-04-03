@@ -20,7 +20,7 @@ bl_info = {
     'name': 'AnimAll',
     'author': 'Daniel Salazar <zanqdo@gmail.com>',
     'version': (0, 5),
-    "blender": (2, 6, 3),
+    "blender": (2, 63, 0),
     'location': 'Select a Mesh/Lattice/Curve: Tool Shelf > AnimAll panel',
     'description': 'Allows animation of mesh, lattice and curve data (Shape Keys, VCols, VGroups, UVs, Points, Radius, Tilt)',
     'warning': '',
@@ -198,10 +198,18 @@ class ANIM_OT_insert_keyframe_animall(bpy.types.Operator):
                 bpy.ops.object.editmode_toggle()
         
         if Obj.type == 'LATTICE':
+            Mode = False
+            if context.mode != 'OBJECT':
+                Mode = not Mode
+                bpy.ops.object.editmode_toggle()
+            
             if context.window_manager.key_shape:
                 if Obj.active_shape_key:
                     for Point in Obj.active_shape_key.data:
                         Point.keyframe_insert('co')
+            
+            if Mode:
+                bpy.ops.object.editmode_toggle()
         
         if Obj.type == 'CURVE':
             Mode = False

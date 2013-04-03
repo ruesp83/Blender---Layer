@@ -29,14 +29,13 @@
  *  \ingroup bli
  */
 
-
+#include <stdlib.h>
 #include <errno.h>
 #include <string.h>
 
 #include "MEM_guardedalloc.h"
 
-
-#include "BLI_blenlib.h"
+#include "BLI_listbase.h"
 #include "BLI_gsqueue.h"
 #include "BLI_threads.h"
 
@@ -400,6 +399,46 @@ void BLI_mutex_end(ThreadMutex *mutex)
 	pthread_mutex_destroy(mutex);
 }
 
+/* Spin Locks */
+
+void BLI_spin_init(SpinLock *spin)
+{
+#ifdef __APPLE__
+	*spin = OS_SPINLOCK_INIT;
+#else
+	pthread_spin_init(spin, 0);
+#endif
+}
+
+void BLI_spin_lock(SpinLock *spin)
+{
+#ifdef __APPLE__
+	OSSpinLockLock(spin);
+#else
+	pthread_spin_lock(spin);
+#endif
+}
+
+void BLI_spin_unlock(SpinLock *spin)
+{
+#ifdef __APPLE__
+	OSSpinLockUnlock(spin);
+#else
+	pthread_spin_unlock(spin);
+#endif
+}
+
+#ifndef __APPLE__
+void BLI_spin_end(SpinLock *spin)
+{
+	pthread_spin_destroy(spin);
+}
+#else
+void BLI_spin_end(SpinLock *UNUSED(spin))
+{
+}
+#endif
+
 /* Read/Write Mutex Lock */
 
 void BLI_rw_mutex_init(ThreadRWMutex *mutex)
@@ -693,6 +732,9 @@ void BLI_thread_queue_wait_finish(ThreadQueue *queue)
 
 void BLI_begin_threaded_malloc(void)
 {
+	/* Used for debug only */
+	/* BLI_assert(thread_levels >= 0); */
+
 	if (thread_levels == 0) {
 		MEM_set_lock_callback(BLI_lock_malloc_thread, BLI_unlock_malloc_thread);
 	}
@@ -701,6 +743,9 @@ void BLI_begin_threaded_malloc(void)
 
 void BLI_end_threaded_malloc(void)
 {
+	/* Used for debug only */
+	/* BLI_assert(thread_levels >= 0); */
+
 	thread_levels--;
 	if (thread_levels == 0)
 		MEM_set_lock_callback(NULL, NULL);

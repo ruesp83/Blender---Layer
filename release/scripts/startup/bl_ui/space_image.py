@@ -19,7 +19,8 @@
 # <pep8 compliant>
 import bpy
 from bpy.types import Header, Menu, Panel
-from bl_ui.properties_paint_common import UnifiedPaintPanel
+from bl_ui.properties_paint_common import UnifiedPaintPanel, brush_texture_settings, brush_mask_texture_settings
+from bpy.app.translations import pgettext_iface as iface_
 
 
 class ImagePaintPanel(UnifiedPaintPanel):
@@ -71,7 +72,7 @@ class IMAGE_MT_view(Menu):
         ratios = ((1, 8), (1, 4), (1, 2), (1, 1), (2, 1), (4, 1), (8, 1))
 
         for a, b in ratios:
-            layout.operator("image.view_zoom_ratio", text="Zoom" + " %d:%d" % (a, b)).ratio = a / b
+            layout.operator("image.view_zoom_ratio", text=iface_("Zoom %d:%d") % (a, b), translate=False).ratio = a / b
 
         layout.separator()
 
@@ -151,9 +152,7 @@ class IMAGE_MT_image(Menu):
             if not show_render:
                 layout.separator()
 
-                if ima.packed_file:
-                    layout.operator("image.unpack")
-                else:
+                if not ima.packed_file:
                     layout.operator("image.pack")
 
                 # only for dirty && specific image types, perhaps
@@ -535,7 +534,9 @@ class IMAGE_HT_header(Header):
 
             row = layout.row(align=True)
             row.prop(toolsettings, "use_snap", text="")
-            row.prop(toolsettings, "snap_target", text="")
+            row.prop(toolsettings, "snap_uv_element", text="", icon_only=True)
+            if toolsettings.snap_uv_element != 'INCREMENT':
+                row.prop(toolsettings, "snap_target", text="")
 
             mesh = context.edit_object.data
             layout.prop_search(mesh.uv_textures, "active", mesh, "uv_textures", text="")
@@ -597,7 +598,6 @@ class IMAGE_PT_game_properties(Panel):
         split = layout.split()
 
         col = split.column()
-
         col.prop(ima, "use_animation")
         sub = col.column(align=True)
         sub.active = ima.use_animation
@@ -869,8 +869,6 @@ class IMAGE_PT_paint(Panel, ImagePaintPanel):
             self.prop_unified_strength(row, context, brush, "use_pressure_strength")
 
             row = col.row(align=True)
-            row.prop(brush, "jitter", slider=True)
-            row.prop(brush, "use_pressure_jitter", toggle=True, text="")
 
             col.prop(brush, "blend", text="Blend")
 
@@ -892,7 +890,38 @@ class IMAGE_PT_tools_brush_texture(BrushButtonsPanel, Panel):
 
         col = layout.column()
         col.template_ID_preview(brush, "texture", new="texture.new", rows=3, cols=8)
-        col.prop(brush, "use_fixed_texture")
+
+        brush_texture_settings(col, brush, 0)
+
+        # use_texture_overlay and texture_overlay_alpha
+        col = layout.column(align=True)
+        col.active = brush.brush_capabilities.has_overlay
+        col.label(text="Overlay:")
+
+        row = col.row()
+        if brush.use_texture_overlay:
+            row.prop(brush, "use_texture_overlay", toggle=True, text="", icon='RESTRICT_VIEW_OFF')
+        else:
+            row.prop(brush, "use_texture_overlay", toggle=True, text="", icon='RESTRICT_VIEW_ON')
+        sub = row.row()
+        sub.prop(brush, "texture_overlay_alpha", text="Alpha")
+
+
+class IMAGE_PT_tools_mask_texture(BrushButtonsPanel, Panel):
+    bl_label = "Texture Mask"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+
+        brush = context.tool_settings.image_paint.brush
+        tex_slot_alpha = brush.mask_texture_slot
+
+        col = layout.column()
+
+        col.template_ID_preview(brush, "mask_texture", new="texture.new", rows=3, cols=8)
+
+        brush_mask_texture_settings(col, brush)
 
 
 class IMAGE_PT_tools_brush_tool(BrushButtonsPanel, Panel):
@@ -923,18 +952,53 @@ class IMAGE_PT_paint_stroke(BrushButtonsPanel, Panel):
         toolsettings = context.tool_settings.image_paint
         brush = toolsettings.brush
 
-        layout.prop(brush, "use_airbrush")
-        row = layout.row()
-        row.active = brush.use_airbrush
-        row.prop(brush, "rate", slider=True)
+        col = layout.column()
+        col.prop(toolsettings, "input_samples")
 
-        layout.prop(brush, "use_space")
-        row = layout.row(align=True)
-        row.active = brush.use_space
-        row.prop(brush, "spacing", text="Distance", slider=True)
-        row.prop(brush, "use_pressure_spacing", toggle=True, text="")
+        col = layout.column()
 
-        layout.prop(brush, "use_wrap")
+        col.label(text="Stroke Method:")
+        
+        col.prop(brush, "stroke_method", text="")
+
+        if brush.use_anchor:
+            col.separator()
+            col.prop(brush, "use_edge_to_edge", "Edge To Edge")
+
+        if brush.use_airbrush:
+            col.separator()
+            col.prop(brush, "rate", text="Rate", slider=True)
+
+        if brush.use_space:
+            col.separator()
+            row = col.row(align=True)
+            row.active = brush.use_space
+            row.prop(brush, "spacing", text="Spacing")
+            row.prop(brush, "use_pressure_spacing", toggle=True, text="")
+
+
+        col = layout.column()
+        col.separator()
+
+        col.prop(brush, "use_smooth_stroke")
+
+        sub = col.column()
+        sub.active = brush.use_smooth_stroke
+        sub.prop(brush, "smooth_stroke_radius", text="Radius", slider=True)
+        sub.prop(brush, "smooth_stroke_factor", text="Factor", slider=True)
+
+        col.separator()
+
+        row = col.row(align=True)
+        if brush.use_relative_jitter:
+            row.prop(brush, "use_relative_jitter", text="", icon='LOCKED')
+            row.prop(brush, "jitter", slider=True)
+        else:
+            row.prop(brush, "use_relative_jitter", text="", icon='UNLOCKED')
+            row.prop(brush, "jitter_absolute")
+        row.prop(brush, "use_pressure_jitter", toggle=True, text="")
+
+        col.prop(brush, "use_wrap")
 
 
 class IMAGE_PT_paint_curve(BrushButtonsPanel, Panel):

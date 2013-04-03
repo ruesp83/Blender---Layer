@@ -41,6 +41,7 @@
 #include "BKE_image.h"
 #include "BKE_main.h"
 #include "BKE_tessmesh.h"
+#include "BKE_library.h"
 
 #include "ED_image.h"  /* own include */
 #include "ED_mesh.h"
@@ -77,8 +78,7 @@ void ED_space_image_set(SpaceImage *sima, Scene *scene, Object *obedit, Image *i
 	if (sima->image)
 		BKE_image_signal(sima->image, &sima->iuser, IMA_SIGNAL_USER_NEW_IMAGE);
 
-	if (sima->image && ID_REAL_USERS(sima->image) <= 0)
-		sima->image->id.us = max_ii(sima->image->id.us, 0) + 1;
+	id_us_ensure_real((ID *)sima->image);
 
 	if (obedit)
 		WM_main_add_notifier(NC_GEOM | ND_DATA, obedit->data);
@@ -96,8 +96,7 @@ void ED_space_image_set_mask(bContext *C, SpaceImage *sima, Mask *mask)
 	sima->mask_info.mask = mask;
 
 	/* weak, but same as image/space */
-	if (sima->mask_info.mask && ID_REAL_USERS(sima->mask_info.mask) <= 0)
-		sima->mask_info.mask->id.us = max_ii(sima->mask_info.mask->id.us, 0) + 1;
+	id_us_ensure_real((ID *)sima->mask_info.mask);
 
 	if (C) {
 		WM_event_add_notifier(C, NC_MASK | NA_SELECTED, mask);
@@ -119,8 +118,12 @@ ImBuf *ED_space_image_acquire_buffer(SpaceImage *sima, void **lock_r)
 		else 
 			ibuf = BKE_image_acquire_ibuf(sima->image, &sima->iuser, lock_r, IMA_IBUF_IMA);
 
-		if (ibuf && (ibuf->rect || ibuf->rect_float))
-			return ibuf;
+		if (ibuf) {
+			if (ibuf->rect || ibuf->rect_float)
+				return ibuf;
+
+			BKE_image_release_ibuf(sima->image, ibuf, NULL);
+		}
 	}
 	else
 		*lock_r = NULL;
@@ -128,10 +131,10 @@ ImBuf *ED_space_image_acquire_buffer(SpaceImage *sima, void **lock_r)
 	return NULL;
 }
 
-void ED_space_image_release_buffer(SpaceImage *sima, void *lock)
+void ED_space_image_release_buffer(SpaceImage *sima, ImBuf *ibuf, void *lock)
 {
 	if (sima && sima->image)
-		BKE_image_release_ibuf(sima->image, lock);
+		BKE_image_release_ibuf(sima->image, ibuf, lock);
 }
 
 int ED_space_image_has_buffer(SpaceImage *sima)
@@ -142,7 +145,7 @@ int ED_space_image_has_buffer(SpaceImage *sima)
 
 	ibuf = ED_space_image_acquire_buffer(sima, &lock);
 	has_buffer = (ibuf != NULL);
-	ED_space_image_release_buffer(sima, lock);
+	ED_space_image_release_buffer(sima, ibuf, lock);
 
 	return has_buffer;
 }
@@ -177,7 +180,7 @@ void ED_space_image_get_size(SpaceImage *sima, int *width, int *height)
 		*height = IMG_SIZE_FALLBACK;
 	}
 
-	ED_space_image_release_buffer(sima, lock);
+	ED_space_image_release_buffer(sima, ibuf, lock);
 }
 
 void ED_space_image_get_size_fl(SpaceImage *sima, float size[2])
@@ -192,9 +195,7 @@ void ED_space_image_get_size_fl(SpaceImage *sima, float size[2])
 void ED_space_image_get_aspect(SpaceImage *sima, float *aspx, float *aspy)
 {
 	Image *ima = sima->image;
-	if ((ima == NULL) || (ima->type == IMA_TYPE_R_RESULT) || (ima->type == IMA_TYPE_COMPOSITE) ||
-	    (ima->aspx == 0.0f || ima->aspy == 0.0f))
-	{
+	if ((ima == NULL) || (ima->aspx == 0.0f || ima->aspy == 0.0f)) {
 		*aspx = *aspy = 1.0;
 	}
 	else {

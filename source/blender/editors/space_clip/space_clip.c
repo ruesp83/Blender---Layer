@@ -236,6 +236,16 @@ static void clip_stabilization_tag_refresh(ScrArea *sa)
 	}
 }
 
+static void clip_prefetch_tag_refresh(ScrArea *sa)
+{
+	SpaceClip *sc = (SpaceClip *) sa->spacedata.first;
+	MovieClip *clip = ED_space_clip_get_clip(sc);
+
+	if (clip) {
+		clip->prefetch_ok = FALSE;
+	}
+}
+
 /* ******************** default callbacks for clip space ***************** */
 
 static SpaceLink *clip_new(const bContext *C)
@@ -246,7 +256,7 @@ static SpaceLink *clip_new(const bContext *C)
 	sc = MEM_callocN(sizeof(SpaceClip), "initclip");
 	sc->spacetype = SPACE_CLIP;
 	sc->flag = SC_SHOW_MARKER_PATTERN | SC_SHOW_TRACK_PATH | SC_MANUAL_CALIBRATION |
-	           SC_SHOW_GRAPH_TRACKS | SC_SHOW_GRAPH_FRAMES;
+	           SC_SHOW_GRAPH_TRACKS | SC_SHOW_GRAPH_FRAMES | SC_SHOW_GPENCIL;
 	sc->zoom = 1.0f;
 	sc->path_length = 20;
 	sc->scopes.track_preview_height = 120;
@@ -317,8 +327,6 @@ static void clip_free(SpaceLink *sl)
 
 	if (sc->scopes.track_search)
 		IMB_freeImBuf(sc->scopes.track_search);
-
-	ED_space_clip_free_texture_buffer(sc);
 }
 
 /* spacetype; init callback */
@@ -338,7 +346,6 @@ static SpaceLink *clip_duplicate(SpaceLink *sl)
 	scn->scopes.track_search = NULL;
 	scn->scopes.track_preview = NULL;
 	scn->scopes.ok = FALSE;
-	scn->draw_context = NULL;
 
 	return (SpaceLink *)scn;
 }
@@ -351,6 +358,7 @@ static void clip_listener(ScrArea *sa, wmNotifier *wmn)
 			switch (wmn->data) {
 				case ND_FRAME:
 					clip_scopes_tag_refresh(sa);
+					clip_prefetch_tag_refresh(sa);
 					/* no break! */
 
 				case ND_FRAME_RANGE:
@@ -359,11 +367,19 @@ static void clip_listener(ScrArea *sa, wmNotifier *wmn)
 			}
 			break;
 		case NC_MOVIECLIP:
+			if (wmn->data == 0 && wmn->action == 0) {
+				/* a nit funky, happens from prefetch job to update
+				 * cache line and job progress
+				 */
+				ED_area_tag_redraw(sa);
+			}
+
 			switch (wmn->data) {
 				case ND_DISPLAY:
 				case ND_SELECT:
 					clip_scopes_tag_refresh(sa);
 					ED_area_tag_redraw(sa);
+					clip_prefetch_tag_refresh(sa);
 					break;
 			}
 			switch (wmn->action) {
@@ -407,6 +423,7 @@ static void clip_listener(ScrArea *sa, wmNotifier *wmn)
 		case NC_SCREEN:
 			switch (wmn->data) {
 				case ND_ANIMPLAY:
+					clip_prefetch_tag_refresh(sa);
 					ED_area_tag_redraw(sa);
 					break;
 			}
@@ -415,6 +432,7 @@ static void clip_listener(ScrArea *sa, wmNotifier *wmn)
 			if (wmn->data == ND_SPACE_CLIP) {
 				clip_scopes_tag_refresh(sa);
 				clip_stabilization_tag_refresh(sa);
+				clip_prefetch_tag_refresh(sa);
 				ED_area_tag_redraw(sa);
 			}
 			break;
@@ -423,6 +441,10 @@ static void clip_listener(ScrArea *sa, wmNotifier *wmn)
 				clip_scopes_check_gpencil_change(sa);
 				ED_area_tag_redraw(sa);
 			}
+			break;
+		case NC_WM:
+			if (wmn->data == ND_FILEREAD)
+				clip_prefetch_tag_refresh(sa);
 			break;
 	}
 }
@@ -534,6 +556,7 @@ static void clip_operatortypes(void)
 	/* ** clip_dopesheet_ops.c  ** */
 
 	WM_operatortype_append(CLIP_OT_dopesheet_select_channel);
+	WM_operatortype_append(CLIP_OT_dopesheet_view_all);
 }
 
 static void clip_keymap(struct wmKeyConfig *keyconf)
@@ -587,14 +610,20 @@ static void clip_keymap(struct wmKeyConfig *keyconf)
 
 	WM_keymap_add_item(keymap, "CLIP_OT_view_zoom", MIDDLEMOUSE, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "CLIP_OT_view_zoom", MOUSEZOOM, 0, 0, 0);
+	WM_keymap_add_item(keymap, "CLIP_OT_view_zoom", MOUSEPAN, 0, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "CLIP_OT_view_zoom_in", WHEELINMOUSE, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "CLIP_OT_view_zoom_out", WHEELOUTMOUSE, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "CLIP_OT_view_zoom_in", PADPLUSKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "CLIP_OT_view_zoom_out", PADMINUS, KM_PRESS, 0, 0);
 
+	/* ctrl now works as well, shift + numpad works as arrow keys on Windows */
+	RNA_float_set(WM_keymap_add_item(keymap, "CLIP_OT_view_zoom_ratio", PAD8, KM_PRESS, KM_CTRL, 0)->ptr, "ratio", 8.0f);
+	RNA_float_set(WM_keymap_add_item(keymap, "CLIP_OT_view_zoom_ratio", PAD4, KM_PRESS, KM_CTRL, 0)->ptr, "ratio", 4.0f);
+	RNA_float_set(WM_keymap_add_item(keymap, "CLIP_OT_view_zoom_ratio", PAD2, KM_PRESS, KM_CTRL, 0)->ptr, "ratio", 2.0f);
 	RNA_float_set(WM_keymap_add_item(keymap, "CLIP_OT_view_zoom_ratio", PAD8, KM_PRESS, KM_SHIFT, 0)->ptr, "ratio", 8.0f);
 	RNA_float_set(WM_keymap_add_item(keymap, "CLIP_OT_view_zoom_ratio", PAD4, KM_PRESS, KM_SHIFT, 0)->ptr, "ratio", 4.0f);
 	RNA_float_set(WM_keymap_add_item(keymap, "CLIP_OT_view_zoom_ratio", PAD2, KM_PRESS, KM_SHIFT, 0)->ptr, "ratio", 2.0f);
+
 	RNA_float_set(WM_keymap_add_item(keymap, "CLIP_OT_view_zoom_ratio", PAD1, KM_PRESS, 0, 0)->ptr, "ratio", 1.0f);
 	RNA_float_set(WM_keymap_add_item(keymap, "CLIP_OT_view_zoom_ratio", PAD2, KM_PRESS, 0, 0)->ptr, "ratio", 0.5f);
 	RNA_float_set(WM_keymap_add_item(keymap, "CLIP_OT_view_zoom_ratio", PAD4, KM_PRESS, 0, 0)->ptr, "ratio", 0.25f);
@@ -762,6 +791,8 @@ static void clip_keymap(struct wmKeyConfig *keyconf)
 
 	kmi = WM_keymap_add_item(keymap, "CLIP_OT_dopesheet_select_channel", ACTIONMOUSE, KM_PRESS, 0, 0);
 	RNA_boolean_set(kmi->ptr, "extend", TRUE);  /* toggle */
+
+	WM_keymap_add_item(keymap, "CLIP_OT_dopesheet_view_all", HOMEKEY, KM_PRESS, 0, 0);
 }
 
 const char *clip_context_dir[] = {"edit_movieclip", "edit_mask", NULL};
@@ -790,7 +821,7 @@ static int clip_context(const bContext *C, const char *member, bContextDataResul
 }
 
 /* dropboxes */
-static int clip_drop_poll(bContext *UNUSED(C), wmDrag *drag, wmEvent *UNUSED(event))
+static int clip_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
 	if (drag->type == WM_DRAG_PATH)
 		if (ELEM3(drag->icon, 0, ICON_FILE_IMAGE, ICON_FILE_BLANK)) /* rule might not work? */
@@ -1028,17 +1059,14 @@ static void clip_refresh(const bContext *C, ScrArea *sa)
 static void movieclip_main_area_set_view2d(const bContext *C, ARegion *ar)
 {
 	SpaceClip *sc = CTX_wm_space_clip(C);
-	MovieClip *clip = ED_space_clip_get_clip(sc);
-	float x1, y1, w, h;
+	float x1, y1, w, h, aspx, aspy;
 	int width, height, winx, winy;
 
 	ED_space_clip_get_size(sc, &width, &height);
+	ED_space_clip_get_aspect(sc, &aspx, &aspy);
 
-	w = width;
-	h = height;
-
-	if (clip)
-		h *= clip->aspy / clip->aspx / clip->tracking.camera.pixel_aspect;
+	w = width * aspx;
+	h = height * aspy;
 
 	winx = BLI_rcti_size_x(&ar->winrct) + 1;
 	winy = BLI_rcti_size_y(&ar->winrct) + 1;
@@ -1149,14 +1177,18 @@ static void clip_main_area_draw(const bContext *C, ARegion *ar)
 
 	}
 
-	/* Grease Pencil */
-	clip_draw_grease_pencil((bContext *)C, 1);
+	if (sc->flag & SC_SHOW_GPENCIL) {
+		/* Grease Pencil */
+		clip_draw_grease_pencil((bContext *)C, TRUE);
+	}
 
 	/* reset view matrix */
 	UI_view2d_view_restore(C);
 
-	/* draw Grease Pencil - screen space only */
-	clip_draw_grease_pencil((bContext *)C, 0);
+	if (sc->flag & SC_SHOW_GPENCIL) {
+		/* draw Grease Pencil - screen space only */
+		clip_draw_grease_pencil((bContext *)C, FALSE);
+	}
 }
 
 static void clip_main_area_listener(ARegion *ar, wmNotifier *wmn)
@@ -1183,6 +1215,9 @@ static void clip_preview_area_init(wmWindowManager *wm, ARegion *ar)
 	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
 
 	keymap = WM_keymap_find(wm->defaultconf, "Clip Graph Editor", SPACE_CLIP, 0);
+	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
+
+	keymap = WM_keymap_find(wm->defaultconf, "Clip Dopesheet Editor", SPACE_CLIP, 0);
 	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
 }
 
@@ -1275,6 +1310,9 @@ static void clip_channels_area_init(wmWindowManager *wm, ARegion *ar)
 {
 	wmKeyMap *keymap;
 
+	/* ensure the 2d view sync works - main region has bottom scroller */
+	ar->v2d.scroll = V2D_SCROLL_BOTTOM;
+
 	UI_view2d_region_reinit(&ar->v2d, V2D_COMMONVIEW_LIST, ar->winx, ar->winy);
 
 	keymap = WM_keymap_find(wm->defaultconf, "Clip Dopesheet Editor", SPACE_CLIP, 0);
@@ -1286,7 +1324,6 @@ static void clip_channels_area_draw(const bContext *C, ARegion *ar)
 	SpaceClip *sc = CTX_wm_space_clip(C);
 	MovieClip *clip = ED_space_clip_get_clip(sc);
 	View2D *v2d = &ar->v2d;
-	View2DScrollers *scrollers;
 
 	if (clip)
 		BKE_tracking_dopesheet_update(&clip->tracking);
@@ -1302,11 +1339,6 @@ static void clip_channels_area_draw(const bContext *C, ARegion *ar)
 
 	/* reset view matrix */
 	UI_view2d_view_restore(C);
-
-	/* scrollers */
-	scrollers = UI_view2d_scrollers_calc(C, v2d, V2D_ARG_DUMMY, V2D_ARG_DUMMY, V2D_ARG_DUMMY, V2D_ARG_DUMMY);
-	UI_view2d_scrollers_draw(C, v2d, scrollers);
-	UI_view2d_scrollers_free(scrollers);
 }
 
 static void clip_channels_area_listener(ARegion *UNUSED(ar), wmNotifier *UNUSED(wmn))

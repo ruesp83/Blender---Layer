@@ -39,6 +39,8 @@
 #include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
+#include "BLF_translation.h"
+
 #include "DNA_scene_types.h"
 
 #include "BKE_blender.h"
@@ -73,6 +75,7 @@
 #include "render_intern.h"
 
 /* Render Callbacks */
+static int render_break(void *rjv);
 
 /* called inside thread! */
 void image_buffer_rect_update(Scene *scene, RenderResult *rr, ImBuf *ibuf, volatile rcti *renrect)
@@ -140,7 +143,7 @@ void image_buffer_rect_update(Scene *scene, RenderResult *rr, ImBuf *ibuf, volat
 
 	if (ibuf->rect == NULL)
 		imb_addrectImBuf(ibuf);
-	
+
 	rectf += 4 * (rr->rectx * ymin + xmin);
 
 	IMB_partial_display_buffer_update(ibuf, rectf, NULL, rr->rectx, rxmin, rymin,
@@ -210,7 +213,7 @@ static int screen_render_exec(bContext *C, wmOperator *op)
 	lay = (v3d) ? v3d->lay : scene->lay;
 
 	G.is_break = FALSE;
-	RE_test_break_cb(re, NULL, (int (*)(void *))blender_test_break);
+	RE_test_break_cb(re, NULL, render_break);
 
 	ima = BKE_image_verify_viewer(IMA_TYPE_R_RESULT, "Render Result");
 
@@ -280,38 +283,39 @@ static void make_renderinfo_string(RenderStats *rs, Scene *scene, char *str)
 	megs_peak_memory = (peak_memory) / (1024.0 * 1024.0);
 
 	if (scene->lay & 0xFF000000)
-		spos += sprintf(spos, "Localview | ");
+		spos += sprintf(spos, IFACE_("Localview | "));
 	else if (scene->r.scemode & R_SINGLE_LAYER)
-		spos += sprintf(spos, "Single Layer | ");
+		spos += sprintf(spos, IFACE_("Single Layer | "));
 
-	spos += sprintf(spos, "Frame:%d ", (scene->r.cfra));
+	spos += sprintf(spos, IFACE_("Frame:%d "), (scene->r.cfra));
 
 	if (rs->statstr) {
 		spos += sprintf(spos, "| %s ", rs->statstr);
 	}
 	else {
-		if (rs->totvert) spos += sprintf(spos, "Ve:%d ", rs->totvert);
-		if (rs->totface) spos += sprintf(spos, "Fa:%d ", rs->totface);
-		if (rs->tothalo) spos += sprintf(spos, "Ha:%d ", rs->tothalo);
-		if (rs->totstrand) spos += sprintf(spos, "St:%d ", rs->totstrand);
-		if (rs->totlamp) spos += sprintf(spos, "La:%d ", rs->totlamp);
+		if (rs->totvert) spos += sprintf(spos, IFACE_("Ve:%d "), rs->totvert);
+		if (rs->totface) spos += sprintf(spos, IFACE_("Fa:%d "), rs->totface);
+		if (rs->tothalo) spos += sprintf(spos, IFACE_("Ha:%d "), rs->tothalo);
+		if (rs->totstrand) spos += sprintf(spos, IFACE_("St:%d "), rs->totstrand);
+		if (rs->totlamp) spos += sprintf(spos, IFACE_("La:%d "), rs->totlamp);
 
 		if (rs->mem_peak == 0.0f)
-			spos += sprintf(spos, "Mem:%.2fM (%.2fM, peak %.2fM) ", megs_used_memory, mmap_used_memory, megs_peak_memory);
+			spos += sprintf(spos, IFACE_("Mem:%.2fM (%.2fM, Peak %.2fM) "),
+			                megs_used_memory, mmap_used_memory, megs_peak_memory);
 		else
-			spos += sprintf(spos, "Mem:%.2fM, Peak: %.2fM ", rs->mem_used, rs->mem_peak);
+			spos += sprintf(spos, IFACE_("Mem:%.2fM, Peak: %.2fM "), rs->mem_used, rs->mem_peak);
 
 		if (rs->curfield)
-			spos += sprintf(spos, "Field %d ", rs->curfield);
+			spos += sprintf(spos, IFACE_("Field %d "), rs->curfield);
 		if (rs->curblur)
-			spos += sprintf(spos, "Blur %d ", rs->curblur);
+			spos += sprintf(spos, IFACE_("Blur %d "), rs->curblur);
 	}
 
-	BLI_timestr(rs->lastframetime, info_time_str);
-	spos += sprintf(spos, "Time:%s ", info_time_str);
+	BLI_timestr(rs->lastframetime, info_time_str, sizeof(info_time_str));
+	spos += sprintf(spos, IFACE_("Time:%s "), info_time_str);
 
 	if (rs->curfsa)
-		spos += sprintf(spos, "| Full Sample %d ", rs->curfsa);
+		spos += sprintf(spos, IFACE_("| Full Sample %d "), rs->curfsa);
 	
 	if (rs->infostr && rs->infostr[0])
 		spos += sprintf(spos, "| %s ", rs->infostr);
@@ -375,7 +379,7 @@ static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrec
 		/* make jobs timer to send notifier */
 		*(rj->do_update) = TRUE;
 	}
-	BKE_image_release_ibuf(ima, lock);
+	BKE_image_release_ibuf(ima, ibuf, lock);
 }
 
 static void render_startjob(void *rjv, short *stop, short *do_update, float *progress)
@@ -443,6 +447,15 @@ static int render_breakjob(void *rjv)
 	return 0;
 }
 
+/* for exec() when there is no render job
+ * note: this wont check for the escape key being pressed, but doing so isnt threadsafe */
+static int render_break(void *UNUSED(rjv))
+{
+	if (G.is_break)
+		return 1;
+	return 0;
+}
+
 /* runs in thread, no cursor setting here works. careful with notifiers too (malloc conflicts) */
 /* maybe need a way to get job send notifer? */
 static void render_drawlock(void *UNUSED(rjv), int lock)
@@ -452,7 +465,7 @@ static void render_drawlock(void *UNUSED(rjv), int lock)
 }
 
 /* catch esc */
-static int screen_render_modal(bContext *C, wmOperator *op, wmEvent *event)
+static int screen_render_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	Scene *scene = (Scene *) op->customdata;
 
@@ -471,7 +484,7 @@ static int screen_render_modal(bContext *C, wmOperator *op, wmEvent *event)
 }
 
 /* using context, starts job */
-static int screen_render_invoke(bContext *C, wmOperator *op, wmEvent *event)
+static int screen_render_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	/* new render clears all callbacks */
 	Main *mainp;
@@ -529,7 +542,7 @@ static int screen_render_invoke(bContext *C, wmOperator *op, wmEvent *event)
 	BKE_sequencer_cache_cleanup();
 
 	/* get editmode results */
-	ED_object_exit_editmode(C, 0);  /* 0 = does not exit editmode */
+	ED_object_editmode_load(CTX_data_edit_object(C));
 
 	// store spare
 	// get view3d layer, local layer, make this nice api call to render
@@ -553,12 +566,19 @@ static int screen_render_invoke(bContext *C, wmOperator *op, wmEvent *event)
 	rj->win = CTX_wm_window(C);
 	rj->srl = srl;
 	rj->camera_override = camera_override;
-	rj->lay = (v3d) ? v3d->lay : scene->lay;
+	rj->lay = scene->lay;
 	rj->anim = is_animation;
 	rj->write_still = is_write_still && !is_animation;
 	rj->iuser.scene = scene;
 	rj->iuser.ok = 1;
 	rj->reports = op->reports;
+
+	if (v3d) {
+		rj->lay = v3d->lay;
+
+		if (v3d->localvd)
+			rj->lay |= v3d->localvd->lay;
+	}
 
 	/* setup job */
 	if (RE_seq_render_active(scene, &scene->r)) name = "Sequence Render";
@@ -611,6 +631,8 @@ static int screen_render_invoke(bContext *C, wmOperator *op, wmEvent *event)
 /* contextual render, using current scene, view3d? */
 void RENDER_OT_render(wmOperatorType *ot)
 {
+	PropertyRNA *prop;
+
 	/* identifiers */
 	ot->name = "Render";
 	ot->description = "Render active scene";
@@ -625,7 +647,9 @@ void RENDER_OT_render(wmOperatorType *ot)
 
 	RNA_def_boolean(ot->srna, "animation", 0, "Animation", "Render files from the animation range of this scene");
 	RNA_def_boolean(ot->srna, "write_still", 0, "Write Image", "Save rendered the image to the output path (used only when animation is disabled)");
-	RNA_def_string(ot->srna, "layer", "", RE_MAXNAME, "Render Layer", "Single render layer to re-render (used only when animation is disabled)");
-	RNA_def_string(ot->srna, "scene", "", MAX_ID_NAME - 2, "Scene", "Scene to render, current scene if not specified");
+	prop = RNA_def_string(ot->srna, "layer", "", RE_MAXNAME, "Render Layer", "Single render layer to re-render (used only when animation is disabled)");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+	prop = RNA_def_string(ot->srna, "scene", "", MAX_ID_NAME - 2, "Scene", "Scene to render, current scene if not specified");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 

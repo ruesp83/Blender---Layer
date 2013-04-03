@@ -26,7 +26,7 @@
 CCL_NAMESPACE_BEGIN
 
 class ImageManager;
-class Shadr;
+class Shader;
 
 /* Texture Mapping */
 
@@ -36,6 +36,7 @@ public:
 	Transform compute_transform();
 	bool skip();
 	void compile(SVMCompiler& compiler, int offset_in, int offset_out);
+	void compile(OSLCompiler &compiler);
 
 	float3 translation;
 	float3 rotation;
@@ -67,11 +68,14 @@ public:
 
 	ImageManager *image_manager;
 	int slot;
-	bool is_float;
+	int is_float;
+	bool is_linear;
 	string filename;
+	void *builtin_data;
 	ustring color_space;
 	ustring projection;
 	float projection_blend;
+	bool animated;
 
 	static ShaderEnum color_space_enum;
 	static ShaderEnum projection_enum;
@@ -85,10 +89,13 @@ public:
 
 	ImageManager *image_manager;
 	int slot;
-	bool is_float;
+	int is_float;
+	bool is_linear;
 	string filename;
+	void *builtin_data;
 	ustring color_space;
 	ustring projection;
+	bool animated;
 
 	static ShaderEnum color_space_enum;
 	static ShaderEnum projection_enum;
@@ -183,19 +190,21 @@ public:
 
 class ProxyNode : public ShaderNode {
 public:
-	ProxyNode(ShaderSocketType from, ShaderSocketType to);
+	ProxyNode(ShaderSocketType type);
 	SHADER_NODE_BASE_CLASS(ProxyNode)
 
-	ShaderSocketType from, to;
+	ShaderSocketType type;
 };
 
 class BsdfNode : public ShaderNode {
 public:
-	SHADER_NODE_CLASS(BsdfNode)
+	BsdfNode(bool scattering = false);
+	SHADER_NODE_BASE_CLASS(BsdfNode);
 
 	void compile(SVMCompiler& compiler, ShaderInput *param1, ShaderInput *param2, ShaderInput *param3 = NULL);
 
 	ClosureType closure;
+	bool scattering;
 };
 
 class WardBsdfNode : public BsdfNode {
@@ -217,6 +226,8 @@ public:
 class TransparentBsdfNode : public BsdfNode {
 public:
 	SHADER_NODE_CLASS(TransparentBsdfNode)
+
+	bool has_surface_transparent() { return true; }
 };
 
 class VelvetBsdfNode : public BsdfNode {
@@ -248,9 +259,17 @@ public:
 	static ShaderEnum distribution_enum;
 };
 
+class SubsurfaceScatteringNode : public BsdfNode {
+public:
+	SHADER_NODE_CLASS(SubsurfaceScatteringNode)
+	bool has_surface_bssrdf() { return true; }
+};
+
 class EmissionNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(EmissionNode)
+
+	bool has_surface_emission() { return true; }
 
 	bool total_power;
 };
@@ -324,6 +343,13 @@ public:
 	void attributes(AttributeRequestSet *attributes);
 };
 
+class HairInfoNode : public ShaderNode {
+public:
+	SHADER_NODE_CLASS(HairInfoNode)
+
+	void attributes(AttributeRequestSet *attributes);
+};
+
 class ValueNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(ValueNode)
@@ -346,6 +372,11 @@ public:
 class MixClosureNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(MixClosureNode)
+};
+
+class MixClosureWeightNode : public ShaderNode {
+public:
+	SHADER_NODE_CLASS(MixClosureWeightNode);
 };
 
 class InvertNode : public ShaderNode {
@@ -444,6 +475,12 @@ public:
 class RGBCurvesNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(RGBCurvesNode)
+	float4 curves[RAMP_TABLE_SIZE];
+};
+
+class VectorCurvesNode : public ShaderNode {
+public:
+	SHADER_NODE_CLASS(VectorCurvesNode)
 	float4 curves[RAMP_TABLE_SIZE];
 };
 

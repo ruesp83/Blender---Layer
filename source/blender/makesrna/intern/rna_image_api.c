@@ -34,12 +34,14 @@
 #include <string.h>
 #include <time.h>
 
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
-
 #include "DNA_packedFile_types.h"
 
+#include "BLI_utildefines.h"
+
 #include "BIF_gl.h"
+
+#include "RNA_define.h"
+#include "RNA_enum_types.h"
 
 #include "rna_internal.h"  /* own include */
 
@@ -99,7 +101,7 @@ static void rna_Image_save_render(Image *image, bContext *C, ReportList *reports
 				IMB_freeImBuf(write_ibuf);
 		}
 
-		BKE_image_release_ibuf(image, lock);
+		BKE_image_release_ibuf(image, ibuf, lock);
 	}
 	else {
 		BKE_report(reports, RPT_ERROR, "Scene not in context, could not get save parameters");
@@ -108,7 +110,11 @@ static void rna_Image_save_render(Image *image, bContext *C, ReportList *reports
 
 static void rna_Image_save(Image *image, ReportList *reports)
 {
+<<<<<<< .mine
 	ImBuf *ibuf = BKE_image_get_ibuf(image, NULL, IMA_IBUF_IMA);
+=======
+	ImBuf *ibuf = BKE_image_acquire_ibuf(image, NULL, NULL);
+>>>>>>> .r55757
 	if (ibuf) {
 		char filename[FILE_MAX];
 		BLI_strncpy(filename, image->name, sizeof(filename));
@@ -136,11 +142,17 @@ static void rna_Image_save(Image *image, ReportList *reports)
 	else {
 		BKE_reportf(reports, RPT_ERROR, "Image '%s' does not have any image data", image->id.name + 2);
 	}
+
+	BKE_image_release_ibuf(image, ibuf, NULL);
 }
 
 static void rna_Image_pack(Image *image, ReportList *reports, int as_png)
 {
+<<<<<<< .mine
 	ImBuf *ibuf = BKE_image_get_ibuf(image, NULL, IMA_IBUF_IMA);
+=======
+	ImBuf *ibuf = BKE_image_acquire_ibuf(image, NULL, NULL);
+>>>>>>> .r55757
 
 	if (!as_png && (ibuf && (ibuf->userflags & IB_BITMAPDIRTY))) {
 		BKE_report(reports, RPT_ERROR, "Cannot pack edited image from disk, only as internal PNG");
@@ -153,6 +165,8 @@ static void rna_Image_pack(Image *image, ReportList *reports, int as_png)
 			image->packedfile = newPackedFile(reports, image->name, ID_BLEND_PATH(G.main, &image->id));
 		}
 	}
+
+	BKE_image_release_ibuf(image, ibuf, NULL);
 }
 
 static void rna_Image_unpack(Image *image, ReportList *reports, int method)
@@ -177,7 +191,11 @@ static void rna_Image_reload(Image *image)
 
 static void rna_Image_update(Image *image, ReportList *reports)
 {
+<<<<<<< .mine
 	ImBuf *ibuf = BKE_image_get_ibuf(image, NULL, IMA_IBUF_IMA);
+=======
+	ImBuf *ibuf = BKE_image_acquire_ibuf(image, NULL, NULL);
+>>>>>>> .r55757
 
 	if (ibuf == NULL) {
 		BKE_reportf(reports, RPT_ERROR, "Image '%s' does not have any image data", image->id.name + 2);
@@ -188,6 +206,8 @@ static void rna_Image_update(Image *image, ReportList *reports)
 		IMB_rect_from_float(ibuf);
 
 	ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
+
+	BKE_image_release_ibuf(image, ibuf, NULL);
 }
 
 static void rna_Image_scale(Image *image, ReportList *reports, int width, int height)
@@ -206,10 +226,15 @@ static int rna_Image_gl_load(Image *image, ReportList *reports, int filter, int 
 	if (*bind)
 		return error;
 
+<<<<<<< .mine
 	ibuf = BKE_image_get_ibuf(image, NULL, IMA_IBUF_IMA);
+=======
+	ibuf = BKE_image_acquire_ibuf(image, NULL, NULL);
+>>>>>>> .r55757
 
 	if (ibuf == NULL || ibuf->rect == NULL) {
 		BKE_reportf(reports, RPT_ERROR, "Image '%s' does not have any image data", image->id.name + 2);
+		BKE_image_release_ibuf(image, ibuf, NULL);
 		return (int)GL_INVALID_OPERATION;
 	}
 
@@ -237,6 +262,8 @@ static int rna_Image_gl_load(Image *image, ReportList *reports, int filter, int 
 		glDeleteTextures(1, (GLuint *)bind);
 		image->bindcode = 0;
 	}
+
+	BKE_image_release_ibuf(image, ibuf, NULL);
 
 	return error;
 }
@@ -309,9 +336,9 @@ void RNA_api_image(StructRNA *srna)
 	RNA_def_function_ui_description(func, "Delay the image from being cleaned from the cache due inactivity");
 	RNA_def_function_flag(func, FUNC_USE_REPORTS);
 	RNA_def_int(func, "filter", GL_LINEAR_MIPMAP_NEAREST, -INT_MAX, INT_MAX, "Filter",
-	            "The texture minifying function to use if the image wan't loaded", -INT_MAX, INT_MAX);
+	            "The texture minifying function to use if the image wasn't loaded", -INT_MAX, INT_MAX);
 	RNA_def_int(func, "mag", GL_LINEAR, -INT_MAX, INT_MAX, "Magnification",
-	            "The texture magnification function to use if the image wan't loaded", -INT_MAX, INT_MAX);
+	            "The texture magnification function to use if the image wasn't loaded", -INT_MAX, INT_MAX);
 	/* return value */
 	parm = RNA_def_int(func, "error", 0, -INT_MAX, INT_MAX, "Error", "OpenGL error value", -INT_MAX, INT_MAX);
 	RNA_def_function_return(func, parm);

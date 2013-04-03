@@ -63,7 +63,7 @@ static int KX_PythonSeq_clear(KX_PythonSeq *self)
 	return 0;
 }
 
-static void KX_PythonSeq_dealloc(KX_PythonSeq * self)
+static void KX_PythonSeq_dealloc(KX_PythonSeq *self)
 {
 	KX_PythonSeq_clear(self);
 	PyObject_GC_Del(self);
@@ -100,7 +100,7 @@ static Py_ssize_t KX_PythonSeq_len( PyObject *self )
 	}
 }
 
-static PyObject *KX_PythonSeq_getIndex(PyObject *self, int index)
+static PyObject *KX_PythonSeq_getIndex(PyObject *self, Py_ssize_t index)
 {
 	PyObjectPlus *self_plus= BGE_PROXY_REF(((KX_PythonSeq *)self)->base);
 	 
@@ -189,7 +189,7 @@ static PyObject *KX_PythonSeq_getIndex(PyObject *self, int index)
 	return NULL;
 }
 
-static PyObjectPlus * KX_PythonSeq_subscript__internal(PyObject *self, const char *key)
+static PyObjectPlus *KX_PythonSeq_subscript__internal(PyObject *self, const char *key)
 {
 	PyObjectPlus *self_plus= BGE_PROXY_REF(((KX_PythonSeq *)self)->base);
 	
@@ -264,7 +264,7 @@ static PyObjectPlus * KX_PythonSeq_subscript__internal(PyObject *self, const cha
 }
 
 
-static PyObject * KX_PythonSeq_subscript(PyObject *self, PyObject *key)
+static PyObject *KX_PythonSeq_subscript(PyObject *self, PyObject *key)
 {
 	PyObjectPlus *self_plus= BGE_PROXY_REF(((KX_PythonSeq *)self)->base);
 	
@@ -273,8 +273,8 @@ static PyObject * KX_PythonSeq_subscript(PyObject *self, PyObject *key)
 		return NULL;
 	}
 	
-	if (PyLong_Check(key)) {
-		return KX_PythonSeq_getIndex(self, PyLong_AsSsize_t( key ));
+	if (PyIndex_Check(key)) {
+		return KX_PythonSeq_getIndex(self, PyLong_AsSsize_t(key));
 	}
 	else if ( PyUnicode_Check(key) ) {
 		const char *name = _PyUnicode_AsString(key);
@@ -394,9 +394,9 @@ static PyObject *KX_PythonSeq_nextIter(KX_PythonSeq *self)
 }
 
 
-static int KX_PythonSeq_compare( KX_PythonSeq * a, KX_PythonSeq * b )
+static int KX_PythonSeq_compare(KX_PythonSeq *a, KX_PythonSeq *b)
 {
-	return ( a->type == b->type && a->base == b->base) ? 0 : -1;
+	return (a->type == b->type && a->base == b->base) ? 0 : -1;
 }
 
 static PyObject *KX_PythonSeq_richcmp(PyObject *a, PyObject *b, int op)
@@ -434,7 +434,7 @@ static PyObject *KX_PythonSeq_richcmp(PyObject *a, PyObject *b, int op)
  * repr function
  * convert to a list and get its string value
  */
-static PyObject *KX_PythonSeq_repr( KX_PythonSeq * self )
+static PyObject *KX_PythonSeq_repr(KX_PythonSeq *self)
 {
 	PyObject *list = PySequence_List((PyObject *)self);
 	PyObject *repr = PyObject_Repr(list);

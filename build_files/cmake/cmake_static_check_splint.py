@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.2
+#!/usr/bin/env python3
 
 # ***** BEGIN GPL LICENSE BLOCK *****
 #
@@ -79,7 +79,7 @@ def main():
     check_commands = []
     for c, inc_dirs, defs in source_info:
         cmd = ([CHECKER_BIN] +
-                CHECKER_ARGS +
+               CHECKER_ARGS +
                [c] +
                [("-I%s" % i) for i in inc_dirs] +
                [("-D%s" % d) for d in defs]

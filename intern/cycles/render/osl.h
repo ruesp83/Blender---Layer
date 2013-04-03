@@ -36,7 +36,7 @@ class Device;
 class DeviceScene;
 class ImageManager;
 class OSLRenderServices;
-class OSLGlobals;
+struct OSLGlobals;
 class Scene;
 class ShaderGraph;
 class ShaderNode;
@@ -45,6 +45,20 @@ class ShaderOutput;
 
 #ifdef WITH_OSL
 
+/* OSL Shader Info
+ * to auto detect closures in the shader for MIS and transparent shadows */
+
+struct OSLShaderInfo {
+	OSLShaderInfo()
+	: has_surface_emission(false), has_surface_transparent(false),
+	  has_surface_bssrdf(false)
+	{}
+
+	bool has_surface_emission;
+	bool has_surface_transparent;
+	bool has_surface_bssrdf;
+};
+
 /* Shader Manage */
 
 class OSLShaderManager : public ShaderManager {
@@ -52,8 +66,12 @@ public:
 	OSLShaderManager();
 	~OSLShaderManager();
 
+	void reset(Scene *scene);
+
+	bool use_osl() { return true; }
+
 	void device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
-	void device_free(Device *device, DeviceScene *dscene);
+	void device_free(Device *device, DeviceScene *dscene, Scene *scene);
 
 	/* osl compile and query */
 	static bool osl_compile(const string& inputfile, const string& outputfile);
@@ -63,6 +81,7 @@ public:
 	const char *shader_test_loaded(const string& hash);
 	const char *shader_load_bytecode(const string& hash, const string& bytecode);
 	const char *shader_load_filepath(string filepath);
+	OSLShaderInfo *shader_loaded_info(const string& hash);
 
 protected:
 	void texture_system_init();
@@ -72,9 +91,7 @@ protected:
 	OSL::TextureSystem *ts;
 	OSLRenderServices *services;
 	OSL::ErrorHandler errhandler;
-	set<string> loaded_shaders;
-
-	bool thread_data_initialized;
+	map<string, OSLShaderInfo> loaded_shaders;
 };
 
 #endif
@@ -83,7 +100,7 @@ protected:
 
 class OSLCompiler {
 public:
-	OSLCompiler(void *manager, void *shadingsys);
+	OSLCompiler(void *manager, void *shadingsys, ImageManager *image_manager);
 	void compile(OSLGlobals *og, Shader *shader);
 
 	void add(ShaderNode *node, const char *name, bool isfilepath = false);
@@ -110,6 +127,7 @@ public:
 	ShaderType output_type() { return current_type; }
 
 	bool background;
+	ImageManager *image_manager;
 
 private:
 	string id(ShaderNode *node);

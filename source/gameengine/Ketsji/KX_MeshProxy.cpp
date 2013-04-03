@@ -172,7 +172,7 @@ PyObject *KX_MeshProxy::PyGetVertexArrayLength(PyObject *args, PyObject *kwds)
 			length = m_meshobj->NumVertices(mat);
 	}
 	
-	return PyLong_FromSsize_t(length);
+	return PyLong_FromLong(length);
 }
 
 
@@ -292,7 +292,7 @@ PyObject *KX_MeshProxy::PyTransformUV(PyObject *args, PyObject *kwds)
 
 	MT_Matrix4x4 transform;
 
-	if (!PyArg_ParseTuple(args,"iO|iii:transform_uv", &matindex, &pymat, &uvindex, &uvindex_from) ||
+	if (!PyArg_ParseTuple(args,"iO|iii:transformUV", &matindex, &pymat, &uvindex, &uvindex_from) ||
 	    !PyMatTo(pymat, transform))
 	{
 		return NULL;
@@ -300,12 +300,12 @@ PyObject *KX_MeshProxy::PyTransformUV(PyObject *args, PyObject *kwds)
 
 	if (uvindex < -1 || uvindex > 1) {
 		PyErr_Format(PyExc_ValueError,
-		             "mesh.transform_uv(...): invalid uv_index %d", uvindex);
+		             "mesh.transformUV(...): invalid uv_index %d", uvindex);
 		return NULL;
 	}
 	if (uvindex_from < -1 || uvindex_from > 1 || uvindex == -1) {
 		PyErr_Format(PyExc_ValueError,
-		             "mesh.transform_uv(...): invalid uv_index_from %d", uvindex);
+		             "mesh.transformUV(...): invalid uv_index_from %d", uvindex);
 		return NULL;
 	}
 	if (uvindex_from == uvindex) {
@@ -338,20 +338,20 @@ PyObject *KX_MeshProxy::PyTransformUV(PyObject *args, PyObject *kwds)
 			for (i = it.startvertex; i < it.endvertex; i++) {
 				RAS_TexVert *vert = &it.vertex[i];
 				if (uvindex_from != -1) {
-					if (uvindex_from == 0) vert->SetUV2(vert->getUV1());
-					else                   vert->SetUV1(vert->getUV2());
+					if (uvindex_from == 0) vert->SetUV(1, vert->getUV(0));
+					else                   vert->SetUV(0, vert->getUV(1));
 				}
 
 				switch (uvindex) {
 					case 0:
-						vert->TransformUV1(transform);
+						vert->TransformUV(0, transform);
 						break;
 					case 1:
-						vert->TransformUV2(transform);
+						vert->TransformUV(1, transform);
 						break;
 					case -1:
-						vert->TransformUV1(transform);
-						vert->TransformUV2(transform);
+						vert->TransformUV(0, transform);
+						vert->TransformUV(1, transform);
 						break;
 				}
 			}
@@ -365,7 +365,7 @@ PyObject *KX_MeshProxy::PyTransformUV(PyObject *args, PyObject *kwds)
 
 	if (ok == false) {
 		PyErr_Format(PyExc_ValueError,
-		             "mesh.transform_uv(...): invalid material index %d", matindex);
+		             "mesh.transformUV(...): invalid material index %d", matindex);
 		return NULL;
 	}
 
@@ -403,16 +403,16 @@ PyObject *KX_MeshProxy::pyattr_get_materials(void *self_v, const KX_PYATTRIBUTE_
 	return materials;
 }
 
-PyObject * KX_MeshProxy::pyattr_get_numMaterials(void * selfv, const KX_PYATTRIBUTE_DEF * attrdef)
+PyObject *KX_MeshProxy::pyattr_get_numMaterials(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
 {
-	KX_MeshProxy * self = static_cast<KX_MeshProxy *> (selfv);
-	return PyLong_FromSsize_t(self->m_meshobj->NumMaterials());
+	KX_MeshProxy * self = static_cast<KX_MeshProxy *> (self_v);
+	return PyLong_FromLong(self->m_meshobj->NumMaterials());
 }
 
-PyObject * KX_MeshProxy::pyattr_get_numPolygons(void * selfv, const KX_PYATTRIBUTE_DEF * attrdef)
+PyObject *KX_MeshProxy::pyattr_get_numPolygons(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
 {
-	KX_MeshProxy * self = static_cast<KX_MeshProxy *> (selfv);
-	return PyLong_FromSsize_t(self->m_meshobj->NumPolygons());
+	KX_MeshProxy * self = static_cast<KX_MeshProxy *> (self_v);
+	return PyLong_FromLong(self->m_meshobj->NumPolygons());
 }
 
 /* a close copy of ConvertPythonToGameObject but for meshes */

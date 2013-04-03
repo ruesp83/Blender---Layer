@@ -471,14 +471,17 @@ elseif(WIN32)
 
 	if(WITH_PYTHON)
 		set_lib_path(PYLIB "python")
+
+		string(REPLACE "." "" _PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
+
 		install(
-			FILES ${PYLIB}/lib/python32.dll
+			FILES ${PYLIB}/lib/python${_PYTHON_VERSION_NO_DOTS}.dll
 			DESTINATION ${TARGETDIR}
 			CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
 		)
 
 		install(
-			FILES ${PYLIB}/lib/python32_d.dll
+			FILES ${PYLIB}/lib/python${_PYTHON_VERSION_NO_DOTS}_d.dll
 			DESTINATION ${TARGETDIR}
 			CONFIGURATIONS Debug
 		)
@@ -502,10 +505,10 @@ elseif(WIN32)
 				"
 				if(\"\${CMAKE_INSTALL_CONFIG_NAME}\" STREQUAL \"Debug\")
 					execute_process(COMMAND \"${CMAKE_COMMAND}\" -E chdir \"${TARGETDIR_VER}/python/lib\"
-						\"${CMAKE_COMMAND}\" -E tar xzfv \"${LIBDIR}/release/python32_d.tar.gz\")
+						\"${CMAKE_COMMAND}\" -E tar xzfv \"${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_d.tar.gz\")
 				else()
 					execute_process(COMMAND \"${CMAKE_COMMAND}\" -E chdir \"${TARGETDIR_VER}/python/lib\"
-						\"${CMAKE_COMMAND}\" -E tar xzfv \"${LIBDIR}/release/python32.tar.gz\")
+						\"${CMAKE_COMMAND}\" -E tar xzfv \"${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}.tar.gz\")
 				endif()
 				"
 			)
@@ -513,6 +516,8 @@ elseif(WIN32)
 			# doesnt work, todo
 			# install(CODE "execute_process(COMMAND find ${TARGETDIR}/${BLENDER_VERSION}/python/lib/ -name '*.so' -exec strip -s {} '\;')")
 		endif()
+
+		unset(_PYTHON_VERSION_NO_DOTS)
 	endif()
 
 	if(CMAKE_CL_64)
@@ -618,18 +623,7 @@ elseif(WIN32)
 	install( # x86 builds can run on x64 Windows, so this is required at all times
 		FILES ${LIBDIR}/thumbhandler/lib/BlendThumb64.dll
 		DESTINATION ${TARGETDIR}
-	)	
-
-	if(WITH_OPENIMAGEIO)
-		if(NOT MINGW)
-			set(OIIOBIN ${LIBDIR}/openimageio)
-			install(
-				FILES
-					${OIIOBIN}/bin/OpenImageIO.dll
-				DESTINATION ${TARGETDIR}
-			)
-		endif()
-	endif()
+	)
 
 	if(WITH_OPENCOLORIO)
 		set(OCIOBIN ${LIBDIR}/opencolorio/bin)
@@ -667,7 +661,7 @@ elseif(APPLE)
 		)
 	endmacro()
 
-	set(OSX_APP_SOURCEDIR ${CMAKE_SOURCE_DIR}/source/darwin/blender.app)
+	set(OSX_APP_SOURCEDIR ${CMAKE_SOURCE_DIR}/release/darwin/blender.app)
 
 	# setup Info.plist
 	execute_process(COMMAND date "+%Y-%m-%d" OUTPUT_VARIABLE BLENDER_DATE OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -695,7 +689,7 @@ elseif(APPLE)
 	)
 
 	# python
-	if(WITH_PYTHON AND NOT WITH_PYTHON_MODULE)
+	if(WITH_PYTHON AND NOT WITH_PYTHON_MODULE AND NOT WITH_PYTHON_FRAMEWORK)
 		# the python zip is first extract as part of the build process,
 		# and then later installed as part of make install. this is much
 		# quicker, and means we can easily exclude files on copy
@@ -726,7 +720,7 @@ elseif(APPLE)
 	# install blenderplayer bundle - copy of blender.app above. re-using macros et al
 	# note we are using OSX Bundle as base and copying Blender dummy bundle on top of it
 	if(WITH_GAMEENGINE AND WITH_PLAYER)
-		set(OSX_APP_PLAYER_SOURCEDIR ${CMAKE_SOURCE_DIR}/source/darwin/blenderplayer.app)
+		set(OSX_APP_PLAYER_SOURCEDIR ${CMAKE_SOURCE_DIR}/release/darwin/blenderplayer.app)
 		set(PLAYER_SOURCEINFO ${OSX_APP_PLAYER_SOURCEDIR}/Contents/Info.plist)
 		set(PLAYER_TARGETDIR_VER ${TARGETDIR}/blenderplayer.app/Contents/MacOS/${BLENDER_VERSION})
 
@@ -748,7 +742,7 @@ elseif(APPLE)
 		)
 
 		# python
-		if(WITH_PYTHON)
+		if(WITH_PYTHON AND NOT WITH_PYTHON_FRAMEWORK)
 			add_custom_command(
 				OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/python
 				COMMAND rm -rf ${CMAKE_CURRENT_BINARY_DIR}/python/
@@ -785,8 +779,7 @@ add_dependencies(blender makesdna)
 
 get_property(BLENDER_LINK_LIBS GLOBAL PROPERTY BLENDER_LINK_LIBS)
 
-set(BLENDER_LINK_LIBS
-	${BLENDER_LINK_LIBS}
+list(APPEND BLENDER_LINK_LIBS
 	bf_windowmanager
 	bf_render
 )
@@ -837,12 +830,12 @@ endif()
 		bf_editor_util
 		bf_editor_uvedit
 		bf_editor_curve
-		bf_editor_armature
 		bf_editor_gpencil
 		bf_editor_interface
 		bf_editor_mesh
 		bf_editor_metaball
 		bf_editor_object
+		bf_editor_armature
 		bf_editor_physics
 		bf_editor_render
 		bf_editor_screen
@@ -891,7 +884,6 @@ endif()
 		extern_colamd
 		ge_logic_ketsji
 		extern_recastnavigation
-		ge_phys_common
 		ge_logic
 		ge_rasterizer
 		ge_oglrasterizer
@@ -899,7 +891,6 @@ endif()
 		ge_scenegraph
 		ge_logic_network
 		ge_logic_ngnetwork
-		extern_bullet
 		ge_logic_loopbacknetwork
 		bf_intern_moto
 		extern_openjpeg
@@ -920,12 +911,14 @@ endif()
 		cycles_subd
 		bf_intern_raskter
 		bf_intern_opencolorio
+		extern_rangetree
+		extern_wcwidth
 	)
 
 	if(WITH_COMPOSITOR)
 		# added for opencl compositor
 		list_insert_before(BLENDER_SORTED_LIBS "bf_blenkernel" "bf_compositor")
-		list_insert_after(BLENDER_SORTED_LIBS "bf_compositor" "bf_opencl")
+		list_insert_after(BLENDER_SORTED_LIBS "bf_compositor" "bf_intern_opencl")
 	endif()
 
 	if(WITH_LIBMV)
@@ -975,6 +968,14 @@ endif()
 
 	if(WITH_INTERNATIONAL)
 		list(APPEND BLENDER_SORTED_LIBS bf_intern_locale)
+	endif()
+
+	if(WITH_BULLET)
+		list_insert_after(BLENDER_SORTED_LIBS "bf_blenkernel" "bf_intern_rigidbody")
+	endif()
+
+	if(WITH_BULLET AND NOT WITH_SYSTEM_BULLET)
+		list_insert_after(BLENDER_SORTED_LIBS "ge_logic_ngnetwork" "extern_bullet")
 	endif()
 
 	foreach(SORTLIB ${BLENDER_SORTED_LIBS})

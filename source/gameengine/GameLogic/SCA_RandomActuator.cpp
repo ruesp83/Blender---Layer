@@ -178,23 +178,15 @@ bool SCA_RandomActuator::Update()
 	case KX_RANDOMACT_FLOAT_NORMAL: {
 		/* normal (big numbers): para1 = mean, para2 = std dev               */
 
-		/* 
-
-		   070301 - nzc - Changed the termination condition. I think I 
-		   made a small mistake here, but it only affects distro's where
-		   the seed equals 0. In that case, the algorithm locks. Let's
-		   just guard that case separately.
-
-		*/
+		/* 070301 - nzc: Changed the termination condition. I think I
+		 * made a small mistake here, but it only affects distro's where
+		 * the seed equals 0. In that case, the algorithm locks. Let's
+		 * just guard that case separately.
+		 */
 
 		float x = 0.0, y = 0.0, s = 0.0, t = 0.0;
 		if (m_base->GetSeed() == 0) {
-			/*
-
-			  070301 - nzc 
-			  Just taking the mean here seems reasonable.
-
-			 */
+			/* 070301 - nzc: Just taking the mean here seems reasonable. */
 			tmpval = new CFloatValue(m_parameter1);
 		}
 		else {
@@ -363,17 +355,17 @@ PyAttributeDef SCA_RandomActuator::Attributes[] = {
 PyObject *SCA_RandomActuator::pyattr_get_seed(void *self, const struct KX_PYATTRIBUTE_DEF *attrdef)
 {
 	SCA_RandomActuator* act = static_cast<SCA_RandomActuator*>(self);
-	return PyLong_FromSsize_t(act->m_base->GetSeed());
+	return PyLong_FromLong(act->m_base->GetSeed());
 }
 
 int SCA_RandomActuator::pyattr_set_seed(void *self, const struct KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
 {
 	SCA_RandomActuator* act = static_cast<SCA_RandomActuator*>(self);
-	if (PyLong_Check(value))	{
-		int ival = PyLong_AsSsize_t(value);
-		act->m_base->SetSeed(ival);
+	if (PyLong_Check(value)) {
+		act->m_base->SetSeed(PyLong_AsLong(value));
 		return PY_SET_ATTR_SUCCESS;
-	} else {
+	}
+	else {
 		PyErr_SetString(PyExc_TypeError, "actuator.seed = int: Random Actuator, expected an integer");
 		return PY_SET_ATTR_FAIL;
 	}

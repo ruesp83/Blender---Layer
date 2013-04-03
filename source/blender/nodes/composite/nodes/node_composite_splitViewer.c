@@ -39,10 +39,9 @@ static bNodeSocketTemplate cmp_node_splitviewer_in[] = {
 	{	-1, 0, ""	}
 };
 
-#ifdef WITH_COMPOSITOR_LEGACY
-
-static void do_copy_split_rgba(bNode *UNUSED(node), float *out, float *in1, float *in2, float *fac)
+static void node_composit_init_splitviewer(bNodeTree *UNUSED(ntree), bNode *node)
 {
+<<<<<<< .mine
 	if (*fac==0.0f) {
 		copy_v4_v4(out, in1);
 	}
@@ -145,6 +144,8 @@ static void node_composit_exec_splitviewer(void *data, bNode *node, bNodeStack *
 
 static void node_composit_init_splitviewer(bNodeTree *UNUSED(ntree), bNode *node, bNodeTemplate *UNUSED(ntemp))
 {
+=======
+>>>>>>> .r55757
 	ImageUser *iuser= MEM_callocN(sizeof(ImageUser), "node image user");
 	node->storage= iuser;
 	iuser->sfra= 1;
@@ -153,21 +154,17 @@ static void node_composit_init_splitviewer(bNodeTree *UNUSED(ntree), bNode *node
 	node->custom1= 50;	/* default 50% split */
 }
 
-void register_node_type_cmp_splitviewer(bNodeTreeType *ttype)
+void register_node_type_cmp_splitviewer(void)
 {
 	static bNodeType ntype;
 
-	node_type_base(ttype, &ntype, CMP_NODE_SPLITVIEWER, "SplitViewer", NODE_CLASS_OUTPUT, NODE_PREVIEW|NODE_OPTIONS);
+	cmp_node_type_base(&ntype, CMP_NODE_SPLITVIEWER, "Split Viewer", NODE_CLASS_OUTPUT, NODE_PREVIEW|NODE_OPTIONS);
 	node_type_socket_templates(&ntype, cmp_node_splitviewer_in, NULL);
-	node_type_size(&ntype, 140, 100, 320);
 	node_type_init(&ntype, node_composit_init_splitviewer);
 	node_type_storage(&ntype, "ImageUser", node_free_standard_storage, node_copy_standard_storage);
-#ifdef WITH_COMPOSITOR_LEGACY
-	node_type_exec(&ntype, node_composit_exec_splitviewer);
-#endif
 
 	/* Do not allow muting for this node. */
 	node_type_internal_links(&ntype, NULL);
 
-	nodeRegisterType(ttype, &ntype);
+	nodeRegisterType(&ntype);
 }

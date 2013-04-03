@@ -1,24 +1,28 @@
 /*
------------------------------------------------------------------------------
-This source file is part of VideoTexture library
-
-Copyright (c) 2007 The Zdeno Ash Miklas
-
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU Lesser General Public License as published by the Free Software
-Foundation; either version 2 of the License, or (at your option) any later
-version.
-
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
-
-You should have received a copy of the GNU Lesser General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place - Suite 330, Boston, MA 02111-1307, USA, or go to
-http://www.gnu.org/copyleft/lesser.txt.
------------------------------------------------------------------------------
-*/
+ * ***** BEGIN GPL LICENSE BLOCK *****
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software  Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ * Copyright (c) 2007 The Zdeno Ash Miklas
+ *
+ * This source file is part of VideoTexture library
+ *
+ * Contributor(s):
+ *
+ * ***** END GPL LICENSE BLOCK *****
+ */
 
 /** \file gameengine/VideoTexture/VideoFFmpeg.cpp
  *  \ingroup bgevideotex
@@ -170,7 +174,7 @@ int VideoFFmpeg::openStream(const char *filename, AVInputFormat *inputFormat, AV
 	if (avformat_open_input(&formatCtx, filename, inputFormat, formatParams)!=0)
 		return -1;
 
-	if (av_find_stream_info(formatCtx)<0) 
+	if (avformat_find_stream_info(formatCtx, NULL) < 0)
 	{
 		av_close_input_file(formatCtx);
 		return -1;
@@ -205,7 +209,7 @@ int VideoFFmpeg::openStream(const char *filename, AVInputFormat *inputFormat, AV
 		return -1;
 	}
 	codecCtx->workaround_bugs = 1;
-	if (avcodec_open(codecCtx, codec)<0) 
+	if (avcodec_open2(codecCtx, codec, NULL) < 0)
 	{
 		av_close_input_file(formatCtx);
 		return -1;
@@ -500,7 +504,7 @@ void VideoFFmpeg::stopCache()
 	}
 }
 
-void VideoFFmpeg::releaseFrame(AVFrame* frame)
+void VideoFFmpeg::releaseFrame(AVFrame *frame)
 {
 	if (frame == m_frameRGB)
 	{
@@ -517,7 +521,7 @@ void VideoFFmpeg::releaseFrame(AVFrame* frame)
 }
 
 // open video file
-void VideoFFmpeg::openFile (char * filename)
+void VideoFFmpeg::openFile (char *filename)
 {
 	if (openStream(filename, NULL, NULL) != 0)
 		return;
@@ -574,7 +578,7 @@ void VideoFFmpeg::openFile (char * filename)
 
 
 // open video capture device
-void VideoFFmpeg::openCam (char * file, short camIdx)
+void VideoFFmpeg::openCam (char *file, short camIdx)
 {
 	// open camera source
 	AVInputFormat		*inputFormat;
@@ -1018,7 +1022,7 @@ AVFrame *VideoFFmpeg::grabFrame(long position)
 				AVFrame * input = m_frame;
 
 				/* This means the data wasnt read properly, 
-				this check stops crashing */
+				 * this check stops crashing */
 				if (   input->data[0]==0 && input->data[1]==0 
 					&& input->data[2]==0 && input->data[3]==0)
 				{
@@ -1081,7 +1085,7 @@ inline VideoFFmpeg * getVideoFFmpeg (PyImage *self)
 
 
 // object initialization
-static int VideoFFmpeg_init (PyObject *pySelf, PyObject *args, PyObject *kwds)
+static int VideoFFmpeg_init(PyObject *pySelf, PyObject *args, PyObject *kwds)
 {
 	PyImage *self = reinterpret_cast<PyImage*>(pySelf);
 	// parameters - video source
@@ -1138,7 +1142,7 @@ static int VideoFFmpeg_setPreseek(PyImage *self, PyObject *value, void *closure)
 		return -1;
 	}
 	// set preseek
-	getFFmpeg(self)->setPreseek(PyLong_AsSsize_t(value));
+	getFFmpeg(self)->setPreseek(PyLong_AsLong(value));
 	// success
 	return 0;
 }
@@ -1239,7 +1243,7 @@ PyTypeObject VideoFFmpegType =
 };
 
 // object initialization
-static int ImageFFmpeg_init (PyObject *pySelf, PyObject *args, PyObject *kwds)
+static int ImageFFmpeg_init(PyObject *pySelf, PyObject *args, PyObject *kwds)
 {
 	PyImage *self = reinterpret_cast<PyImage*>(pySelf);
 	// parameters - video source

@@ -29,8 +29,10 @@
  *  \ingroup cmpnodes
  */
 
-
 #include "node_composite_util.h"
+
+#include "BKE_global.h"
+#include "BKE_main.h"
 
 /* **************** IMAGE (and RenderResult, multilayer image) ******************** */
 
@@ -71,7 +73,7 @@ static bNodeSocket *cmp_node_image_add_render_pass_output(bNodeTree *ntree, bNod
 	bNodeSocket *sock;
 	NodeImageLayer *sockdata;
 	
-	sock = node_add_output_from_template(ntree, node, &cmp_node_rlayers_out[rres_index]);
+	sock = node_add_socket_from_template(ntree, node, &cmp_node_rlayers_out[rres_index], SOCK_OUT);
 	/* extra socket info */
 	sockdata = MEM_callocN(sizeof(NodeImageLayer), "node image layer");
 	sock->storage = sockdata;
@@ -158,7 +160,7 @@ static void cmp_node_image_add_multilayer_outputs(bNodeTree *ntree, bNode *node,
 		else
 			type = SOCK_RGBA;
 		
-		sock = nodeAddSocket(ntree, node, SOCK_OUT, rpass->name, type);
+		sock = nodeAddStaticSocket(ntree, node, SOCK_OUT, type, PROP_NONE, rpass->name, rpass->name);
 		/* extra socket info */
 		sockdata = MEM_callocN(sizeof(NodeImageLayer), "node image layer");
 		sock->storage = sockdata;
@@ -172,10 +174,28 @@ static void cmp_node_image_create_outputs(bNodeTree *ntree, bNode *node)
 {
 	Image *ima= (Image *)node->id;
 	if (ima) {
-		ImageUser *iuser= node->storage;
-		
+		ImageUser *iuser = node->storage;
+		ImageUser load_iuser = {NULL};
+		ImBuf *ibuf;
+		int offset = BKE_image_sequence_guess_offset(ima);
+
+		/* It is possible that image user in this node is not
+		 * properly updated yet. In this case loading image will
+		 * fail and sockets detection will go wrong.
+		 *
+		 * So we manually construct image user to be sure first
+		 * image from sequence (that one which is set as fileanme
+		 * for image datablock) is used for sockets detection
+		 */
+		load_iuser.ok = 1;
+		load_iuser.framenr = offset;
+
 		/* make sure ima->type is correct */
+<<<<<<< .mine
 		BKE_image_get_ibuf(ima, iuser, IMA_IBUF_IMA);
+=======
+		ibuf = BKE_image_acquire_ibuf(ima, &load_iuser, NULL);
+>>>>>>> .r55757
 		
 		if (ima->rr) {
 			RenderLayer *rl= BLI_findlink(&ima->rr->layers, iuser->layer);
@@ -191,6 +211,8 @@ static void cmp_node_image_create_outputs(bNodeTree *ntree, bNode *node)
 		}
 		else
 			cmp_node_image_add_render_pass_outputs(ntree, node, RRES_OUT_IMAGE|RRES_OUT_ALPHA|RRES_OUT_Z);
+		
+		BKE_image_release_ibuf(ima, ibuf, NULL);
 	}
 	else
 		cmp_node_image_add_render_pass_outputs(ntree, node, RRES_OUT_IMAGE|RRES_OUT_ALPHA);
@@ -200,8 +222,8 @@ static bNodeSocket *cmp_node_image_output_find_match(bNode *UNUSED(node), bNodeS
 {
 	bNodeSocket *sock;
 	
-	for (sock=oldsocklist->first; sock; sock=sock->next)
-		if (strcmp(sock->name, newsock->name)==0)
+	for (sock=oldsocklist->first; sock; sock = sock->next)
+		if (STREQ(sock->name, newsock->name))
 			return sock;
 	return NULL;
 }
@@ -211,8 +233,8 @@ static bNodeSocket *cmp_node_image_output_relink(bNode *node, bNodeSocket *oldso
 	bNodeSocket *sock;
 	
 	/* first try to find matching socket name */
-	for (sock=node->outputs.first; sock; sock=sock->next)
-		if (strcmp(sock->name, oldsock->name)==0)
+	for (sock = node->outputs.first; sock; sock = sock->next)
+		if (STREQ(sock->name, oldsock->name))
 			return sock;
 	
 	/* no matching name, simply link to same index */
@@ -238,11 +260,8 @@ static void cmp_node_image_verify_outputs(bNodeTree *ntree, bNode *node)
 	
 	/* XXX make callback */
 	cmp_node_image_create_outputs(ntree, node);
-	/* flag all new sockets as dynamic, to prevent removal by socket verification function */
-	for (newsock=node->outputs.first; newsock; newsock=newsock->next)
-		newsock->flag |= SOCK_DYNAMIC;
 	
-	for (newsock=node->outputs.first; newsock; newsock=newsock->next) {
+	for (newsock = node->outputs.first; newsock; newsock=newsock->next) {
 		/* XXX make callback */
 		oldsock = cmp_node_image_output_find_match(node, newsock, &oldsocklist);
 		if (oldsock) {
@@ -282,11 +301,9 @@ static void cmp_node_image_update(bNodeTree *ntree, bNode *node)
 		cmp_node_image_verify_outputs(ntree, node);
 }
 
-#ifdef WITH_COMPOSITOR_LEGACY
-
-/* float buffer from the image with matching color management */
-float *node_composit_get_float_buffer(RenderData *rd, ImBuf *ibuf, int *alloc)
+static void node_composit_init_image(bNodeTree *ntree, bNode *node)
 {
+<<<<<<< .mine
 	float *rect;
 	int predivide= (ibuf->flags & IB_cm_predivide);
 
@@ -518,6 +535,8 @@ static void node_composit_exec_image(void *data, bNode *node, bNodeStack **UNUSE
 
 static void node_composit_init_image(bNodeTree *ntree, bNode *node, bNodeTemplate *UNUSED(ntemp))
 {
+=======
+>>>>>>> .r55757
 	ImageUser *iuser= MEM_callocN(sizeof(ImageUser), "node image user");
 	node->storage= iuser;
 	iuser->frames= 1;
@@ -534,187 +553,63 @@ static void node_composit_free_image(bNode *node)
 	bNodeSocket *sock;
 	
 	/* free extra socket info */
-	for (sock=node->outputs.first; sock; sock=sock->next)
+	for (sock = node->outputs.first; sock; sock = sock->next)
 		MEM_freeN(sock->storage);
 	
 	MEM_freeN(node->storage);
 }
 
-static void node_composit_copy_image(bNode *orig_node, bNode *new_node)
+static void node_composit_copy_image(bNodeTree *UNUSED(dest_ntree), bNode *dest_node, bNode *src_node)
 {
 	bNodeSocket *sock;
 	
-	new_node->storage= MEM_dupallocN(orig_node->storage);
+	dest_node->storage= MEM_dupallocN(src_node->storage);
 	
 	/* copy extra socket info */
-	for (sock=orig_node->outputs.first; sock; sock=sock->next)
+	for (sock=src_node->outputs.first; sock; sock = sock->next)
 		sock->new_sock->storage = MEM_dupallocN(sock->storage);
 }
 
-void register_node_type_cmp_image(bNodeTreeType *ttype)
+void register_node_type_cmp_image(void)
 {
 	static bNodeType ntype;
 
-	node_type_base(ttype, &ntype, CMP_NODE_IMAGE, "Image", NODE_CLASS_INPUT, NODE_PREVIEW|NODE_OPTIONS);
-	node_type_size(&ntype, 120, 80, 300);
+	cmp_node_type_base(&ntype, CMP_NODE_IMAGE, "Image", NODE_CLASS_INPUT, NODE_PREVIEW|NODE_OPTIONS);
 	node_type_init(&ntype, node_composit_init_image);
 	node_type_storage(&ntype, "ImageUser", node_composit_free_image, node_composit_copy_image);
 	node_type_update(&ntype, cmp_node_image_update, NULL);
-#ifdef WITH_COMPOSITOR_LEGACY
-	node_type_exec(&ntype, node_composit_exec_image);
-#endif
 
-	nodeRegisterType(ttype, &ntype);
+	nodeRegisterType(&ntype);
 }
 
 
 /* **************** RENDER RESULT ******************** */
 
-#ifdef WITH_COMPOSITOR_LEGACY
-
-static CompBuf *compbuf_from_pass(RenderData *rd, RenderLayer *rl, int rectx, int recty, int passcode)
+static int node_composit_poll_rlayers(bNodeType *UNUSED(ntype), bNodeTree *ntree)
 {
-	float *fp= RE_RenderLayerGetPass(rl, passcode);
-	if (fp) {
-		CompBuf *buf;
-		int buftype= CB_VEC3;
-
-		if (ELEM4(passcode, SCE_PASS_Z, SCE_PASS_INDEXOB, SCE_PASS_MIST, SCE_PASS_INDEXMA))
-			buftype= CB_VAL;
-		else if (passcode==SCE_PASS_VECTOR)
-			buftype= CB_VEC4;
-		else if (ELEM(passcode, SCE_PASS_COMBINED, SCE_PASS_RGBA))
-			buftype= CB_RGBA;
-
-		if (rd->scemode & R_COMP_CROP)
-			buf= get_cropped_compbuf(&rd->disprect, fp, rectx, recty, buftype);
-		else {
-			buf= alloc_compbuf(rectx, recty, buftype, 0);
-			buf->rect= fp;
-		}
-		return buf;
+	if (strcmp(ntree->idname, "CompositorNodeTree")==0) {
+		Scene *scene;
+		
+		/* XXX ugly: check if ntree is a local scene node tree.
+		 * Render layers node can only be used in local scene->nodetree,
+		 * since it directly links to the scene.
+		 */
+		for (scene = G.main->scene.first; scene; scene = scene->id.next)
+			if (scene->nodetree == ntree)
+				break;
+		
+		return (scene != NULL);
 	}
-	return NULL;
+	return false;
 }
 
-static void node_composit_rlayers_out(RenderData *rd, RenderLayer *rl, bNodeStack **out, int rectx, int recty)
-{
-	if (out[RRES_OUT_Z]->hasoutput)
-		out[RRES_OUT_Z]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_Z);
-	if (out[RRES_OUT_VEC]->hasoutput)
-		out[RRES_OUT_VEC]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_VECTOR);
-	if (out[RRES_OUT_NORMAL]->hasoutput)
-		out[RRES_OUT_NORMAL]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_NORMAL);
-	if (out[RRES_OUT_UV]->hasoutput)
-		out[RRES_OUT_UV]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_UV);
-
-	if (out[RRES_OUT_RGBA]->hasoutput)
-		out[RRES_OUT_RGBA]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_RGBA);
-	if (out[RRES_OUT_DIFF]->hasoutput)
-		out[RRES_OUT_DIFF]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_DIFFUSE);
-	if (out[RRES_OUT_SPEC]->hasoutput)
-		out[RRES_OUT_SPEC]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_SPEC);
-	if (out[RRES_OUT_SHADOW]->hasoutput)
-		out[RRES_OUT_SHADOW]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_SHADOW);
-	if (out[RRES_OUT_AO]->hasoutput)
-		out[RRES_OUT_AO]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_AO);
-	if (out[RRES_OUT_REFLECT]->hasoutput)
-		out[RRES_OUT_REFLECT]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_REFLECT);
-	if (out[RRES_OUT_REFRACT]->hasoutput)
-		out[RRES_OUT_REFRACT]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_REFRACT);
-	if (out[RRES_OUT_INDIRECT]->hasoutput)
-		out[RRES_OUT_INDIRECT]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_INDIRECT);
-	if (out[RRES_OUT_INDEXOB]->hasoutput)
-		out[RRES_OUT_INDEXOB]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_INDEXOB);
-	if (out[RRES_OUT_INDEXMA]->hasoutput)
-		out[RRES_OUT_INDEXMA]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_INDEXMA);
-	if (out[RRES_OUT_MIST]->hasoutput)
-		out[RRES_OUT_MIST]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_MIST);
-	if (out[RRES_OUT_EMIT]->hasoutput)
-		out[RRES_OUT_EMIT]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_EMIT);
-	if (out[RRES_OUT_ENV]->hasoutput)
-		out[RRES_OUT_ENV]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_ENVIRONMENT);
-	if (out[RRES_OUT_DIFF_DIRECT]->hasoutput)
-		out[RRES_OUT_DIFF_DIRECT]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_DIFFUSE_DIRECT);
-	if (out[RRES_OUT_DIFF_INDIRECT]->hasoutput)
-		out[RRES_OUT_DIFF_INDIRECT]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_DIFFUSE_INDIRECT);
-	if (out[RRES_OUT_DIFF_COLOR]->hasoutput)
-		out[RRES_OUT_DIFF_COLOR]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_DIFFUSE_COLOR);
-	if (out[RRES_OUT_GLOSSY_DIRECT]->hasoutput)
-		out[RRES_OUT_GLOSSY_DIRECT]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_GLOSSY_DIRECT);
-	if (out[RRES_OUT_GLOSSY_INDIRECT]->hasoutput)
-		out[RRES_OUT_GLOSSY_INDIRECT]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_GLOSSY_INDIRECT);
-	if (out[RRES_OUT_GLOSSY_COLOR]->hasoutput)
-		out[RRES_OUT_GLOSSY_COLOR]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_GLOSSY_COLOR);
-	if (out[RRES_OUT_TRANSM_DIRECT]->hasoutput)
-		out[RRES_OUT_TRANSM_DIRECT]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_TRANSM_DIRECT);
-	if (out[RRES_OUT_TRANSM_INDIRECT]->hasoutput)
-		out[RRES_OUT_TRANSM_INDIRECT]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_TRANSM_INDIRECT);
-	if (out[RRES_OUT_TRANSM_COLOR]->hasoutput)
-		out[RRES_OUT_TRANSM_COLOR]->data= compbuf_from_pass(rd, rl, rectx, recty, SCE_PASS_TRANSM_COLOR);
-}
-
-static void node_composit_exec_rlayers(void *data, bNode *node, bNodeStack **UNUSED(in), bNodeStack **out)
-{
-	Scene *sce= (Scene *)node->id;
-	Render *re= (sce)? RE_GetRender(sce->id.name): NULL;
-	RenderData *rd= data;
-	RenderResult *rr= NULL;
-
-	if (re)
-		rr= RE_AcquireResultRead(re);
-
-	if (rr) {
-		SceneRenderLayer *srl= BLI_findlink(&sce->r.layers, node->custom1);
-		if (srl) {
-			RenderLayer *rl= RE_GetRenderLayer(rr, srl->name);
-			if (rl && rl->rectf) {
-				CompBuf *stackbuf;
-
-				/* we put render rect on stack, cbuf knows rect is from other ibuf when freed! */
-				if (rd->scemode & R_COMP_CROP)
-					stackbuf= get_cropped_compbuf(&rd->disprect, rl->rectf, rr->rectx, rr->recty, CB_RGBA);
-				else {
-					stackbuf= alloc_compbuf(rr->rectx, rr->recty, CB_RGBA, 0);
-					stackbuf->rect= rl->rectf;
-				}
-				if (stackbuf==NULL) {
-					printf("Error; Preview Panel in UV Window returns zero sized image\n");
-				}
-				else {
-					stackbuf->xof= rr->xof;
-					stackbuf->yof= rr->yof;
-
-					/* put on stack */
-					out[RRES_OUT_IMAGE]->data= stackbuf;
-
-					if (out[RRES_OUT_ALPHA]->hasoutput)
-						out[RRES_OUT_ALPHA]->data= valbuf_from_rgbabuf(stackbuf, CHAN_A);
-
-					node_composit_rlayers_out(rd, rl, out, rr->rectx, rr->recty);
-
-					generate_preview(data, node, stackbuf);
-				}
-			}
-		}
-	}
-
-	if (re)
-		RE_ReleaseResult(re);
-}
-
-#endif  /* WITH_COMPOSITOR_LEGACY */
-
-void register_node_type_cmp_rlayers(bNodeTreeType *ttype)
+void register_node_type_cmp_rlayers(void)
 {
 	static bNodeType ntype;
 
-	node_type_base(ttype, &ntype, CMP_NODE_R_LAYERS, "Render Layers", NODE_CLASS_INPUT, NODE_PREVIEW|NODE_OPTIONS);
+	cmp_node_type_base(&ntype, CMP_NODE_R_LAYERS, "Render Layers", NODE_CLASS_INPUT, NODE_PREVIEW|NODE_OPTIONS);
 	node_type_socket_templates(&ntype, NULL, cmp_node_rlayers_out);
-	node_type_size(&ntype, 150, 100, 300);
-#ifdef WITH_COMPOSITOR_LEGACY
-	node_type_exec(&ntype, node_composit_exec_rlayers);
-#endif
+	ntype.poll = node_composit_poll_rlayers;
 
-	nodeRegisterType(ttype, &ntype);
+	nodeRegisterType(&ntype);
 }

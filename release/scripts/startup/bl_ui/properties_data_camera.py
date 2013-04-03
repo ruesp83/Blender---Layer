@@ -80,7 +80,7 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
             row = col.row()
             if cam.lens_unit == 'MILLIMETERS':
                 row.prop(cam, "lens")
-            elif cam.lens_unit == 'DEGREES':
+            elif cam.lens_unit == 'FOV':
                 row.prop(cam, "angle")
             row.prop(cam, "lens_unit", text="")
 
@@ -142,8 +142,12 @@ class DATA_PT_camera(CameraButtonsPanel, Panel):
         if cam.sensor_fit == 'AUTO':
             col.prop(cam, "sensor_width", text="Size")
         else:
-            col.prop(cam, "sensor_width", text="Width")
-            col.prop(cam, "sensor_height", text="Height")
+            sub = col.column()
+            sub.active = cam.sensor_fit == 'HORIZONTAL'
+            sub.prop(cam, "sensor_width", text="Width")
+            sub = col.column()
+            sub.active = cam.sensor_fit == 'VERTICAL'
+            sub.prop(cam, "sensor_height", text="Height")
 
         col = split.column(align=True)
         col.prop(cam, "sensor_fit", text="")

@@ -363,7 +363,9 @@ void WM_jobs_start(wmWindowManager *wm, wmJob *wm_job)
 			if (G.debug & G_DEBUG_JOBS)
 				wm_job->start_time = PIL_check_seconds_timer();
 		}
-		else printf("job fails, not initialized\n");
+		else {
+			printf("job fails, not initialized\n");
+		}
 	}
 }
 
@@ -405,14 +407,28 @@ void WM_jobs_kill_all(wmWindowManager *wm)
 /* wait until every job ended, except for one owner (used in undo to keep screen job alive) */
 void WM_jobs_kill_all_except(wmWindowManager *wm, void *owner)
 {
-	wmJob *wm_job;
+	wmJob *wm_job, *next_job;
 	
-	for (wm_job = wm->jobs.first; wm_job; wm_job = wm_job->next) {
+	for (wm_job = wm->jobs.first; wm_job; wm_job = next_job) {
+		next_job = wm_job->next;
+
 		if (wm_job->owner != owner)
 			wm_jobs_kill_job(wm, wm_job);
 	}
 }
 
+
+void WM_jobs_kill_type(struct wmWindowManager *wm, int job_type)
+{
+	wmJob *wm_job, *next_job;
+	
+	for (wm_job = wm->jobs.first; wm_job; wm_job = next_job) {
+		next_job = wm_job->next;
+
+		if (wm_job->job_type == job_type)
+			wm_jobs_kill_job(wm, wm_job);
+	}
+}
 
 /* signal job(s) from this owner or callback to stop, timer is required to get handled */
 void WM_jobs_stop(wmWindowManager *wm, void *owner, void *startjob)
@@ -569,6 +585,19 @@ int WM_jobs_has_running(wmWindowManager *wm)
 
 	for (wm_job = wm->jobs.first; wm_job; wm_job = wm_job->next) {
 		if (wm_job->running) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+int WM_jobs_has_running_except(wmWindowManager *wm, int job_type)
+{
+	wmJob *wm_job;
+
+	for (wm_job = wm->jobs.first; wm_job; wm_job = wm_job->next) {
+		if (wm_job->running && wm_job->job_type != job_type) {
 			return TRUE;
 		}
 	}

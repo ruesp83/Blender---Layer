@@ -239,7 +239,7 @@ static void eyedropper_color_sample_accum(bContext *C, Eyedropper *eye, int mx, 
 }
 
 /* main modal status check */
-static int eyedropper_modal(bContext *C, wmOperator *op, wmEvent *event)
+static int eyedropper_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	Eyedropper *eye = (Eyedropper *)op->customdata;
 	
@@ -285,7 +285,7 @@ static int eyedropper_modal(bContext *C, wmOperator *op, wmEvent *event)
 }
 
 /* Modal Operator init */
-static int eyedropper_invoke(bContext *C, wmOperator *op, wmEvent *UNUSED(event))
+static int eyedropper_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
 	/* init */
 	if (eyedropper_init(C, op)) {
@@ -661,11 +661,12 @@ static int reports_to_text_poll(bContext *C)
 static int reports_to_text_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	ReportList *reports = CTX_wm_reports(C);
+	Main *bmain = CTX_data_main(C);
 	Text *txt;
 	char *str;
 	
 	/* create new text-block to write to */
-	txt = BKE_text_add("Recent Reports");
+	txt = BKE_text_add(bmain, "Recent Reports");
 	
 	/* convert entire list to a display string, and add this to the text-block
 	 *	- if commandline debug option enabled, show debug reports too
@@ -803,7 +804,7 @@ static int editsource_text_edit(bContext *C, wmOperator *op,
 	}
 
 	if (text == NULL) {
-		text = BKE_text_load(filepath, bmain->name);
+		text = BKE_text_load(bmain, filepath, bmain->name);
 	}
 
 	if (text == NULL) {
@@ -852,7 +853,7 @@ static int editsource_exec(bContext *C, wmOperator *op)
 		ED_region_do_draw(C, ar);
 
 		for (BLI_ghashIterator_init(&ghi, ui_editsource_info->hash);
-		     !BLI_ghashIterator_isDone(&ghi);
+		     BLI_ghashIterator_notDone(&ghi);
 		     BLI_ghashIterator_step(&ghi))
 		{
 			uiBut *but_key = BLI_ghashIterator_getKey(&ghi);
@@ -960,7 +961,6 @@ static int edittranslation_exec(bContext *C, wmOperator *op)
 		const char *root = U.i18ndir;
 		const char *uilng = BLF_lang_get();
 
-		const int bufs_nbr = 10;
 		uiStringInfo but_label = {BUT_GET_LABEL, NULL};
 		uiStringInfo rna_label = {BUT_GET_RNA_LABEL, NULL};
 		uiStringInfo enum_label = {BUT_GET_RNAENUM_LABEL, NULL};
@@ -990,8 +990,8 @@ static int edittranslation_exec(bContext *C, wmOperator *op)
 			return OPERATOR_CANCELLED;
 		}
 
-		uiButGetStrInfo(C, but, bufs_nbr, &but_label, &rna_label, &enum_label, &but_tip, &rna_tip, &enum_tip,
-		                &rna_struct, &rna_prop, &rna_enum, &rna_ctxt);
+		uiButGetStrInfo(C, but, &but_label, &rna_label, &enum_label, &but_tip, &rna_tip, &enum_tip,
+		                &rna_struct, &rna_prop, &rna_enum, &rna_ctxt, NULL);
 
 		WM_operator_properties_create(&ptr, EDTSRC_I18N_OP_NAME);
 		RNA_string_set(&ptr, "lang", uilng);
@@ -1089,4 +1089,3 @@ void UI_buttons_operatortypes(void)
 #endif
 	WM_operatortype_append(UI_OT_reloadtranslation);
 }
-

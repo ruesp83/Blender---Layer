@@ -29,13 +29,15 @@
 
 struct BMAllocTemplate;
 
-BMesh *BM_mesh_create(struct BMAllocTemplate *allocsize);
+void   BM_mesh_elem_toolflags_ensure(BMesh *bm);
+void   BM_mesh_elem_toolflags_clear(BMesh *bm);
+BMesh *BM_mesh_create(const struct BMAllocTemplate *allocsize);
 
 void   BM_mesh_free(BMesh *bm);
 void   BM_mesh_data_free(BMesh *bm);
 void   BM_mesh_clear(BMesh *bm);
 
-void BM_mesh_normals_update(BMesh *bm, const short skip_hidden);
+void BM_mesh_normals_update(BMesh *bm, const bool skip_hidden);
 
 void bmesh_edit_begin(BMesh *bm, int type_flag);
 void bmesh_edit_end(BMesh *bm, int type_flag);
@@ -55,7 +57,11 @@ typedef struct BMAllocTemplate {
 	int totvert, totedge, totloop, totface;
 } BMAllocTemplate;
 
-extern BMAllocTemplate bm_mesh_allocsize_default;
-extern BMAllocTemplate bm_mesh_chunksize_default;
+extern const BMAllocTemplate bm_mesh_allocsize_default;
+extern const BMAllocTemplate bm_mesh_chunksize_default;
+
+enum {
+	BM_MESH_CREATE_USE_TOOLFLAGS = (1 << 0)
+};
 
 #endif /* __BMESH_MESH_H__ */

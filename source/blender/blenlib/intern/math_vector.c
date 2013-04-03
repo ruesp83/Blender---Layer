@@ -115,6 +115,39 @@ void mid_v2_v2v2(float v[2], const float v1[2], const float v2[2])
 	v[1] = 0.5f * (v1[1] + v2[1]);
 }
 
+void mid_v3_v3v3v3(float v[3], const float v1[3], const float v2[3], const float v3[3])
+{
+	v[0] = (v1[0] + v2[0] + v3[0]) / 3.0f;
+	v[1] = (v1[1] + v2[1] + v3[1]) / 3.0f;
+	v[2] = (v1[2] + v2[2] + v3[2]) / 3.0f;
+}
+
+/**
+ * Equivalent to:
+ * interp_v3_v3v3(v, v1, v2, -1.0f);
+ */
+
+void flip_v4_v4v4(float v[4], const float v1[4], const float v2[4])
+{
+	v[0] = v1[0] + (v1[0] - v2[0]);
+	v[1] = v1[1] + (v1[1] - v2[1]);
+	v[2] = v1[2] + (v1[2] - v2[2]);
+	v[3] = v1[3] + (v1[3] - v2[3]);
+}
+
+void flip_v3_v3v3(float v[3], const float v1[3], const float v2[3])
+{
+	v[0] = v1[0] + (v1[0] - v2[0]);
+	v[1] = v1[1] + (v1[1] - v2[1]);
+	v[2] = v1[2] + (v1[2] - v2[2]);
+}
+
+void flip_v2_v2v2(float v[2], const float v1[2], const float v2[2])
+{
+	v[0] = v1[0] + (v1[0] - v2[0]);
+	v[1] = v1[1] + (v1[1] - v2[1]);
+}
+
 /********************************** Angles ***********************************/
 
 /* Return the angle in radians between vecs 1-2 and 2-3 in radians
@@ -201,6 +234,10 @@ float angle_signed_v2v2(const float v1[2], const float v2[2])
 
 float angle_normalized_v3v3(const float v1[3], const float v2[3])
 {
+	/* double check they are normalized */
+	BLI_ASSERT_UNIT_V3(v1);
+	BLI_ASSERT_UNIT_V3(v2);
+
 	/* this is the same as acos(dot_v3v3(v1, v2)), but more accurate */
 	if (dot_v3v3(v1, v2) < 0.0f) {
 		float vec[3];
@@ -217,6 +254,10 @@ float angle_normalized_v3v3(const float v1[3], const float v2[3])
 
 float angle_normalized_v2v2(const float v1[2], const float v2[2])
 {
+	/* double check they are normalized */
+	BLI_ASSERT_UNIT_V2(v1);
+	BLI_ASSERT_UNIT_V2(v2);
+
 	/* this is the same as acos(dot_v3v3(v1, v2)), but more accurate */
 	if (dot_v2v2(v1, v2) < 0.0f) {
 		float vec[2];
@@ -400,6 +441,9 @@ void rotate_normalized_v3_v3v3fl(float r[3], const float p[3], const float axis[
 {
 	const float costheta = cos(angle);
 	const float sintheta = sin(angle);
+
+	/* double check they are normalized */
+	BLI_ASSERT_UNIT_V3(axis);
 
 	r[0] = ((costheta + (1 - costheta) * axis[0] * axis[0]) * p[0]) +
 	       (((1 - costheta) * axis[0] * axis[1] - axis[2] * sintheta) * p[1]) +
@@ -655,6 +699,19 @@ void msub_vn_vnvn(float *array_tar, const float *array_src_a, const float *array
 	int i = size;
 	while (i--) {
 		*(tar--) = *(src_a--) - (*(src_b--) * f);
+	}
+}
+
+void interp_vn_vn(float *array_tar, const float *array_src, const float t, const int size)
+{
+	const float s = 1.0f - t;
+	float *tar = array_tar + (size - 1);
+	const float *src = array_src + (size - 1);
+	int i = size;
+	while (i--) {
+		*(tar) = (s * *(tar)) + (t * *(src));
+		tar--;
+		src--;
 	}
 }
 

@@ -60,7 +60,7 @@ elseif(APPLE)
 	add_executable(blenderplayer ${EXETYPE} bad_level_call_stubs/stubs.c)
 	# setup Info.plist
 	execute_process(COMMAND date "+%Y-%m-%d" OUTPUT_VARIABLE BLENDER_DATE OUTPUT_STRIP_TRAILING_WHITESPACE)
-	set(PLAYER_SOURCEDIR ${CMAKE_SOURCE_DIR}/source/darwin/blenderplayer.app)
+	set(PLAYER_SOURCEDIR ${CMAKE_SOURCE_DIR}/release/darwin/blenderplayer.app)
 	set(PLAYER_SOURCEINFO ${PLAYER_SOURCEDIR}/Contents/Info.plist)
 	set_target_properties(blenderplayer PROPERTIES
 		MACOSX_BUNDLE_INFO_PLIST ${PLAYER_SOURCEINFO}
@@ -95,6 +95,7 @@ endif()
 		bf_rna
 		bf_bmesh
 		bf_blenkernel
+		bf_intern_rigidbody
 		bf_blenloader
 		ge_blen_routines
 		bf_editor_datafiles
@@ -102,7 +103,6 @@ endif()
 		ge_logic_ketsji 
 		ge_phys_bullet 
 		ge_phys_dummy
-		ge_phys_common 
 		ge_logic 
 		ge_rasterizer 
 		ge_oglrasterizer 
@@ -149,6 +149,8 @@ endif()
 		bf_intern_raskter
 		bf_intern_opencolorio
 		bf_intern_opennl
+		extern_rangetree
+		extern_wcwidth
 	)
 
 	if(WITH_MOD_CLOTH_ELTOPO)

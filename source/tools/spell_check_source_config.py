@@ -33,13 +33,15 @@ dict_custom = {
     "subdirectory",
     "decrement",
     "boolean",
+    "decrementing",
 
     # python types
     "str",
     "enum", "enums",
     "int", "ints",
     "tuple", "tuples",
-    # python funcs
+
+    # python functions
     "repr",
     "func",
 
@@ -59,6 +61,7 @@ dict_custom = {
     "tooltip",
 
     # general computer terms
+    "endian",
     "contructor",
     "unicode",
     "jitter",
@@ -66,7 +69,8 @@ dict_custom = {
     "searchable",
     "metadata",
     "hashable",
-    "normals",
+    "stdin",
+    "stdout",
     "stdin",
     "opengl",
     "boids",
@@ -76,20 +80,42 @@ dict_custom = {
     "euler", "eulers",
     "booleans",
     "intrinsics",
-    "xml",
+    "XXX",
+    "segfault",
+    "wiki",
+    "foo",
+    "diff",
+    "diffs",
+    "sudo",
+    "http",
+    "url",
+    "usr",
+    "env",
+    "app",
+    "preprocessor",
 
-    # spesific computer terms/brands
+    # specific computer terms/brands
+    "posix",
+    "unix",
     "amiga",
     "netscape",
     "mozilla",
     "irix",
     "kde",
+    "qtcreator",
+    "ack",
 
     # general computer graphics terms
+    "colinear",
+    "coplanar",
+    "barycentric",
+    "bezier",
+    "fresnel",
     "radiosity",
     "reflectance",
     "specular",
     "nurbs",
+    "ngon", "ngons",
     "bicubic",
     "compositing",
     "deinterlace",
@@ -98,14 +124,23 @@ dict_custom = {
     "centroid",
     "emissive",
     "quaternions",
+    "lacunarity",
+    "musgrave",
+    "normals",
 
     # blender terms
+    "bmain",
+    "bmesh",
     "bpy",
+    "bge",
     "mathutils",
     "fcurve",
     "animviz",
     "animsys",
     "eekadoodle",
+    "editmode",
+    "obdata",
+    "doctree",
 
     # should have apostrophe but ignore for now
     # unless we want to get really picky!
@@ -139,8 +174,12 @@ dict_ignore = {
     "a-z",
     "id-block",
     "node-trees",
+    "pyflakes",
+    "pylint",
 
     # acronyms
+    "cpu",
+    "gpu",
     "nan",
     "utf",
     "rgb",
@@ -154,6 +193,15 @@ dict_ignore = {
     "lhs",
     "ik",
     "smpte",
+    "svn",
+    "hg",
+    "gl",
+
+    # extensions
+    "xpm",
+    "xml",
+    "py",
+    "rst",
 
     # tags
     "fixme",
@@ -169,4 +217,5 @@ dict_ignore = {
     # names
     "jahka",
     "campbell",
+    "mikkelsen", "morten",
 }

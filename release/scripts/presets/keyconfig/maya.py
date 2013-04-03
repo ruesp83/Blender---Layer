@@ -138,41 +138,49 @@ kmi.properties.extend = False
 kmi.properties.center = False
 kmi.properties.object = False
 kmi.properties.enumerate = False
+kmi.properties.toggle = False
 kmi = km.keymap_items.new('view3d.select', 'SELECTMOUSE', 'RELEASE', shift=True)
-kmi.properties.extend = True
+kmi.properties.extend = False
 kmi.properties.center = False
 kmi.properties.object = False
 kmi.properties.enumerate = False
+kmi.properties.toggle = True
 kmi = km.keymap_items.new('view3d.select', 'SELECTMOUSE', 'RELEASE', ctrl=True)
 kmi.properties.extend = False
 kmi.properties.center = True
 kmi.properties.object = False
 kmi.properties.enumerate = False
+kmi.properties.toggle = False
 kmi = km.keymap_items.new('view3d.select', 'SELECTMOUSE', 'RELEASE', alt=True)
 kmi.properties.extend = False
 kmi.properties.center = False
 kmi.properties.object = False
 kmi.properties.enumerate = True
+kmi.properties.toggle = False
 kmi = km.keymap_items.new('view3d.select', 'SELECTMOUSE', 'RELEASE', shift=True, ctrl=True)
 kmi.properties.extend = True
 kmi.properties.center = True
 kmi.properties.object = False
 kmi.properties.enumerate = False
+kmi.properties.toggle = True
 kmi = km.keymap_items.new('view3d.select', 'SELECTMOUSE', 'RELEASE', ctrl=True, alt=True)
 kmi.properties.extend = False
 kmi.properties.center = True
 kmi.properties.object = False
 kmi.properties.enumerate = True
+kmi.properties.toggle = False
 kmi = km.keymap_items.new('view3d.select', 'SELECTMOUSE', 'RELEASE', shift=True, alt=True)
 kmi.properties.extend = True
 kmi.properties.center = False
 kmi.properties.object = False
 kmi.properties.enumerate = True
+kmi.properties.toggle = True
 kmi = km.keymap_items.new('view3d.select', 'SELECTMOUSE', 'RELEASE', shift=True, ctrl=True, alt=True)
 kmi.properties.extend = True
 kmi.properties.center = True
 kmi.properties.object = False
 kmi.properties.enumerate = True
+kmi.properties.toggle = True
 kmi = km.keymap_items.new('view3d.select_border', 'EVT_TWEAK_S', 'ANY')
 kmi.properties.extend = False
 kmi = km.keymap_items.new('view3d.select_lasso', 'EVT_TWEAK_A', 'ANY', ctrl=True)
@@ -218,7 +226,9 @@ kmi.properties.use = True
 kmi = km.keymap_items.new('transform.mirror', 'M', 'PRESS', ctrl=True)
 kmi = km.keymap_items.new('wm.context_toggle', 'TAB', 'PRESS', shift=True)
 kmi.properties.data_path = 'tool_settings.use_snap'
-kmi = km.keymap_items.new('transform.snap_type', 'TAB', 'PRESS', shift=True, ctrl=True)
+kmi = km.keymap_items.new('WM_OT_context_menu_enum', 'TAB', 'PRESS', shift=True, ctrl=True)
+kmi.properties.data_path = 'tool_settings.snap_element'
+
 kmi = km.keymap_items.new('view3d.enable_manipulator', 'W', 'PRESS')
 kmi.properties.translate = True
 kmi = km.keymap_items.new('view3d.enable_manipulator', 'E', 'PRESS')
@@ -366,7 +376,7 @@ kmi = km.keymap_items.new('mesh.split', 'Y', 'PRESS')
 kmi = km.keymap_items.new('mesh.dupli_extrude_cursor', 'ACTIONMOUSE', 'CLICK', ctrl=True)
 kmi = km.keymap_items.new('mesh.delete', 'X', 'PRESS')
 kmi = km.keymap_items.new('mesh.delete', 'DEL', 'PRESS')
-kmi = km.keymap_items.new('mesh.knifetool', 'LEFTMOUSE', 'PRESS', key_modifier='K')
+kmi = km.keymap_items.new('mesh.knife_tool', 'LEFTMOUSE', 'PRESS', key_modifier='K')
 # BMESH_TODO: midpoints for knife were moved to modal keymap
 #kmi = km.keymap_items.new('mesh.knifetool', 'LEFTMOUSE', 'PRESS', shift=True, key_modifier='K')
 #kmi.properties.type = 'MIDPOINTS'

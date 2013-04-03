@@ -27,14 +27,19 @@
 remove_strict_flags()
 
 add_subdirectory(colamd)
+add_subdirectory(rangetree)
+add_subdirectory(wcwidth)
 
 if(WITH_BULLET)
-	add_subdirectory(bullet2)
+	if(NOT WITH_SYSTEM_BULLET)
+		add_subdirectory(bullet2)
+	endif()
 endif()
 
-if(WITH_MOD_CLOTH_ELTOPO)
-	add_subdirectory(eltopo)
-endif()
+# now only available in a branch
+#if(WITH_MOD_CLOTH_ELTOPO)
+#	add_subdirectory(eltopo)
+#endif()
 
 if(WITH_BINRELOC)
 	add_subdirectory(binreloc)

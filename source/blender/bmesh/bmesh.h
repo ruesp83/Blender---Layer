@@ -243,6 +243,7 @@ extern "C" {
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include "bmesh_class.h"
 
@@ -252,9 +253,9 @@ extern "C" {
 
 #include "intern/bmesh_construct.h"
 #include "intern/bmesh_core.h"
-#include "intern/bmesh_decimate.h"
 #include "intern/bmesh_interp.h"
 #include "intern/bmesh_iterators.h"
+#include "intern/bmesh_log.h"
 #include "intern/bmesh_marking.h"
 #include "intern/bmesh_mesh.h"
 #include "intern/bmesh_mesh_conv.h"
@@ -266,6 +267,10 @@ extern "C" {
 #include "intern/bmesh_walkers.h"
 
 #include "intern/bmesh_inline.h"
+
+#include "tools/bmesh_bevel.h"
+#include "tools/bmesh_decimate.h"
+#include "tools/bmesh_triangulate.h"
 
 #ifdef __cplusplus
 }

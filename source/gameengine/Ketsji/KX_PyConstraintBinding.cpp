@@ -34,7 +34,6 @@
 #include "KX_ConstraintWrapper.h"
 #include "KX_VehicleWrapper.h"
 #include "KX_CharacterWrapper.h"
-#include "KX_PhysicsObjectWrapper.h"
 #include "PHY_IPhysicsController.h"
 #include "PHY_IVehicle.h"
 #include "PHY_DynamicTypes.h"
@@ -44,14 +43,14 @@
 
 #include "PyObjectPlus.h" 
 
-#ifdef USE_BULLET
+#ifdef WITH_BULLET
 #  include "LinearMath/btIDebugDraw.h"
 #endif
 
 #ifdef WITH_PYTHON
 
 // macro copied from KX_PythonInit.cpp
-#define KX_MACRO_addTypesToDict(dict, name, name2) PyDict_SetItemString(dict, #name, item=PyLong_FromSsize_t(name2)); Py_DECREF(item)
+#define KX_MACRO_addTypesToDict(dict, name, name2) PyDict_SetItemString(dict, #name, item=PyLong_FromLong(name2)); Py_DECREF(item)
 
 // nasty glob variable to connect scripting language
 // if there is a better way (without global), please do so!
@@ -717,7 +716,7 @@ PyObject *initPythonConstraintBinding()
 	PyDict_SetItemString(d, "error", ErrorObject);
 	Py_DECREF(ErrorObject);
 
-#ifdef USE_BULLET
+#ifdef WITH_BULLET
 	//Debug Modes constants to be used with setDebugMode() python function
 	KX_MACRO_addTypesToDict(d, DBG_NODEBUG, btIDebugDraw::DBG_NoDebug);
 	KX_MACRO_addTypesToDict(d, DBG_DRAWWIREFRAME, btIDebugDraw::DBG_DrawWireframe);
@@ -729,11 +728,11 @@ PyObject *initPythonConstraintBinding()
 	KX_MACRO_addTypesToDict(d, DBG_PROFILETIMINGS, btIDebugDraw::DBG_ProfileTimings);
 	KX_MACRO_addTypesToDict(d, DBG_ENABLESATCOMPARISION, btIDebugDraw::DBG_EnableSatComparison);
 	KX_MACRO_addTypesToDict(d, DBG_DISABLEBULLETLCP, btIDebugDraw::DBG_DisableBulletLCP);
-	KX_MACRO_addTypesToDict(d, DBG_ENABLECDD, btIDebugDraw::DBG_EnableCCD);
+	KX_MACRO_addTypesToDict(d, DBG_ENABLECCD, btIDebugDraw::DBG_EnableCCD);
 	KX_MACRO_addTypesToDict(d, DBG_DRAWCONSTRAINTS, btIDebugDraw::DBG_DrawConstraints);
 	KX_MACRO_addTypesToDict(d, DBG_DRAWCONSTRAINTLIMITS, btIDebugDraw::DBG_DrawConstraintLimits);
 	KX_MACRO_addTypesToDict(d, DBG_FASTWIREFRAME, btIDebugDraw::DBG_FastWireframe);
-#endif // USE_BULLET
+#endif // WITH_BULLET
 
 	//Constraint types to be used with createConstraint() python function
 	KX_MACRO_addTypesToDict(d, POINTTOPOINT_CONSTRAINT, PHY_POINT2POINT_CONSTRAINT);

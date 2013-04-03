@@ -59,6 +59,19 @@ static PyMethodDef bpy_reload_meth;
 static PyObject   *imp_reload_orig = NULL;
 
 /* 'builtins' is most likely PyEval_GetBuiltins() */
+
+/**
+ * \note to the discerning developer, yes - this is nasty
+ * monkey-patching our own import into Python's builtin 'imp' module.
+ *
+ * However Python's alternative is to use import hooks,
+ * which are implemented in a way that we can't use our own importer as a
+ * fall-back (instead we must try and fail - raise an exception every time).
+ * Since importing from blenders text-blocks is not the common case
+ * I prefer to use Pythons import by default and fall-back to
+ * Blenders - which we can only do by intercepting import calls I'm afraid.
+ * - Campbell
+ */
 void bpy_import_init(PyObject *builtins)
 {
 	PyObject *item;
@@ -68,7 +81,7 @@ void bpy_import_init(PyObject *builtins)
 
 	/* move reload here
 	 * XXX, use import hooks */
-	mod = PyImport_ImportModuleLevel((char *)"imp", NULL, NULL, NULL, 0);
+	mod = PyImport_ImportModuleLevel("imp", NULL, NULL, NULL, 0);
 	if (mod) {
 		PyObject *mod_dict = PyModule_GetDict(mod);
 

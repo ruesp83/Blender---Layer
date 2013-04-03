@@ -43,6 +43,8 @@ class OSLCompiler;
  * Data type for inputs and outputs */
 
 enum ShaderSocketType {
+	SHADER_SOCKET_UNDEFINED,
+	
 	SHADER_SOCKET_FLOAT,
 	SHADER_SOCKET_INT,
 	SHADER_SOCKET_COLOR,
@@ -118,6 +120,12 @@ public:
 		NONE
 	};
 
+	enum Usage {
+		USE_SVM = 1,
+		USE_OSL = 2,
+		USE_ALL = USE_SVM|USE_OSL
+	};
+
 	ShaderInput(ShaderNode *parent, const char *name, ShaderSocketType type);
 	void set(const float3& v) { value = v; }
 	void set(float f) { value = make_float3(f, 0, 0); }
@@ -134,7 +142,7 @@ public:
 	ustring value_string;
 
 	int stack_offset; /* for SVM compiler */
-	bool osl_only;
+	int usage;
 };
 
 /* Output
@@ -167,15 +175,19 @@ public:
 	ShaderInput *input(const char *name);
 	ShaderOutput *output(const char *name);
 
-	ShaderInput *add_input(const char *name, ShaderSocketType type, float value=0.0f);
-	ShaderInput *add_input(const char *name, ShaderSocketType type, float3 value);
-	ShaderInput *add_input(const char *name, ShaderSocketType type, ShaderInput::DefaultValue value, bool osl_only=false);
+	ShaderInput *add_input(const char *name, ShaderSocketType type, float value=0.0f, int usage=ShaderInput::USE_ALL);
+	ShaderInput *add_input(const char *name, ShaderSocketType type, float3 value, int usage=ShaderInput::USE_ALL);
+	ShaderInput *add_input(const char *name, ShaderSocketType type, ShaderInput::DefaultValue value, int usage=ShaderInput::USE_ALL);
 	ShaderOutput *add_output(const char *name, ShaderSocketType type);
 
 	virtual ShaderNode *clone() const = 0;
 	virtual void attributes(AttributeRequestSet *attributes);
 	virtual void compile(SVMCompiler& compiler) = 0;
 	virtual void compile(OSLCompiler& compiler) = 0;
+
+	virtual bool has_surface_emission() { return false; }
+	virtual bool has_surface_transparent() { return false; }
+	virtual bool has_surface_bssrdf() { return false; }
 
 	vector<ShaderInput*> inputs;
 	vector<ShaderOutput*> outputs;
@@ -227,7 +239,7 @@ public:
 	void connect(ShaderOutput *from, ShaderInput *to);
 	void disconnect(ShaderInput *to);
 
-	void finalize(bool do_bump = false, bool do_osl = false);
+	void finalize(bool do_bump = false, bool do_osl = false, bool do_multi_closure = false);
 
 protected:
 	typedef pair<ShaderNode* const, ShaderNode*> NodePair;
@@ -241,6 +253,7 @@ protected:
 	void bump_from_displacement();
 	void refine_bump_nodes();
 	void default_inputs(bool do_osl);
+	void transform_multi_closure(ShaderNode *node, ShaderOutput *weight_out, bool volume);
 };
 
 CCL_NAMESPACE_END

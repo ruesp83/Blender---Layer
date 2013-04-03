@@ -28,7 +28,6 @@ import math  # math.pi
 import bpy
 from mathutils import Vector, Matrix
 
-
 # I guess FBX uses degrees instead of radians (Arystan).
 # Call this function just before writing to FBX.
 # 180 / math.pi == 57.295779513
@@ -2928,12 +2927,12 @@ Takes:  {''')
         mapping.clear()
     del mapping
 
-    ob_arms[:] = []
-    ob_bones[:] = []
-    ob_cameras[:] = []
-    ob_lights[:] = []
-    ob_meshes[:] = []
-    ob_null[:] = []
+    del ob_arms[:]
+    del ob_bones[:]
+    del ob_cameras[:]
+    del ob_lights[:]
+    del ob_meshes[:]
+    del ob_null[:]
 
     file.close()
 

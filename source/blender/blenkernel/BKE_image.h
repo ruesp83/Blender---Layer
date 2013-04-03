@@ -44,9 +44,13 @@ struct anim;
 struct Scene;
 struct Object;
 struct ImageFormatData;
+struct ImagePool;
 struct Main;
 
 #define IMA_MAX_SPACE       64
+
+void   BKE_images_init(void);
+void   BKE_images_exit(void);
 
 /* call from library */
 void    BKE_image_free(struct Image *me);
@@ -57,12 +61,14 @@ int     BKE_imbuf_alpha_test(struct ImBuf *ibuf);
 int     BKE_imbuf_write_stamp(struct Scene *scene, struct Object *camera, struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf);
 int     BKE_imbuf_write(struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf);
 int     BKE_imbuf_write_as(struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf, const short is_copy);
-void    BKE_makepicstring(char *string, const char *base, const char *relbase, int frame, const char imtype, const short use_ext, const short use_frames);
-int     BKE_add_image_extension(char *string, const char imtype);
+void    BKE_makepicstring(char *string, const char *base, const char *relbase, int frame, const struct ImageFormatData *im_format, const short use_ext, const short use_frames);
+void    BKE_makepicstring_from_type(char *string, const char *base, const char *relbase, int frame, const char imtype, const short use_ext, const short use_frames);
+int     BKE_add_image_extension(char *string, const struct ImageFormatData *im_format);
+int     BKE_add_image_extension_from_type(char *string, const char imtype);
 char    BKE_ftype_to_imtype(const int ftype);
 int     BKE_imtype_to_ftype(const char imtype);
 
-int     BKE_imtype_is_movie(const char imtype);
+bool    BKE_imtype_is_movie(const char imtype);
 int     BKE_imtype_supports_zbuf(const char imtype);
 int     BKE_imtype_supports_compress(const char imtype);
 int     BKE_imtype_supports_quality(const char imtype);
@@ -133,27 +139,40 @@ enum {
 #define IMA_CHAN_FLAG_RGB   2
 #define IMA_CHAN_FLAG_ALPHA 4
 
+<<<<<<< .mine
 #define IMA_IBUF_IMA	1
 #define IMA_IBUF_LAYER	2
 
 /* depending Image type, and (optional) ImageUser setting it returns ibuf */
 /* always call to make signals work */
 struct ImBuf *BKE_image_get_ibuf(struct Image *ima, struct ImageUser *iuser, int type_ibuf);
+=======
+/* checks whether there's an image buffer for given image and user */
+int BKE_image_has_ibuf(struct Image *ima, struct ImageUser *iuser);
+>>>>>>> .r55757
 
 /* same as above, but can be used to retrieve images being rendered in
  * a thread safe way, always call both acquire and release */
 struct ImBuf *BKE_image_acquire_ibuf(struct Image *ima, struct ImageUser *iuser, void **lock_r, int type_ibuf);
-void BKE_image_release_ibuf(struct Image *ima, void *lock);
+void BKE_image_release_ibuf(struct Image *ima, struct ImBuf *ibuf, void *lock);
+
+struct ImagePool *BKE_image_pool_new(void);
+void BKE_image_pool_free(struct ImagePool *pool);
+struct ImBuf *BKE_image_pool_acquire_ibuf(struct Image *ima, struct ImageUser *iuser, struct ImagePool *pool);
+void BKE_image_pool_release_ibuf(struct Image *ima, struct ImBuf *ibuf, struct ImagePool *pool);
+
+/* set an alpha mode based on file extension */
+void BKE_image_alpha_mode_from_extension(struct Image *image);
 
 /* returns a new image or NULL if it can't load */
-struct Image *BKE_image_load(const char *filepath);
+struct Image *BKE_image_load(struct Main *bmain, const char *filepath);
 /* returns existing Image when filename/type is same (frame optional) */
 struct Image *BKE_image_load_exists(const char *filepath);
 struct ImageLayer *BKE_add_image_file_as_layer(struct Image *ima, const char *name);
 struct ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, float color[4],struct ColorManagedColorspaceSettings *colorspace_settings);
 
 /* adds image, adds ibuf, generates color or pattern */
-struct Image *BKE_image_add_generated(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short uvtestgrid, float color[4]);
+struct Image *BKE_image_add_generated(struct Main *bmain, unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, float color[4]);
 /* adds image from imbuf, owns imbuf */
 struct Image *BKE_image_add_from_imbuf(struct ImBuf *ibuf);
 
@@ -202,7 +221,7 @@ void BKE_image_memorypack(struct Image *ima);
 void BKE_image_print_memlist(void);
 
 /* empty image block, of similar type and filename */
-struct Image *BKE_image_copy(struct Image *ima);
+struct Image *BKE_image_copy(struct Main *bmain, struct Image *ima);
 
 /* merge source into dest, and free source */
 void BKE_image_merge(struct Image *dest, struct Image *source);
@@ -222,6 +241,12 @@ void BKE_image_buf_fill_color(unsigned char *rect, float *rect_float, int width,
 void BKE_image_buf_fill_checker(unsigned char *rect, float *rect_float, int height, int width);
 void BKE_image_buf_fill_checker_color(unsigned char *rect, float *rect_float, int height, int width);
 
+/* Cycles hookup */
+unsigned char *BKE_image_get_pixels_for_frame(struct Image *image, int frame);
+float *BKE_image_get_float_pixels_for_frame(struct Image *image, int frame);
+
+/* Guess offset for the first frame in the sequence */
+int BKE_image_sequence_guess_offset(struct Image *image);
 #ifdef __cplusplus
 }
 #endif

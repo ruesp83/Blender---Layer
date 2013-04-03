@@ -100,6 +100,15 @@ MINLINE void linearrgb_to_srgb_uchar4(unsigned char srgb[4], const float linear[
 
 void BLI_init_srgb_conversion(void);
 
+/**************** Alpha Transformations *****************/
+
+MINLINE void premul_to_straight_v4_v4(float straight[4], const float premul[4]);
+MINLINE void premul_to_straight_v4(float color[4]);
+MINLINE void straight_to_premul_v4_v4(float straight[4], const float premul[4]);
+MINLINE void straight_to_premul_v4(float color[4]);
+MINLINE void straight_uchar_to_premul_float(float result[4], const unsigned char color[4]);
+MINLINE void premul_float_to_straight_uchar(unsigned char *result, const float color[4]);
+
 /************************** Other *************************/
 
 int constrain_rgb(float *r, float *g, float *b);
@@ -121,7 +130,7 @@ MINLINE int compare_rgb_uchar(const unsigned char a[3], const unsigned char b[3]
 
 void lift_gamma_gain_to_asc_cdl(float *lift, float *gamma, float *gain, float *offset, float *slope, float *power);
 
-#ifdef __BLI_MATH_INLINE_H__
+#if BLI_MATH_DO_INLINE
 #include "intern/math_color_inline.c"
 #endif
 

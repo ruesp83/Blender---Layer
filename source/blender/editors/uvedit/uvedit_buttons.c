@@ -43,6 +43,8 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
+#include "BLF_translation.h"
+
 #include "BKE_context.h"
 #include "BKE_customdata.h"
 #include "BKE_mesh.h"
@@ -94,14 +96,19 @@ static int uvedit_center(Scene *scene, BMEditMesh *em, Image *ima, float center[
 	return tot;
 }
 
-static void uvedit_translate(Scene *scene, BMEditMesh *em, Image *UNUSED(ima), float delta[2])
+static void uvedit_translate(Scene *scene, BMEditMesh *em, Image *ima, float delta[2])
 {
 	BMFace *f;
 	BMLoop *l;
 	BMIter iter, liter;
 	MLoopUV *luv;
+	MTexPoly *tf;
 	
 	BM_ITER_MESH (f, &iter, em->bm, BM_FACES_OF_MESH) {
+		tf = CustomData_bmesh_get(&em->bm->pdata, f->head.data, CD_MTEXPOLY);
+		if (!uvedit_face_visible_test(scene, ima, f, tf))
+			continue;
+
 		BM_ITER_ELEM (l, &liter, f, BM_LOOPS_OF_FACE) {
 			luv = CustomData_bmesh_get(&em->bm->ldata, l->head.data, CD_MLOOPUV);
 			if (uvedit_uv_select_test(em, scene, l)) {
@@ -147,8 +154,10 @@ static void uvedit_vertex_buttons(const bContext *C, uiBlock *block)
 		}
 		
 		uiBlockBeginAlign(block);
-		uiDefButF(block, NUM, B_UVEDIT_VERTEX, "X:",    10, 10, 145, 19, &uvedit_old_center[0], -10 * imx, 10.0 * imx, step, digits, "");
-		uiDefButF(block, NUM, B_UVEDIT_VERTEX, "Y:",    165, 10, 145, 19, &uvedit_old_center[1], -10 * imy, 10.0 * imy, step, digits, "");
+		uiDefButF(block, NUM, B_UVEDIT_VERTEX, IFACE_("X:"), 10, 10, 145, 19, &uvedit_old_center[0],
+		          -10 * imx, 10.0 * imx, step, digits, "");
+		uiDefButF(block, NUM, B_UVEDIT_VERTEX, IFACE_("Y:"), 165, 10, 145, 19, &uvedit_old_center[1],
+		          -10 * imy, 10.0 * imy, step, digits, "");
 		uiBlockEndAlign(block);
 	}
 }
@@ -209,7 +218,7 @@ void ED_uvedit_buttons_register(ARegionType *art)
 
 	pt = MEM_callocN(sizeof(PanelType), "spacetype image panel uv");
 	strcpy(pt->idname, "IMAGE_PT_uv");
-	strcpy(pt->label, "UV Vertex");
+	strcpy(pt->label, N_("UV Vertex"));  /* XXX C panels are not available through RNA (bpy.types)! */
 	pt->draw = image_panel_uv;
 	pt->poll = image_panel_uv_poll;
 	BLI_addtail(&art->paneltypes, pt);

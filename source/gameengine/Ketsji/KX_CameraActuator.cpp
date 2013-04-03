@@ -36,7 +36,6 @@
 #include "BLI_math_vector.h"
 
 #include "KX_CameraActuator.h"
-#include <iostream>
 #include <math.h>
 #include <float.h>
 #include "KX_GameObject.h"
@@ -115,7 +114,7 @@ void KX_CameraActuator::Relink(CTR_Map<CTR_HashedPtr, void*> *obj_map)
 
 /* copied from blender BLI_math ... don't know if there's an equivalent */
 
-static void Kx_VecUpMat3(float vec[3], float mat[][3], short axis)
+static void Kx_VecUpMat3(float vec[3], float mat[3][3], short axis)
 {
 
 	// Construct a camera matrix s.t. the specified axis
@@ -197,7 +196,7 @@ bool KX_CameraActuator::Update(double curtime, bool frame)
 	MT_Point3 lookat = ((KX_GameObject*)m_ob)->NodeGetWorldPosition();
 	MT_Matrix3x3 actormat = ((KX_GameObject*)m_ob)->NodeGetWorldOrientation();
 
-	float fp1[3], fp2[3], rc[3];
+	float fp1[3]={0}, fp2[3]={0}, rc[3];
 	float inp, fac; //, factor = 0.0; /* some factor...                                    */
 	float mindistsq, maxdistsq, distsq;
 	float mat[3][3];
@@ -388,8 +387,8 @@ PyAttributeDef KX_CameraActuator::Attributes[] = {
 	KX_PYATTRIBUTE_FLOAT_RW("min",-FLT_MAX,FLT_MAX,KX_CameraActuator,m_minHeight),
 	KX_PYATTRIBUTE_FLOAT_RW("max",-FLT_MAX,FLT_MAX,KX_CameraActuator,m_maxHeight),
 	KX_PYATTRIBUTE_FLOAT_RW("height",-FLT_MAX,FLT_MAX,KX_CameraActuator,m_height),
-	KX_PYATTRIBUTE_SHORT_RW("axis", 0, 3, true, KX_CameraActuator,m_axis),
-	KX_PYATTRIBUTE_RW_FUNCTION("object", KX_CameraActuator, pyattr_get_object,	pyattr_set_object),
+	KX_PYATTRIBUTE_SHORT_RW("axis", 0, 5, true, KX_CameraActuator, m_axis),
+	KX_PYATTRIBUTE_RW_FUNCTION("object", KX_CameraActuator, pyattr_get_object, pyattr_set_object),
 	KX_PYATTRIBUTE_FLOAT_RW("damping",0.f,10.f,KX_CameraActuator,m_damping),
 	{NULL}
 };

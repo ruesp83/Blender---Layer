@@ -20,12 +20,16 @@ CCL_NAMESPACE_BEGIN
 
 enum ObjectTransform {
 	OBJECT_TRANSFORM = 0,
-	OBJECT_INVERSE_TRANSFORM = 3,
-	OBJECT_PROPERTIES = 6,
-	OBJECT_TRANSFORM_MOTION_PRE = 8,
-	OBJECT_TRANSFORM_MOTION_MID = 12,
-	OBJECT_TRANSFORM_MOTION_POST = 16,
-	OBJECT_DUPLI = 20
+	OBJECT_TRANSFORM_MOTION_PRE = 0,
+	OBJECT_INVERSE_TRANSFORM = 4,
+	OBJECT_TRANSFORM_MOTION_POST = 4,
+	OBJECT_PROPERTIES = 8,
+	OBJECT_DUPLI = 9
+};
+
+enum ObjectVectorTransform {
+	OBJECT_VECTOR_MOTION_PRE = 0,
+	OBJECT_VECTOR_MOTION_POST = 3
 };
 
 __device_inline Transform object_fetch_transform(KernelGlobals *kg, int object, enum ObjectTransform type)
@@ -41,27 +45,35 @@ __device_inline Transform object_fetch_transform(KernelGlobals *kg, int object, 
 	return tfm;
 }
 
+__device_inline Transform object_fetch_vector_transform(KernelGlobals *kg, int object, enum ObjectVectorTransform type)
+{
+	int offset = object*OBJECT_VECTOR_SIZE + (int)type;
+
+	Transform tfm;
+	tfm.x = kernel_tex_fetch(__objects_vector, offset + 0);
+	tfm.y = kernel_tex_fetch(__objects_vector, offset + 1);
+	tfm.z = kernel_tex_fetch(__objects_vector, offset + 2);
+	tfm.w = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
+
+	return tfm;
+}
+
 #ifdef __OBJECT_MOTION__
 __device_inline Transform object_fetch_transform_motion(KernelGlobals *kg, int object, float time)
 {
-	MotionTransform motion;
+	DecompMotionTransform motion;
 
 	int offset = object*OBJECT_SIZE + (int)OBJECT_TRANSFORM_MOTION_PRE;
 
-	motion.pre.x = kernel_tex_fetch(__objects, offset + 0);
-	motion.pre.y = kernel_tex_fetch(__objects, offset + 1);
-	motion.pre.z = kernel_tex_fetch(__objects, offset + 2);
-	motion.pre.w = kernel_tex_fetch(__objects, offset + 3);
+	motion.mid.x = kernel_tex_fetch(__objects, offset + 0);
+	motion.mid.y = kernel_tex_fetch(__objects, offset + 1);
+	motion.mid.z = kernel_tex_fetch(__objects, offset + 2);
+	motion.mid.w = kernel_tex_fetch(__objects, offset + 3);
 
-	motion.mid.x = kernel_tex_fetch(__objects, offset + 4);
-	motion.mid.y = kernel_tex_fetch(__objects, offset + 5);
-	motion.mid.z = kernel_tex_fetch(__objects, offset + 6);
-	motion.mid.w = kernel_tex_fetch(__objects, offset + 7);
-
-	motion.post.x = kernel_tex_fetch(__objects, offset + 8);
-	motion.post.y = kernel_tex_fetch(__objects, offset + 9);
-	motion.post.z = kernel_tex_fetch(__objects, offset + 10);
-	motion.post.w = kernel_tex_fetch(__objects, offset + 11);
+	motion.pre_x = kernel_tex_fetch(__objects, offset + 4);
+	motion.pre_y = kernel_tex_fetch(__objects, offset + 5);
+	motion.post_x = kernel_tex_fetch(__objects, offset + 6);
+	motion.post_y = kernel_tex_fetch(__objects, offset + 7);
 
 	Transform tfm;
 	transform_motion_interpolate(&tfm, &motion, time);

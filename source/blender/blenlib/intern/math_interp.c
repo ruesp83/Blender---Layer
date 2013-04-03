@@ -134,12 +134,12 @@ BLI_INLINE void bicubic_interpolation(const unsigned char *byte_buffer, const fl
 			w = wx * wy[m + 1];
 
 			if (float_output) {
-				const float *float_data = float_buffer + width * y1 * 4 + 4 * x1;
+				const float *float_data = float_buffer + width * y1 * components + components * x1;
 
 				vector_from_float(float_data, data, components);
 			}
 			else {
-				const unsigned char *byte_data = byte_buffer + width * y1 * 4 + 4 * x1;
+				const unsigned char *byte_data = byte_buffer + width * y1 * components + components * x1;
 
 				vector_from_byte(byte_data, data, components);
 			}
@@ -173,12 +173,12 @@ BLI_INLINE void bicubic_interpolation(const unsigned char *byte_buffer, const fl
 				float data[4];
 
 				if (float_output) {
-					const float *float_data = float_buffer + width * y1 * 4 + 4 * x1;
+					const float *float_data = float_buffer + width * y1 * components + components * x1;
 
 					vector_from_float(float_data, data, components);
 				}
 				else {
-					const unsigned char *byte_data = byte_buffer + width * y1 * 4 + 4 * x1;
+					const unsigned char *byte_data = byte_buffer + width * y1 * components + components * x1;
 
 					vector_from_byte(byte_data, data, components);
 				}
@@ -215,18 +215,18 @@ BLI_INLINE void bicubic_interpolation(const unsigned char *byte_buffer, const fl
 	}
 	else {
 		if (components == 1) {
-			byte_output[0] = out[0];
+			byte_output[0] = out[0] + 0.5f;
 		}
 		else if (components == 3) {
-			byte_output[0] = out[0];
-			byte_output[1] = out[1];
-			byte_output[2] = out[2];
+			byte_output[0] = out[0] + 0.5f;
+			byte_output[1] = out[1] + 0.5f;
+			byte_output[2] = out[2] + 0.5f;
 		}
 		else {
-			byte_output[0] = out[0];
-			byte_output[1] = out[1];
-			byte_output[2] = out[2];
-			byte_output[3] = out[3];
+			byte_output[0] = out[0] + 0.5f;
+			byte_output[1] = out[1] + 0.5f;
+			byte_output[2] = out[2] + 0.5f;
+			byte_output[3] = out[3] + 0.5f;
 		}
 	}
 }
@@ -270,16 +270,16 @@ BLI_INLINE void bilinear_interpolation(const unsigned char *byte_buffer, const f
 
 		/* sample including outside of edges of image */
 		if (x1 < 0 || y1 < 0) row1 = empty;
-		else row1 = float_buffer + width * y1 * 4 + 4 * x1;
+		else row1 = float_buffer + width * y1 * components + components * x1;
 
 		if (x1 < 0 || y2 > height - 1) row2 = empty;
-		else row2 = float_buffer + width * y2 * 4 + 4 * x1;
+		else row2 = float_buffer + width * y2 * components + components * x1;
 
 		if (x2 > width - 1 || y1 < 0) row3 = empty;
-		else row3 = float_buffer + width * y1 * 4 + 4 * x2;
+		else row3 = float_buffer + width * y1 * components + components * x2;
 
 		if (x2 > width - 1 || y2 > height - 1) row4 = empty;
-		else row4 = float_buffer + width * y2 * 4 + 4 * x2;
+		else row4 = float_buffer + width * y2 * components + components * x2;
 
 		a = u - floorf(u);
 		b = v - floorf(v);
@@ -306,34 +306,34 @@ BLI_INLINE void bilinear_interpolation(const unsigned char *byte_buffer, const f
 
 		/* sample including outside of edges of image */
 		if (x1 < 0 || y1 < 0) row1 = empty;
-		else row1 = byte_buffer + width * y1 * 4 + 4 * x1;
+		else row1 = byte_buffer + width * y1 * components + components * x1;
 
 		if (x1 < 0 || y2 > height - 1) row2 = empty;
-		else row2 = byte_buffer + width * y2 * 4 + 4 * x1;
+		else row2 = byte_buffer + width * y2 * components + components * x1;
 
 		if (x2 > width - 1 || y1 < 0) row3 = empty;
-		else row3 = byte_buffer + width * y1 * 4 + 4 * x2;
+		else row3 = byte_buffer + width * y1 * components + components * x2;
 
 		if (x2 > width - 1 || y2 > height - 1) row4 = empty;
-		else row4 = byte_buffer + width * y2 * 4 + 4 * x2;
+		else row4 = byte_buffer + width * y2 * components + components * x2;
 
 		a = u - floorf(u);
 		b = v - floorf(v);
 		a_b = a * b; ma_b = (1.0f - a) * b; a_mb = a * (1.0f - b); ma_mb = (1.0f - a) * (1.0f - b);
 
 		if (components == 1) {
-			byte_output[0] = ma_mb * row1[0] + a_mb * row3[0] + ma_b * row2[0] + a_b * row4[0];
+			byte_output[0] = ma_mb * row1[0] + a_mb * row3[0] + ma_b * row2[0] + a_b * row4[0] + 0.5f;
 		}
 		else if (components == 3) {
-			byte_output[0] = ma_mb * row1[0] + a_mb * row3[0] + ma_b * row2[0] + a_b * row4[0];
-			byte_output[1] = ma_mb * row1[1] + a_mb * row3[1] + ma_b * row2[1] + a_b * row4[1];
-			byte_output[2] = ma_mb * row1[2] + a_mb * row3[2] + ma_b * row2[2] + a_b * row4[2];
+			byte_output[0] = ma_mb * row1[0] + a_mb * row3[0] + ma_b * row2[0] + a_b * row4[0] + 0.5f;
+			byte_output[1] = ma_mb * row1[1] + a_mb * row3[1] + ma_b * row2[1] + a_b * row4[1] + 0.5f;
+			byte_output[2] = ma_mb * row1[2] + a_mb * row3[2] + ma_b * row2[2] + a_b * row4[2] + 0.5f;
 		}
 		else {
-			byte_output[0] = ma_mb * row1[0] + a_mb * row3[0] + ma_b * row2[0] + a_b * row4[0];
-			byte_output[1] = ma_mb * row1[1] + a_mb * row3[1] + ma_b * row2[1] + a_b * row4[1];
-			byte_output[2] = ma_mb * row1[2] + a_mb * row3[2] + ma_b * row2[2] + a_b * row4[2];
-			byte_output[3] = ma_mb * row1[3] + a_mb * row3[3] + ma_b * row2[3] + a_b * row4[3];
+			byte_output[0] = ma_mb * row1[0] + a_mb * row3[0] + ma_b * row2[0] + a_b * row4[0] + 0.5f;
+			byte_output[1] = ma_mb * row1[1] + a_mb * row3[1] + ma_b * row2[1] + a_b * row4[1] + 0.5f;
+			byte_output[2] = ma_mb * row1[2] + a_mb * row3[2] + ma_b * row2[2] + a_b * row4[2] + 0.5f;
+			byte_output[3] = ma_mb * row1[3] + a_mb * row3[3] + ma_b * row2[3] + a_b * row4[3] + 0.5f;
 		}
 	}
 }

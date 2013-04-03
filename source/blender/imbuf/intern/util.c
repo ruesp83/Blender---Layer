@@ -41,9 +41,9 @@
 
 #include <stdlib.h>
 
+#include "BLI_utildefines.h"
 #include "BLI_path_util.h"
 #include "BLI_fileops.h"
-#include "BLI_utildefines.h"
 #include "BLI_string.h"
 
 #include "DNA_userdef_types.h"
@@ -228,16 +228,27 @@ static int isqtime(const char *name)
 
 #ifdef WITH_FFMPEG
 
+#ifdef _MSC_VER
+#define va_copy(dst, src) ((dst) = (src))
+#endif
+
 /* BLI_vsnprintf in ffmpeg_log_callback() causes invalid warning */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmissing-format-attribute"
+#ifdef __GNUC__
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wmissing-format-attribute"
+#endif
 
 static char ffmpeg_last_error[1024];
 
 static void ffmpeg_log_callback(void *ptr, int level, const char *format, va_list arg)
 {
 	if (ELEM(level, AV_LOG_FATAL, AV_LOG_ERROR)) {
-		size_t n = BLI_vsnprintf(ffmpeg_last_error, sizeof(ffmpeg_last_error), format, arg);
+		size_t n;
+		va_list arg2;
+
+		va_copy(arg2, arg);
+
+		n = BLI_vsnprintf(ffmpeg_last_error, sizeof(ffmpeg_last_error), format, arg2);
 
 		/* strip trailing \n */
 		ffmpeg_last_error[n - 1] = '\0';
@@ -249,7 +260,9 @@ static void ffmpeg_log_callback(void *ptr, int level, const char *format, va_lis
 	}
 }
 
-#pragma GCC diagnostic pop
+#ifdef __GNUC__
+#  pragma GCC diagnostic pop
+#endif
 
 void IMB_ffmpeg_init(void)
 {
@@ -293,8 +306,8 @@ static int isffmpeg(const char *filename)
 		return 0;
 	}
 
-	if (av_find_stream_info(pFormatCtx) < 0) {
-		if (UTIL_DEBUG) fprintf(stderr, "isffmpeg: av_find_stream_info failed\n");
+	if (avformat_find_stream_info(pFormatCtx, NULL) < 0) {
+		if (UTIL_DEBUG) fprintf(stderr, "isffmpeg: avformat_find_stream_info failed\n");
 		av_close_input_file(pFormatCtx);
 		return 0;
 	}
@@ -327,7 +340,7 @@ static int isffmpeg(const char *filename)
 		return 0;
 	}
 
-	if (avcodec_open(pCodecCtx, pCodec) < 0) {
+	if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0) {
 		av_close_input_file(pFormatCtx);
 		return 0;
 	}

@@ -34,12 +34,18 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#ifdef WIN32
+#include "BLI_winstuff.h"
+#endif
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
 #include "BLI_voxel.h"
 #include "BLI_utildefines.h"
+
+#include "BLF_translation.h"
 
 #include "IMB_imbuf.h"
 #include "DNA_imbuf_types.h"
@@ -157,10 +163,18 @@ static void load_frame_image_sequence(VoxelData *vd, Tex *tex)
 
 	/* find the first valid ibuf and use it to initialize the resolution of the data set */
 	/* need to do this in advance so we know how much memory to allocate */
+<<<<<<< .mine
 	ibuf = BKE_image_get_ibuf(ima, &iuser, IMA_IBUF_IMA);
+=======
+	ibuf = BKE_image_acquire_ibuf(ima, &iuser, NULL);
+>>>>>>> .r55757
 	while (!ibuf && (iuser.framenr < iuser.frames)) {
 		iuser.framenr++;
+<<<<<<< .mine
 		ibuf = BKE_image_get_ibuf(ima, &iuser, IMA_IBUF_IMA);
+=======
+		ibuf = BKE_image_acquire_ibuf(ima, &iuser, NULL);
+>>>>>>> .r55757
 	}
 	if (!ibuf) return;
 	if (!ibuf->rect_float) IMB_float_from_rect(ibuf);
@@ -175,7 +189,12 @@ static void load_frame_image_sequence(VoxelData *vd, Tex *tex)
 		/* get a new ibuf for each frame */
 		if (z > 0) {
 			iuser.framenr++;
+<<<<<<< .mine
 			ibuf = BKE_image_get_ibuf(ima, &iuser, IMA_IBUF_IMA);
+=======
+			BKE_image_release_ibuf(ima, ibuf, NULL);
+			ibuf = BKE_image_acquire_ibuf(ima, &iuser, NULL);
+>>>>>>> .r55757
 			if (!ibuf) break;
 			if (!ibuf->rect_float) IMB_float_from_rect(ibuf);
 		}
@@ -184,14 +203,16 @@ static void load_frame_image_sequence(VoxelData *vd, Tex *tex)
 		for (y = 0; y < ibuf->y; y++) {
 			for (x = 0; x < ibuf->x; x++) {
 				/* currently averaged to monchrome */
-				vd->dataset[BLI_VOXEL_INDEX(x, y, z, vd->resol)] = (rf[0] + rf[1] + rf[2]) * 0.333f;
+				vd->dataset[BLI_VOXEL_INDEX(x, y, z, vd->resol)] = (rf[0] + rf[1] + rf[2]) / 3.0f;
 				rf += 4;
 			}
 		}
 		
 		BKE_image_free_anim_ibufs(ima, iuser.framenr);
 	}
-	
+
+	BKE_image_release_ibuf(ima, ibuf, NULL);
+
 	vd->ok = 1;
 	return;
 }
@@ -397,7 +418,7 @@ void make_voxeldata(struct Render *re)
 {
 	Tex *tex;
 	
-	re->i.infostr = "Loading voxel datasets";
+	re->i.infostr = IFACE_("Loading voxel datasets");
 	re->stats_draw(re->sdh, &re->i);
 	
 	/* XXX: should be doing only textures used in this render */

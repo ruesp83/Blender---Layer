@@ -33,18 +33,25 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_userdef_types.h"
 #include "DNA_vec_types.h"
 
 #include "BLI_rect.h"
 #include "BLI_utildefines.h"
-
-#include "BKE_colortools.h"
-
 #include "BLI_math.h"
 #include "BLI_threads.h"
 
+#include "BKE_blender.h"
+#include "BKE_colortools.h"
+#include "BKE_context.h"
+
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
+
+#include "GPU_extensions.h"
+
+#include "IMB_colormanagement.h"
+#include "IMB_imbuf_types.h"
 
 #ifndef GL_CLAMP_TO_EDGE
 #define GL_CLAMP_TO_EDGE                        0x812F
@@ -54,7 +61,7 @@
 /* ******************************************** */
 
 /* defined in BIF_gl.h */
-GLubyte stipple_halftone[128] = {
+const GLubyte stipple_halftone[128] = {
 	0xAA, 0xAA, 0xAA, 0xAA, 0x55, 0x55, 0x55, 0x55, 
 	0xAA, 0xAA, 0xAA, 0xAA, 0x55, 0x55, 0x55, 0x55, 
 	0xAA, 0xAA, 0xAA, 0xAA, 0x55, 0x55, 0x55, 0x55,
@@ -81,7 +88,7 @@ GLubyte stipple_halftone[128] = {
  *     00000000 */
 
 
-GLubyte stipple_quarttone[128] = { 
+const GLubyte stipple_quarttone[128] = {
 	136, 136, 136, 136, 0, 0, 0, 0, 34, 34, 34, 34, 0, 0, 0, 0,
 	136, 136, 136, 136, 0, 0, 0, 0, 34, 34, 34, 34, 0, 0, 0, 0,
 	136, 136, 136, 136, 0, 0, 0, 0, 34, 34, 34, 34, 0, 0, 0, 0,
@@ -92,7 +99,7 @@ GLubyte stipple_quarttone[128] = {
 	136, 136, 136, 136, 0, 0, 0, 0, 34, 34, 34, 34, 0, 0, 0, 0};
 
 
-GLubyte stipple_diag_stripes_pos[128] = {
+const GLubyte stipple_diag_stripes_pos[128] = {
 	0x00, 0xff, 0x00, 0xff, 0x01, 0xfe, 0x01, 0xfe,
 	0x03, 0xfc, 0x03, 0xfc, 0x07, 0xf8, 0x07, 0xf8,
 	0x0f, 0xf0, 0x0f, 0xf0, 0x1f, 0xe0, 0x1f, 0xe0,
@@ -111,7 +118,7 @@ GLubyte stipple_diag_stripes_pos[128] = {
 	0xc0, 0x3f, 0xc0, 0x3f, 0x80, 0x7f, 0x80, 0x7f};
 
 
-GLubyte stipple_diag_stripes_neg[128] = {
+const GLubyte stipple_diag_stripes_neg[128] = {
 	0xff, 0x00, 0xff, 0x00, 0xfe, 0x01, 0xfe, 0x01,
 	0xfc, 0x03, 0xfc, 0x03, 0xf8, 0x07, 0xf8, 0x07,
 	0xf0, 0x0f, 0xf0, 0x0f, 0xe0, 0x1f, 0xe0, 0x1f,
@@ -292,7 +299,10 @@ void setlinestyle(int nr)
 	else {
 		
 		glEnable(GL_LINE_STIPPLE);
-		glLineStipple(nr, 0xAAAA);
+		if (U.pixelsize > 1.0f)
+			glLineStipple(nr, 0xCCCC);
+		else
+			glLineStipple(nr, 0xAAAA);
 	}
 }
 
@@ -478,7 +488,7 @@ static int get_cached_work_texture(int *w_r, int *h_r)
 	return texid;
 }
 
-void glaDrawPixelsTexScaled(float x, float y, int img_w, int img_h, int format, void *rect, float scaleX, float scaleY)
+void glaDrawPixelsTexScaled(float x, float y, int img_w, int img_h, int format, int zoomfilter, void *rect, float scaleX, float scaleY)
 {
 	unsigned char *uc_rect = (unsigned char *) rect;
 	float *f_rect = (float *)rect;
@@ -499,6 +509,7 @@ void glaDrawPixelsTexScaled(float x, float y, int img_w, int img_h, int format, 
 	/* don't want nasty border artifacts */
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, zoomfilter);
 
 #ifdef __APPLE__
 	/* workaround for os x 10.5/10.6 driver bug: http://lists.apple.com/archives/Mac-opengl/2008/Jul/msg00117.html */
@@ -513,6 +524,15 @@ void glaDrawPixelsTexScaled(float x, float y, int img_w, int img_h, int format, 
 	
 	nsubparts_x = (img_w + (offset_x - 1)) / (offset_x);
 	nsubparts_y = (img_h + (offset_y - 1)) / (offset_y);
+
+	if (format == GL_FLOAT) {
+		/* need to set internal format to higher range float */
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, tex_w, tex_h, 0, GL_RGBA, GL_FLOAT, NULL);
+	}
+	else {
+		/* switch to 8bit RGBA for byte buffer  */
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tex_w, tex_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	}
 
 	for (subpart_y = 0; subpart_y < nsubparts_y; subpart_y++) {
 		for (subpart_x = 0; subpart_x < nsubparts_x; subpart_x++) {
@@ -556,10 +576,10 @@ void glaDrawPixelsTexScaled(float x, float y, int img_w, int img_h, int format, 
 			glEnable(GL_TEXTURE_2D);
 			glBegin(GL_QUADS);
 			glTexCoord2f((float)(0 + offset_left) / tex_w, (float)(0 + offset_bot) / tex_h);
-			glVertex2f(rast_x + (float)offset_left * xzoom, rast_y + (float)offset_bot * xzoom);
+			glVertex2f(rast_x + (float)offset_left * xzoom, rast_y + (float)offset_bot * yzoom);
 
 			glTexCoord2f((float)(subpart_w - offset_right) / tex_w, (float)(0 + offset_bot) / tex_h);
-			glVertex2f(rast_x + (float)(subpart_w - offset_right) * xzoom * scaleX, rast_y + (float)offset_bot * xzoom);
+			glVertex2f(rast_x + (float)(subpart_w - offset_right) * xzoom * scaleX, rast_y + (float)offset_bot * yzoom);
 
 			glTexCoord2f((float)(subpart_w - offset_right) / tex_w, (float)(subpart_h - offset_top) / tex_h);
 			glVertex2f(rast_x + (float)(subpart_w - offset_right) * xzoom * scaleX, rast_y + (float)(subpart_h - offset_top) * yzoom * scaleY);
@@ -581,9 +601,9 @@ void glaDrawPixelsTexScaled(float x, float y, int img_w, int img_h, int format, 
 #endif
 }
 
-void glaDrawPixelsTex(float x, float y, int img_w, int img_h, int format, void *rect)
+void glaDrawPixelsTex(float x, float y, int img_w, int img_h, int format, int zoomfilter, void *rect)
 {
-	glaDrawPixelsTexScaled(x, y, img_w, img_h, format, rect, 1.0f, 1.0f);
+	glaDrawPixelsTexScaled(x, y, img_w, img_h, format, zoomfilter, rect, 1.0f, 1.0f);
 }
 
 void glaDrawPixelsSafe(float x, float y, int img_w, int img_h, int row_w, int format, int type, void *rect)
@@ -663,6 +683,22 @@ void glaDrawPixelsSafe(float x, float y, int img_w, int img_h, int row_w, int fo
 		
 		glPixelStorei(GL_UNPACK_ROW_LENGTH,  old_row_length);
 	}
+}
+
+/* uses either DrawPixelsSafe or DrawPixelsTex, based on user defined maximum */
+void glaDrawPixelsAuto(float x, float y, int img_w, int img_h, int format, int zoomfilter, void *rect)
+{
+	if (U.image_gpubuffer_limit) {
+		/* Megapixels, use float math to prevent overflow */
+		float img_size = ((float)img_w * (float)img_h) / (1024.0f * 1024.0f);
+		
+		if (U.image_gpubuffer_limit > (int)img_size) {
+			glColor4f(1.0, 1.0, 1.0, 1.0);
+			glaDrawPixelsTex(x, y, img_w, img_h, format, zoomfilter, rect);
+			return;
+		}
+	}
+	glaDrawPixelsSafe(x, y, img_w, img_h, img_w, GL_RGBA, format, rect);
 }
 
 /* 2D Drawing Assistance */
@@ -803,7 +839,9 @@ void bglBegin(int mode)
 			pointhack = floor(value[0] + 0.5f);
 			if (pointhack > 4) pointhack = 4;
 		}
-		else glBegin(mode);
+		else {
+			glBegin(mode);
+		}
 	}
 }
 
@@ -831,7 +869,9 @@ void bglVertex3fv(const float vec[3])
 				glRasterPos3fv(vec);
 				glBitmap(pointhack, pointhack, (float)pointhack / 2.0f, (float)pointhack / 2.0f, 0.0, 0.0, Squaredot);
 			}
-			else glVertex3fv(vec);
+			else {
+				glVertex3fv(vec);
+			}
 			break;
 	}
 }
@@ -844,7 +884,9 @@ void bglVertex3f(float x, float y, float z)
 				glRasterPos3f(x, y, z);
 				glBitmap(pointhack, pointhack, (float)pointhack / 2.0f, (float)pointhack / 2.0f, 0.0, 0.0, Squaredot);
 			}
-			else glVertex3f(x, y, z);
+			else {
+				glVertex3f(x, y, z);
+			}
 			break;
 	}
 }
@@ -857,7 +899,9 @@ void bglVertex2fv(const float vec[2])
 				glRasterPos2fv(vec);
 				glBitmap(pointhack, pointhack, (float)pointhack / 2, pointhack / 2, 0.0, 0.0, Squaredot);
 			}
-			else glVertex2fv(vec);
+			else {
+				glVertex2fv(vec);
+			}
 			break;
 	}
 }
@@ -945,3 +989,96 @@ void bglFlush(void)
 #endif
 }
 #endif
+
+/* **** Color management helper functions for GLSL display/transform ***** */
+
+/* Draw given image buffer on a screen using GLSL for display transform */
+void glaDrawImBuf_glsl_ctx(const bContext *C, ImBuf *ibuf, float x, float y, int zoomfilter)
+{
+	bool need_fallback = true;
+
+	/* Bytes and dithering are not supported on GLSL yet */
+
+	/* WORKAROUND: only use GLSL if there's no byte buffer at all,
+	 *             this is because of how render results are handled,
+	 *             they're not updating image buffer's float buffer,
+	 *             but writes data directly to it's byte buffer and
+	 *             modifies display buffer.
+	 */
+	if (ibuf->rect == NULL && ibuf->rect_float && ibuf->dither == 0.0f) {
+		if (IMB_colormanagement_setup_glsl_draw_from_ctx(C)) {
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+			glColor4f(1.0, 1.0, 1.0, 1.0);
+
+			glaDrawPixelsTex(x, y, ibuf->x, ibuf->y, GL_FLOAT, zoomfilter, ibuf->rect_float);
+
+			IMB_colormanagement_finish_glsl_draw();
+
+			need_fallback = false;
+		}
+	}
+
+	if (need_fallback) {
+		unsigned char *display_buffer;
+		void *cache_handle;
+
+		display_buffer = IMB_display_buffer_acquire_ctx(C, ibuf, &cache_handle);
+
+		if (display_buffer)
+			glaDrawPixelsAuto(x, y, ibuf->x, ibuf->y, GL_UNSIGNED_BYTE, zoomfilter, display_buffer);
+
+		IMB_display_buffer_release(cache_handle);
+	}
+}
+
+/* Transform buffer from role to scene linear space using GLSL OCIO conversion
+ *
+ * See IMB_colormanagement_setup_transform_from_role_glsl description for
+ * some more details
+ */
+int glaBufferTransformFromRole_glsl(float *buffer, int width, int height, int role)
+{
+	GPUOffScreen *ofs;
+	char err_out[256];
+	rcti display_rect;
+
+	ofs = GPU_offscreen_create(width, height, err_out);
+
+	if (!ofs)
+		return FALSE;
+
+	GPU_offscreen_bind(ofs);
+
+	if (!IMB_colormanagement_setup_transform_from_role_glsl(role)) {
+		GPU_offscreen_unbind(ofs);
+		GPU_offscreen_free(ofs);
+		return FALSE;
+	}
+
+	BLI_rcti_init(&display_rect, 0, width, 0, height);
+
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+
+	glaDefine2DArea(&display_rect);
+	glLoadIdentity();
+
+	glaDrawPixelsTex(0, 0, width, height, GL_FLOAT, GL_NEAREST, buffer);
+
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
+
+	GPU_offscreen_read_pixels(ofs, GL_FLOAT, buffer);
+
+	IMB_colormanagement_finish_glsl_transform();
+
+	/* unbind */
+	GPU_offscreen_unbind(ofs);
+	GPU_offscreen_free(ofs);
+
+	return TRUE;
+}

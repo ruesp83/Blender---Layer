@@ -188,7 +188,7 @@ enum {
 #define WM_UI_HANDLER_CONTINUE	0
 #define WM_UI_HANDLER_BREAK		1
 
-typedef int (*wmUIHandlerFunc)(struct bContext *C, struct wmEvent *event, void *userdata);
+typedef int (*wmUIHandlerFunc)(struct bContext *C, const struct wmEvent *event, void *userdata);
 typedef void (*wmUIHandlerRemoveFunc)(struct bContext *C, void *userdata);
 
 /* ************** Notifiers ****************** */
@@ -300,6 +300,7 @@ typedef struct wmNotifier {
 	/* NC_MATERIAL Material */
 #define	ND_SHADING			(30<<16)
 #define	ND_SHADING_DRAW		(31<<16)
+#define	ND_SHADING_LINKS	(32<<16)
 
 	/* NC_LAMP Lamp */
 #define	ND_LIGHTING			(40<<16)
@@ -326,6 +327,7 @@ typedef struct wmNotifier {
 	/* Mesh, Curve, MetaBall, Armature, .. */
 #define ND_SELECT			(90<<16)
 #define ND_DATA				(91<<16)
+#define ND_VERTEX_GROUP		(92<<16)
 
 	/* NC_NODE Nodes */
 
@@ -405,6 +407,9 @@ typedef struct wmGesture {
 	/* customdata for circle is recti, (xmin, ymin) is center, xmax radius */
 	/* customdata for lasso is short array */
 	/* customdata for straight line is a recti: (xmin,ymin) is start, (xmax, ymax) is end */
+
+	/* free pointer to use for operator allocs (if set, its freed on exit)*/
+	void *userdata;
 } wmGesture;
 
 /* ************** wmEvent ************************ */
@@ -440,7 +445,10 @@ typedef struct wmEvent {
 	
 	/* keymap item, set by handler (weak?) */
 	const char *keymap_idname;
-	
+
+	/* tablet info, only use when the tablet is active */
+	struct wmTabletData *tablet_data;
+
 	/* custom data */
 	short custom;		/* custom data type, stylus, 6dof, see wm_event_types.h */
 	short customdatafree;
@@ -504,6 +512,7 @@ typedef struct wmTimer {
 typedef struct wmOperatorType {
 	const char *name;		/* text for ui, undo */
 	const char *idname;		/* unique identifier */
+	const char *translation_context;
 	const char *description;	/* tooltips and python docs */
 
 	/* this callback executes the operator without any interactive input,
@@ -526,13 +535,13 @@ typedef struct wmOperatorType {
 	 * any further events are handled in modal. if the operation is
 	 * canceled due to some external reason, cancel is called
 	 * - see defines below for return values */
-	int (*invoke)(struct bContext *, struct wmOperator *, struct wmEvent *)
+	int (*invoke)(struct bContext *, struct wmOperator *, const struct wmEvent *)
 #ifdef __GNUC__
 	__attribute__((warn_unused_result))
 #endif
 	;
 	int (*cancel)(struct bContext *, struct wmOperator *);
-	int (*modal)(struct bContext *, struct wmOperator *, struct wmEvent *)
+	int (*modal)(struct bContext *, struct wmOperator *, const struct wmEvent *)
 #ifdef __GNUC__
 	__attribute__((warn_unused_result))
 #endif
@@ -637,7 +646,7 @@ typedef struct wmDropBox {
 	struct wmDropBox *next, *prev;
 	
 	/* test if the dropbox is active, then can print optype name */
-	int (*poll)(struct bContext *, struct wmDrag *, wmEvent *);
+	int (*poll)(struct bContext *, struct wmDrag *, const wmEvent *);
 
 	/* before exec, this copies drag info to wmDrop properties */
 	void (*copy)(struct wmDrag *, struct wmDropBox *);

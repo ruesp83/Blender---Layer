@@ -30,7 +30,7 @@ set(INC
 	../blenlib
 	../makesdna
 	../../../intern/guardedalloc
-	../../../extern/bullet2/src
+	../../../extern/rangetree
 	../../../intern/opennl/extern
 )
 
@@ -39,12 +39,14 @@ set(INC_SYS
 )
 
 set(SRC
+	operators/bmo_beautify.c
 	operators/bmo_bevel.c
 	operators/bmo_connect.c
-	operators/bmo_slide.c
 	operators/bmo_create.c
 	operators/bmo_dissolve.c
 	operators/bmo_dupe.c
+	operators/bmo_edgeloop_fill.c
+	operators/bmo_edgenet.c
 	operators/bmo_edgesplit.c
 	operators/bmo_extrude.c
 	operators/bmo_hull.c
@@ -58,7 +60,6 @@ set(SRC
 	operators/bmo_smooth_laplacian.c
 	operators/bmo_symmetrize.c
 	operators/bmo_subdivide.c
-	operators/bmo_subdivide.h
 	operators/bmo_triangulate.c
 	operators/bmo_unsubdivide.c
 	operators/bmo_utils.c
@@ -68,16 +69,14 @@ set(SRC
 	intern/bmesh_construct.h
 	intern/bmesh_core.c
 	intern/bmesh_core.h
-	intern/bmesh_decimate_collapse.c
-	intern/bmesh_decimate_dissolve.c
-	intern/bmesh_decimate_unsubdivide.c
-	intern/bmesh_decimate.h
 	intern/bmesh_inline.h
 	intern/bmesh_interp.c
 	intern/bmesh_interp.h
 	intern/bmesh_iterators.c
 	intern/bmesh_iterators.h
 	intern/bmesh_iterators_inline.h
+	intern/bmesh_log.c
+	intern/bmesh_log.h
 	intern/bmesh_marking.c
 	intern/bmesh_marking.h
 	intern/bmesh_mesh.c
@@ -109,6 +108,16 @@ set(SRC
 	intern/bmesh_error.h
 
 	tools/BME_bevel.c
+	tools/bmesh_bevel.c
+	tools/bmesh_bevel.h
+	tools/bmesh_decimate_collapse.c
+	tools/bmesh_decimate_dissolve.c
+	tools/bmesh_decimate_unsubdivide.c
+	tools/bmesh_decimate.h
+	tools/bmesh_edgesplit.c
+	tools/bmesh_edgesplit.h
+	tools/bmesh_triangulate.c
+	tools/bmesh_triangulate.h
 
 	bmesh.h
 	bmesh_class.h
@@ -120,6 +129,9 @@ endif()
 
 if(WITH_BULLET)
 	add_definitions(-DWITH_BULLET)
+	list(APPEND INC_SYS
+		${BULLET_INCLUDE_DIRS}
+	)
 endif()
 
 if(WITH_INTERNATIONAL)

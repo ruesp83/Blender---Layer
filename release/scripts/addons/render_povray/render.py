@@ -25,7 +25,7 @@ import sys
 import time
 from math import atan, pi, degrees, sqrt
 import re
-
+import random
 ##############################SF###########################
 ##############find image texture
 
@@ -168,11 +168,11 @@ def write_pov(filename, scene=None, info_callback=None):
 
     def setTab(tabtype, spaces):
         TabStr = ""
-        if tabtype == '0':
+        if tabtype == 'NONE':
             TabStr = ""
-        elif tabtype == '1':
+        elif tabtype == 'TAB':
             TabStr = "\t"
-        elif tabtype == '2':
+        elif tabtype == 'SPACE':
             TabStr = spaces * " "
         return TabStr
 
@@ -821,11 +821,12 @@ def write_pov(filename, scene=None, info_callback=None):
                 continue
                    
             # Export Hair
-
+            renderEmitter = True
             if hasattr(ob, 'particle_systems'):
+                renderEmitter = False
                 for pSys in ob.particle_systems:
-                    if not pSys.settings.use_render_emitter:
-                        continue #don't render mesh
+                    if pSys.settings.use_render_emitter:
+                        renderEmitter = True
                     for mod in [m for m in ob.modifiers if (m is not None) and (m.type == 'PARTICLE_SYSTEM')]:
                         if (pSys.settings.render_type == 'PATH') and mod.show_render and (pSys.name == mod.particle_system.name):
                             tstart = time.time()
@@ -834,57 +835,64 @@ def write_pov(filename, scene=None, info_callback=None):
                                 if pmaterial.strand.use_blender_units:
                                     strandStart = pmaterial.strand.root_size
                                     strandEnd = pmaterial.strand.tip_size
-                                    strandShape = pmaterial.strand.shape
+                                    strandShape = pmaterial.strand.shape 
                                 else:  # Blender unit conversion
-                                    strandStart = pmaterial.strand.root_size / 200
-                                    strandEnd = pmaterial.strand.tip_size / 200
+                                    strandStart = pmaterial.strand.root_size / 200.0
+                                    strandEnd = pmaterial.strand.tip_size / 200.0
                                     strandShape = pmaterial.strand.shape
                             else:
                                 pmaterial = "default"  # No material assigned in blender, use default one
                                 strandStart = 0.01
                                 strandEnd = 0.01
                                 strandShape = 0.0
-                                
-                            totalNumberOfHairs = len(pSys.particles)
-                            hairCounter = 0
+                            # Set the number of particles to render count rather than 3d view display    
+                            pSys.set_resolution(scene, ob, 'RENDER')    
+                            steps = pSys.settings.draw_step
+                            steps = 3 ** steps # or (power of 2 rather than 3) + 1 # Formerly : len(particle.hair_keys)
+                            
+                            totalNumberOfHairs = ( len(pSys.particles) + len(pSys.child_particles) )
+                            #hairCounter = 0
                             file.write('#declare HairArray = array[%i] {\n' % totalNumberOfHairs)
-                            for particle in pSys.particles:
-                                if particle.is_exist and particle.is_visible:
-                                    hairCounter += 1
-                                    controlPointCounter = 0
+                            for pindex in range(0, totalNumberOfHairs):
+
+                                #if particle.is_exist and particle.is_visible:
+                                    #hairCounter += 1
+                                    #controlPointCounter = 0
                                     # Each hair is represented as a separate sphere_sweep in POV-Ray.
                                     
                                     file.write('sphere_sweep{')
                                     if pSys.settings.use_hair_bspline:
                                         file.write('b_spline ')
-                                        file.write('%i,\n' % (len(particle.hair_keys) + 2))  # +2 because the first point needs tripling to be more than a handle in POV
-
+                                        file.write('%i,\n' % (steps + 2))  # +2 because the first point needs tripling to be more than a handle in POV
                                     else:
                                         file.write('linear_spline ')
-                                        file.write('%i,\n' % (len(particle.hair_keys)))
-                                    for controlPoint in particle.hair_keys:
+                                        file.write('%i,\n' % (steps))
+                                        
+                                    for step in range(0, steps):
+                                        co = pSys.co_hair(ob, mod, pindex, step)
+                                    #for controlPoint in particle.hair_keys:
                                         if pSys.settings.clump_factor != 0:
-                                            hDiameter = pSys.settings.clump_factor #* random.uniform(0.5, 1)
-                                        elif controlPointCounter == 0:
+                                            hDiameter = pSys.settings.clump_factor / 200.0 * random.uniform(0.5, 1)
+                                        elif step == 0:
                                             hDiameter = strandStart
                                         else:
-                                            hDiameter += (strandEnd-strandStart)/(len(particle.hair_keys)+1) #XXX +1 or not?
-                                        if controlPointCounter == 0 and pSys.settings.use_hair_bspline:
+                                            hDiameter += (strandEnd-strandStart)/(pSys.settings.draw_step+1) #XXX +1 or not?
+                                        if step == 0 and pSys.settings.use_hair_bspline:
                                             # Write three times the first point to compensate pov Bezier handling
-                                            file.write('<%.6g,%.6g,%.6g>,%.7g,\n' % (controlPoint.co[0], controlPoint.co[1], controlPoint.co[2], abs(hDiameter)))
-                                            file.write('<%.6g,%.6g,%.6g>,%.7g,\n' % (controlPoint.co[0], controlPoint.co[1], controlPoint.co[2], abs(hDiameter)))                                          
-											#file.write('<%.6g,%.6g,%.6g>,%.7g' % (particle.location[0], particle.location[1], particle.location[2], abs(hDiameter))) # Useless because particle location is the tip, not the root.
+                                            file.write('<%.6g,%.6g,%.6g>,%.7g,\n' % (co[0], co[1], co[2], abs(hDiameter)))
+                                            file.write('<%.6g,%.6g,%.6g>,%.7g,\n' % (co[0], co[1], co[2], abs(hDiameter)))                                          
+                                            #file.write('<%.6g,%.6g,%.6g>,%.7g' % (particle.location[0], particle.location[1], particle.location[2], abs(hDiameter))) # Useless because particle location is the tip, not the root.
                                             #file.write(',\n')
-                                        controlPointCounter += 1
+                                        #controlPointCounter += 1
                                         #totalNumberOfHairs += len(pSys.particles)# len(particle.hair_keys)
                                              
                                       # Each control point is written out, along with the radius of the
                                       # hair at that point.
-                                        file.write('<%.6g,%.6g,%.6g>,%.7g' % (controlPoint.co[0], controlPoint.co[1], controlPoint.co[2], abs(hDiameter)))
+                                        file.write('<%.6g,%.6g,%.6g>,%.7g' % (co[0], co[1], co[2], abs(hDiameter)))
 
                                       # All coordinates except the last need a following comma.
 
-                                        if controlPointCounter != len(particle.hair_keys):
+                                        if step != steps - 1:
                                             file.write(',\n')
                                         else:
                                             # End the sphere_sweep declaration for this hair
@@ -892,7 +900,7 @@ def write_pov(filename, scene=None, info_callback=None):
                                         
                                       # All but the final sphere_sweep (each array element) needs a terminating comma.
 
-                                    if hairCounter != totalNumberOfHairs:
+                                    if pindex != totalNumberOfHairs:
                                         file.write(',\n')
                                     else:
                                         file.write('\n')
@@ -950,9 +958,12 @@ def write_pov(filename, scene=None, info_callback=None):
                             file.write('}')
                             print('Totals hairstrands written: %i' % totalNumberOfHairs)
                             print('Number of tufts (particle systems)', len(ob.particle_systems))
-
-                                
-
+                            
+                            # Set back the displayed number of particles to preview count
+                            pSys.set_resolution(scene, ob, 'PREVIEW')
+                            
+                            if renderEmitter == False:
+                                continue #don't render mesh, skip to next object.
             try:
                 me = ob.to_mesh(scene, True, 'RENDER')
             except:
@@ -1697,15 +1708,16 @@ def write_pov(filename, scene=None, info_callback=None):
             if not world.use_sky_blend:
                 # Non fully transparent background could premultiply alpha and avoid anti-aliasing
                 # display issue:
-                if render.alpha_mode == 'PREMUL':
+                if render.alpha_mode == 'TRANSPARENT':
                     tabWrite("background {rgbt<%.3g, %.3g, %.3g, 0.75>}\n" % \
                              (world.horizon_color[:]))
                 #Currently using no alpha with Sky option:
                 elif render.alpha_mode == 'SKY':
                     tabWrite("background {rgbt<%.3g, %.3g, %.3g, 0>}\n" % (world.horizon_color[:]))
                 #StraightAlpha:
-                else:
-                    tabWrite("background {rgbt<%.3g, %.3g, %.3g, 1>}\n" % (world.horizon_color[:]))
+                # XXX Does not exists anymore
+                #else:
+                    #tabWrite("background {rgbt<%.3g, %.3g, %.3g, 1>}\n" % (world.horizon_color[:]))
 
             worldTexCount = 0
             #For Background image textures
@@ -1776,10 +1788,11 @@ def write_pov(filename, scene=None, info_callback=None):
                     # for skysphere..5.5
                     tabWrite("gradient y\n")
                     tabWrite("color_map {\n")
-                    if render.alpha_mode == 'STRAIGHT':
-                        tabWrite("[0.0 rgbt<%.3g, %.3g, %.3g, 1>]\n" % (world.horizon_color[:]))
-                        tabWrite("[1.0 rgbt<%.3g, %.3g, %.3g, 1>]\n" % (world.zenith_color[:]))
-                    elif render.alpha_mode == 'PREMUL':
+                    # XXX Does not exists anymore
+                    #if render.alpha_mode == 'STRAIGHT':
+                        #tabWrite("[0.0 rgbt<%.3g, %.3g, %.3g, 1>]\n" % (world.horizon_color[:]))
+                        #tabWrite("[1.0 rgbt<%.3g, %.3g, %.3g, 1>]\n" % (world.zenith_color[:]))
+                    if render.alpha_mode == 'TRANSPARENT':
                         tabWrite("[0.0 rgbt<%.3g, %.3g, %.3g, 0.99>]\n" % (world.horizon_color[:]))
                         # aa premult not solved with transmit 1
                         tabWrite("[1.0 rgbt<%.3g, %.3g, %.3g, 0.99>]\n" % (world.zenith_color[:]))
@@ -1852,9 +1865,9 @@ def write_pov(filename, scene=None, info_callback=None):
                 # In pov, the scale has reversed influence compared to blender. these number
                 # should correct that
                 tabWrite("mm_per_unit %.6f\n" % \
-                         (material.subsurface_scattering.scale * (-100.0) + 15.0))
+                         (material.subsurface_scattering.scale * 10000.0))# formerly ...scale * (-100.0) + 15.0))
                 # In POV-Ray, the scale factor for all subsurface shaders needs to be the same
-                sslt_samples = (11 - material.subsurface_scattering.error_threshold) * 100
+                sslt_samples = (11 - material.subsurface_scattering.error_threshold) * 10 # formerly ...*100
                 tabWrite("subsurface { samples %d, %d }\n" % (sslt_samples, sslt_samples / 10))
                 onceSss = 0
 
@@ -2008,6 +2021,46 @@ class PovrayRender(bpy.types.RenderEngine):
     bl_label = "POV-Ray 3.7"
     DELAY = 0.5
 
+    @staticmethod
+    def _locate_binary():
+        addon_prefs = bpy.context.user_preferences.addons[__package__].preferences
+
+        # Use the system preference if its set.
+        pov_binary = addon_prefs.filepath_povray
+        if pov_binary:
+            if os.path.exists(pov_binary):
+                return pov_binary
+            else:
+                print("User Preference to povray %r NOT FOUND, checking $PATH" % pov_binary)
+
+        # Windows Only
+        # assume if there is a 64bit binary that the user has a 64bit capable OS
+        if sys.platform[:3] == "win":
+            import winreg
+            win_reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Software\\POV-Ray\\v3.7\\Windows")
+            win_home = winreg.QueryValueEx(win_reg_key, "Home")[0]
+
+            # First try 64bits
+            pov_binary = os.path.join(win_home, "bin", "pvengine64.exe")
+            if os.path.exists(pov_binary):
+                return pov_binary
+
+            # Then try 32bits
+            pov_binary = os.path.join(win_home, "bin", "pvengine.exe")
+            if os.path.exists(pov_binary):
+                return pov_binary
+
+        # search the path all os's
+        pov_binary_default = "povray"
+
+        os_path_ls = os.getenv("PATH").split(':') + [""]
+
+        for dir_name in os_path_ls:
+            pov_binary = os.path.join(dir_name, pov_binary_default)
+            if os.path.exists(pov_binary):
+                return pov_binary
+        return ""
+
     def _export(self, scene, povPath, renderImagePath):
         import tempfile
 
@@ -2040,17 +2093,19 @@ class PovrayRender(bpy.types.RenderEngine):
         write_pov(self._temp_file_in, scene, info_callback)
 
     def _render(self, scene):
-
         try:
             os.remove(self._temp_file_out)  # so as not to load the old file
         except OSError:
             pass
 
+        pov_binary = PovrayRender._locate_binary()
+        if not pov_binary:
+            print("POV-Ray 3.7: could not execute povray, possibly POV-Ray isn't installed")
+            return False
+
         write_pov_ini(scene, self._temp_file_ini, self._temp_file_in, self._temp_file_out)
 
         print ("***-STARTING-***")
-
-        pov_binary = "povray"
 
         extra_args = []
 
@@ -2062,127 +2117,26 @@ class PovrayRender(bpy.types.RenderEngine):
         if sys.platform[:3] == "win":
             self._is_windows = True
             #extra_args.append("/EXIT")
-
-            import winreg
-            import platform as pltfrm
-            if pltfrm.architecture()[0] == "64bit":
-                bitness = 64
-            else:
-                bitness = 32
-
-            regKey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Software\\POV-Ray\\v3.7\\Windows")
-
-            # TODO, report api
-
-            # 64 bits blender
-            if bitness == 64:
-                try:
-                    pov_binary = winreg.QueryValueEx(regKey, "Home")[0] + "\\bin\\pvengine64"
-                    self._process = subprocess.Popen(
-                            [pov_binary, self._temp_file_ini] + extra_args,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                    # This would work too but means we have to wait until its done:
-                    # os.system("%s %s" % (pov_binary, self._temp_file_ini))
-
-                except OSError:
-                    # someone might run povray 32 bits on a 64 bits blender machine
-                    try:
-                        pov_binary = winreg.QueryValueEx(regKey, "Home")[0] + "\\bin\\pvengine"
-                        self._process = subprocess.Popen(
-                                [pov_binary, self._temp_file_ini] + extra_args,
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-                    except OSError:
-                        # TODO, report api
-                        print("POV-Ray 3.7: could not execute '%s', possibly POV-Ray isn't " \
-                              "installed" % pov_binary)
-                        import traceback
-                        traceback.print_exc()
-                        print ("***-DONE-***")
-                        return False
-
-                    else:
-                        print("POV-Ray 3.7 64 bits could not execute, running 32 bits instead")
-                        print("Command line arguments passed: " + str(extra_args))
-                        return True
-
-                else:
-                    print("POV-Ray 3.7 64 bits found")
-                    print("Command line arguments passed: " + str(extra_args))
-                    return True
-
-            #32 bits blender
-            else:
-                try:
-                    pov_binary = winreg.QueryValueEx(regKey, "Home")[0] + "\\bin\\pvengine"
-                    self._process = subprocess.Popen(
-                            [pov_binary, self._temp_file_ini] + extra_args,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-                # someone might also run povray 64 bits with a 32 bits build of blender.
-                except OSError:
-                    try:
-                        pov_binary = winreg.QueryValueEx(regKey, "Home")[0] + "\\bin\\pvengine64"
-                        self._process = subprocess.Popen(
-                                [pov_binary, self._temp_file_ini] + extra_args,
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-                    except OSError:
-                        # TODO, report api
-                        print("POV-Ray 3.7: could not execute '%s', possibly POV-Ray isn't " \
-                              "installed" % pov_binary)
-                        import traceback
-                        traceback.print_exc()
-                        print ("***-DONE-***")
-                        return False
-
-                    else:
-                        print("Running POV-Ray 3.7 64 bits build with 32 bits Blender,\n" \
-                              "You might want to run Blender 64 bits as well.")
-                        print("Command line arguments passed: " + str(extra_args))
-                        return True
-
-                else:
-                    print("POV-Ray 3.7 32 bits found")
-                    print("Command line arguments passed: " + str(extra_args))
-                    return True
-
         else:
-            # DH - added -d option to prevent render window popup which leads to segfault on linux
+            # added -d option to prevent render window popup which leads to segfault on linux
             extra_args.append("-d")
 
-            isExists = False
-            sysPathList = os.getenv("PATH").split(':')
-            sysPathList.append("")
+        # Start Rendering!
+        try:
+            self._process = subprocess.Popen([pov_binary, self._temp_file_ini] + extra_args,
+                                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        except OSError:
+            # TODO, report api
+            print("POV-Ray 3.7: could not execute '%s'" % pov_binary)
+            import traceback
+            traceback.print_exc()
+            print ("***-DONE-***")
+            return False
 
-            for dirName in sysPathList:
-                if (os.path.exists(os.path.join(dirName, pov_binary))):
-                    isExists = True
-                    break
-
-            if not isExists:
-                print("POV-Ray 3.7: could not found execute '%s' - not if PATH" % pov_binary)
-                import traceback
-                traceback.print_exc()
-                print ("***-DONE-***")
-                return False
-
-            try:
-                self._process = subprocess.Popen([pov_binary, self._temp_file_ini] + extra_args,
-                                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-            except OSError:
-                # TODO, report api
-                print("POV-Ray 3.7: could not execute '%s'" % pov_binary)
-                import traceback
-                traceback.print_exc()
-                print ("***-DONE-***")
-                return False
-
-            else:
-                print("POV-Ray 3.7 found")
-                print("Command line arguments passed: " + str(extra_args))
-                return True
+        else:
+            print("POV-Ray 3.7 found")
+            print("Command line arguments passed: " + str(extra_args))
+            return True
 
         # Now that we have a valid process
 
@@ -2407,47 +2361,49 @@ class PovrayRender(bpy.types.RenderEngine):
 
             # Not needed right now, might only be useful if we find a way to use temp raw output of
             # pov 3.7 (in which case it might go under _test_wait()).
-#            def update_image():
-#                # possible the image wont load early on.
-#                try:
-#                    lay.load_from_file(self._temp_file_out)
-#                    # XXX, tests for border render.
-#                    #lay.load_from_file(self._temp_file_out, xmin, ymin)
-#                    #lay.load_from_file(self._temp_file_out, xmin, ymin)
-#                except RuntimeError:
-#                    pass
+            '''
+            def update_image():
+                # possible the image wont load early on.
+                try:
+                    lay.load_from_file(self._temp_file_out)
+                    # XXX, tests for border render.
+                    #lay.load_from_file(self._temp_file_out, xmin, ymin)
+                    #lay.load_from_file(self._temp_file_out, xmin, ymin)
+                except RuntimeError:
+                    pass
 
-#            # Update while POV-Ray renders
-#            while True:
-#                # print("***POV RENDER LOOP***")
+            # Update while POV-Ray renders
+            while True:
+                # print("***POV RENDER LOOP***")
 
-#                # test if POV-Ray exists
-#                if self._process.poll() is not None:
-#                    print("***POV PROCESS FINISHED***")
-#                    update_image()
-#                    break
+                # test if POV-Ray exists
+                if self._process.poll() is not None:
+                    print("***POV PROCESS FINISHED***")
+                    update_image()
+                    break
 
-#                # user exit
-#                if self.test_break():
-#                    try:
-#                        self._process.terminate()
-#                        print("***POV PROCESS INTERRUPTED***")
-#                    except OSError:
-#                        pass
+                # user exit
+                if self.test_break():
+                    try:
+                        self._process.terminate()
+                        print("***POV PROCESS INTERRUPTED***")
+                    except OSError:
+                        pass
 
-#                    break
+                    break
 
-#                # Would be nice to redirect the output
-#                # stdout_value, stderr_value = self._process.communicate() # locks
+                # Would be nice to redirect the output
+                # stdout_value, stderr_value = self._process.communicate() # locks
 
-#                # check if the file updated
-#                new_size = os.path.getsize(self._temp_file_out)
+                # check if the file updated
+                new_size = os.path.getsize(self._temp_file_out)
 
-#                if new_size != prev_size:
-#                    update_image()
-#                    prev_size = new_size
+                if new_size != prev_size:
+                    update_image()
+                    prev_size = new_size
 
-#                time.sleep(self.DELAY)
+                time.sleep(self.DELAY)
+            '''
 
             self.end_result(result)
 

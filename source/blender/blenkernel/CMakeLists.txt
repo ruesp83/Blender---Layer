@@ -58,13 +58,14 @@ set(SRC
 	intern/CCGSubSurf.c
 	intern/DerivedMesh.c
 	intern/action.c
+	intern/addon.c
 	intern/anim.c
 	intern/anim_sys.c
 	intern/armature.c
 	intern/blender.c
 	intern/bmfont.c
 	intern/boids.c
-	intern/booleanops_mesh.c
+	intern/bpath.c
 	intern/brush.c
 	intern/bullet.c
 	intern/bvhutils.c
@@ -102,9 +103,9 @@ set(SRC
 	intern/lattice.c
 	intern/layer.c
 	intern/library.c
+	intern/mask.c
 	intern/mask_evaluate.c
 	intern/mask_rasterize.c
-	intern/mask.c
 	intern/material.c
 	intern/mball.c
 	intern/mesh.c
@@ -122,9 +123,12 @@ set(SRC
 	intern/paint.c
 	intern/particle.c
 	intern/particle_system.c
+	intern/pbvh.c
+	intern/pbvh_bmesh.c
 	intern/pointcache.c
 	intern/property.c
 	intern/report.c
+	intern/rigidbody.c
 	intern/sca.c
 	intern/scene.c
 	intern/screen.c
@@ -148,9 +152,10 @@ set(SRC
 	intern/world.c
 	intern/writeavi.c
 	intern/writeframeserver.c
-	
+
 	BKE_DerivedMesh.h
 	BKE_action.h
+	BKE_addon.h
 	BKE_anim.h
 	BKE_animsys.h
 	BKE_armature.h
@@ -159,7 +164,7 @@ set(SRC
 	BKE_bmfont.h
 	BKE_bmfont_types.h
 	BKE_boids.h
-	BKE_booleanops_mesh.h
+	BKE_bpath.h
 	BKE_brush.h
 	BKE_bullet.h
 	BKE_bvhutils.h
@@ -211,9 +216,11 @@ set(SRC
 	BKE_packedFile.h
 	BKE_paint.h
 	BKE_particle.h
+	BKE_pbvh.h
 	BKE_pointcache.h
 	BKE_property.h
 	BKE_report.h
+	BKE_rigidbody.h
 	BKE_sca.h
 	BKE_scene.h
 	BKE_screen.h
@@ -236,9 +243,11 @@ set(SRC
 	BKE_world.h
 	BKE_writeavi.h
 	BKE_writeframeserver.h
+
 	depsgraph_private.h
 	nla_private.h
 	intern/CCGSubSurf.h
+	intern/pbvh_intern.h
 )
 
 add_definitions(-DGLEW_STATIC)
@@ -252,18 +261,21 @@ endif()
 
 if(WITH_BULLET)
 	list(APPEND INC_SYS
-		../../../extern/bullet2/src
+		${BULLET_INCLUDE_DIRS}
 	)
-	add_definitions(-DUSE_BULLET)
+	list(APPEND INC
+		../../../intern/rigidbody
+	)
+	add_definitions(-DWITH_BULLET)
 endif()
 
-if(WITH_MOD_CLOTH_ELTOPO)
-	list(APPEND INC
-		../../../extern/eltopo
-		../../../extern/eltopo/eltopo3d
-	)
-	add_definitions(-DWITH_ELTOPO)
-endif()
+#if(WITH_MOD_CLOTH_ELTOPO)
+#	list(APPEND INC
+#		../../../extern/eltopo
+#		../../../extern/eltopo/eltopo3d
+#	)
+#	add_definitions(-DWITH_ELTOPO)
+#endif()
 
 if(WITH_IMAGE_OPENEXR)
 	add_definitions(-DWITH_OPENEXR)

@@ -23,6 +23,7 @@
 #include "scene.h"
 
 #include "osl_closures.h"
+#include "osl_globals.h"
 #include "osl_services.h"
 #include "osl_shader.h"
 
@@ -37,6 +38,9 @@
 #include "kernel_object.h"
 #include "kernel_bvh.h"
 #include "kernel_triangle.h"
+#include "kernel_curve.h"
+#include "kernel_primitive.h"
+#include "kernel_projection.h"
 #include "kernel_accumulate.h"
 #include "kernel_shader.h"
 
@@ -44,7 +48,7 @@ CCL_NAMESPACE_BEGIN
 
 /* RenderServices implementation */
 
-#define TO_MATRIX44(m) (*(OSL::Matrix44 *)&(m))
+#define COPY_MATRIX44(m1, m2) memcpy(m1, m2, sizeof(*m2))
 
 /* static ustrings */
 ustring OSLRenderServices::u_distance("distance");
@@ -53,6 +57,39 @@ ustring OSLRenderServices::u_camera("camera");
 ustring OSLRenderServices::u_screen("screen");
 ustring OSLRenderServices::u_raster("raster");
 ustring OSLRenderServices::u_ndc("NDC");
+ustring OSLRenderServices::u_object_location("object:location");
+ustring OSLRenderServices::u_object_index("object:index");
+ustring OSLRenderServices::u_geom_dupli_generated("geom:dupli_generated");
+ustring OSLRenderServices::u_geom_dupli_uv("geom:dupli_uv");
+ustring OSLRenderServices::u_material_index("material:index");
+ustring OSLRenderServices::u_object_random("object:random");
+ustring OSLRenderServices::u_particle_index("particle:index");
+ustring OSLRenderServices::u_particle_age("particle:age");
+ustring OSLRenderServices::u_particle_lifetime("particle:lifetime");
+ustring OSLRenderServices::u_particle_location("particle:location");
+ustring OSLRenderServices::u_particle_rotation("particle:rotation");
+ustring OSLRenderServices::u_particle_size("particle:size");
+ustring OSLRenderServices::u_particle_velocity("particle:velocity");
+ustring OSLRenderServices::u_particle_angular_velocity("particle:angular_velocity");
+ustring OSLRenderServices::u_geom_numpolyvertices("geom:numpolyvertices");
+ustring OSLRenderServices::u_geom_trianglevertices("geom:trianglevertices");
+ustring OSLRenderServices::u_geom_polyvertices("geom:polyvertices");
+ustring OSLRenderServices::u_geom_name("geom:name");
+#ifdef __HAIR__
+ustring OSLRenderServices::u_is_curve("geom:is_curve");
+ustring OSLRenderServices::u_curve_thickness("geom:curve_thickness");
+ustring OSLRenderServices::u_curve_tangent_normal("geom:curve_tangent_normal");
+#endif
+ustring OSLRenderServices::u_path_ray_length("path:ray_length");
+ustring OSLRenderServices::u_trace("trace");
+ustring OSLRenderServices::u_hit("hit");
+ustring OSLRenderServices::u_hitdist("hitdist");
+ustring OSLRenderServices::u_N("N");
+ustring OSLRenderServices::u_Ng("Ng");
+ustring OSLRenderServices::u_P("P");
+ustring OSLRenderServices::u_I("I");
+ustring OSLRenderServices::u_u("u");
+ustring OSLRenderServices::u_v("v");
 ustring OSLRenderServices::u_empty;
 
 OSLRenderServices::OSLRenderServices()
@@ -80,12 +117,17 @@ bool OSLRenderServices::get_matrix(OSL::Matrix44 &result, OSL::TransformationPtr
 
 		if (object != ~0) {
 #ifdef __OBJECT_MOTION__
-			Transform tfm = object_fetch_transform_motion_test(kg, object, time, NULL);
+			Transform tfm;
+
+			if(time == sd->time)
+				tfm = sd->ob_tfm;
+			else
+				tfm = object_fetch_transform_motion_test(kg, object, time, NULL);
 #else
 			Transform tfm = object_fetch_transform(kg, object, OBJECT_TRANSFORM);
 #endif
 			tfm = transform_transpose(tfm);
-			result = TO_MATRIX44(tfm);
+			COPY_MATRIX44(&result, &tfm);
 
 			return true;
 		}
@@ -106,12 +148,16 @@ bool OSLRenderServices::get_inverse_matrix(OSL::Matrix44 &result, OSL::Transform
 		if (object != ~0) {
 #ifdef __OBJECT_MOTION__
 			Transform itfm;
-			object_fetch_transform_motion_test(kg, object, time, &itfm);
+
+			if(time == sd->time)
+				itfm = sd->ob_itfm;
+			else
+				object_fetch_transform_motion_test(kg, object, time, &itfm);
 #else
 			Transform itfm = object_fetch_transform(kg, object, OBJECT_INVERSE_TRANSFORM);
 #endif
 			itfm = transform_transpose(itfm);
-			result = TO_MATRIX44(itfm);
+			COPY_MATRIX44(&result, &itfm);
 
 			return true;
 		}
@@ -126,22 +172,22 @@ bool OSLRenderServices::get_matrix(OSL::Matrix44 &result, ustring from, float ti
 
 	if (from == u_ndc) {
 		Transform tfm = transform_transpose(transform_quick_inverse(kernel_data.cam.worldtondc));
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 	else if (from == u_raster) {
 		Transform tfm = transform_transpose(kernel_data.cam.rastertoworld);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 	else if (from == u_screen) {
 		Transform tfm = transform_transpose(kernel_data.cam.screentoworld);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 	else if (from == u_camera) {
 		Transform tfm = transform_transpose(kernel_data.cam.cameratoworld);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 
@@ -154,22 +200,22 @@ bool OSLRenderServices::get_inverse_matrix(OSL::Matrix44 &result, ustring to, fl
 
 	if (to == u_ndc) {
 		Transform tfm = transform_transpose(kernel_data.cam.worldtondc);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 	else if (to == u_raster) {
 		Transform tfm = transform_transpose(kernel_data.cam.worldtoraster);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 	else if (to == u_screen) {
 		Transform tfm = transform_transpose(kernel_data.cam.worldtoscreen);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 	else if (to == u_camera) {
 		Transform tfm = transform_transpose(kernel_data.cam.worldtocamera);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 
@@ -192,7 +238,7 @@ bool OSLRenderServices::get_matrix(OSL::Matrix44 &result, OSL::TransformationPtr
 			Transform tfm = object_fetch_transform(kg, object, OBJECT_TRANSFORM);
 #endif
 			tfm = transform_transpose(tfm);
-			result = TO_MATRIX44(tfm);
+			COPY_MATRIX44(&result, &tfm);
 
 			return true;
 		}
@@ -217,7 +263,7 @@ bool OSLRenderServices::get_inverse_matrix(OSL::Matrix44 &result, OSL::Transform
 			Transform tfm = object_fetch_transform(kg, object, OBJECT_INVERSE_TRANSFORM);
 #endif
 			tfm = transform_transpose(tfm);
-			result = TO_MATRIX44(tfm);
+			COPY_MATRIX44(&result, &tfm);
 
 			return true;
 		}
@@ -232,22 +278,22 @@ bool OSLRenderServices::get_matrix(OSL::Matrix44 &result, ustring from)
 
 	if (from == u_ndc) {
 		Transform tfm = transform_transpose(transform_quick_inverse(kernel_data.cam.worldtondc));
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 	else if (from == u_raster) {
 		Transform tfm = transform_transpose(kernel_data.cam.rastertoworld);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 	else if (from == u_screen) {
 		Transform tfm = transform_transpose(kernel_data.cam.screentoworld);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 	else if (from == u_camera) {
 		Transform tfm = transform_transpose(kernel_data.cam.cameratoworld);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 
@@ -260,22 +306,22 @@ bool OSLRenderServices::get_inverse_matrix(OSL::Matrix44 &result, ustring to)
 	
 	if (to == u_ndc) {
 		Transform tfm = transform_transpose(kernel_data.cam.worldtondc);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 	else if (to == u_raster) {
 		Transform tfm = transform_transpose(kernel_data.cam.worldtoraster);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 	else if (to == u_screen) {
 		Transform tfm = transform_transpose(kernel_data.cam.worldtoscreen);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 	else if (to == u_camera) {
 		Transform tfm = transform_transpose(kernel_data.cam.worldtocamera);
-		result = TO_MATRIX44(tfm);
+		COPY_MATRIX44(&result, &tfm);
 		return true;
 	}
 	
@@ -455,14 +501,14 @@ static bool get_mesh_attribute(KernelGlobals *kg, const ShaderData *sd, const OS
 	    attr.type == TypeDesc::TypeNormal || attr.type == TypeDesc::TypeColor)
 	{
 		float3 fval[3];
-		fval[0] = triangle_attribute_float3(kg, sd, attr.elem, attr.offset,
-		                                    (derivatives) ? &fval[1] : NULL, (derivatives) ? &fval[2] : NULL);
+		fval[0] = primitive_attribute_float3(kg, sd, attr.elem, attr.offset,
+		                                     (derivatives) ? &fval[1] : NULL, (derivatives) ? &fval[2] : NULL);
 		return set_attribute_float3(fval, type, derivatives, val);
 	}
 	else if (attr.type == TypeDesc::TypeFloat) {
 		float fval[3];
-		fval[0] = triangle_attribute_float(kg, sd, attr.elem, attr.offset,
-		                                   (derivatives) ? &fval[1] : NULL, (derivatives) ? &fval[2] : NULL);
+		fval[0] = primitive_attribute_float(kg, sd, attr.elem, attr.offset,
+		                                    (derivatives) ? &fval[1] : NULL, (derivatives) ? &fval[2] : NULL);
 		return set_attribute_float(fval, type, derivatives, val);
 	}
 	else {
@@ -479,104 +525,131 @@ static void get_object_attribute(const OSLGlobals::Attribute& attr, bool derivat
 		memset((char *)val + datasize, 0, datasize * 2);
 }
 
-static bool get_object_standard_attribute(KernelGlobals *kg, ShaderData *sd, ustring name,
-                                          TypeDesc type, bool derivatives, void *val)
+bool OSLRenderServices::get_object_standard_attribute(KernelGlobals *kg, ShaderData *sd, ustring name,
+                                                      TypeDesc type, bool derivatives, void *val)
 {
-	/* todo: turn this into hash table returning int, which can be used in switch */
+	/* todo: turn this into hash table? */
 
 	/* Object Attributes */
-	if (name == "object:location") {
+	if (name == u_object_location) {
 		float3 f = object_location(kg, sd);
 		return set_attribute_float3(f, type, derivatives, val);
 	}
-	else if (name == "object:index") {
+	else if (name == u_object_index) {
 		float f = object_pass_id(kg, sd->object);
 		return set_attribute_float(f, type, derivatives, val);
 	}
-	else if (name == "geom:dupli_generated") {
+	else if (name == u_geom_dupli_generated) {
 		float3 f = object_dupli_generated(kg, sd->object);
 		return set_attribute_float3(f, type, derivatives, val);
 	}
-	else if (name == "geom:dupli_uv") {
+	else if (name == u_geom_dupli_uv) {
 		float3 f = object_dupli_uv(kg, sd->object);
 		return set_attribute_float3(f, type, derivatives, val);
 	}
-	else if (name == "material:index") {
+	else if (name == u_material_index) {
 		float f = shader_pass_id(kg, sd);
 		return set_attribute_float(f, type, derivatives, val);
 	}
-	else if (name == "object:random") {
+	else if (name == u_object_random) {
 		float f = object_random_number(kg, sd->object);
 		return set_attribute_float(f, type, derivatives, val);
 	}
 
 	/* Particle Attributes */
-	else if (name == "particle:index") {
+	else if (name == u_particle_index) {
 		uint particle_id = object_particle_id(kg, sd->object);
 		float f = particle_index(kg, particle_id);
 		return set_attribute_float(f, type, derivatives, val);
 	}
-	else if (name == "particle:age") {
+	else if (name == u_particle_age) {
 		uint particle_id = object_particle_id(kg, sd->object);
 		float f = particle_age(kg, particle_id);
 		return set_attribute_float(f, type, derivatives, val);
 	}
-	else if (name == "particle:lifetime") {
+	else if (name == u_particle_lifetime) {
 		uint particle_id = object_particle_id(kg, sd->object);
 		float f= particle_lifetime(kg, particle_id);
 		return set_attribute_float(f, type, derivatives, val);
 	}
-	else if (name == "particle:location") {
+	else if (name == u_particle_location) {
 		uint particle_id = object_particle_id(kg, sd->object);
 		float3 f = particle_location(kg, particle_id);
 		return set_attribute_float3(f, type, derivatives, val);
 	}
 #if 0	/* unsupported */
-	else if (name == "particle:rotation") {
+	else if (name == u_particle_rotation) {
 		uint particle_id = object_particle_id(kg, sd->object);
 		float4 f = particle_rotation(kg, particle_id);
 		return set_attribute_float4(f, type, derivatives, val);
 	}
 #endif
-	else if (name == "particle:size") {
+	else if (name == u_particle_size) {
 		uint particle_id = object_particle_id(kg, sd->object);
 		float f = particle_size(kg, particle_id);
 		return set_attribute_float(f, type, derivatives, val);
 	}
-	else if (name == "particle:velocity") {
+	else if (name == u_particle_velocity) {
 		uint particle_id = object_particle_id(kg, sd->object);
 		float3 f = particle_velocity(kg, particle_id);
 		return set_attribute_float3(f, type, derivatives, val);
 	}
-	else if (name == "particle:angular_velocity") {
+	else if (name == u_particle_angular_velocity) {
 		uint particle_id = object_particle_id(kg, sd->object);
 		float3 f = particle_angular_velocity(kg, particle_id);
 		return set_attribute_float3(f, type, derivatives, val);
 	}
-	else if (name == "geom:numpolyvertices") {
+	
+	/* Geometry Attributes */
+	else if (name == u_geom_numpolyvertices) {
 		return set_attribute_int(3, type, derivatives, val);
 	}
-	else if (name == "geom:trianglevertices" || name == "geom:polyvertices") {
+	else if ((name == u_geom_trianglevertices || name == u_geom_polyvertices)
+#ifdef __HAIR__
+		     && sd->segment == ~0) {
+#else
+		) {
+#endif
 		float3 P[3];
 		triangle_vertices(kg, sd->prim, P);
-		object_position_transform(kg, sd, &P[0]);
-		object_position_transform(kg, sd, &P[1]);
-		object_position_transform(kg, sd, &P[2]);
+
+		if(!(sd->flag & SD_TRANSFORM_APPLIED)) {
+			object_position_transform(kg, sd, &P[0]);
+			object_position_transform(kg, sd, &P[1]);
+			object_position_transform(kg, sd, &P[2]);
+		}
+
 		return set_attribute_float3_3(P, type, derivatives, val);
 	}
-	else if(name == "geom:name") {
-		ustring object_name = kg->osl.object_names[sd->object];
+	else if(name == u_geom_name) {
+		ustring object_name = kg->osl->object_names[sd->object];
 		return set_attribute_string(object_name, type, derivatives, val);
 	}
+	
+#ifdef __HAIR__
+	/* Hair Attributes */
+	else if (name == u_is_curve) {
+		float f = (sd->segment != ~0);
+		return set_attribute_float(f, type, derivatives, val);
+	}
+	else if (name == u_curve_thickness) {
+		float f = curve_thickness(kg, sd);
+		return set_attribute_float(f, type, derivatives, val);
+	}
+	else if (name == u_curve_tangent_normal) {
+		float3 f = curve_tangent_normal(kg, sd);
+		return set_attribute_float3(f, type, derivatives, val);
+	}
+#endif
 	else
 		return false;
 }
 
-static bool get_background_attribute(KernelGlobals *kg, ShaderData *sd, ustring name,
-                                     TypeDesc type, bool derivatives, void *val)
+bool OSLRenderServices::get_background_attribute(KernelGlobals *kg, ShaderData *sd, ustring name,
+                                                 TypeDesc type, bool derivatives, void *val)
 {
 	/* Ray Length */
-	if (name == "path:ray_length") {
+	if (name == u_path_ray_length) {
 		float f = sd->ray_length;
 		return set_attribute_float(f, type, derivatives, val);
 	}
@@ -590,25 +663,35 @@ bool OSLRenderServices::get_attribute(void *renderstate, bool derivatives, ustri
 {
 	KernelGlobals *kg = kernel_globals;
 	ShaderData *sd = (ShaderData *)renderstate;
-	int object = sd->object;
-	int tri = sd->prim;
+	int object, prim, segment;
 
 	/* lookup of attribute on another object */
-	if (object_name != u_empty) {
-		OSLGlobals::ObjectNameMap::iterator it = kg->osl.object_name_map.find(object_name);
+	if (object_name != u_empty || sd == NULL) {
+		OSLGlobals::ObjectNameMap::iterator it = kg->osl->object_name_map.find(object_name);
 
-		if (it == kg->osl.object_name_map.end())
+		if (it == kg->osl->object_name_map.end())
 			return false;
 
 		object = it->second;
-		tri = ~0;
+		prim = ~0;
+		segment = ~0;
 	}
-	else if (object == ~0) {
-		return get_background_attribute(kg, sd, name, type, derivatives, val);
+	else {
+		object = sd->object;
+		prim = sd->prim;
+#ifdef __HAIR__
+		segment = sd->segment;
+#else
+		segment = ~0;
+#endif
+
+		if (object == ~0)
+			return get_background_attribute(kg, sd, name, type, derivatives, val);
 	}
 
 	/* find attribute on object */
-	OSLGlobals::AttributeMap& attribute_map = kg->osl.attribute_map[object];
+	object = object*ATTR_PRIM_TYPES + (segment != ~0);
+	OSLGlobals::AttributeMap& attribute_map = kg->osl->attribute_map[object];
 	OSLGlobals::AttributeMap::iterator it = attribute_map.find(name);
 
 	if (it != attribute_map.end()) {
@@ -616,7 +699,7 @@ bool OSLRenderServices::get_attribute(void *renderstate, bool derivatives, ustri
 
 		if (attr.elem != ATTR_ELEMENT_VALUE) {
 			/* triangle and vertex attributes */
-			if (tri != ~0)
+			if (prim != ~0)
 				return get_mesh_attribute(kg, sd, attr, type, derivatives, val);
 		}
 		else {
@@ -647,6 +730,80 @@ bool OSLRenderServices::get_userdata(bool derivatives, ustring name, TypeDesc ty
 bool OSLRenderServices::has_userdata(ustring name, TypeDesc type, void *renderstate)
 {
 	return false; /* never called by OSL */
+}
+
+bool OSLRenderServices::texture(ustring filename, TextureOpt &options,
+                                OSL::ShaderGlobals *sg,
+                                float s, float t, float dsdx, float dtdx,
+                                float dsdy, float dtdy, float *result)
+{
+	OSL::TextureSystem *ts = kernel_globals->osl->ts;
+	bool status = ts->texture(filename, options, s, t, dsdx, dtdx, dsdy, dtdy, result);
+
+	if(!status) {
+		if(options.nchannels == 3 || options.nchannels == 4) {
+			result[0] = 1.0f;
+			result[1] = 0.0f;
+			result[2] = 1.0f;
+
+			if(options.nchannels == 4)
+				result[3] = 1.0f;
+		}
+	}
+
+	return status;
+}
+
+bool OSLRenderServices::texture3d(ustring filename, TextureOpt &options,
+                                  OSL::ShaderGlobals *sg, const OSL::Vec3 &P,
+                                  const OSL::Vec3 &dPdx, const OSL::Vec3 &dPdy,
+                                  const OSL::Vec3 &dPdz, float *result)
+{
+	OSL::TextureSystem *ts = kernel_globals->osl->ts;
+	bool status = ts->texture3d(filename, options, P, dPdx, dPdy, dPdz, result);
+
+	if(!status) {
+		if(options.nchannels == 3 || options.nchannels == 4) {
+			result[0] = 1.0f;
+			result[1] = 0.0f;
+			result[2] = 1.0f;
+
+			if(options.nchannels == 4)
+				result[3] = 1.0f;
+		}
+
+	}
+
+	return status;
+}
+
+bool OSLRenderServices::environment(ustring filename, TextureOpt &options,
+                                    OSL::ShaderGlobals *sg, const OSL::Vec3 &R,
+                                    const OSL::Vec3 &dRdx, const OSL::Vec3 &dRdy, float *result)
+{
+	OSL::TextureSystem *ts = kernel_globals->osl->ts;
+	bool status = ts->environment(filename, options, R, dRdx, dRdy, result);
+
+	if(!status) {
+		if(options.nchannels == 3 || options.nchannels == 4) {
+			result[0] = 1.0f;
+			result[1] = 0.0f;
+			result[2] = 1.0f;
+
+			if(options.nchannels == 4)
+				result[3] = 1.0f;
+		}
+	}
+
+	return status;
+}
+
+bool OSLRenderServices::get_texture_info(ustring filename, int subimage,
+                                         ustring dataname,
+                                         TypeDesc datatype, void *data)
+{
+	OSL::TextureSystem *ts = kernel_globals->osl->ts;
+	return ts->get_texture_info(filename, subimage, dataname, datatype, data);
 }
 
 int OSLRenderServices::pointcloud_search(OSL::ShaderGlobals *sg, ustring filename, const OSL::Vec3 &center,
@@ -697,13 +854,10 @@ bool OSLRenderServices::trace(TraceOpt &options, OSL::ShaderGlobals *sg,
 	ray.dD.dy = TO_FLOAT3(dRdy);
 
 	/* allocate trace data */
-	TraceData *tracedata = new TraceData();
+	OSLTraceData *tracedata = (OSLTraceData*)sg->tracedata;
 	tracedata->ray = ray;
 	tracedata->setup = false;
-
-	if(sg->tracedata)
-		delete (TraceData*)sg->tracedata;
-	sg->tracedata = tracedata;
+	tracedata->init = true;
 
 	/* raytrace */
 	return scene_intersect(kernel_globals, &ray, ~0, &tracedata->isect);
@@ -713,14 +867,14 @@ bool OSLRenderServices::trace(TraceOpt &options, OSL::ShaderGlobals *sg,
 bool OSLRenderServices::getmessage(OSL::ShaderGlobals *sg, ustring source, ustring name,
 	TypeDesc type, void *val, bool derivatives)
 {
-	TraceData *tracedata = (TraceData*)sg->tracedata;
+	OSLTraceData *tracedata = (OSLTraceData*)sg->tracedata;
 
-	if(source == "trace" && tracedata) {
-		if(name == "hit") {
+	if(source == u_trace && tracedata->init) {
+		if(name == u_hit) {
 			return set_attribute_int((tracedata->isect.prim != ~0), type, derivatives, val);
 		}
 		else if(tracedata->isect.prim != ~0) {
-			if(name == "hitdist") {
+			if(name == u_hitdist) {
 				float f[3] = {tracedata->isect.t, 0.0f, 0.0f};
 				return set_attribute_float(f, type, derivatives, val);
 			}
@@ -734,25 +888,25 @@ bool OSLRenderServices::getmessage(OSL::ShaderGlobals *sg, ustring source, ustri
 					tracedata->setup = true;
 				}
 
-				if(name == "N") {
+				if(name == u_N) {
 					return set_attribute_float3(sd->N, type, derivatives, val);
 				}
-				else if(name == "Ng") {
+				else if(name == u_Ng) {
 					return set_attribute_float3(sd->Ng, type, derivatives, val);
 				}
-				else if(name == "P") {
+				else if(name == u_P) {
 					float3 f[3] = {sd->P, sd->dP.dx, sd->dP.dy};
 					return set_attribute_float3(f, type, derivatives, val);
 				}
-				else if(name == "I") {
+				else if(name == u_I) {
 					float3 f[3] = {sd->I, sd->dI.dx, sd->dI.dy};
 					return set_attribute_float3(f, type, derivatives, val);
 				}
-				else if(name == "u") {
+				else if(name == u_u) {
 					float f[3] = {sd->u, sd->du.dx, sd->du.dy};
 					return set_attribute_float(f, type, derivatives, val);
 				}
-				else if(name == "v") {
+				else if(name == u_v) {
 					float f[3] = {sd->v, sd->dv.dx, sd->dv.dy};
 					return set_attribute_float(f, type, derivatives, val);
 				}

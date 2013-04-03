@@ -52,6 +52,8 @@
 
 #include "BKE_action.h"
 #include "BKE_fcurve.h"
+#include "BKE_global.h"
+#include "BKE_main.h"
 #include "BKE_nla.h"
 #include "BKE_context.h"
 #include "BKE_report.h"
@@ -103,8 +105,10 @@ static int act_new_exec(bContext *C, wmOperator *UNUSED(op))
 			action = BKE_action_copy(oldact);
 		}
 		else {
+			Main *bmain = CTX_data_main(C);
+
 			/* just make a new (empty) action */
-			action = add_empty_action("Action");
+			action = add_empty_action(bmain, "Action");
 		}
 		
 		/* when creating new ID blocks, use is already 1 (fake user), 
@@ -493,7 +497,7 @@ static int actkeys_copy_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 
 	/* copy keyframes */
-	if (ELEM(ac.datatype, ANIMCONT_GPENCIL, ANIMCONT_MASK)) {
+	if (ac.datatype == ANIMCONT_GPENCIL) {
 		/* FIXME... */
 		BKE_report(op->reports, RPT_ERROR, "Keyframe pasting is not available for grease pencil mode");
 		return OPERATOR_CANCELLED;
@@ -738,7 +742,7 @@ static int actkeys_duplicate_exec(bContext *C, wmOperator *UNUSED(op))
 	return OPERATOR_FINISHED;
 }
 
-static int actkeys_duplicate_invoke(bContext *C, wmOperator *op, wmEvent *UNUSED(event))
+static int actkeys_duplicate_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
 	actkeys_duplicate_exec(C, op);
 	
@@ -1308,6 +1312,15 @@ void ACTION_OT_keyframe_type(wmOperatorType *ot)
 
 /* ***************** Jump to Selected Frames Operator *********************** */
 
+static int actkeys_framejump_poll(bContext *C)
+{
+	/* prevent changes during render */
+	if (G.is_rendering)
+		return 0;
+
+	return ED_operator_action_active(C);
+}
+
 /* snap current-frame indicator to 'average time' of selected keyframe */
 static int actkeys_framejump_exec(bContext *C, wmOperator *UNUSED(op))
 {
@@ -1361,7 +1374,7 @@ void ACTION_OT_frame_jump(wmOperatorType *ot)
 	
 	/* api callbacks */
 	ot->exec = actkeys_framejump_exec;
-	ot->poll = ED_operator_action_active;
+	ot->poll = actkeys_framejump_poll;
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -1412,15 +1425,20 @@ static void snap_action_keys(bAnimContext *ac, short mode)
 	for (ale = anim_data.first; ale; ale = ale->next) {
 		AnimData *adt = ANIM_nla_mapping_get(ac, ale);
 		
-		if (adt) {
+		if (ale->type == ANIMTYPE_GPLAYER) {
+			ED_gplayer_snap_frames(ale->data, ac->scene, mode);
+		}
+		else if (ale->type == ANIMTYPE_MASKLAYER) {
+			ED_masklayer_snap_frames(ale->data, ac->scene, mode);
+		}
+		else if (adt) {
 			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 0, 1); 
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);
 			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 1, 1);
 		}
-		//else if (ale->type == ACTTYPE_GPLAYER)
-		//	snap_gplayer_frames(ale->data, mode);
-		else 
+		else {
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);
+		}
 	}
 	
 	BLI_freelistN(&anim_data);
@@ -1436,11 +1454,7 @@ static int actkeys_snap_exec(bContext *C, wmOperator *op)
 	/* get editor data */
 	if (ANIM_animdata_get_context(C, &ac) == 0)
 		return OPERATOR_CANCELLED;
-		
-	/* XXX... */
-	if (ELEM(ac.datatype, ANIMCONT_GPENCIL, ANIMCONT_MASK))
-		return OPERATOR_PASS_THROUGH;
-		
+	
 	/* get snapping mode */
 	mode = RNA_enum_get(op->ptr, "type");
 	
@@ -1448,7 +1462,8 @@ static int actkeys_snap_exec(bContext *C, wmOperator *op)
 	snap_action_keys(&ac, mode);
 	
 	/* validate keyframes after editing */
-	ANIM_editkeyframes_refresh(&ac);
+	if (!ELEM(ac.datatype, ANIMCONT_GPENCIL, ANIMCONT_MASK))
+		ANIM_editkeyframes_refresh(&ac);
 	
 	/* set notifier that keyframes have changed */
 	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);

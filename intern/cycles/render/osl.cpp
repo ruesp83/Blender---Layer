@@ -45,19 +45,27 @@ CCL_NAMESPACE_BEGIN
 
 OSLShaderManager::OSLShaderManager()
 {
-	thread_data_initialized = false;
-
 	services = new OSLRenderServices();
 
-	shading_system_init();
 	texture_system_init();
+	shading_system_init();
 }
 
 OSLShaderManager::~OSLShaderManager()
 {
 	OSL::ShadingSystem::destroy(ss);
 	OSL::TextureSystem::destroy(ts);
+
 	delete services;
+}
+
+void OSLShaderManager::reset(Scene *scene)
+{
+	OSL::ShadingSystem::destroy(ss);
+	delete services;
+
+	services = new OSLRenderServices();
+	shading_system_init();
 }
 
 void OSLShaderManager::device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
@@ -65,7 +73,7 @@ void OSLShaderManager::device_update(Device *device, DeviceScene *dscene, Scene 
 	if(!need_update)
 		return;
 
-	device_free(device, dscene);
+	device_free(device, dscene, scene);
 
 	/* determine which shaders are in use */
 	device_update_shaders_used(scene);
@@ -78,17 +86,19 @@ void OSLShaderManager::device_update(Device *device, DeviceScene *dscene, Scene 
 
 		if(progress.get_cancel()) return;
 
-		if(shader->sample_as_light && shader->has_surface_emission)
-			scene->light_manager->need_update = true;
-
-		OSLCompiler compiler((void*)this, (void*)ss);
+		OSLCompiler compiler((void*)this, (void*)ss, scene->image_manager);
 		compiler.background = (shader == scene->shaders[scene->default_background]);
 		compiler.compile(og, shader);
+
+		if(shader->sample_as_light && shader->has_surface_emission)
+			scene->light_manager->need_update = true;
 	}
 
 	/* setup shader engine */
 	og->ss = ss;
+	og->ts = ts;
 	og->services = services;
+
 	int background_id = scene->shader_manager->get_shader_id(scene->default_background);
 	og->background_state = og->surface_state[background_id & SHADER_MASK];
 	og->use = true;
@@ -102,32 +112,23 @@ void OSLShaderManager::device_update(Device *device, DeviceScene *dscene, Scene 
 	scene->image_manager->set_osl_texture_system((void*)ts);
 
 	device_update_common(device, dscene, scene, progress);
-
-	if(!thread_data_initialized) {
-		og->thread_data_init();
-		thread_data_initialized = true;
-	}
 }
 
-void OSLShaderManager::device_free(Device *device, DeviceScene *dscene)
+void OSLShaderManager::device_free(Device *device, DeviceScene *dscene, Scene *scene)
 {
 	OSLGlobals *og = (OSLGlobals*)device->osl_memory();
 
-	device_free_common(device, dscene);
+	device_free_common(device, dscene, scene);
 
 	/* clear shader engine */
 	og->use = false;
 	og->ss = NULL;
+	og->ts = NULL;
 
 	og->surface_state.clear();
 	og->volume_state.clear();
 	og->displacement_state.clear();
 	og->background_state.reset();
-
-	if(thread_data_initialized) {
-		og->thread_data_free();
-		thread_data_initialized = false;
-	}
 }
 
 void OSLShaderManager::texture_system_init()
@@ -136,6 +137,7 @@ void OSLShaderManager::texture_system_init()
 	ts = TextureSystem::create(true);
 	ts->attribute("automip",  1);
 	ts->attribute("autotile", 64);
+	ts->attribute("gray_to_rgb", 1);
 
 	/* effectively unlimited for now, until we support proper mipmap lookups */
 	ts->attribute("max_memory_MB", 16384);
@@ -167,7 +169,7 @@ void OSLShaderManager::shading_system_init()
 	const int nraytypes = sizeof(raytypes)/sizeof(raytypes[0]);
 	ss->attribute("raytypes", TypeDesc(TypeDesc::STRING, nraytypes), raytypes);
 
-	OSLShader::register_closures(ss);
+	OSLShader::register_closures((OSLShadingSystem*)ss);
 
 	loaded_shaders.clear();
 }
@@ -211,8 +213,14 @@ static string shader_filepath_hash(const string& filepath, uint64_t modified_tim
 
 const char *OSLShaderManager::shader_test_loaded(const string& hash)
 {
-	set<string>::iterator it = loaded_shaders.find(hash);
-	return (it == loaded_shaders.end())? NULL: it->c_str();
+	map<string, OSLShaderInfo>::iterator it = loaded_shaders.find(hash);
+	return (it == loaded_shaders.end())? NULL: it->first.c_str();
+}
+
+OSLShaderInfo *OSLShaderManager::shader_loaded_info(const string& hash)
+{
+	map<string, OSLShaderInfo>::iterator it = loaded_shaders.find(hash);
+	return (it == loaded_shaders.end())? NULL: &it->second;
 }
 
 const char *OSLShaderManager::shader_load_filepath(string filepath)
@@ -270,26 +278,69 @@ const char *OSLShaderManager::shader_load_filepath(string filepath)
 
 	if(!path_read_text(filepath, bytecode)) {
 		fprintf(stderr, "Cycles shader graph: failed to read file %s\n", filepath.c_str());
-		loaded_shaders.insert(bytecode_hash); /* to avoid repeat tries */
+		OSLShaderInfo info;
+		loaded_shaders[bytecode_hash] = info; /* to avoid repeat tries */
 		return NULL;
 	}
 
 	return shader_load_bytecode(bytecode_hash, bytecode);
 }
 
+/* don't try this at home .. this is a template trick to use either
+ * LoadMemoryShader or LoadMemoryCompiledShader which are the function
+ * names in our custom branch and the official repository. */
+
+template<bool C, typename T = void> struct enable_if { typedef T type; };
+template<typename T> struct enable_if<false, T> { };
+
+template<typename T, typename Sign>
+struct has_LoadMemoryCompiledShader {
+	typedef int yes;
+	typedef char no;
+	
+	template<typename U, U> struct type_check;
+	template<typename _1> static yes &chk(type_check<Sign, &_1::LoadMemoryCompiledShader>*);
+	template<typename   > static no  &chk(...);
+	static bool const value = sizeof(chk<T>(0)) == sizeof(yes);
+};
+
+template<typename T>
+typename enable_if<has_LoadMemoryCompiledShader<T, 
+	bool(T::*)(const char*, const char*)>::value, bool>::type
+load_memory_shader(T *ss, const char *name, const char *buffer)
+{
+	return ss->LoadMemoryCompiledShader(name, buffer);
+}
+
+template<typename T>
+typename enable_if<!has_LoadMemoryCompiledShader<T, 
+	bool(T::*)(const char*, const char*)>::value, bool>::type
+load_memory_shader(T *ss, const char *name, const char *buffer)
+{
+	return ss->LoadMemoryShader(name, buffer);
+}
+
 const char *OSLShaderManager::shader_load_bytecode(const string& hash, const string& bytecode)
 {
-	ss->LoadMemoryShader(hash.c_str(), bytecode.c_str());
+	load_memory_shader(ss, hash.c_str(), bytecode.c_str());
 
-	return loaded_shaders.insert(hash).first->c_str();
+	/* this is a bit weak, but works */
+	OSLShaderInfo info;
+	info.has_surface_emission = (bytecode.find("\"emission\"") != string::npos);
+	info.has_surface_transparent = (bytecode.find("\"transparent\"") != string::npos);
+	info.has_surface_bssrdf = (bytecode.find("\"bssrdf\"") != string::npos);
+	loaded_shaders[hash] = info;
+
+	return loaded_shaders.find(hash)->first.c_str();
 }
 
 /* Graph Compiler */
 
-OSLCompiler::OSLCompiler(void *manager_, void *shadingsys_)
+OSLCompiler::OSLCompiler(void *manager_, void *shadingsys_, ImageManager *image_manager_)
 {
 	manager = manager_;
 	shadingsys = shadingsys_;
+	image_manager = image_manager_;
 	current_type = SHADER_TYPE_SURFACE;
 	current_shader = NULL;
 	background = false;
@@ -333,7 +384,7 @@ string OSLCompiler::compatible_name(ShaderNode *node, ShaderOutput *output)
 	while((i = sname.find(" ")) != string::npos)
 		sname.replace(i, 1, "");
 	
-	/* if output exists with the same name, add "In" suffix */
+	/* if input exists with the same name, add "Out" suffix */
 	foreach(ShaderInput *input, node->inputs) {
 		if (strcmp(input->name, output->name)==0) {
 			sname += "Out";
@@ -348,6 +399,9 @@ bool OSLCompiler::node_skip_input(ShaderNode *node, ShaderInput *input)
 {
 	/* exception for output node, only one input is actually used
 	 * depending on the current shader type */
+	
+	if(!(input->usage & ShaderInput::USE_OSL))
+		return true;
 
 	if(node->name == ustring("output")) {
 		if(strcmp(input->name, "Surface") == 0 && current_type != SHADER_TYPE_SURFACE)
@@ -415,6 +469,7 @@ void OSLCompiler::add(ShaderNode *node, const char *name, bool isfilepath)
 					parameter(param_name.c_str(), input->value_string);
 					break;
 				case SHADER_SOCKET_CLOSURE:
+				case SHADER_SOCKET_UNDEFINED:
 					break;
 			}
 		}
@@ -447,6 +502,18 @@ void OSLCompiler::add(ShaderNode *node, const char *name, bool isfilepath)
 
 			ss->ConnectShaders(id_from.c_str(), param_from.c_str(), id_to.c_str(), param_to.c_str());
 		}
+	}
+
+	/* test if we shader contains specific closures */
+	OSLShaderInfo *info = ((OSLShaderManager*)manager)->shader_loaded_info(name);
+
+	if(info) {
+		if(info->has_surface_emission)
+			current_shader->has_surface_emission = true;
+		if(info->has_surface_transparent)
+			current_shader->has_surface_transparent = true;
+		if(info->has_surface_bssrdf)
+			current_shader->has_surface_bssrdf = true;
 	}
 }
 
@@ -603,10 +670,12 @@ void OSLCompiler::generate_nodes(const set<ShaderNode*>& nodes)
 					node->compile(*this);
 					done.insert(node);
 
-					if(node->name == ustring("emission"))
+					if(node->has_surface_emission())
 						current_shader->has_surface_emission = true;
-					if(node->name == ustring("transparent"))
+					if(node->has_surface_transparent())
 						current_shader->has_surface_transparent = true;
+					if(node->has_surface_bssrdf())
+						current_shader->has_surface_bssrdf = true;
 				}
 				else
 					nodes_done = false;
@@ -672,6 +741,7 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
 		shader->has_surface = false;
 		shader->has_surface_emission = false;
 		shader->has_surface_transparent = false;
+		shader->has_surface_bssrdf = false;
 		shader->has_volume = false;
 		shader->has_displacement = false;
 

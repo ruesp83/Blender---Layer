@@ -236,7 +236,7 @@ int KX_LightObject::GetShadowLayer()
 		return 0;
 }
 
-void KX_LightObject::BindShadowBuffer(RAS_IRasterizer *ras, KX_Camera *cam, MT_Transform& camtrans)
+void KX_LightObject::BindShadowBuffer(RAS_IRasterizer *ras, RAS_ICanvas *canvas, KX_Camera *cam, MT_Transform& camtrans)
 {
 	GPULamp *lamp;
 	float viewmat[4][4], winmat[4][4];
@@ -245,6 +245,12 @@ void KX_LightObject::BindShadowBuffer(RAS_IRasterizer *ras, KX_Camera *cam, MT_T
 	/* bind framebuffer */
 	lamp = GetGPULamp();
 	GPU_lamp_shadow_buffer_bind(lamp, viewmat, &winsize, winmat);
+
+	if (GPU_lamp_shadow_buffer_type(lamp) == LA_SHADMAP_VARIANCE)
+		ras->SetUsingOverrideShader(true);
+
+	/* GPU_lamp_shadow_buffer_bind() changes the viewport, so update the canvas */
+	canvas->UpdateViewPort(0, 0, winsize, winsize);
 
 	/* setup camera transformation */
 	MT_Matrix4x4 modelviewmat((float*)viewmat);
@@ -273,6 +279,9 @@ void KX_LightObject::UnbindShadowBuffer(RAS_IRasterizer *ras)
 {
 	GPULamp *lamp = GetGPULamp();
 	GPU_lamp_shadow_buffer_unbind(lamp);
+
+	if (GPU_lamp_shadow_buffer_type(lamp) == LA_SHADMAP_VARIANCE)
+		ras->SetUsingOverrideShader(false);
 }
 
 struct Image *KX_LightObject::GetTextureImage(short texslot)
@@ -372,11 +381,11 @@ PyObject *KX_LightObject::pyattr_get_typeconst(void *self_v, const KX_PYATTRIBUT
 	const char* type = attrdef->m_name;
 
 	if (!strcmp(type, "SPOT")) {
-		retvalue = PyLong_FromSsize_t(RAS_LightObject::LIGHT_SPOT);
+		retvalue = PyLong_FromLong(RAS_LightObject::LIGHT_SPOT);
 	} else if (!strcmp(type, "SUN")) {
-		retvalue = PyLong_FromSsize_t(RAS_LightObject::LIGHT_SUN);
+		retvalue = PyLong_FromLong(RAS_LightObject::LIGHT_SUN);
 	} else if (!strcmp(type, "NORMAL")) {
-		retvalue = PyLong_FromSsize_t(RAS_LightObject::LIGHT_NORMAL);
+		retvalue = PyLong_FromLong(RAS_LightObject::LIGHT_NORMAL);
 	}
 	else {
 		/* should never happen */
@@ -390,13 +399,13 @@ PyObject *KX_LightObject::pyattr_get_typeconst(void *self_v, const KX_PYATTRIBUT
 PyObject *KX_LightObject::pyattr_get_type(void* self_v, const KX_PYATTRIBUTE_DEF *attrdef)
 {
 	KX_LightObject* self = static_cast<KX_LightObject*>(self_v);
-	return PyLong_FromSsize_t(self->m_lightobj.m_type);
+	return PyLong_FromLong(self->m_lightobj.m_type);
 }
 
 int KX_LightObject::pyattr_set_type(void* self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
 {
 	KX_LightObject* self = static_cast<KX_LightObject*>(self_v);
-	int val = PyLong_AsSsize_t(value);
+	const int val = PyLong_AsLong(value);
 	if ((val==-1 && PyErr_Occurred()) || val<0 || val>2) {
 		PyErr_SetString(PyExc_ValueError, "light.type= val: KX_LightObject, expected an int between 0 and 2");
 		return PY_SET_ATTR_FAIL;

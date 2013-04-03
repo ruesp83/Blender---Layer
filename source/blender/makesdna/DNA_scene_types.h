@@ -271,8 +271,9 @@ typedef struct ImageFormatData {
 
 	/* Jpeg2000 */
 	char  jp2_flag;
+	char jp2_codec;
 
-	char pad[7];
+	char pad[6];
 
 	/* color management */
 	ColorManagedViewSettings view_settings;
@@ -341,6 +342,10 @@ typedef struct ImageFormatData {
 #define R_IMF_JP2_FLAG_CINE_PRESET  (1<<1)  /* was R_JPEG2K_CINE_PRESET */
 #define R_IMF_JP2_FLAG_CINE_48      (1<<2)  /* was R_JPEG2K_CINE_48FPS */
 
+/* ImageFormatData.jp2_codec */
+#define R_IMF_JP2_CODEC_JP2  0
+#define R_IMF_JP2_CODEC_J2K  1
+
 /* ImageFormatData.cineon_flag */
 #define R_IMF_CINEON_FLAG_LOG (1<<0)  /* was R_CINEON_LOG */
 
@@ -383,16 +388,22 @@ typedef struct RenderData {
 
 	short filtertype;	/* filter is box, tent, gauss, mitch, etc */
 
-	short size, maximsize;	/* size in %, max in Kb */
+	short size; /* size in % */
+	
+	short maximsize DNA_DEPRECATED; /* max in Kb */
+
+	short pad6;
+
 	/* from buttons: */
 	/**
 	 * The desired number of pixels in the x direction
 	 */
-	short xsch;
+	int xsch;
 	/**
 	 * The desired number of pixels in the y direction
 	 */
-	short ysch;
+	int ysch;
+
 	/**
 	 * The number of part to use in the x direction
 	 */
@@ -405,7 +416,7 @@ typedef struct RenderData {
 	/**
 	 * render tile dimensions
 	 */
-	short tilex, tiley;
+	int tilex, tiley;
 
 	short planes  DNA_DEPRECATED, imtype  DNA_DEPRECATED, subimtype  DNA_DEPRECATED, quality  DNA_DEPRECATED; /*deprecated!*/
 	
@@ -413,6 +424,7 @@ typedef struct RenderData {
 	 * Render to image editor, fullscreen or to new window.
 	 */
 	short displaymode;
+	short pad7;
 
 	/**
 	 * Flags for render settings. Use bit-masking to access the settings.
@@ -453,8 +465,6 @@ typedef struct RenderData {
 
 	short frs_sec, edgeint;
 
-	int pad;
-
 	
 	/* safety, border and display rect */
 	rctf safety, border;
@@ -491,7 +501,8 @@ typedef struct RenderData {
 	/* Bake Render options */
 	short bake_osa, bake_filter, bake_mode, bake_flag;
 	short bake_normal_space, bake_quad_split;
-	float bake_maxdist, bake_biasdist, bake_pad;
+	float bake_maxdist, bake_biasdist;
+	short bake_samples, bake_pad;
 
 	/* path to render output */
 	char pic[1024]; /* 1024 = FILE_MAX */
@@ -635,7 +646,8 @@ typedef struct GameData {
 	short physicsEngine;
 	short exitkey, pad;
 	short ticrate, maxlogicstep, physubstep, maxphystep;
-	short obstacleSimulation, pad1;
+	short obstacleSimulation;
+	short raster_storage;
 	float levelHeight;
 	float deactivationtime, lineardeactthreshold, angulardeactthreshold, pad2;
 } GameData;
@@ -662,6 +674,12 @@ typedef struct GameData {
 #define OBSTSIMULATION_TOI_rays		1
 #define OBSTSIMULATION_TOI_cells	2
 
+/* Raster storage */
+#define RAS_STORE_AUTO		0
+#define RAS_STORE_IMMEDIATE	1
+#define RAS_STORE_VA		2
+#define RAS_STORE_VBO		3
+
 /* GameData.flag */
 #define GAME_RESTRICT_ANIM_UPDATES			(1 << 0)
 #define GAME_ENABLE_ALL_FRAMES				(1 << 1)
@@ -680,6 +698,7 @@ typedef struct GameData {
 #define GAME_SHOW_MOUSE						(1 << 14)
 #define GAME_GLSL_NO_COLOR_MANAGEMENT		(1 << 15)
 #define GAME_SHOW_OBSTACLE_SIMULATION		(1 << 16)
+#define GAME_NO_MATERIAL_CACHING			(1 << 17)
 /* Note: GameData.flag is now an int (max 32 flags). A short could only take 16 flags */
 
 /* GameData.playerflag */
@@ -800,23 +819,11 @@ typedef struct Sculpt {
 	//char tablet_size, tablet_strength; XXX not used?
 	int radial_symm[3];
 
-	// all this below is used to communicate with the cursor drawing routine
+	/* Maximum edge length for dynamic topology sculpting (in pixels) */
+	int detail_size;
 
-	/* record movement of mouse so that rake can start at an intuitive angle */
-	float last_x, last_y;
-	float last_angle;
-
-	int draw_anchored;
-	int   anchored_size;
-	float anchored_location[3];
-	float anchored_initial_mouse[2];
-
-	int draw_pressure;
-	float pressure_value;
-
-	float special_rotation;
-
-	int pad;
+	/* Direction used for SCULPT_OT_symmetrize operator */
+	int symmetrize_direction;
 } Sculpt;
 
 typedef struct UvSculpt {
@@ -879,7 +886,29 @@ typedef struct UnifiedPaintSettings {
 
 	/* user preferences for sculpt and paint */
 	int flag;
+
+	/* rake rotation */
+
+	/* record movement of mouse so that rake can start at an intuitive angle */
+	float last_rake[2];
 	int pad;
+
+	float brush_rotation;
+
+	// all this below is used to communicate with the cursor drawing routine
+	int draw_anchored;
+	int   anchored_size;
+	float anchored_initial_mouse[2];
+
+	/* drawing pressure */
+	int draw_pressure;
+	float pressure_value;
+
+	/* position of mouse, used to sample the texture */
+	float tex_mouse[2];
+	/* radius of brush, premultiplied with pressure.
+	 * In case of anchored brushes contains that radius */
+	float pixel_radius;
 } UnifiedPaintSettings;
 
 typedef enum {
@@ -945,7 +974,7 @@ typedef struct ToolSettings {
 	short uvcalc_mapalign;
 	short uvcalc_flag;
 	short uv_flag, uv_selectmode;
-	short uv_subsurf_level;
+	short pad2;
 	
 	/* Grease Pencil */
 	short gpencil_flags;
@@ -973,7 +1002,7 @@ typedef struct ToolSettings {
 
 	/* Multires */
 	char multires_subdiv_type;
-	char pad2[5];
+	char pad3[5];
 
 	/* Skeleton generation */
 	short skgen_resolution;
@@ -1009,15 +1038,16 @@ typedef struct ToolSettings {
 
 	/* Transform */
 	char snap_mode, snap_node_mode;
-	char pad3;
+	char snap_uv_mode;
 	short snap_flag, snap_target;
 	short proportional, prop_mode;
 	char proportional_objects; /* proportional edit, object mode */
 	char proportional_mask; /* proportional edit, object mode */
-	char pad4[2];
+	char pad4[1];
 
 	char auto_normalize; /*auto normalizing mode in wpaint*/
 	char multipaint; /* paint multiple bones in wpaint */
+	char weightuser;
 
 	/* UV painting */
 	int use_uv_sculpt;
@@ -1118,11 +1148,8 @@ typedef struct Scene {
 	
 	/* none of the dependency graph  vars is mean to be saved */
 	struct  DagForest *theDag;
-	short dagisvalid, dagflags;
+	short dagflags;
 	short recalc;				/* recalc = counterpart of ob->recalc */
-
-	short pad6;
-	int pad5;
 
 	/* User-Defined KeyingSets */
 	int active_keyingset;			/* index of the active KeyingSet. first KeyingSet has index 1, 'none' active is 0, 'add new' is -1 */
@@ -1151,6 +1178,9 @@ typedef struct Scene {
 	ColorManagedViewSettings view_settings;
 	ColorManagedDisplaySettings display_settings;
 	ColorManagedColorspaceSettings sequencer_colorspace_settings;
+	
+	/* RigidBody simulation world+settings */
+	struct RigidBodyWorld *rigidbody_world;
 } Scene;
 
 
@@ -1198,6 +1228,7 @@ typedef struct Scene {
 /* seq_flag */
 #define R_SEQ_GL_PREV 1
 // #define R_SEQ_GL_REND 2  // UNUSED, opengl render has its own operator now.
+#define R_SEQ_SOLID_TEX 4
 
 /* displaymode */
 
@@ -1271,11 +1302,11 @@ typedef struct Scene {
 /* alphamode */
 #define R_ADDSKY		0
 #define R_ALPHAPREMUL	1
-#define R_ALPHAKEY		2
+/*#define R_ALPHAKEY		2*/ /* deprecated, shouldn't be used */
 
 /* color_mgt_flag */
 #define R_COLOR_MANAGEMENT              (1 << 0)  /* deprecated, should only be used in versioning code only */
-#define R_COLOR_MANAGEMENT_PREDIVIDE    (1 << 1)
+/*#define R_COLOR_MANAGEMENT_PREDIVIDE    (1 << 1)*/  /* deprecated, shouldn't be used */
 
 /* subimtype, flag options for imtype */
 #define R_OPENEXR_HALF    1                                      /*deprecated*/
@@ -1298,6 +1329,7 @@ typedef struct Scene {
 #define R_BAKE_NORMALIZE	8
 #define R_BAKE_MULTIRES		16
 #define R_BAKE_LORES_MESH	32
+#define R_BAKE_VCOL			64
 
 /* bake_normal_space */
 #define R_BAKE_SPACE_CAMERA	 0
@@ -1329,46 +1361,46 @@ typedef struct Scene {
 #define TESTBASE(v3d, base)  (                                                \
 	((base)->flag & SELECT) &&                                                \
 	((base)->lay & v3d->lay) &&                                               \
-	(((base)->object->restrictflag & OB_RESTRICT_VIEW)==0)  )
+	(((base)->object->restrictflag & OB_RESTRICT_VIEW) == 0))
 #define TESTBASELIB(v3d, base)  (                                             \
 	((base)->flag & SELECT) &&                                                \
 	((base)->lay & v3d->lay) &&                                               \
-	((base)->object->id.lib==NULL) &&                                         \
-	(((base)->object->restrictflag & OB_RESTRICT_VIEW)==0)  )
+	((base)->object->id.lib == NULL) &&                                       \
+	(((base)->object->restrictflag & OB_RESTRICT_VIEW) == 0))
 #define TESTBASELIB_BGMODE(v3d, scene, base)  (                               \
 	((base)->flag & SELECT) &&                                                \
 	((base)->lay & (v3d ? v3d->lay : scene->lay)) &&                          \
-	((base)->object->id.lib==NULL) &&                                         \
-	(((base)->object->restrictflag & OB_RESTRICT_VIEW)==0)  )
+	((base)->object->id.lib == NULL) &&                                       \
+	(((base)->object->restrictflag & OB_RESTRICT_VIEW) == 0))
 #define BASE_EDITABLE_BGMODE(v3d, scene, base)  (                             \
 	((base)->lay & (v3d ? v3d->lay : scene->lay)) &&                          \
-	((base)->object->id.lib==NULL) &&                                         \
-	(((base)->object->restrictflag & OB_RESTRICT_VIEW)==0))
+	((base)->object->id.lib == NULL) &&                                       \
+	(((base)->object->restrictflag & OB_RESTRICT_VIEW) == 0))
 #define BASE_SELECTABLE(v3d, base)  (                                         \
 	(base->lay & v3d->lay) &&                                                 \
-	(base->object->restrictflag & (OB_RESTRICT_SELECT|OB_RESTRICT_VIEW))==0  )
+	(base->object->restrictflag & (OB_RESTRICT_SELECT | OB_RESTRICT_VIEW)) == 0)
 #define BASE_VISIBLE(v3d, base)  (                                            \
 	(base->lay & v3d->lay) &&                                                 \
-	(base->object->restrictflag & OB_RESTRICT_VIEW)==0  )
+	(base->object->restrictflag & OB_RESTRICT_VIEW) == 0)
 
 #define FIRSTBASE		scene->base.first
 #define LASTBASE		scene->base.last
 #define BASACT			(scene->basact)
-#define OBACT			(BASACT? BASACT->object: NULL)
+#define OBACT			(BASACT ? BASACT->object: NULL)
 
 #define V3D_CAMERA_LOCAL(v3d) ((!(v3d)->scenelock && (v3d)->camera) ? (v3d)->camera : NULL)
 #define V3D_CAMERA_SCENE(scene, v3d) ((!(v3d)->scenelock && (v3d)->camera) ? (v3d)->camera : (scene)->camera)
 
-#define	CFRA			(scene->r.cfra)
-#define SUBFRA			(scene->r.subframe)
-#define	SFRA			(scene->r.sfra)
-#define	EFRA			(scene->r.efra)
-#define PRVRANGEON		(scene->r.flag & SCER_PRV_RANGE)
-#define PSFRA			((PRVRANGEON) ? (scene->r.psfra) : (scene->r.sfra))
-#define PEFRA			((PRVRANGEON) ? (scene->r.pefra) : (scene->r.efra))
-#define FRA2TIME(a)           ((((double) scene->r.frs_sec_base) * (double)(a)) / (double)scene->r.frs_sec)
-#define TIME2FRA(a)           ((((double) scene->r.frs_sec) * (double)(a)) / (double)scene->r.frs_sec_base)
-#define FPS                     (((double) scene->r.frs_sec) / (double)scene->r.frs_sec_base)
+#define CFRA            (scene->r.cfra)
+#define SUBFRA          (scene->r.subframe)
+#define SFRA            (scene->r.sfra)
+#define EFRA            (scene->r.efra)
+#define PRVRANGEON      (scene->r.flag & SCER_PRV_RANGE)
+#define PSFRA           ((PRVRANGEON) ? (scene->r.psfra) : (scene->r.sfra))
+#define PEFRA           ((PRVRANGEON) ? (scene->r.pefra) : (scene->r.efra))
+#define FRA2TIME(a)     ((((double) scene->r.frs_sec_base) * (double)(a)) / (double)scene->r.frs_sec)
+#define TIME2FRA(a)     ((((double) scene->r.frs_sec) * (double)(a)) / (double)scene->r.frs_sec_base)
+#define FPS              (((double) scene->r.frs_sec) / (double)scene->r.frs_sec_base)
 
 /* base->flag is in DNA_object_types.h */
 
@@ -1421,6 +1453,13 @@ typedef struct Scene {
 #define PROP_EDIT_ON			1
 #define PROP_EDIT_CONNECTED	2
 
+/* toolsettings->weightuser */
+enum {
+	OB_DRAW_GROUPUSER_NONE      = 0,
+	OB_DRAW_GROUPUSER_ACTIVE    = 1,
+	OB_DRAW_GROUPUSER_ALL       = 2
+};
+
 /* sce->flag */
 #define SCE_DS_SELECTED			(1<<0)
 #define SCE_DS_COLLAPSED		(1<<1)
@@ -1464,6 +1503,14 @@ typedef enum SculptFlags {
 	SCULPT_USE_OPENMP = (1<<7),
 	SCULPT_ONLY_DEFORM = (1<<8),
 	SCULPT_SHOW_DIFFUSE = (1<<9),
+
+	/* If set, the mesh will be drawn with smooth-shading in
+	 * dynamic-topology mode */
+	SCULPT_DYNTOPO_SMOOTH_SHADING = (1<<10),
+
+	/* If set, dynamic-topology brushes will collapse short edges in
+	 * addition to subdividing long ones */
+	SCULPT_DYNTOPO_COLLAPSE = (1<<11)
 } SculptFlags;
 
 /* ImagePaintSettings.flag */
@@ -1472,7 +1519,6 @@ typedef enum SculptFlags {
 // #define IMAGEPAINT_DRAW_TOOL_DRAWING	4 // deprecated
 
 /* projection painting only */
-#define IMAGEPAINT_PROJECT_DISABLE		8	/* Non projection 3D painting */
 #define IMAGEPAINT_PROJECT_XRAY			16
 #define IMAGEPAINT_PROJECT_BACKFACE		32
 #define IMAGEPAINT_PROJECT_FLAT			64
@@ -1600,4 +1646,4 @@ typedef enum SculptFlags {
 }
 #endif
 
-#endif
+#endif  /* __DNA_SCENE_TYPES_H__ */

@@ -32,6 +32,8 @@ set(INC_SYS
 
 set(SRC
 	boost_locale_wrapper.cpp
+
+	boost_locale_wrapper.h
 )
 
 if(WITH_INTERNATIONAL)
@@ -39,6 +41,7 @@ if(WITH_INTERNATIONAL)
 		${BOOST_INCLUDE_DIR}
 	)
 	add_definitions(-DWITH_INTERNATIONAL)
+	add_definitions(${BOOST_DEFINITIONS})
 endif()
 
 blender_add_lib(bf_intern_locale "${SRC}" "${INC}" "${INC_SYS}")

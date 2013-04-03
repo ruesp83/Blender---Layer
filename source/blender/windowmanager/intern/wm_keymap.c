@@ -101,11 +101,8 @@ static int wm_keymap_item_equals_result(wmKeyMapItem *a, wmKeyMapItem *b)
 	if (strcmp(a->idname, b->idname) != 0)
 		return 0;
 	
-	if (!((a->ptr == NULL && b->ptr == NULL) ||
-	      (a->ptr && b->ptr && IDP_EqualsProperties(a->ptr->data, b->ptr->data))))
-	{
+	if (!RNA_struct_equals(a->ptr, b->ptr))
 		return 0;
-	}
 	
 	if ((a->flag & KMI_INACTIVE) != (b->flag & KMI_INACTIVE))
 		return 0;
@@ -129,10 +126,13 @@ static int wm_keymap_item_equals(wmKeyMapItem *a, wmKeyMapItem *b)
 /* properties can be NULL, otherwise the arg passed is used and ownership is given to the kmi */
 void WM_keymap_properties_reset(wmKeyMapItem *kmi, struct IDProperty *properties)
 {
-	WM_operator_properties_free(kmi->ptr);
-	MEM_freeN(kmi->ptr);
+	if (LIKELY(kmi->ptr)) {
+		WM_operator_properties_free(kmi->ptr);
+		MEM_freeN(kmi->ptr);
 
-	kmi->ptr = NULL;
+		kmi->ptr = NULL;
+	}
+
 	kmi->properties = properties;
 
 	wm_keymap_item_properties_set(kmi);
@@ -395,7 +395,7 @@ int WM_keymap_remove_item(wmKeyMap *keymap, wmKeyMapItem *kmi)
 		}
 		BLI_freelinkN(&keymap->items, kmi);
 
-		WM_keyconfig_update_tag(keymap, kmi);
+		WM_keyconfig_update_tag(keymap, NULL);
 		return TRUE;
 	}
 	else {
@@ -737,6 +737,24 @@ wmKeyMapItem *WM_modalkeymap_add_item_str(wmKeyMap *km, int type, int val, int m
 	return kmi;
 }
 
+wmKeyMapItem *WM_modalkeymap_find_propvalue(wmKeyMap *km, const int propvalue)
+{
+
+	if (km->flag & KEYMAP_MODAL) {
+		wmKeyMapItem *kmi;
+		for (kmi = km->items.first; kmi; kmi = kmi->next) {
+			if (kmi->propvalue == propvalue) {
+				return kmi;
+			}
+		}
+	}
+	else {
+		BLI_assert(!"called with non modal keymap");
+	}
+
+	return NULL;
+}
+
 void WM_modalkeymap_assign(wmKeyMap *km, const char *opname)
 {
 	wmOperatorType *ot = WM_operatortype_find(opname, 0);
@@ -785,7 +803,7 @@ const char *WM_key_event_string(short type)
 	return "";
 }
 
-char *WM_keymap_item_to_string(wmKeyMapItem *kmi, char *str, int len)
+int WM_keymap_item_to_string(wmKeyMapItem *kmi, char *str, int len)
 {
 	char buf[128];
 
@@ -818,9 +836,7 @@ char *WM_keymap_item_to_string(wmKeyMapItem *kmi, char *str, int len)
 	}
 
 	strcat(buf, WM_key_event_string(kmi->type));
-	BLI_strncpy(str, buf, len);
-
-	return str;
+	return BLI_strncpy_rlen(str, buf, len);
 }
 
 static wmKeyMapItem *wm_keymap_item_find_handlers(

@@ -47,10 +47,10 @@ def get_version():
 
         if (ver_base is not None) and (ver_char is not None) and (ver_cycle is not None):
             # eg '2.56a-beta'
-            if ver_cycle:
+            if ver_cycle != "release":
                 ver_display = "%s%s-%s" % (ver_base, ver_char, ver_cycle)
             else:
-                ver_display = "%s%s" % (ver_base, ver_char)  # assume release
+                ver_display = "%s%s" % (ver_base, ver_char)
 
             return ver_base, ver_display, ver_cycle
 
@@ -99,7 +99,7 @@ def validate_arguments(args, bc):
             'WITH_BF_PYTHON', 'WITH_BF_PYTHON_SAFETY', 'BF_PYTHON', 'BF_PYTHON_VERSION', 'BF_PYTHON_INC', 'BF_PYTHON_BINARY', 'BF_PYTHON_LIB', 'BF_PYTHON_LIBPATH', 'WITH_BF_STATICPYTHON', 'WITH_OSX_STATICPYTHON', 'BF_PYTHON_LIB_STATIC', 'BF_PYTHON_DLL', 'BF_PYTHON_ABI_FLAGS', 
             'WITH_BF_OPENAL', 'BF_OPENAL', 'BF_OPENAL_INC', 'BF_OPENAL_LIB', 'BF_OPENAL_LIBPATH', 'WITH_BF_STATICOPENAL', 'BF_OPENAL_LIB_STATIC',
             'WITH_BF_SDL', 'BF_SDL', 'BF_SDL_INC', 'BF_SDL_LIB', 'BF_SDL_LIBPATH',
-            'WITH_BF_JACK', 'BF_JACK', 'BF_JACK_INC', 'BF_JACK_LIB', 'BF_JACK_LIBPATH', 'WITH_BF_STATICJACK', 'BF_JACK_LIB_STATIC',
+            'WITH_BF_JACK', 'BF_JACK', 'BF_JACK_INC', 'BF_JACK_LIB', 'BF_JACK_LIBPATH', 'WITH_BF_JACK_DYNLOAD',
             'WITH_BF_SNDFILE', 'BF_SNDFILE', 'BF_SNDFILE_INC', 'BF_SNDFILE_LIB', 'BF_SNDFILE_LIBPATH', 'WITH_BF_STATICSNDFILE', 'BF_SNDFILE_LIB_STATIC',
             'BF_PTHREADS', 'BF_PTHREADS_INC', 'BF_PTHREADS_LIB', 'BF_PTHREADS_LIBPATH',
             'WITH_BF_OPENEXR', 'BF_OPENEXR', 'BF_OPENEXR_INC', 'BF_OPENEXR_LIB', 'BF_OPENEXR_LIBPATH', 'WITH_BF_STATICOPENEXR', 'BF_OPENEXR_LIB_STATIC',
@@ -108,7 +108,7 @@ def validate_arguments(args, bc):
             'WITH_BF_STATICFFMPEG', 'BF_FFMPEG_LIB_STATIC',
             'WITH_BF_OGG', 'BF_OGG', 'BF_OGG_LIB',
             'WITH_BF_FRAMESERVER',
-            'WITH_BF_COMPOSITOR', 'WITH_BF_COMPOSITOR_LEGACY',
+            'WITH_BF_COMPOSITOR',
             'WITH_BF_JPEG', 'BF_JPEG', 'BF_JPEG_INC', 'BF_JPEG_LIB', 'BF_JPEG_LIBPATH', 'WITH_BF_STATICJPEG', 'BF_JPEG_LIB_STATIC',
             'WITH_BF_OPENJPEG', 'BF_OPENJPEG', 'BF_OPENJPEG_INC', 'BF_OPENJPEG_LIB', 'BF_OPENJPEG_LIBPATH',
             'WITH_BF_REDCODE', 'BF_REDCODE', 'BF_REDCODE_INC', 'BF_REDCODE_LIB', 'BF_REDCODE_LIBPATH',
@@ -119,7 +119,8 @@ def validate_arguments(args, bc):
             'WITH_BF_ICONV', 'BF_ICONV', 'BF_ICONV_INC', 'BF_ICONV_LIB', 'BF_ICONV_LIBPATH',
             'WITH_BF_GAMEENGINE',
             'WITH_BF_BULLET', 'BF_BULLET', 'BF_BULLET_INC', 'BF_BULLET_LIB',
-            'WITH_BF_ELTOPO', 'BF_LAPACK', 'BF_LAPACK_LIB', 'BF_LAPACK_LIBPATH', 'BF_LAPACK_LIB_STATIC',
+            # 'WITH_BF_ELTOPO',  # now only available in a branch
+            'BF_LAPACK', 'BF_LAPACK_LIB', 'BF_LAPACK_LIBPATH', 'BF_LAPACK_LIB_STATIC',
             'BF_WINTAB', 'BF_WINTAB_INC',
             'BF_FREETYPE', 'BF_FREETYPE_INC', 'BF_FREETYPE_LIB', 'BF_FREETYPE_LIBPATH', 'BF_FREETYPE_LIB_STATIC', 'WITH_BF_FREETYPE_STATIC',
             'WITH_BF_QUICKTIME', 'BF_QUICKTIME', 'BF_QUICKTIME_INC', 'BF_QUICKTIME_LIB', 'BF_QUICKTIME_LIBPATH',
@@ -164,7 +165,9 @@ def validate_arguments(args, bc):
             'WITH_BF_OIIO', 'WITH_BF_STATICOIIO', 'BF_OIIO', 'BF_OIIO_INC', 'BF_OIIO_LIB', 'BF_OIIO_LIB_STATIC', 'BF_OIIO_LIBPATH',
             'WITH_BF_OCIO', 'WITH_BF_STATICOCIO', 'BF_OCIO', 'BF_OCIO_INC', 'BF_OCIO_LIB', 'BF_OCIO_LIB_STATIC', 'BF_OCIO_LIBPATH',
             'WITH_BF_BOOST', 'WITH_BF_STATICBOOST', 'BF_BOOST', 'BF_BOOST_INC', 'BF_BOOST_LIB', 'BF_BOOST_LIB_INTERNATIONAL', 'BF_BOOST_LIB_STATIC', 'BF_BOOST_LIBPATH',
-            'WITH_BF_LIBMV'
+            'WITH_BF_LIBMV',
+            'WITH_BF_CYCLES_OSL', 'WITH_BF_STATICOSL', 'BF_OSL', 'BF_OSL_INC', 'BF_OSL_LIB', 'BF_OSL_LIBPATH', 'BF_OSL_LIB_STATIC', 'BF_OSL_COMPILER',
+            'WITH_BF_LLVM', 'WITH_BF_STATICLLVM', 'BF_LLVM', 'BF_LLVM_LIB', 'BF_LLVM_LIBPATH', 'BF_LLVM_LIB_STATIC', 'BF_PROGRAM_LINKFLAGS'
             ]
     
     # Have options here that scons expects to be lists
@@ -178,7 +181,7 @@ def validate_arguments(args, bc):
             'BF_DEBUG_CFLAGS', 'BF_DEBUG_CCFLAGS', 'BF_DEBUG_CXXFLAGS',
             'C_WARN', 'CC_WARN', 'CXX_WARN',
             'LLIBS', 'PLATFORM_LINKFLAGS','MACOSX_ARCHITECTURE', 'MACOSX_SDK_CHECK', 'XCODE_CUR_VER',
-            'BF_CYCLES_CUDA_BINARIES_ARCH',
+            'BF_CYCLES_CUDA_BINARIES_ARCH', 'BF_PROGRAM_LINKFLAGS', 'MACOSX_DEPLOYMENT_TARGET'
     ]
     
     
@@ -212,7 +215,8 @@ def print_targets(targs, bc):
 def validate_targets(targs, bc):
     valid_list = ['.', 'blender', 'blenderstatic', 'blenderplayer', 'webplugin',
             'blendernogame', 'blenderstaticnogame', 'blenderlite', 'release',
-            'everything', 'clean', 'install-bin', 'install', 'nsis','buildslave']
+            'everything', 'clean', 'install-bin', 'install', 'nsis','buildslave',
+            'cudakernels']
     oklist = []
     for t in targs:
         if t in valid_list:
@@ -284,12 +288,11 @@ def read_opts(env, cfg, args):
         ('BF_SDL_LIBPATH', 'SDL library path', ''),
 
         (BoolVariable('WITH_BF_JACK', 'Enable jack support if true', True)),
-        (BoolVariable('WITH_BF_STATICJACK', 'Staticly link to jack', False)),
         ('BF_JACK', 'jack base path', ''),
         ('BF_JACK_INC', 'jack include path', ''),
         ('BF_JACK_LIB', 'jack library', ''),
         ('BF_JACK_LIBPATH', 'jack library path', ''),
-        ('BF_JACK_LIB_STATIC', 'jack static library', ''),
+        (BoolVariable('WITH_BF_JACK_DYNLOAD', 'Enable runtime dynamic Jack libraries loading (works only on Linux)', False)),
 
         (BoolVariable('WITH_BF_SNDFILE', 'Enable sndfile support if true', True)),
         ('BF_SNDFILE', 'sndfile base path', ''),
@@ -391,8 +394,7 @@ def read_opts(env, cfg, args):
         (BoolVariable('WITH_BF_GAMEENGINE', 'Build with gameengine' , False)),
 
         (BoolVariable('WITH_BF_BULLET', 'Use Bullet if true', True)),
-        
-        (BoolVariable('WITH_BF_ELTOPO', 'Use Eltopo collision library if true', False)),
+        # (BoolVariable('WITH_BF_ELTOPO', 'Use Eltopo collision library if true', False)),  # this is now only available in a branch
         ('BF_LAPACK', 'LAPACK base path', ''),
         ('BF_LAPACK_LIB', 'LAPACK library', ''),
         ('BF_LAPACK_LIB_STATIC', 'LAPACK library', ''),
@@ -500,8 +502,9 @@ def read_opts(env, cfg, args):
         ('LLIBS', 'Platform libs', []),
         ('PLATFORM_LINKFLAGS', 'Platform linkflags', []),
         ('MACOSX_ARCHITECTURE', 'python_arch.zip select', ''),
-        ('MACOSX_SDK_CHECK', 'detect available OSX sdk`s', ''),
-        ('XCODE_CUR_VER', 'detect XCode version', ''),
+        ('MACOSX_SDK_CHECK', 'Detect available OS X SDK`s', ''),
+        ('XCODE_CUR_VER', 'Detect XCode version', ''),
+        ('MACOSX_DEPLOYMENT_TARGET', 'Detect OS X target version', ''),
 
         (BoolVariable('BF_PROFILE', 'Add profiling information if true', False)),
         ('BF_PROFILE_CFLAGS', 'C only profiling flags', []),
@@ -595,7 +598,24 @@ def read_opts(env, cfg, args):
         ('BF_BOOST_LIB_STATIC', 'Boost static library', ''),
 
         (BoolVariable('WITH_GHOST_XDND', 'Build with drag-n-drop support on Linux platforms using XDND protocol', True)),
-        (BoolVariable('WITH_BF_COMPOSITOR_LEGACY', 'Enable the legacy compositor', False))
+
+        (BoolVariable('WITH_BF_CYCLES_OSL', 'Build with OSL sypport in Cycles', False)),
+        (BoolVariable('WITH_BF_STATICOSL', 'Staticly link to OSL', False)),
+        ('BF_OSL', 'OSL root path', ''),
+        ('BF_OSL_INC', 'OSL include path', ''),
+        ('BF_OSL_LIB', 'OSL library', ''),
+        ('BF_OSL_LIBPATH', 'OSL library path', ''),
+        ('BF_OSL_LIB_STATIC', 'OSL static library', ''),
+        ('BF_OSL_COMPILER', 'OSL compiler', ''),
+
+        (BoolVariable('WITH_BF_LLVM', 'Build with LLVM sypport (required for OSL)', False)),
+        (BoolVariable('WITH_BF_STATICLLVM', 'Staticly link to LLVM', False)),
+        ('BF_LLVM', 'LLVM root path', ''),
+        ('BF_LLVM_LIB', 'LLVM library', ''),
+        ('BF_LLVM_LIBPATH', 'LLVM library path', ''),
+        ('BF_LLVM_LIB_STATIC', 'LLVM static library', ''),
+
+        ('BF_PROGRAM_LINKFLAGS', 'Link flags applied only to final binaries (blender and blenderplayer, not makesrna/makesdna)', '')
     ) # end of opts.AddOptions()
 
     return localopts
@@ -666,7 +686,7 @@ def buildslave(target=None, source=None, env=None):
         elif bitness == '32bit':
             platform = 'linux-' + glibc + '-i686'
     if platform == 'darwin':
-        platform = 'OSX-' + env['MACOSX_ARCHITECTURE']
+        platform = 'OSX-' + env['MACOSX_DEPLOYMENT_TARGET'] + '-' + env['MACOSX_ARCHITECTURE']
 
     branch = env['BUILDBOT_BRANCH']
 
@@ -804,6 +824,18 @@ def NSIS_Installer(target=None, source=None, env=None):
         print
         print data.strip().split("\n")[-1]
     return rv
+
+def cudakernels_print(target, source, env):
+    return "Running cudakernels target"
+
+def cudakernels(target=None, source=None, env=None):
+    """
+    Builder for cuda kernels compilation. Used by release build environment only
+    """
+
+    # Currently nothing to do, everything is handled by a dependency resolver
+
+    pass
 
 def check_environ():
     problematic_envvars = ""

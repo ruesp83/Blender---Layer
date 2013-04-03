@@ -1,24 +1,28 @@
 /*
------------------------------------------------------------------------------
-This source file is part of VideoTexture library
-
-Copyright (c) 2007 The Zdeno Ash Miklas
-
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU Lesser General Public License as published by the Free Software
-Foundation; either version 2 of the License, or (at your option) any later
-version.
-
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
-
-You should have received a copy of the GNU Lesser General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place - Suite 330, Boston, MA 02111-1307, USA, or go to
-http://www.gnu.org/copyleft/lesser.txt.
------------------------------------------------------------------------------
-*/
+ * ***** BEGIN GPL LICENSE BLOCK *****
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software  Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ * Copyright (c) 2007 The Zdeno Ash Miklas
+ *
+ * This source file is part of VideoTexture library
+ *
+ * Contributor(s):
+ *
+ * ***** END GPL LICENSE BLOCK *****
+ */
 
 /** \file gameengine/VideoTexture/ImageBase.cpp
  *  \ingroup bgevideotex
@@ -120,7 +124,7 @@ void ImageBase::refresh (void)
 
 
 // get source object
-PyImage * ImageBase::getSource (const char * id)
+PyImage * ImageBase::getSource (const char *id)
 {
 	// find source
 	ImageSourceList::iterator src = findSource(id);
@@ -130,7 +134,7 @@ PyImage * ImageBase::getSource (const char * id)
 
 
 // set source object
-bool ImageBase::setSource (const char * id, PyImage *source)
+bool ImageBase::setSource (const char *id, PyImage *source)
 {
 	// find source
 	ImageSourceList::iterator src = findSource(id);
@@ -178,8 +182,8 @@ void ImageBase::setFilter (PyFilter * filt)
 ExceptionID ImageHasExports;
 ExceptionID InvalidColorChannel;
 
-ExpDesc ImageHasExportsDesc (ImageHasExports, "Image has exported buffers, cannot resize");
-ExpDesc InvalidColorChannelDesc (InvalidColorChannel, "Invalid or too many color channels specified. At most 4 values within R, G, B, A, 0, 1");
+ExpDesc ImageHasExportsDesc(ImageHasExports, "Image has exported buffers, cannot resize");
+ExpDesc InvalidColorChannelDesc(InvalidColorChannel, "Invalid or too many color channels specified. At most 4 values within R, G, B, A, 0, 1");
 
 // initialize image data
 void ImageBase::init (short width, short height)
@@ -219,7 +223,7 @@ void ImageBase::init (short width, short height)
 
 
 // find source
-ImageSourceList::iterator ImageBase::findSource (const char * id)
+ImageSourceList::iterator ImageBase::findSource (const char *id)
 {
 	// iterate sources
 	ImageSourceList::iterator it;
@@ -290,7 +294,7 @@ bool ImageBase::loopDetect (ImageBase * img)
 // ImageSource class implementation
 
 // constructor
-ImageSource::ImageSource (const char * id) : m_source(NULL), m_image(NULL)
+ImageSource::ImageSource (const char *id) : m_source(NULL), m_image(NULL)
 {
 	// copy id
 	int idx;
@@ -308,9 +312,9 @@ ImageSource::~ImageSource (void)
 
 
 // compare id
-bool ImageSource::is (const char * id)
+bool ImageSource::is (const char *id)
 {
-	for (char * myId = m_id; *myId != '\0'; ++myId, ++id)
+	for (char *myId = m_id; *myId != '\0'; ++myId, ++id)
 		if (*myId != *id) return false;
 	return *id == '\0';
 }
@@ -360,7 +364,7 @@ PyTypeList pyImageTypes;
 // functions for python interface
 
 // object allocation
-PyObject *Image_allocNew (PyTypeObject *type, PyObject *args, PyObject *kwds)
+PyObject *Image_allocNew(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
 	// allocate object
 	PyImage *self = reinterpret_cast<PyImage*>(type->tp_alloc(type, 0));
@@ -371,7 +375,7 @@ PyObject *Image_allocNew (PyTypeObject *type, PyObject *args, PyObject *kwds)
 }
 
 // object deallocation
-void Image_dealloc (PyImage *self)
+void Image_dealloc(PyImage *self)
 {
 	// release object attributes
 	if (self->m_image != NULL)
@@ -390,7 +394,7 @@ void Image_dealloc (PyImage *self)
 }
 
 // get image data
-PyObject *Image_getImage (PyImage *self, char * mode)
+PyObject *Image_getImage(PyImage *self, char *mode)
 {
 	try
 	{
@@ -510,7 +514,7 @@ PyObject *Image_getScale (PyImage *self, void *closure)
 }
 
 // set scale
-int Image_setScale (PyImage *self, PyObject *value, void *closure)
+int Image_setScale(PyImage *self, PyObject *value, void *closure)
 {
 	// check parameter, report failure
 	if (value == NULL || !PyBool_Check(value))
@@ -532,7 +536,7 @@ PyObject *Image_getFlip (PyImage *self, void *closure)
 }
 
 // set flip
-int Image_setFlip (PyImage *self, PyObject *value, void *closure)
+int Image_setFlip(PyImage *self, PyObject *value, void *closure)
 {
 	// check parameter, report failure
 	if (value == NULL || !PyBool_Check(value))
@@ -547,14 +551,14 @@ int Image_setFlip (PyImage *self, PyObject *value, void *closure)
 }
 
 // get zbuff
-PyObject * Image_getZbuff (PyImage * self, void * closure)
+PyObject *Image_getZbuff(PyImage *self, void *closure)
 {
 	if (self->m_image != NULL && self->m_image->getZbuff()) Py_RETURN_TRUE;
 	else Py_RETURN_FALSE;
 }
 
 // set zbuff
-int Image_setZbuff (PyImage * self, PyObject * value, void * closure)
+int Image_setZbuff(PyImage *self, PyObject *value, void *closure)
 {
 	// check parameter, report failure
 	if (value == NULL || !PyBool_Check(value))
@@ -569,14 +573,14 @@ int Image_setZbuff (PyImage * self, PyObject * value, void * closure)
 }
 
 // get depth
-PyObject * Image_getDepth (PyImage * self, void * closure)
+PyObject *Image_getDepth(PyImage *self, void *closure)
 {
 	if (self->m_image != NULL && self->m_image->getDepth()) Py_RETURN_TRUE;
 	else Py_RETURN_FALSE;
 }
 
 // set depth
-int Image_setDepth (PyImage * self, PyObject * value, void * closure)
+int Image_setDepth(PyImage *self, PyObject *value, void *closure)
 {
 	// check parameter, report failure
 	if (value == NULL || !PyBool_Check(value))
@@ -594,10 +598,10 @@ int Image_setDepth (PyImage * self, PyObject * value, void * closure)
 
 
 // get filter source object
-PyObject *Image_getSource (PyImage *self, PyObject *args)
+PyObject *Image_getSource(PyImage *self, PyObject *args)
 {
 	// get arguments
-	char * id;
+	char *id;
 	if (!PyArg_ParseTuple(args, "s:getSource", &id))
 		return NULL;
 	if (self->m_image != NULL)
@@ -618,10 +622,10 @@ PyObject *Image_getSource (PyImage *self, PyObject *args)
 
 
 // set filter source object
-PyObject *Image_setSource (PyImage *self, PyObject *args)
+PyObject *Image_setSource(PyImage *self, PyObject *args)
 {
 	// get arguments
-	char * id;
+	char *id;
 	PyObject *obj;
 	if (!PyArg_ParseTuple(args, "sO:setSource", &id, &obj))
 		return NULL;
@@ -653,13 +657,13 @@ PyObject *Image_setSource (PyImage *self, PyObject *args)
 
 
 // get pixel filter object
-PyObject *Image_getFilter (PyImage *self, void *closure)
+PyObject *Image_getFilter(PyImage *self, void *closure)
 {
 	// if image object is available
 	if (self->m_image != NULL)
 	{
 		// pixel filter object
-		PyObject * filt = reinterpret_cast<PyObject*>(self->m_image->getFilter());
+		PyObject *filt = reinterpret_cast<PyObject*>(self->m_image->getFilter());
 		// if filter is present
 		if (filt != NULL)
 		{
@@ -674,7 +678,7 @@ PyObject *Image_getFilter (PyImage *self, void *closure)
 
 
 // set pixel filter object
-int Image_setFilter (PyImage *self, PyObject *value, void *closure)
+int Image_setFilter(PyImage *self, PyObject *value, void *closure)
 {
 	// if image object is available
 	if (self->m_image != NULL)

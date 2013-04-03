@@ -61,6 +61,7 @@ def words_from_text(text):
     text = text.replace("+", " ")
     text = text.replace("%", " ")
     text = text.replace(",", " ")
+    text = text.replace("|", " ")
     words = text.split()
 
     # filter words
@@ -156,7 +157,7 @@ def extract_c_comments(filepath):
     Extracts comments like this:
 
         /*
-         * This is a multiline comment, notice the '*'s are aligned.
+         * This is a multi-line comment, notice the '*'s are aligned.
          */
     """
     i = 0
@@ -193,9 +194,7 @@ def extract_c_comments(filepath):
             for directive in STRIP_DOXY_DIRECTIVES:
                 if directive in l:
                     l_split = l.split()
-                    value = l_split[l_split.index(directive) + 1]
-                    # print("remove:", value)
-                    l = l.replace(value, " ")
+                    l_split[l_split.index(directive) + 1] = " "
             block_split[i] = l
 
     comments = []
@@ -212,7 +211,7 @@ def extract_c_comments(filepath):
 
                 block = text[i:i_next + len(END)]
 
-                # add whitespace infront of the block (for alignment test)
+                # add whitespace in front of the block (for alignment test)
                 ws = []
                 j = i
                 while j > 0 and text[j - 1] != "\n":
@@ -330,7 +329,7 @@ def spell_check_comments_recursive(dirpath):
 
     def is_source(filename):
         ext = splitext(filename)[1]
-        return (ext in {".c", ".inl", ".cpp", ".cxx", ".hpp", ".hxx", ".h", ".osl"})
+        return (ext in {".c", ".inl", ".cpp", ".cxx", ".hpp", ".hxx", ".h", ".osl", ".py"})
 
     for filepath in source_list(dirpath, is_source):
         spell_check_comments(filepath)

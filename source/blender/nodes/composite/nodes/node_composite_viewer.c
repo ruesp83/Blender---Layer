@@ -41,10 +41,9 @@ static bNodeSocketTemplate cmp_node_viewer_in[] = {
 	{   -1, 0, ""   }
 };
 
-#ifdef WITH_COMPOSITOR_LEGACY
-
-static void node_composit_exec_viewer(void *data, bNode *node, bNodeStack **in, bNodeStack **UNUSED(out))
+static void node_composit_init_viewer(bNodeTree *UNUSED(ntree), bNode *node)
 {
+<<<<<<< .mine
 	/* image assigned to output */
 	/* stack order input sockets: col, alpha, z */
 	
@@ -127,6 +126,8 @@ static void node_composit_exec_viewer(void *data, bNode *node, bNodeStack **in, 
 
 static void node_composit_init_viewer(bNodeTree *UNUSED(ntree), bNode *node, bNodeTemplate *UNUSED(ntemp))
 {
+=======
+>>>>>>> .r55757
 	ImageUser *iuser = MEM_callocN(sizeof(ImageUser), "node image user");
 	node->storage = iuser;
 	iuser->sfra = 1;
@@ -136,20 +137,16 @@ static void node_composit_init_viewer(bNodeTree *UNUSED(ntree), bNode *node, bNo
 	node->custom4 = 0.5f;
 }
 
-void register_node_type_cmp_viewer(bNodeTreeType *ttype)
+void register_node_type_cmp_viewer(void)
 {
 	static bNodeType ntype;
 
-	node_type_base(ttype, &ntype, CMP_NODE_VIEWER, "Viewer", NODE_CLASS_OUTPUT, NODE_PREVIEW);
+	cmp_node_type_base(&ntype, CMP_NODE_VIEWER, "Viewer", NODE_CLASS_OUTPUT, NODE_OPTIONS | NODE_PREVIEW);
 	node_type_socket_templates(&ntype, cmp_node_viewer_in, NULL);
-	node_type_size(&ntype, 80, 60, 200);
 	node_type_init(&ntype, node_composit_init_viewer);
 	node_type_storage(&ntype, "ImageUser", node_free_standard_storage, node_copy_standard_storage);
-#ifdef WITH_COMPOSITOR_LEGACY
-	node_type_exec(&ntype, node_composit_exec_viewer);
-#endif
 
 	node_type_internal_links(&ntype, NULL);
 
-	nodeRegisterType(ttype, &ntype);
+	nodeRegisterType(&ntype);
 }

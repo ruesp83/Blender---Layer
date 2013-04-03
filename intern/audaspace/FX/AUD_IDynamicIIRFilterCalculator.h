@@ -29,6 +29,8 @@
 #ifndef AUD_IDYNAMICIIRFILTERCALCULATOR_H
 #define AUD_IDYNAMICIIRFILTERCALCULATOR_H
 
+#include "AUD_Space.h"
+
 #include <vector>
 
 /**
@@ -38,6 +40,8 @@
 class AUD_IDynamicIIRFilterCalculator
 {
 public:
+	virtual ~AUD_IDynamicIIRFilterCalculator() {}
+
 	/**
 	 * Recalculates the filter coefficients.
 	 * \param rate The sample rate of the audio data.

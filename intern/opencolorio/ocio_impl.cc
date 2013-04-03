@@ -26,7 +26,15 @@
  */
 
 #include <iostream>
+#include <sstream>
 #include <string.h>
+
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
+#include <OpenGL/glu.h>
+#else
+#include <GL/glew.h>
+#endif
 
 #include <OpenColorIO/OpenColorIO.h>
 
@@ -48,7 +56,9 @@ using namespace OCIO_NAMESPACE;
 #endif
 
 #define MEM_NEW(type) new(MEM_mallocN(sizeof(type), __func__)) type()
-#define MEM_DELETE(what, type) if(what) { (what)->~type(); MEM_freeN(what); } (void)0
+#define MEM_DELETE(what, type) if(what) { ((type*)(what))->~type(); MEM_freeN(what); } (void)0
+
+static const int LUT3D_EDGE_SIZE = 32;
 
 static void OCIO_reportError(const char *err)
 {
@@ -421,8 +431,7 @@ void OCIOImpl::processorApplyRGBA_predivide(OCIO_ConstProcessorRcPtr *processor,
 
 void OCIOImpl::processorRelease(OCIO_ConstProcessorRcPtr *p)
 {
-	p->~OCIO_ConstProcessorRcPtr();
-	MEM_freeN(p);
+	MEM_DELETE(p, ConstProcessorRcPtr);
 }
 
 const char *OCIOImpl::colorSpaceGetName(OCIO_ConstColorSpaceRcPtr *cs)
@@ -480,7 +489,7 @@ void OCIOImpl::displayTransformRelease(OCIO_DisplayTransformRcPtr *dt)
 }
 
 OCIO_PackedImageDesc *OCIOImpl::createOCIO_PackedImageDesc(float *data, long width, long height, long numChannels,
-                                                 long chanStrideBytes, long xStrideBytes, long yStrideBytes)
+                                                           long chanStrideBytes, long xStrideBytes, long yStrideBytes)
 {
 	try {
 		void *mem = MEM_mallocN(sizeof(PackedImageDesc), __func__);

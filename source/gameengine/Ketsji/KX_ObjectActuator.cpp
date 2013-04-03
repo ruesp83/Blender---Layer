@@ -81,6 +81,16 @@ KX_ObjectActuator(
 
 		m_pid = m_torque;
 	}
+	if (m_bitLocalFlag.CharacterMotion)
+	{
+		KX_GameObject *parent = static_cast<KX_GameObject *>(GetParent());
+
+		if (!parent->GetPhysicsController() || !parent->GetPhysicsController()->IsCharacter())
+		{
+			printf("Character motion enabled on non-character object (%s), falling back to simple motion.\n", parent->GetName().Ptr());
+			m_bitLocalFlag.CharacterMotion = false;
+		}
+	}
 	if (m_reference)
 		m_reference->RegisterActuator(this);
 	UpdateFuzzyFlags();
@@ -116,10 +126,10 @@ bool KX_ObjectActuator::Update()
 			m_active_combined_velocity = false;
 		}
 
-		// Explicitly stop the movement if we're using a character (apply movement is a little different for characters)
-		if (parent->GetPhysicsController() && parent->GetPhysicsController()->IsCharacter()) {
+		// Explicitly stop the movement if we're using character motion
+		if (m_bitLocalFlag.CharacterMotion) {
 			MT_Vector3 vec(0.0, 0.0, 0.0);
-			parent->ApplyMovement(vec, true);
+			parent->GetPhysicsController()->SetWalkDirection(vec, true);
 		}
 
 		m_linear_damping_active = false;
@@ -205,8 +215,35 @@ bool KX_ObjectActuator::Update()
 			m_previous_error = e;
 			m_error_accumulator = I;
 			parent->ApplyForce(m_force,(m_bitLocalFlag.LinearVelocity) != 0);
-		} else
-		{
+		}
+		else if (m_bitLocalFlag.CharacterMotion) {
+			MT_Vector3 dir = m_dloc;
+
+			if (m_bitLocalFlag.AddOrSetCharLoc) {
+				MT_Vector3 old_dir = parent->GetPhysicsController()->GetWalkDirection();
+
+				if (!old_dir.fuzzyZero()) {
+					MT_Scalar mag = old_dir.length();
+
+					dir = dir + old_dir;
+					if (!dir.fuzzyZero())
+						dir = dir.normalized() * mag;
+				}
+			}
+
+			// We always want to set the walk direction since a walk direction of (0, 0, 0) should stop the character
+			parent->GetPhysicsController()->SetWalkDirection(dir, (m_bitLocalFlag.DLoc) != 0);
+
+			if (!m_bitLocalFlag.ZeroDRot)
+			{
+				parent->ApplyRotation(m_drot,(m_bitLocalFlag.DRot) != 0);
+			}
+			if (m_bitLocalFlag.CharacterJump)
+			{
+				parent->GetPhysicsController()->Jump();
+			}
+		}
+		else {
 			if (!m_bitLocalFlag.ZeroForce)
 			{
 				parent->ApplyForce(m_force,(m_bitLocalFlag.Force) != 0);
@@ -529,7 +566,7 @@ int KX_ObjectActuator::pyattr_set_forceLimitX(void *self_v, const KX_PYATTRIBUTE
 	{
 		self->m_drot[0] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value, 0));
 		self->m_dloc[0] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value, 1));
-		self->m_bitLocalFlag.Torque = (PyLong_AsSsize_t(PySequence_Fast_GET_ITEM(value, 2)) != 0);
+		self->m_bitLocalFlag.Torque = (PyLong_AsLong(PySequence_Fast_GET_ITEM(value, 2)) != 0);
 
 		if (!PyErr_Occurred())
 		{
@@ -565,7 +602,7 @@ int	KX_ObjectActuator::pyattr_set_forceLimitY(void *self_v, const KX_PYATTRIBUTE
 	{
 		self->m_drot[1] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value, 0));
 		self->m_dloc[1] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value, 1));
-		self->m_bitLocalFlag.DLoc = (PyLong_AsSsize_t(PySequence_Fast_GET_ITEM(value, 2)) != 0);
+		self->m_bitLocalFlag.DLoc = (PyLong_AsLong(PySequence_Fast_GET_ITEM(value, 2)) != 0);
 
 		if (!PyErr_Occurred())
 		{
@@ -601,7 +638,7 @@ int	KX_ObjectActuator::pyattr_set_forceLimitZ(void *self_v, const KX_PYATTRIBUTE
 	{
 		self->m_drot[2] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value, 0));
 		self->m_dloc[2] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value, 1));
-		self->m_bitLocalFlag.DRot = (PyLong_AsSsize_t(PySequence_Fast_GET_ITEM(value, 2)) != 0);
+		self->m_bitLocalFlag.DRot = (PyLong_AsLong(PySequence_Fast_GET_ITEM(value, 2)) != 0);
 
 		if (!PyErr_Occurred())
 		{

@@ -83,19 +83,19 @@ typedef void* (*SG_DestructionNewCallback)(
 	void*	clientinfo
 );
 
-typedef void  (*SG_UpdateTransformCallback)(
+typedef void (*SG_UpdateTransformCallback)(
 	SG_IObject* sgobject,
 	void*	clientobj,
 	void*	clientinfo
 );
 
-typedef bool  (*SG_ScheduleUpdateCallback)(
+typedef bool (*SG_ScheduleUpdateCallback)(
 	SG_IObject* sgobject,
 	void*	clientobj,
 	void*	clientinfo
 );
 
-typedef bool  (*SG_RescheduleUpdateCallback)(
+typedef bool (*SG_RescheduleUpdateCallback)(
 	SG_IObject* sgobject,
 	void*	clientobj,
 	void*	clientinfo
@@ -152,8 +152,8 @@ struct	SG_Callbacks
 };
 
 /**
-base object that can be part of the scenegraph.
-*/
+ * base object that can be part of the scenegraph.
+ */
 class SG_IObject : public SG_QList
 {
 private :
