@@ -62,7 +62,7 @@ typedef struct ImageUser {
 
 	short flag;
 	char use_layer_ima, pad1;
-	short layer_ima;
+	short pad2;
 } ImageUser;
 
 /* iuser->flag */
@@ -78,18 +78,17 @@ typedef struct ImageLayer {
 	//struct PreviewImage * preview;
 	char name[64];
 	char file_path[1024];
-	short background;
-	short color_space;
 	float opacity;
+	short background;
 	short mode;
 	short type;
 	short visible;
 	short select;
-	short lock;
-	short pad1;
-	int pad2;
+	short locked;
+	int pad1;
 	//int icon_id;
 	float default_color[4];
+	int pad2;
 	ListBase ibufs;
 }ImageLayer;
 
@@ -101,10 +100,6 @@ typedef struct ImageLayer {
 #define IMA_LAYER_BG_WHITE		(1<<1)
 #define IMA_LAYER_BG_ALPHA		(1<<2)
 #define IMA_LAYER_BG_IMAGE		(1<<3)
-
-/* ImageLayer.color_space */
-#define IMA_LAYER_COL_RGB		(1<<0)
-#define IMA_LAYER_COL_GRAY		(1<<1)
 
 /* ImageLayer.mode */
 typedef enum ImageLayerMode {
@@ -265,8 +260,9 @@ int32 Color_HlsToRgb(float64 Hue, float64 Lumination, float64 Saturation, uint8 
 #define IMA_LAYER_SEL_TOP		(1<<3)
 #define IMA_LAYER_SEL_BOTTOM	(1<<4)
 
-/* ImageLayer.lock */
-#define IMA_LAYER_LOCK		(1<<0)
+/* ImageLayer.locked */
+#define IMA_LAYER_LOCK			1
+#define IMA_LAYER_LOCK_ALPHA	2
 
 /* Option for delete the layer*/
 #define IMA_LAYER_DEL_SELECTED	(1<<0)
@@ -323,16 +319,15 @@ typedef struct Image {
 	float aspx, aspy;
 	/* color management */
 	ColorManagedColorspaceSettings colorspace_settings;
-<<<<<<< .mine
-
-	int Act_Layers;
-	int Count_Layers;
-	ListBase imlayers;
-=======
 	char alpha_mode;
 
 	char pad[7];
->>>>>>> .r55757
+	int Act_Layers;
+	int Count_Layers;
+	short use_layers;
+	short color_space;
+	int pad4;
+	struct ListBase imlayers;
 } Image;
 
 
@@ -376,5 +371,9 @@ enum {
 	IMA_ALPHA_STRAIGHT = 0,
 	IMA_ALPHA_PREMUL = 1,
 };
+
+/* color_space */
+#define IMA_COL_RGB		(1<<0)
+#define IMA_COL_GRAY	(1<<1)
 
 #endif

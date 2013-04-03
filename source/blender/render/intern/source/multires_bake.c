@@ -53,7 +53,7 @@
 #include "RE_pipeline.h"
 #include "RE_shader_ext.h"
 
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "rayintersection.h"
@@ -468,7 +468,7 @@ static void do_multires_bake(MultiresBakeRender *bkr, Image *ima, int require_ta
 		MultiresBakeThread *handles;
 		MultiresBakeQueue queue;
 
-		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
+		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 		MVert *mvert = dm->getVertArray(dm);
 		MFace *mface = dm->getTessFaceArray(dm);
 		MTFace *mtface = dm->getTessFaceDataArray(dm, CD_MTFACE);
@@ -692,7 +692,7 @@ static void interp_barycentric_mface(DerivedMesh *dm, MFace *mface, const float 
 static void *init_heights_data(MultiresBakeRender *bkr, Image *ima)
 {
 	MHeightBakeData *height_data;
-	ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
+	ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 	DerivedMesh *lodm = bkr->lores_dm;
 	BakeImBufuserData *userdata = ibuf->userdata;
 
@@ -1219,7 +1219,7 @@ static void bake_images(MultiresBakeRender *bkr, MultiresBakeResult *result)
 
 	for (link = bkr->image.first; link; link = link->next) {
 		Image *ima = (Image *)link->data;
-		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
+		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 
 		if (ibuf->x > 0 && ibuf->y > 0) {
 			BakeImBufuserData *userdata = MEM_callocN(sizeof(BakeImBufuserData), "MultiresBake userdata");
@@ -1252,7 +1252,7 @@ static void finish_images(MultiresBakeRender *bkr, MultiresBakeResult *result)
 
 	for (link = bkr->image.first; link; link = link->next) {
 		Image *ima = (Image *)link->data;
-		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
+		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 		BakeImBufuserData *userdata = (BakeImBufuserData *) ibuf->userdata;
 
 		if (ibuf->x <= 0 || ibuf->y <= 0)

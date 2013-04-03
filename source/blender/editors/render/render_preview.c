@@ -942,14 +942,9 @@ static void icon_preview_startjob(void *customdata, short *stop, short *do_updat
 		/* elubie: this needs to be changed: here image is always loaded if not
 		 * already there. Very expensive for large images. Need to find a way to 
 		 * only get existing ibuf */
-<<<<<<< .mine
-		ibuf = BKE_image_get_ibuf(ima, &iuser, IMA_IBUF_IMA);
-		if (ibuf == NULL || ibuf->rect == NULL)
-=======
-		ibuf = BKE_image_acquire_ibuf(ima, &iuser, NULL);
+		ibuf = BKE_image_acquire_ibuf(ima, &iuser, NULL, IMA_IBUF_IMA);
 		if (ibuf == NULL || ibuf->rect == NULL) {
 			BKE_image_release_ibuf(ima, ibuf, NULL);
->>>>>>> .r55757
 			return;
 		}
 		

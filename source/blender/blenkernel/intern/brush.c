@@ -1080,13 +1080,7 @@ unsigned int *BKE_brush_gen_texture_cache(Brush *br, int half_side)
 
 		texcache = MEM_callocN(sizeof(int) * side * side, "Brush texture cache");
 
-<<<<<<< .mine
-		BKE_image_get_ibuf(mtex->tex->ima, NULL, IMA_IBUF_IMA);
-		
-		/*do normalized cannonical view coords for texture*/
-=======
 		/* do normalized cannonical view coords for texture */
->>>>>>> .r55757
 		for (y = -1.0, iy = 0; iy < side; iy++, y += step) {
 			for (x = -1.0, ix = 0; ix < side; ix++, x += step) {
 				co[0] = x;

@@ -1163,11 +1163,7 @@ static void do_material_tex(GPUShadeInput *shi)
 
 						// resolve texture resolution
 						if ( (mtex->texflag & MTEX_BUMP_TEXTURESPACE) || found_deriv_map ) {
-<<<<<<< .mine
-							ImBuf *ibuf= BKE_image_get_ibuf(tex->ima, &tex->iuser, IMA_IBUF_IMA);
-=======
-							ImBuf *ibuf= BKE_image_acquire_ibuf(tex->ima, &tex->iuser, NULL);
->>>>>>> .r55757
+							ImBuf *ibuf= BKE_image_acquire_ibuf(tex->ima, &tex->iuser, NULL, IMA_IBUF_IMA);
 							ima_x= 512.0f; ima_y= 512.f;		// prevent calling textureSize, glsl 1.3 only
 							if (ibuf) {
 								ima_x= ibuf->x;

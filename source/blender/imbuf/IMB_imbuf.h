@@ -423,6 +423,9 @@ void bilinear_interpolation_color_wrap(struct ImBuf *in, unsigned char col[4], f
 void IMB_alpha_under_color_float(float *rect_float, int x, int y, float backcol[3]);
 void IMB_alpha_under_color_byte(unsigned char *rect, int x, int y, float backcol[3]);
 
+void IMB_invert_channels(struct ImBuf *in, const short r, const short g, const short b, const short a);
+void IMB_bright_contrast(struct ImBuf *in, float bright, float contrast);
+
 /**
  *
  * \attention defined in readimage.c

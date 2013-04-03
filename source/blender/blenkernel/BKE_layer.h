@@ -56,6 +56,7 @@ int image_remove_layer(struct Image *ima, const int action);
 
 /* Removes the currently selected image layer */
 struct ImageLayer *image_duplicate_current_image_layer(struct Image *ima);
+struct ImageLayer *image_duplicate_layer(struct Image *ima, struct ImageLayer *layer);
 
 /* Adds another image layer and selects it */
 struct ImageLayer *image_add_image_layer(struct Image *ima, const char *name, int depth, float color[4], int order);

@@ -79,7 +79,21 @@ void IMAGE_OT_save_sequence(struct wmOperatorType *ot);
 void IMAGE_OT_pack(struct wmOperatorType *ot);
 void IMAGE_OT_unpack(struct wmOperatorType *ot);
 
+void IMAGE_OT_bright_contrast(struct wmOperatorType *ot);
 void IMAGE_OT_invert(struct wmOperatorType *ot);
+
+void IMAGE_OT_duplicate(struct wmOperatorType *ot);
+void IMAGE_OT_flip(struct wmOperatorType *ot);
+void IMAGE_OT_rotate(struct wmOperatorType *ot);
+void IMAGE_OT_arbitrary_rot(struct wmOperatorType *ot);
+void IMAGE_OT_offset(struct wmOperatorType *ot);
+void IMAGE_OT_scale(struct wmOperatorType *ot);
+void IMAGE_OT_merge(struct wmOperatorType *ot);
+void IMAGE_OT_flatten(struct wmOperatorType *ot);
+
+/* Mode Space Color */
+void IMAGE_OT_color_space_grayscale(struct wmOperatorType *ot);
+void IMAGE_OT_color_space_rgb(struct wmOperatorType *ot);
 
 void IMAGE_OT_cycle_render_slot(struct wmOperatorType *ot);
 
@@ -94,23 +108,23 @@ void IMAGE_OT_properties(struct wmOperatorType *ot);
 void IMAGE_OT_scopes(struct wmOperatorType *ot);
 
 /* image layers */
-void IMAGE_OT_image_layer_move(struct wmOperatorType *ot);
-//void IMAGE_OT_image_layer_fill_color(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_remove(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_add(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_add_default(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_add_below(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_add_above(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_duplicate(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_select(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_clean(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_merge(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_flip(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_rotate(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_arbitrary_rot(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_offset(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_scale(struct wmOperatorType *ot);
-void IMAGE_OT_image_layer_size(struct wmOperatorType *ot);
+void IMAGE_OT_layer_move(struct wmOperatorType *ot);
+//void IMAGE_OT_layer_fill_color(struct wmOperatorType *ot);
+void IMAGE_OT_layer_remove(struct wmOperatorType *ot);
+void IMAGE_OT_layer_add(struct wmOperatorType *ot);
+void IMAGE_OT_layer_add_default(struct wmOperatorType *ot);
+void IMAGE_OT_layer_add_below(struct wmOperatorType *ot);
+void IMAGE_OT_layer_add_above(struct wmOperatorType *ot);
+void IMAGE_OT_layer_duplicate(struct wmOperatorType *ot);
+void IMAGE_OT_layer_select(struct wmOperatorType *ot);
+void IMAGE_OT_layer_clean(struct wmOperatorType *ot);
+void IMAGE_OT_layer_merge(struct wmOperatorType *ot);
+void IMAGE_OT_layer_flip(struct wmOperatorType *ot);
+void IMAGE_OT_layer_rotate(struct wmOperatorType *ot);
+void IMAGE_OT_layer_arbitrary_rot(struct wmOperatorType *ot);
+void IMAGE_OT_layer_offset(struct wmOperatorType *ot);
+void IMAGE_OT_layer_scale(struct wmOperatorType *ot);
+void IMAGE_OT_layer_size(struct wmOperatorType *ot);
 
 
 #endif /* __IMAGE_INTERN_H__ */

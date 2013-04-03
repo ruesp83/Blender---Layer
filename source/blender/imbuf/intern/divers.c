@@ -670,12 +670,16 @@ void IMB_color_to_bw(ImBuf *ibuf)
 
 	if (rctf) {
 		for (i = ibuf->x * ibuf->y; i > 0; i--, rctf += 4)
-			rctf[0] = rctf[1] = rctf[2] = rgb_to_grayscale(rctf);
+			if (rctf[3] != 0.0f) {
+				rctf[0] = rctf[1] = rctf[2] = rgb_to_grayscale(rctf);
+			}
 	}
 
 	if (rct) {
 		for (i = ibuf->x * ibuf->y; i > 0; i--, rct += 4)
-			rct[0] = rct[1] = rct[2] = rgb_to_grayscale_byte(rct);
+			if (rct[3] != 0) {
+				rct[0] = rct[1] = rct[2] = rgb_to_grayscale_byte(rct);
+			}
 	}
 }
 

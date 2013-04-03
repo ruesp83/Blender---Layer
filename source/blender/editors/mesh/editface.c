@@ -34,13 +34,9 @@
 #include "BLI_math.h"
 #include "BLI_edgehash.h"
 
-<<<<<<< .mine
-#include "DNA_imbuf_types.h"
-=======
 #include "BLF_translation.h"
 
-#include "IMB_imbuf_types.h"
->>>>>>> .r55757
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"
 
 #include "DNA_mesh_types.h"

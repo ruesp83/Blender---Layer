@@ -108,9 +108,10 @@ struct RenderResult;
 
 /* ima->type, how to handle/generate it */
 #define IMA_TYPE_IMAGE      0
-#define IMA_TYPE_MULTILAYER 1
+//#define IMA_TYPE_IMAGELAYER 2
+#define IMA_TYPE_MULTILAYER 2
 /* generated */
-#define IMA_TYPE_UV_TEST    2
+#define IMA_TYPE_UV_TEST    3
 /* viewers */
 #define IMA_TYPE_R_RESULT   4
 #define IMA_TYPE_COMPOSITE  5
@@ -139,17 +140,12 @@ enum {
 #define IMA_CHAN_FLAG_RGB   2
 #define IMA_CHAN_FLAG_ALPHA 4
 
-<<<<<<< .mine
 #define IMA_IBUF_IMA	1
 #define IMA_IBUF_LAYER	2
 
 /* depending Image type, and (optional) ImageUser setting it returns ibuf */
-/* always call to make signals work */
-struct ImBuf *BKE_image_get_ibuf(struct Image *ima, struct ImageUser *iuser, int type_ibuf);
-=======
 /* checks whether there's an image buffer for given image and user */
-int BKE_image_has_ibuf(struct Image *ima, struct ImageUser *iuser);
->>>>>>> .r55757
+int BKE_image_has_ibuf(struct Image *ima, struct ImageUser *iuser, int type_ibuf);
 
 /* same as above, but can be used to retrieve images being rendered in
  * a thread safe way, always call both acquire and release */
@@ -158,7 +154,7 @@ void BKE_image_release_ibuf(struct Image *ima, struct ImBuf *ibuf, void *lock);
 
 struct ImagePool *BKE_image_pool_new(void);
 void BKE_image_pool_free(struct ImagePool *pool);
-struct ImBuf *BKE_image_pool_acquire_ibuf(struct Image *ima, struct ImageUser *iuser, struct ImagePool *pool);
+struct ImBuf *BKE_image_pool_acquire_ibuf(struct Image *ima, struct ImageUser *iuser, struct ImagePool *pool, int type_ibuf);
 void BKE_image_pool_release_ibuf(struct Image *ima, struct ImBuf *ibuf, struct ImagePool *pool);
 
 /* set an alpha mode based on file extension */

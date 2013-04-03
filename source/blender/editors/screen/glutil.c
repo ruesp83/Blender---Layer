@@ -33,6 +33,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_imbuf_types.h"
 #include "DNA_userdef_types.h"
 #include "DNA_vec_types.h"
 
@@ -51,7 +52,6 @@
 #include "GPU_extensions.h"
 
 #include "IMB_colormanagement.h"
-#include "IMB_imbuf_types.h"
 
 #ifndef GL_CLAMP_TO_EDGE
 #define GL_CLAMP_TO_EDGE                        0x812F

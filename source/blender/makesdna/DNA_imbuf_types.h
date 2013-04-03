@@ -28,6 +28,8 @@
 #ifndef __IMB_IMBUF_TYPES_H__
 #define __IMB_IMBUF_TYPES_H__
 
+#include "DNA_vec_types.h"  /* for rcti */
+
 /**
  * \file DNA_imbuf_types.h
  * \ingroup DNA
@@ -141,6 +143,7 @@ typedef struct ImBuf {
 	struct ColormanageCache *colormanage_cache;  /* cache used by color management */
 	int colormanage_flag;
 	int pad8;
+	rcti invalid_rect;
 	/* information for compressed textures */
 	struct DDSData dds_data;
 } ImBuf;
@@ -175,8 +178,10 @@ typedef struct ImBuf {
 #define IB_animdeinterlace	(1 << 9)
 #define IB_tiles			(1 << 10)
 #define IB_tilecache		(1 << 11)
-#define IB_premul			(1 << 12)
-#define IB_cm_predivide		(1 << 13)
+#define IB_alphamode_premul	(1 << 12)  /* indicates whether image on disk have premul alpha */
+#define IB_alphamode_detect	(1 << 13)  /* if this flag is set, alpha mode would be guessed from file */
+#define IB_ignore_alpha		(1 << 14)  /* ignore alpha on load and substitude it with 1.0f */
+
 
 /*
  * The bit flag is stored in the ImBuf.ftype variable.
@@ -224,8 +229,12 @@ typedef struct ImBuf {
 #define JP2_16BIT		(1 << 16)
 #define JP2_YCC			(1 << 15)
 #define JP2_CINE		(1 << 14)
-#define JP2_CINE_48FPS	(1 << 13) 
+#define JP2_CINE_48FPS	(1 << 13)
+#define JP2_JP2	(1 << 12)
+#define JP2_J2K	(1 << 11)
 #endif
+
+#define PNG_16BIT			(1 << 10)
 
 #define RAWTGA	        (TGA | 1)
 

@@ -722,11 +722,7 @@ static void draw_mesh_text(Scene *scene, Object *ob, int glsl)
 			BKE_bproperty_set_valstr(prop, string);
 			characters = strlen(string);
 			
-<<<<<<< .mine
-			if (!BKE_image_get_ibuf(mtpoly->tpage, NULL, IMA_IBUF_IMA))
-=======
-			if (!BKE_image_has_ibuf(mtpoly->tpage, NULL))
->>>>>>> .r55757
+			if (!BKE_image_has_ibuf(mtpoly->tpage, NULL, IMA_IBUF_IMA))
 				characters = 0;
 
 			if (!mf_smooth) {

@@ -377,3 +377,97 @@ void IMB_alpha_under_color_byte(unsigned char *rect, int x, int y, float backcol
 		cp += 4;
 	}
 }
+
+void IMB_invert_channels(ImBuf *in, const short r, const short g, const short b, const short a)
+{
+	int i;
+
+	if (in->rect_float) {
+		float *fp = (float *) in->rect_float;
+		for (i = in->x * in->y; i > 0; i--, fp += 4) {
+			if (r) fp[0] = 1.0f - fp[0];
+			if (g) fp[1] = 1.0f - fp[1];
+			if (b) fp[2] = 1.0f - fp[2];
+			if (a) fp[3] = 1.0f - fp[3];
+		}
+
+		if (in->rect) {
+			IMB_rect_from_float(in);
+		}
+	}
+	else if (in->rect) {
+		unsigned char *cp = (unsigned char *) in->rect;
+		for (i = in->x * in->y; i > 0; i--, cp += 4) {
+			if (r) cp[0] = 255 - cp[0];
+			if (g) cp[1] = 255 - cp[1];
+			if (b) cp[2] = 255 - cp[2];
+			if (a) cp[3] = 255 - cp[3];
+		}
+	}
+}
+
+/* Aggiungere nei parametri: unsigned char *mask_rect, float *mask_rect_float */
+void IMB_bright_contrast(ImBuf *in, float bright, float contrast)
+{
+	int x, y;
+	float i;
+	int c;
+	float a, b, v;
+	float brightness = bright / 100.0f;
+	float delta = contrast / 200.0f;
+
+	a = 1.0f - delta * 2.0f;
+	/*
+	 * The algorithm is by Werner D. Streidt
+	 * (http://visca.com/ffactory/archives/5-99/msg00021.html)
+	 * Extracted of OpenCV demhist.c
+	 */
+	if (contrast > 0) {
+		a = 1.0f / a;
+		b = a * (brightness - delta);
+	}
+	else {
+		delta *= -1;
+		b = a * (brightness + delta);
+	}
+
+	for (y = 0; y < in->y; y++) {
+		for (x = 0; x < in->x; x++) {
+			int pixel_index = (y * in->x + x) * 4;
+
+			if (in->rect) {
+				unsigned char *pixel = (unsigned char *)in->rect + pixel_index;
+
+				for (c = 0; c < 3; c++) {
+					i = (float) pixel[c] / 255.0f;
+					v = a * i + b;
+
+					/*if (mask_rect) {
+						unsigned char *m = mask_rect + pixel_index;
+						float t = (float) m[c] / 255.0f;
+
+						v = (float) pixel[c] / 255.0f * (1.0f - t) + v * t;
+					} */
+
+					pixel[c] = FTOCHAR(v);
+				}
+			}
+			else if (in->rect_float) {
+				float *pixel = in->rect_float + pixel_index;
+
+				for (c = 0; c < 3; c++) {
+					i = pixel[c];
+					v = a * i + b;
+
+					/*if (mask_rect_float) {
+						float *m = mask_rect_float + pixel_index;
+
+						pixel[c] = pixel[c] * (1.0f - m[c]) + v * m[c];
+					}
+					else */
+						pixel[c] = v;
+				}
+			}
+		}
+	}
+}

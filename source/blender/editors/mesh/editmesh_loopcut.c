@@ -45,11 +45,8 @@
 
 #include "BIF_gl.h"
 
-<<<<<<< .mine
 #include "DNA_imbuf_types.h"
 
-=======
->>>>>>> .r55757
 #include "ED_screen.h"
 #include "ED_space_api.h"
 #include "ED_view3d.h"

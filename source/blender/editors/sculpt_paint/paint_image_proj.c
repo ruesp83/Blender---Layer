@@ -50,9 +50,9 @@
 #include "PIL_time.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
 
 #include "DNA_brush_types.h"
+#include "DNA_imbuf_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
@@ -1182,7 +1182,7 @@ static float project_paint_uvpixel_mask(
 		Image *other_tpage = project_paint_face_image(ps, ps->dm_mtface_stencil, face_index);
 		const MTFace *tf_other = ps->dm_mtface_stencil + face_index;
 
-		if (other_tpage && (ibuf_other = BKE_image_acquire_ibuf(other_tpage, NULL, NULL))) {
+		if (other_tpage && (ibuf_other = BKE_image_acquire_ibuf(other_tpage, NULL, NULL, IMA_IBUF_LAYER))) {
 			/* BKE_image_acquire_ibuf - TODO - this may be slow */
 			unsigned char rgba_ub[4];
 			float rgba_f[4];
@@ -1371,7 +1371,7 @@ static ProjPixel *project_paint_uvpixel_init(
 			Image *other_tpage = project_paint_face_image(ps, ps->dm_mtface_clone, face_index);
 			const MTFace *tf_other = ps->dm_mtface_clone + face_index;
 
-			if (other_tpage && (ibuf_other = BKE_image_acquire_ibuf(other_tpage, NULL, NULL))) {
+			if (other_tpage && (ibuf_other = BKE_image_acquire_ibuf(other_tpage, NULL, NULL, IMA_IBUF_LAYER))) {
 				/* BKE_image_acquire_ibuf - TODO - this may be slow */
 
 				if (ibuf->rect_float) {
@@ -3193,7 +3193,7 @@ static void project_paint_begin(ProjPaintState *ps)
 
 				image_index = BLI_linklist_index(image_LinkList, tpage);
 
-				if (image_index == -1 && BKE_image_has_ibuf(tpage, NULL)) { /* MemArena dosnt have an append func */
+				if (image_index == -1 && BKE_image_has_ibuf(tpage, NULL, IMA_IBUF_LAYER)) { /* MemArena dosnt have an append func */
 					BLI_linklist_append(&image_LinkList, tpage);
 					image_index = ps->image_tot;
 					ps->image_tot++;
@@ -3216,7 +3216,7 @@ static void project_paint_begin(ProjPaintState *ps)
 	for (node = image_LinkList, i = 0; node; node = node->next, i++, projIma++) {
 		projIma->ima = node->link;
 		projIma->touch = 0;
-		projIma->ibuf = BKE_image_acquire_ibuf(projIma->ima, NULL, NULL);
+		projIma->ibuf = BKE_image_acquire_ibuf(projIma->ima, NULL, NULL, IMA_IBUF_LAYER);
 		projIma->partRedrawRect =  BLI_memarena_alloc(arena, sizeof(ImagePaintPartialRedraw) * PROJ_BOUNDBOX_SQUARED);
 		memset(projIma->partRedrawRect, 0, sizeof(ImagePaintPartialRedraw) * PROJ_BOUNDBOX_SQUARED);
 	}
@@ -4294,7 +4294,7 @@ static int texture_paint_camera_project_exec(bContext *C, wmOperator *op)
 	}
 
 	ps.reproject_image = image;
-	ps.reproject_ibuf = BKE_image_acquire_ibuf(image, NULL, NULL);
+	ps.reproject_ibuf = BKE_image_acquire_ibuf(image, NULL, NULL, IMA_IBUF_LAYER);
 
 	if (ps.reproject_ibuf == NULL || ps.reproject_ibuf->rect == NULL) {
 		BKE_report(op->reports, RPT_ERROR, "Image data could not be found");

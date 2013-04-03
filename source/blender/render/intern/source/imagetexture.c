@@ -129,13 +129,8 @@ int imagewrap(Tex *tex, Image *ima, ImBuf *ibuf, const float texvec[3], TexResul
 		/* hack for icon render */
 		if (ima->ibufs.first==NULL && (R.r.scemode & R_NO_IMAGE_LOAD))
 			return retval;
-<<<<<<< .mine
-		
-		ibuf= BKE_image_get_ibuf(ima, &tex->iuser, IMA_IBUF_IMA);
-=======
->>>>>>> .r55757
 
-		ibuf = BKE_image_pool_acquire_ibuf(ima, &tex->iuser, pool);
+		ibuf = BKE_image_pool_acquire_ibuf(ima, &tex->iuser, pool, IMA_IBUF_IMA);
 
 		ima->flag|= IMA_USED_FOR_RENDER;
 	}
@@ -1097,11 +1092,7 @@ static int imagewraposa_aniso(Tex *tex, Image *ima, ImBuf *ibuf, const float tex
 
 	if (ima) {	/* hack for icon render */
 		if ((ima->ibufs.first == NULL) && (R.r.scemode & R_NO_IMAGE_LOAD)) return retval;
-<<<<<<< .mine
-		ibuf = BKE_image_get_ibuf(ima, &tex->iuser, IMA_IBUF_IMA); 
-=======
-		ibuf = BKE_image_pool_acquire_ibuf(ima, &tex->iuser, pool);
->>>>>>> .r55757
+		ibuf = BKE_image_pool_acquire_ibuf(ima, &tex->iuser, pool, IMA_IBUF_IMA);
 	}
 
 	if ((ibuf == NULL) || ((ibuf->rect == NULL) && (ibuf->rect_float == NULL))) {
@@ -1520,11 +1511,7 @@ int imagewraposa(Tex *tex, Image *ima, ImBuf *ibuf, const float texvec[3], const
 		if (ima->ibufs.first==NULL && (R.r.scemode & R_NO_IMAGE_LOAD))
 			return retval;
 		
-<<<<<<< .mine
-		ibuf= BKE_image_get_ibuf(ima, &tex->iuser, IMA_IBUF_IMA); 
-=======
-		ibuf = BKE_image_pool_acquire_ibuf(ima, &tex->iuser, pool);
->>>>>>> .r55757
+		ibuf = BKE_image_pool_acquire_ibuf(ima, &tex->iuser, pool, IMA_IBUF_IMA);
 
 		ima->flag|= IMA_USED_FOR_RENDER;
 	}
@@ -1900,11 +1887,7 @@ int imagewraposa(Tex *tex, Image *ima, ImBuf *ibuf, const float texvec[3], const
 void image_sample(Image *ima, float fx, float fy, float dx, float dy, float result[4], struct ImagePool *pool)
 {
 	TexResult texres;
-<<<<<<< .mine
-	ImBuf *ibuf= BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
-=======
-	ImBuf *ibuf = BKE_image_pool_acquire_ibuf(ima, NULL, pool);
->>>>>>> .r55757
+	ImBuf *ibuf = BKE_image_pool_acquire_ibuf(ima, NULL, pool, IMA_IBUF_IMA);
 	
 	if (UNLIKELY(ibuf == NULL)) {
 		zero_v4(result);

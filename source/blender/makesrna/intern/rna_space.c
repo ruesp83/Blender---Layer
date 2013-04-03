@@ -155,14 +155,9 @@ EnumPropertyItem clip_editor_mode_items[] = {
 #include "ED_sequencer.h"
 #include "ED_clip.h"
 
-<<<<<<< .mine
-#include "DNA_imbuf_types.h"
-=======
 #include "GPU_material.h"
 
-#include "IMB_imbuf_types.h"
->>>>>>> .r55757
-
+#include "DNA_imbuf_types.h"
 static StructRNA *rna_Space_refine(struct PointerRNA *ptr)
 {
 	SpaceLink *space = (SpaceLink *)ptr->data;

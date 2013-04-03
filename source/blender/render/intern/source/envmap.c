@@ -38,13 +38,9 @@
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
-<<<<<<< .mine
-#include "DNA_imbuf_types.h"
-=======
 #include "BLF_translation.h"
 
-#include "IMB_imbuf_types.h"
->>>>>>> .r55757
+#include "DNA_imbuf_types.h"
 #include "IMB_imbuf.h"        /* for rectcpy */
 
 #include "DNA_group_types.h"
@@ -693,11 +689,7 @@ int envmaptex(Tex *tex, const float texvec[3], float dxt[3], float dyt[3], int o
 		env->ima = tex->ima;
 		if (env->ima && env->ima->ok) {
 			if (env->cube[1] == NULL) {
-<<<<<<< .mine
-				ImBuf *ibuf_ima = BKE_image_get_ibuf(env->ima, NULL, IMA_IBUF_IMA);
-=======
-				ImBuf *ibuf_ima = BKE_image_pool_acquire_ibuf(env->ima, NULL, pool);
->>>>>>> .r55757
+				ImBuf *ibuf_ima = BKE_image_pool_acquire_ibuf(env->ima, NULL, pool, IMA_IBUF_IMA);
 				if (ibuf_ima)
 					envmap_split_ima(env, ibuf_ima);
 				else

@@ -158,8 +158,6 @@ struct ImBuf *IMB_rotation(struct ImBuf *ibuf, float x, float y, float angle, in
 	unsigned char ccol[4];
 	float *outF_d, *outF_s;
 
-	//angle = DEG2RADF(angle);
-
 	if (ibuf) {
 		int i, j;
 		
@@ -194,23 +192,6 @@ struct ImBuf *IMB_rotation(struct ImBuf *ibuf, float x, float y, float angle, in
 
 		for (j = 0; j < ibuf2->y; j++) {
 			for (i = 0; i < ibuf2->x; i++) {
-								
-				/*if ((vec[0] >= 0) && (vec[0] < w) && (vec[1] >= 0) && (vec[1] < h)) {
-					switch (filter_type) {
-						case 0:
-							neareast_interpolation(ibuf, ibuf2, vec[0], vec[1], i, j);
-							break;
-						case 1:
-							bilinear_interpolation(ibuf, ibuf2, vec[0], vec[1], i, j);
-							break;
-						case 2: {
-							//bicubic_interpolation(ibuf, ibuf2, vec[0], vec[1], i, j);
-
-							bicubic_interpolation_color(ibuf, outI, outF, vec[0], vec[1]);
-							break;
-						}
-					}
-				}*/
 
 				Src_x = (int)((i + minx) * cosine + (j + miny) * sine); 
 				Src_y = (int)((j + miny) * cosine - (i + minx) * sine); 
@@ -240,8 +221,22 @@ struct ImBuf *IMB_rotation(struct ImBuf *ibuf, float x, float y, float angle, in
 							outI_d[2] = outI_s[2];
 							outI_d[3] = outI_s[3];
 						}
-						//bicubic_interpolation(ibuf, ibuf2, vec[0], vec[1], i, j);
-						//bicubic_interpolation_color(ibuf, outI_d, outF_d, Src_x, Src_y);
+
+						/*switch (filter_type) {
+							case 0:
+								neareast_interpolation(ibuf, ibuf2, vec[0], vec[1], i, j);
+								break;
+							case 1:
+								bilinear_interpolation(ibuf, ibuf2, vec[0], vec[1], i, j);
+								break;
+							case 2: {
+								//bicubic_interpolation(ibuf, ibuf2, vec[0], vec[1], i, j);
+
+								bicubic_interpolation_color(ibuf, outI, outF, vec[0], vec[1]);
+								break;
+						}*/
+						//bicubic_interpolation(ibuf, ibuf2, Src_x, Src_y, i, j);
+						//bicubic_interpolation_color(ibuf2, outI_d, outF_d, Src_x, Src_y);
 				}
 				else {
 					if (ibuf->rect_float) {
@@ -259,6 +254,7 @@ struct ImBuf *IMB_rotation(struct ImBuf *ibuf, float x, float y, float angle, in
 						col[3] = ccol[3];
 					}
 				}
+				//bicubic_interpolation(ibuf, ibuf2, Src_x, Src_y, i, y);
 			}
 		}
 	}

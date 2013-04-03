@@ -1403,11 +1403,7 @@ static void UNUSED_FUNCTION(image_aspect) (Scene *scene, View3D *v3d)
 						if (ma->mtex[b] && ma->mtex[b]->tex) {
 							tex = ma->mtex[b]->tex;
 							if (tex->type == TEX_IMAGE && tex->ima) {
-<<<<<<< .mine
-								ImBuf *ibuf = BKE_image_get_ibuf(tex->ima, NULL, IMA_IBUF_IMA);
-=======
-								ImBuf *ibuf = BKE_image_acquire_ibuf(tex->ima, NULL, NULL);
->>>>>>> .r55757
+								ImBuf *ibuf = BKE_image_acquire_ibuf(tex->ima, NULL, NULL, IMA_IBUF_IMA);
 								
 								/* texturespace */
 								space = 1.0;

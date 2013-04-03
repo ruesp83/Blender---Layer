@@ -808,7 +808,6 @@ class USERPREF_PT_theme(Panel):
                 colsub = padding.column()
                 colsub = padding.column()
                 colsub.row().prop(ui, "show_colored_constraints")
-<<<<<<< .mine
         elif theme.theme_area == 'IMAGE_EDITOR':
             def theme_generic_recurse(data):
                 col.label(data.rna_type.name)
@@ -890,8 +889,6 @@ class USERPREF_PT_theme(Panel):
                 if props_type[0] == 'POINTER':
                     for i, prop in enumerate(props_ls):
                         theme_generic_recurse(getattr(data, prop.identifier))
-
-=======
         elif theme.theme_area == 'STYLE':
             col = split.column()
 
@@ -914,7 +911,6 @@ class USERPREF_PT_theme(Panel):
             ui = style.widget_label
             col.label(text="Widget Label:")
             ui_style_items(col, ui)
->>>>>>> .r55757
         else:
             self._theme_generic(split, getattr(theme, theme.theme_area.lower()))
 

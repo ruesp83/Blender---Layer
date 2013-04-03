@@ -356,14 +356,8 @@ static void sample_draw(const bContext *C, ARegion *ar, void *arg_info)
 
 	if (info->draw) {
 		ED_image_draw_info(scene, ar, info->color_manage, FALSE, info->channels,
-<<<<<<< .mine
-		                   info->x, info->y, info->col, info->colf,
-		                   NULL, NULL /* zbuf - unused for nodes */, 2
-		                   );
-=======
 		                   info->x, info->y, info->col, info->colf, info->linearcol,
-		                   info->zp, info->zfp);
->>>>>>> .r55757
+		                   info->zp, info->zfp, 2);
 	}
 }
 

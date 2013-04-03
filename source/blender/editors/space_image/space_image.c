@@ -245,7 +245,20 @@ static void image_operatortypes(void)
 	WM_operatortype_append(IMAGE_OT_pack);
 	WM_operatortype_append(IMAGE_OT_unpack);
 	
+	WM_operatortype_append(IMAGE_OT_bright_contrast);
 	WM_operatortype_append(IMAGE_OT_invert);
+
+	WM_operatortype_append(IMAGE_OT_duplicate);
+	WM_operatortype_append(IMAGE_OT_flip);
+	WM_operatortype_append(IMAGE_OT_rotate);
+	WM_operatortype_append(IMAGE_OT_arbitrary_rot);
+	WM_operatortype_append(IMAGE_OT_offset);
+	WM_operatortype_append(IMAGE_OT_scale);
+	WM_operatortype_append(IMAGE_OT_merge);
+	WM_operatortype_append(IMAGE_OT_flatten);
+	
+	WM_operatortype_append(IMAGE_OT_color_space_grayscale);
+	WM_operatortype_append(IMAGE_OT_color_space_rgb);
 
 	WM_operatortype_append(IMAGE_OT_cycle_render_slot);
 
@@ -256,23 +269,23 @@ static void image_operatortypes(void)
 	WM_operatortype_append(IMAGE_OT_properties);
 	WM_operatortype_append(IMAGE_OT_scopes);
 
-	WM_operatortype_append(IMAGE_OT_image_layer_move);
-	//WM_operatortype_append(IMAGE_OT_image_layer_fill_color);
-	WM_operatortype_append(IMAGE_OT_image_layer_remove);
-	WM_operatortype_append(IMAGE_OT_image_layer_add);
-	WM_operatortype_append(IMAGE_OT_image_layer_add_default);
-	WM_operatortype_append(IMAGE_OT_image_layer_add_below);
-	WM_operatortype_append(IMAGE_OT_image_layer_add_above);
-	WM_operatortype_append(IMAGE_OT_image_layer_duplicate);
-	WM_operatortype_append(IMAGE_OT_image_layer_select);
-	WM_operatortype_append(IMAGE_OT_image_layer_clean);
-	WM_operatortype_append(IMAGE_OT_image_layer_merge);
-	WM_operatortype_append(IMAGE_OT_image_layer_flip);
-	WM_operatortype_append(IMAGE_OT_image_layer_rotate);
-	WM_operatortype_append(IMAGE_OT_image_layer_arbitrary_rot);
-	WM_operatortype_append(IMAGE_OT_image_layer_offset);
-	WM_operatortype_append(IMAGE_OT_image_layer_scale);
-	WM_operatortype_append(IMAGE_OT_image_layer_size);
+	WM_operatortype_append(IMAGE_OT_layer_move);
+	//WM_operatortype_append(IMAGE_OT_layer_fill_color);
+	WM_operatortype_append(IMAGE_OT_layer_remove);
+	WM_operatortype_append(IMAGE_OT_layer_add);
+	WM_operatortype_append(IMAGE_OT_layer_add_default);
+	WM_operatortype_append(IMAGE_OT_layer_add_below);
+	WM_operatortype_append(IMAGE_OT_layer_add_above);
+	WM_operatortype_append(IMAGE_OT_layer_duplicate);
+	WM_operatortype_append(IMAGE_OT_layer_select);
+	WM_operatortype_append(IMAGE_OT_layer_clean);
+	WM_operatortype_append(IMAGE_OT_layer_merge);
+	WM_operatortype_append(IMAGE_OT_layer_flip);
+	WM_operatortype_append(IMAGE_OT_layer_rotate);
+	WM_operatortype_append(IMAGE_OT_layer_arbitrary_rot);
+	WM_operatortype_append(IMAGE_OT_layer_offset);
+	WM_operatortype_append(IMAGE_OT_layer_scale);
+	WM_operatortype_append(IMAGE_OT_layer_size);
 }
 
 static void image_keymap(struct wmKeyConfig *keyconf)
@@ -293,22 +306,22 @@ static void image_keymap(struct wmKeyConfig *keyconf)
 	WM_keymap_add_item(keymap, "IMAGE_OT_scopes", TKEY, KM_PRESS, 0, 0);
 
 	/*Layers*/
-	WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_add", NKEY, KM_PRESS, KM_SHIFT|KM_ALT, 0);
-	RNA_int_set(WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_add_default", LEFTMOUSE, KM_PRESS, KM_ALT, 0)->ptr, "layer", 1);
-	WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_add_default", NKEY, KM_PRESS, KM_SHIFT|KM_ALT|KM_CTRL, 0);
-	WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_add_above", UPARROWKEY, KM_PRESS, KM_SHIFT|KM_ALT, 0);
-	WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_add_below", DOWNARROWKEY, KM_PRESS, KM_SHIFT|KM_ALT, 0);
+	WM_keymap_add_item(keymap, "IMAGE_OT_layer_add", NKEY, KM_PRESS, KM_SHIFT|KM_ALT, 0);
+	//WM_keymap_add_item(keymap, "IMAGE_OT_layer_add_default", LEFTMOUSE, KM_CLICK, KM_ALT, 0);
+	WM_keymap_add_item(keymap, "IMAGE_OT_layer_add_default", NKEY, KM_PRESS, KM_SHIFT|KM_ALT|KM_CTRL, 0);
+	WM_keymap_add_item(keymap, "IMAGE_OT_layer_add_above", UPARROWKEY, KM_PRESS, KM_SHIFT|KM_ALT, 0);
+	WM_keymap_add_item(keymap, "IMAGE_OT_layer_add_below", DOWNARROWKEY, KM_PRESS, KM_SHIFT|KM_ALT, 0);
 
-	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_select", PAGEUPKEY, KM_PRESS, 0, 0);
+	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_layer_select", PAGEUPKEY, KM_PRESS, 0, 0);
 	RNA_enum_set(kmi->ptr, "action", IMA_LAYER_SEL_PREVIOUS);
-	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_select", PAGEDOWNKEY, KM_PRESS, 0, 0);
+	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_layer_select", PAGEDOWNKEY, KM_PRESS, 0, 0);
 	RNA_enum_set(kmi->ptr, "action", IMA_LAYER_SEL_NEXT);
-	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_select", HOMEKEY, KM_PRESS, 0, 0);
+	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_layer_select", HOMEKEY, KM_PRESS, 0, 0);
 	RNA_enum_set(kmi->ptr, "action", IMA_LAYER_SEL_TOP);
-	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_select", ENDKEY, KM_PRESS, 0, 0);
+	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_layer_select", ENDKEY, KM_PRESS, 0, 0);
 	RNA_enum_set(kmi->ptr, "action", IMA_LAYER_SEL_BOTTOM);
 
-	WM_keymap_add_item(keymap, "IMAGE_OT_image_layer_clean", DELKEY, KM_PRESS, 0, 0);
+	WM_keymap_add_item(keymap, "IMAGE_OT_layer_clean", DELKEY, KM_PRESS, 0, 0);
 
 	WM_keymap_add_item(keymap, "IMAGE_OT_cycle_render_slot", JKEY, KM_PRESS, 0, 0);
 	RNA_boolean_set(WM_keymap_add_item(keymap, "IMAGE_OT_cycle_render_slot", JKEY, KM_PRESS, KM_ALT, 0)->ptr, "reverse", TRUE);

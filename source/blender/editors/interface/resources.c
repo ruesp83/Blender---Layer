@@ -915,13 +915,11 @@ void ui_theme_init_default(void)
 	rgba_char_args_set_fl(btheme->tima.preview_stitch_vert, 0.0, 0.0, 1.0, 0.2);
 	rgba_char_args_set_fl(btheme->tima.preview_stitch_stitchable, 0.0, 1.0, 0.0, 1.0);
 	rgba_char_args_set_fl(btheme->tima.preview_stitch_unstitchable, 1.0, 0.0, 0.0, 1.0);
-<<<<<<< .mine
+	rgba_char_args_set_fl(btheme->tima.preview_stitch_active, 0.886, 0.824, 0.765, 0.140);
+
 	btheme->tima.show_boundary_layer = TH_IMAGE_LAYER_BOUNDARY;
 	rgba_char_args_set(btheme->tima.col1_boundary_layer, 255, 255, 0, 255);
 	rgba_char_args_set(btheme->tima.col2_boundary_layer, 255, 0, 255, 255);
-=======
-	rgba_char_args_set_fl(btheme->tima.preview_stitch_active, 0.886, 0.824, 0.765, 0.140);
->>>>>>> .r55757
 
 	/* space text */
 	btheme->text = btheme->tv3d;

@@ -35,7 +35,7 @@
 
 #include "BLF_translation.h"
 
-#include "DNA_material_types.h"
+#include "DNA_imbuf_types.h"#include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
@@ -58,7 +58,6 @@
 #include "rna_internal_types.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
 
 #include "WM_types.h"
 
@@ -680,7 +679,7 @@ static void rna_NodeTree_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 	if (ntree->flag & NTREE_VIEWER_BORDER) {
 		Image *ima = BKE_image_verify_viewer(IMA_TYPE_COMPOSITE, "Viewer Node");
 		void *lock;
-		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock);
+		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock, IMA_IBUF_IMA);
 
 		if (ibuf) {
 			if (ibuf->rect)
@@ -2235,20 +2234,6 @@ static char *rna_NodeSocketInterface_path(PointerRNA *ptr)
 	return NULL;
 }
 
-<<<<<<< .mine
-static void rna_Node_render_layer_update(Main *bmain, Scene *scene, PointerRNA *ptr)
-{
-	bNode *node = (bNode *)ptr->data;
-	Image *ima = (Image *)node->id;
-	ImageUser *iuser = node->storage;
-	
-	BKE_render_multilayer_index(ima->rr, iuser);
-	BKE_image_signal(ima, iuser, IMA_SIGNAL_SRC_CHANGE);
-	
-	rna_Node_update(bmain, scene, ptr);
-}
-
-=======
 static IDProperty *rna_NodeSocketInterface_idprops(PointerRNA *ptr, bool create)
 {
 	bNodeSocket *sock = ptr->data;
@@ -2505,14 +2490,25 @@ static void rna_Node_scene_set(PointerRNA *ptr, PointerRNA value)
 	id_us_plus(node->id);
 }
 
->>>>>>> .r55757
+static void rna_Node_render_layer_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	bNode *node = (bNode *)ptr->data;
+	Image *ima = (Image *)node->id;
+	ImageUser *iuser = node->storage;
+	
+	BKE_render_multilayer_index(ima->rr, iuser);
+	BKE_image_signal(ima, iuser, IMA_SIGNAL_SRC_CHANGE);
+	
+	rna_Node_update(bmain, scene, ptr);
+}
+
 static void rna_Node_image_layer_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	bNode *node = (bNode *)ptr->data;
 	Image *ima = (Image *)node->id;
 	ImageUser *iuser = node->storage;
 	
-	BKE_image_multilayer_index(ima, iuser);
+	//BKE_image_multilayer_index(ima, iuser);
 	BKE_image_signal(ima, iuser, IMA_SIGNAL_SRC_CHANGE);
 	
 	rna_Node_update(bmain, scene, ptr);
@@ -2553,47 +2549,6 @@ static EnumPropertyItem *rna_Node_render_layer_itemf(bContext *UNUSED(C), Pointe
 	
 	rl = ima->rr->layers.first;
 	item = renderresult_layers_add_enum(rl);
-	
-	*free = 1;
-	
-	return item;
-}
-
-static EnumPropertyItem *image_layers_add_enum(ImageLayer *iml)
-{
-	EnumPropertyItem *item = NULL;
-	EnumPropertyItem tmp = {0, "", 0, "", ""};
-	int i = 0, totitem = 0;
-	
-	while (iml) {
-		tmp.identifier = iml->name;
-		/* little trick: using space char instead empty string makes the item selectable in the dropdown */
-		if (iml->name[0] == '\0')
-			tmp.name = " ";
-		else
-			tmp.name = iml->name;
-		tmp.value = i++;
-		RNA_enum_item_add(&item, &totitem, &tmp);
-		iml = iml->next;
-	}
-	
-	RNA_enum_item_end(&item, &totitem);
-
-	return item;
-}
-
-static EnumPropertyItem *rna_Node_image_layer_itemf(bContext *UNUSED(C), PointerRNA *ptr,
-                                                    PropertyRNA *UNUSED(prop), int *free)
-{
-	bNode *node = (bNode *)ptr->data;
-	Image *ima = (Image *)node->id;
-	EnumPropertyItem *item = NULL;
-	ImageLayer *iml;
-	
-	if (!ima || !(ima->imlayers.last)) return NULL;
-	
-	iml = ima->imlayers.first;
-	item = image_layers_add_enum(iml);
 	
 	*free = 1;
 	
@@ -2836,11 +2791,6 @@ static void rna_ShaderNodeScript_update(Main *bmain, Scene *scene, PointerRNA *p
 #else
 
 static EnumPropertyItem prop_render_layer_items[] = {
-	{ 0, "PLACEHOLDER",          0, "Placeholder",          ""},
-	{0, NULL, 0, NULL, NULL}
-};
-
-static EnumPropertyItem prop_image_layer_items[] = {
 	{ 0, "PLACEHOLDER",          0, "Placeholder",          ""},
 	{0, NULL, 0, NULL, NULL}
 };
@@ -3924,15 +3874,7 @@ static void def_node_image_user(StructRNA *srna)
 	prop = RNA_def_property(srna, "use_layer_ima", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "use_layer_ima", IMA_USE_LAYER);
 	RNA_def_property_ui_text(prop, "Layer Image", "Uses the Image Layer");
-	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
-
-	prop = RNA_def_property(srna, "layer_ima", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_sdna(prop, NULL, "layer_ima");
-	RNA_def_property_enum_items(prop, prop_image_layer_items);
-	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_Node_image_layer_itemf");
-	RNA_def_property_ui_text(prop, "Layer", "");
 	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_image_layer_update");
-
 
 }
 

@@ -18,7 +18,7 @@
 
 # <pep8 compliant>
 import bpy
-from bpy.types import Header, Menu, Panel
+from bpy.types import Header, Menu, Panel, UIList
 from bl_ui.properties_paint_common import UnifiedPaintPanel, brush_texture_settings, brush_mask_texture_settings
 from bpy.app.translations import pgettext_iface as iface_
 
@@ -112,8 +112,8 @@ class IMAGE_MT_select(Menu):
         layout.operator("uv.select_split")
 
 
-class IMAGE_MT_image(Menu):
-    bl_label = "Image"
+class IMAGE_MT_file(Menu):
+    bl_label = "File"
 
     def draw(self, context):
         layout = self.layout
@@ -145,10 +145,6 @@ class IMAGE_MT_image(Menu):
 
             layout.operator("image.external_edit", "Edit Externally")
 
-            layout.separator()
-
-            layout.menu("IMAGE_MT_image_invert")
-
             if not show_render:
                 layout.separator()
 
@@ -164,112 +160,58 @@ class IMAGE_MT_image(Menu):
             layout.separator()
 
 
-class IMAGE_MT_layers(Menu):
-    bl_label = "Layer"
+class IMAGE_MT_image(Menu):
+    bl_label = "Image"
 
     def draw(self, context):
         layout = self.layout
 
-        sima = context.space_data
-        ima = sima.image
-
-        layout.menu("IMAGE_MT_layers_new", icon='NEW')
-        # layout.operator("image.open")
-        layout.operator("image.image_layer_duplicate", icon='GHOST')
-        layout.operator("image.image_layer_clean", icon='FILE')
-        layout.menu("IMAGE_MT_layers_remove", icon='CANCEL')
-        layout.menu("IMAGE_MT_layers_merge", icon='LINK_AREA')
+        layout.menu("IMAGE_MT_image_space", icon='COLOR')
         layout.separator()
-        layout.menu("IMAGE_MT_layers_select", icon='FILE_TICK')
-        layout.menu("IMAGE_MT_layers_order", icon='SORTALPHA')
-        layout.menu("IMAGE_MT_layers_transform", icon='MANIPUL')
-        layout.menu("IMAGE_MT_layers_scale", icon='MAN_SCALE')
-
-
-class IMAGE_MT_layers_new(Menu):
-    bl_label = "Add"
-
-    def draw(self, context):
-        layout = self.layout
-
-        layout.operator("image.image_layer_add", icon='NEW')
+        layout.operator("image.duplicate", icon='GHOST')
+        layout.menu("IMAGE_MT_image_transform", icon='MANIPUL')
+        layout.operator("image.scale")
         layout.separator()
-        layout.operator("image.image_layer_add_above", icon='TRIA_UP')
-        layout.operator("image.image_layer_add_below", icon='TRIA_DOWN')
+        layout.operator("image.merge")
+        layout.operator("image.flatten")
 
 
-class IMAGE_MT_layers_select(Menu):
-    bl_label = "Select"
-
-    def draw(self, context):
-        layout = self.layout
-
-        layout.operator("image.image_layer_select", text="Select Previous Layer").action = 'PREVIOUS'
-        layout.operator("image.image_layer_select", text="Select Next Layer" ).action = 'NEXT'
-        layout.operator("image.image_layer_select", text="Select Top Layer").action = 'TOP'
-        layout.operator("image.image_layer_select", text="Select Bottom Layer").action = 'BOTTOM'
-
-
-class IMAGE_MT_layers_order(Menu):
-    bl_label = "Order"
+class IMAGE_MT_image_space(Menu):
+    bl_label = "Color Space"
 
     def draw(self, context):
         layout = self.layout
 
-        layout.operator("image.image_layer_move", text="Layer the Top").type = 'TOP'
-        layout.operator("image.image_layer_move", text="Raise Layer", icon='TRIA_UP').type = 'UP'
-        layout.operator("image.image_layer_move", text="Lower Layer", icon='TRIA_DOWN').type = 'DOWN'
-        layout.operator("image.image_layer_move", text="Layer the Bottom").type = 'BOTTOM'
-        layout.separator()
-        layout.operator("image.image_layer_move", text="Invert").type = 'INVERT'
+        layout.operator("image.color_space_grayscale")
+        layout.operator("image.color_space_rgb")
 
 
-class IMAGE_MT_layers_transform(Menu):
+class IMAGE_MT_image_transform(Menu):
     bl_label = "Transform"
 
     def draw(self, context):
         layout = self.layout
 
-        layout.operator("image.image_layer_flip", text="Flip Horizontally", icon='ARROW_LEFTRIGHT').type = 'FLIP_H'
-        layout.operator("image.image_layer_flip", text="Flip Vertically").type = 'FLIP_V'
+        layout.operator("image.flip", text="Flip Horizontally", icon='ARROW_LEFTRIGHT').type = 'FLIP_H'
+        layout.operator("image.flip", text="Flip Vertically").type = 'FLIP_V'
         layout.separator()
-        layout.operator("image.image_layer_rotate", text="Rotate 90 clockwise", icon='TIME').type = 'ROT_90'
-        layout.operator("image.image_layer_rotate", text="Rotate 90 anti-clockwise", icon='RECOVER_LAST').type = 'ROT_90A'
-        layout.operator("image.image_layer_rotate", text="Rotate 180").type = 'ROT_180'
-        layout.operator("image.image_layer_arbitrary_rot", text="Arbitrary Rotation", icon='FILE_REFRESH')
+        layout.operator("image.rotate", text="Rotate 90 clockwise", icon='TIME').type = 'ROT_90'
+        layout.operator("image.rotate", text="Rotate 90 anti-clockwise", icon='RECOVER_LAST').type = 'ROT_90A'
+        layout.operator("image.rotate", text="Rotate 180").type = 'ROT_180'
+        layout.operator("image.arbitrary_rot", text="Arbitrary Rotation", icon='FILE_REFRESH')
         layout.separator()
-        layout.operator("image.image_layer_offset", text="Offset", icon='MAN_TRANS')
+        layout.operator("image.offset", text="Offset", icon='MAN_TRANS')
 
 
-class IMAGE_MT_layers_scale(Menu):
-    bl_label = "Scale"
-
-    def draw(self, context):
-        layout = self.layout
-
-        layout.operator("image.image_layer_size", text="Layer Boundary Size")
-        layout.operator("image.image_layer_scale", text="Scale Layer")
-
-
-class IMAGE_MT_layers_remove(Menu):
-    bl_label = "Remove"
+class IMAGE_MT_color(Menu):
+    bl_label = "Color"
 
     def draw(self, context):
         layout = self.layout
 
-        layout.operator("image.image_layer_remove", text="Layer").action = 'SELECTED'
-        layout.operator("image.image_layer_remove", text="Hidden Layers" ).action = 'HIDDEN'
-
-
-class IMAGE_MT_layers_merge(Menu):
-    bl_label = "Merge"
-
-    def draw(self, context):
-        layout = self.layout
-
-        layout.operator("image.image_layer_merge", text="Merge Down").type = 'DOWN'
-        layout.operator("image.image_layer_merge", text="Merge Visible" ).type = 'VISIBLE'
-        layout.operator("image.image_layer_merge", text="Merge All" ).type = 'ONE'
+        layout.operator("image.bright_contrast", text="Bright/Contrast")
+        layout.separator()
+        layout.menu("IMAGE_MT_image_invert")
 
 
 class IMAGE_MT_image_invert(Menu):
@@ -296,6 +238,110 @@ class IMAGE_MT_image_invert(Menu):
 
         props = layout.operator("image.invert", text="Invert Alpha Channel")
         props.invert_a = True
+
+
+class IMAGE_MT_layers(Menu):
+    bl_label = "Layer"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.menu("IMAGE_MT_layers_new", icon='NEW')
+        layout.operator("image.layer_duplicate", icon='GHOST')
+        layout.operator("image.layer_clean", icon='FILE')
+        layout.menu("IMAGE_MT_layers_remove", icon='CANCEL')
+        layout.menu("IMAGE_MT_layers_merge", icon='LINK_AREA')
+        layout.separator()
+        layout.menu("IMAGE_MT_layers_select", icon='FILE_TICK')
+        layout.menu("IMAGE_MT_layers_order", icon='SORTALPHA')
+        layout.menu("IMAGE_MT_layers_transform", icon='MANIPUL')
+        layout.menu("IMAGE_MT_layers_scale", icon='MAN_SCALE')
+
+
+class IMAGE_MT_layers_new(Menu):
+    bl_label = "Add"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.layer_add", icon='NEW')
+        layout.separator()
+        layout.operator("image.layer_add_above", icon='TRIA_UP')
+        layout.operator("image.layer_add_below", icon='TRIA_DOWN')
+
+
+class IMAGE_MT_layers_select(Menu):
+    bl_label = "Select"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.layer_select", text="Select Previous Layer").action = 'PREVIOUS'
+        layout.operator("image.layer_select", text="Select Next Layer" ).action = 'NEXT'
+        layout.operator("image.layer_select", text="Select Top Layer").action = 'TOP'
+        layout.operator("image.layer_select", text="Select Bottom Layer").action = 'BOTTOM'
+
+
+class IMAGE_MT_layers_order(Menu):
+    bl_label = "Order"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.layer_move", text="Layer the Top").type = 'TOP'
+        layout.operator("image.layer_move", text="Raise Layer", icon='TRIA_UP').type = 'UP'
+        layout.operator("image.layer_move", text="Lower Layer", icon='TRIA_DOWN').type = 'DOWN'
+        layout.operator("image.layer_move", text="Layer the Bottom").type = 'BOTTOM'
+        layout.separator()
+        layout.operator("image.layer_move", text="Invert").type = 'INVERT'
+
+
+class IMAGE_MT_layers_transform(Menu):
+    bl_label = "Transform"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.layer_flip", text="Flip Horizontally", icon='ARROW_LEFTRIGHT').type = 'FLIP_H'
+        layout.operator("image.layer_flip", text="Flip Vertically").type = 'FLIP_V'
+        layout.separator()
+        layout.operator("image.layer_rotate", text="Rotate 90 clockwise", icon='TIME').type = 'ROT_90'
+        layout.operator("image.layer_rotate", text="Rotate 90 anti-clockwise", icon='RECOVER_LAST').type = 'ROT_90A'
+        layout.operator("image.layer_rotate", text="Rotate 180").type = 'ROT_180'
+        layout.operator("image.layer_arbitrary_rot", text="Arbitrary Rotation", icon='FILE_REFRESH')
+        layout.separator()
+        layout.operator("image.layer_offset", text="Offset", icon='MAN_TRANS')
+
+
+class IMAGE_MT_layers_scale(Menu):
+    bl_label = "Scale"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.layer_size")
+        layout.operator("image.layer_scale")
+
+
+class IMAGE_MT_layers_remove(Menu):
+    bl_label = "Remove"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.layer_remove", text="Layer").action = 'SELECTED'
+        layout.operator("image.layer_remove", text="Hidden Layers" ).action = 'HIDDEN'
+
+
+class IMAGE_MT_layers_merge(Menu):
+    bl_label = "Merge"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.layer_merge", text="Merge Down").type = 'DOWN'
+        layout.operator("image.layer_merge", text="Merge Visible" ).type = 'VISIBLE'
+        layout.operator("image.layer_merge", text="Merge All" ).type = 'ONE'
 
 
 class IMAGE_MT_uvs_showhide(Menu):
@@ -487,11 +533,15 @@ class IMAGE_HT_header(Header):
                 sub.menu("IMAGE_MT_select")
 
             if ima and ima.is_dirty:
-                sub.menu("IMAGE_MT_image", text="Image*")
+                sub.menu("IMAGE_MT_file", text="File*")
             else:
-                sub.menu("IMAGE_MT_image", text="Image")
+                sub.menu("IMAGE_MT_file", text="File")
 
-            if show_paint:
+            if ima and not show_render:
+                sub.menu("IMAGE_MT_image", text="Image")
+                sub.menu("IMAGE_MT_color", text="Color")
+
+            if ima and show_paint:
                 sub.menu("IMAGE_MT_layers", text="Layer")
 
             if show_uvedit:
@@ -505,7 +555,6 @@ class IMAGE_HT_header(Header):
         if not show_render:
             layout.prop(sima, "use_image_pin", text="")
 
-        # if not show_render:
         layout.prop(sima, "mode", text="")
 
         if show_maskedit:
@@ -785,13 +834,30 @@ class IMAGE_PT_view_properties(Panel):
             sub.row().prop(uvedit, "draw_stretch_type", expand=True)
 
 
+class IMAGE_UL_ima_layers(UIList):
+    def draw_item(self, context, layout, data, item, icon,
+                  active_data, active_propname, index):
+        layer = item
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            split = layout.split()
+            split.label(text=layer.name, icon_value=icon)
+            row = split.row()
+            row.alignment = 'RIGHT'
+            row.prop(layer, "locked", text="", emboss=False)
+            row.prop(layer, "locked_alpha", text="", emboss=False)
+            row.prop(layer, "visible", text="", index=index)
+        elif self.layout_type in {'GRID'}:
+            layout.alignment = 'CENTER'
+            layout.label("", icon_value=icon)
+
+
 class IMAGE_PT_image_layers(Panel, ImagePaintPanel):
     bl_label = "Image Layers"
 
     @classmethod
     def poll(cls, context):
         sima = context.space_data
-        return sima.show_paint
+        return (sima.image and sima.show_paint)
 
     def draw(self, context):
         layout = self.layout
@@ -801,23 +867,26 @@ class IMAGE_PT_image_layers(Panel, ImagePaintPanel):
 
         if ima:
             row = layout.row()
-            row.template_list(ima, "image_layers", ima.image_layers, "active_image_layer_index", 
-                              rows=5, maxrows=5)
+
+            rows = 5 if layers.active_image_layer else 2
+            row.template_list("IMAGE_UL_ima_layers", "", ima, "image_layers",
+                              ima.image_layers, "active_image_layer_index", 
+                              rows=rows)
 
             col = row.column(align=True)
-            col.operator("image.image_layer_add_default", text="", icon='NEW')
+            col.operator("image.layer_add_default", text="", icon='NEW')
 
             if layers.active_image_layer:
-                col.operator("image.image_layer_duplicate", text="", icon='GHOST')
+                col.operator("image.layer_duplicate", text="", icon='GHOST')
                 sub = col.column()
 
                 if (layers.active_image_layer.type == 'BASE'):
                     sub.enabled = False
                 else:
                     sub.enabled = True
-                sub.operator("image.image_layer_remove", text="", icon='CANCEL').action = 'SELECTED'
-                col.operator("image.image_layer_move", text="", icon='TRIA_UP').type = 'UP'
-                col.operator("image.image_layer_move", text="", icon='TRIA_DOWN').type = 'DOWN'
+                sub.operator("image.layer_remove", text="", icon='CANCEL').action = 'SELECTED'
+                col.operator("image.layer_move", text="", icon='TRIA_UP').type = 'UP'
+                col.operator("image.layer_move", text="", icon='TRIA_DOWN').type = 'DOWN'
                 split = layout.split(percentage=0.35)
                 col = split.column()
                 col.label(text="Name")

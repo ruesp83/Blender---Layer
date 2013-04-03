@@ -1636,12 +1636,8 @@ static void view3d_draw_bgpic(Scene *scene, ARegion *ar, View3D *v3d,
 					ibuf = NULL; /* frame is out of range, dont show */
 				}
 				else {
-<<<<<<< .mine
-					ibuf = BKE_image_get_ibuf(ima, &bgpic->iuser, IMA_IBUF_IMA);
-=======
-					ibuf = BKE_image_acquire_ibuf(ima, &bgpic->iuser, NULL);
+					ibuf = BKE_image_acquire_ibuf(ima, &bgpic->iuser, NULL, IMA_IBUF_IMA);
 					releaseibuf = ibuf;
->>>>>>> .r55757
 				}
 
 				image_aspect[0] = ima->aspx;

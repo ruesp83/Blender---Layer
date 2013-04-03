@@ -594,15 +594,9 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 		uiBlockSetNFunc(block, rna_update_cb, MEM_dupallocN(cb), NULL);
 
 		if (ima->source == IMA_SRC_VIEWER) {
-<<<<<<< .mine
-			ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock, IMA_IBUF_IMA);
-			image_info(scene, iuser, ima, ibuf, str);
-			BKE_image_release_ibuf(ima, lock);
-=======
-			ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock);
+			ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock, IMA_IBUF_IMA);
 			image_info(scene, iuser, ima, ibuf, str, MAX_INFO_LEN);
 			BKE_image_release_ibuf(ima, ibuf, lock);
->>>>>>> .r55757
 
 			uiItemL(layout, ima->id.name + 2, ICON_NONE);
 			uiItemL(layout, str, ICON_NONE);
@@ -633,10 +627,8 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 
 				/* use BKE_image_acquire_renderresult  so we get the correct slot in the menu */
 				rr = BKE_image_acquire_renderresult(scene, ima);
-				printf("1\n");
 				uiblock_layer_pass_arrow_buttons(layout, rr, iuser, &ima->render_slot);
 				BKE_image_release_renderresult(scene, ima);
-				printf("2\n");
 			}
 		}
 		else {
@@ -672,18 +664,17 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 			}
 			else if (ima->source != IMA_SRC_GENERATED) {
 				if (compact == 0) {
-<<<<<<< .mine
-					ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock, IMA_IBUF_IMA);
-					image_info(scene, iuser, ima, ibuf, str);
-					BKE_image_release_ibuf(ima, lock);
-=======
-					ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock);
+					ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock, IMA_IBUF_IMA);
 					image_info(scene, iuser, ima, ibuf, str, MAX_INFO_LEN);
 					BKE_image_release_ibuf(ima, ibuf, lock);
->>>>>>> .r55757
 					uiItemL(layout, str, ICON_NONE);
 				}
 			}
+
+			if (ima->color_space & IMA_COL_GRAY)
+				uiItemL(layout, "Mode Color Space: GrayScale", ICON_NONE);
+			else
+				uiItemL(layout, "Mode Color Space: RGB", ICON_NONE);
 
 			col = uiLayoutColumn(layout, FALSE);
 			uiTemplateColorspaceSettings(col, &imaptr, "colorspace_settings");
@@ -691,7 +682,7 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 
 			if (ima->source != IMA_SRC_GENERATED) {
 				if (compact == 0) { /* background image view doesnt need these */
-					ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, NULL);
+					ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, NULL, IMA_IBUF_IMA);
 					int has_alpha = TRUE;
 
 					if (ibuf) {

@@ -42,6 +42,7 @@
 #include "BLI_utildefines.h"
 
 #include "DNA_image_types.h"
+#include "DNA_imbuf_types.h"
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -54,7 +55,6 @@
 #include "BKE_node.h"
 #include "BKE_scene.h"
 
-#include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include "IMB_colormanagement.h"
 
@@ -657,7 +657,7 @@ static int get_next_bake_face(BakeShade *bs)
 						continue;
 
 					ima = tface->tpage;
-					ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
+					ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 
 					if (ibuf == NULL)
 						continue;
@@ -801,7 +801,7 @@ static void shade_tface(BakeShade *bs)
 		BKE_image_release_ibuf(bs->ima, bs->ibuf, NULL);
 
 		bs->ima = ima;
-		bs->ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
+		bs->ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 		/* note, these calls only free/fill contents of zspan struct, not zspan itself */
 		zbuf_free_span(bs->zspan);
 		zbuf_alloc_span(bs->zspan, bs->ibuf->x, bs->ibuf->y, R.clipcrop);
@@ -990,7 +990,7 @@ int RE_bake_shade_all_selected(Render *re, int type, Object *actob, short *do_up
 	/* baker uses this flag to detect if image was initialized */
 	if ((R.r.bake_flag & R_BAKE_VCOL) == 0) {
 		for (ima = G.main->image.first; ima; ima = ima->id.next) {
-			ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
+			ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 			ima->id.flag |= LIB_DOIT;
 			ima->flag &= ~IMA_USED_FOR_RENDER;
 			if (ibuf) {
@@ -1068,7 +1068,7 @@ int RE_bake_shade_all_selected(Render *re, int type, Object *actob, short *do_up
 
 		for (ima = G.main->image.first; ima; ima = ima->id.next) {
 			if ((ima->id.flag & LIB_DOIT) == 0) {
-				ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
+				ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 				BakeImBufuserData *userdata;
 
 				if (ima->flag & IMA_USED_FOR_RENDER)

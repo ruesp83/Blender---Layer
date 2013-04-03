@@ -33,6 +33,7 @@
 
 #include "DNA_action_types.h"
 #include "DNA_anim_types.h"
+#include "DNA_imbuf_types.h"
 #include "DNA_lamp_types.h"
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
@@ -75,8 +76,6 @@
 #include "UI_view2d.h"
 
 #include "GPU_material.h"
-
-#include "IMB_imbuf_types.h"
 
 #include "node_intern.h"  /* own include */
 #include "NOD_common.h"
@@ -2417,7 +2416,7 @@ static int viewer_border_exec(bContext *C, wmOperator *op)
 	ED_preview_kill_jobs(C);
 
 	ima = BKE_image_verify_viewer(IMA_TYPE_COMPOSITE, "Viewer Node");
-	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock);
+	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock, IMA_IBUF_IMA);
 
 	if (ibuf) {
 		ARegion *ar = CTX_wm_region(C);

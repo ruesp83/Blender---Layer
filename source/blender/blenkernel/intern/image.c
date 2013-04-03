@@ -180,11 +180,7 @@ static void de_interlace_st(struct ImBuf *ibuf) /* standard fields */
 
 void BKE_image_de_interlace(Image *ima, int odd)
 {
-<<<<<<< .mine
-	ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
-=======
-	ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
->>>>>>> .r55757
+	ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 	if (ibuf) {
 		if (odd)
 			de_interlace_st(ibuf);
@@ -199,6 +195,8 @@ void BKE_image_de_interlace(Image *ima, int odd)
 static void image_free_buffers(Image *ima)
 {
 	ImBuf *ibuf;
+
+	image_free_image_layers(ima);
 
 	while ((ibuf = ima->ibufs.first)) {
 		BLI_remlink(&ima->ibufs, ibuf);
@@ -228,7 +226,7 @@ void BKE_image_free(Image *ima)
 {
 	int a;
 
-	image_free_image_layers(ima);
+	//image_free_image_layers(ima);
 	image_free_buffers(ima);
 	if (ima->packedfile) {
 		freePackedFile(ima->packedfile);
@@ -273,52 +271,50 @@ static Image *image_alloc(Main *bmain, const char *name, short source, short typ
 	return ima;
 }
 
+static ImBuf *image_get_ibuf_layer(Image *ima)
+{
+	ImBuf *ibuf = NULL;
+	ImageLayer *layer;
+
+	//BLI_spin_lock(&image_spin);
+
+		layer = imalayer_get_current(ima);
+		if (layer && layer->ibufs.first)
+			ibuf = (ImBuf *)layer->ibufs.first;
+
+	//BLI_spin_unlock(&image_spin);
+
+	return ibuf;
+}
 
 /* get the ibuf from an image cache, local use here only */
-static ImBuf *image_get_ibuf(Image *ima, int index, int frame, int type_ibuf)
+static ImBuf *image_get_ibuf(Image *ima, int index, int frame)
 {
-	/* unsigned int totsize= 0; */
-
 	/* this function is intended to be thread safe. with IMA_NO_INDEX this
 	 * should be OK, but when iterating over the list this is more tricky
 	 * */
-<<<<<<< .mine
 	if (index == IMA_NO_INDEX) {
-		if (type_ibuf == IMA_IBUF_LAYER) {
-			ImageLayer *layer = imalayer_get_current(ima);
-			if (layer && layer->ibufs.first)
-				return (ImBuf *)layer->ibufs.first;
-		}
-		else {
+		//if (ima->use_layers) {
+			//ima->use_layers = FALSE;
 			if (ima->imlayers.first) {
 				BLI_lock_thread(LOCK_IMAGE);
 				
-				merge_layers_visible_nd(ima);
+					merge_layers_visible_nd(ima);
 				
 				BLI_unlock_thread(LOCK_IMAGE);
 			}
-			/* Only return "normal" image ibuf if no layer ibuf was found. */
-			return (ImBuf *)ima->ibufs.first;
-		}
-	}
-=======
-	if (index == IMA_NO_INDEX) {
+		//}
 		return ima->ibufs.first;
->>>>>>> .r55757
 	}
 	else {
 		ImBuf *ibuf;
+
 		index = IMA_MAKE_INDEX(frame, index);
 		for (ibuf = ima->ibufs.first; ibuf; ibuf = ibuf->next)
 			if (ibuf->index == index)
 				return ibuf;
-<<<<<<< .mine
-	}
-=======
 	}
 
-	return NULL;
->>>>>>> .r55757
 	return NULL;
 }
 
@@ -673,7 +669,7 @@ Image *BKE_image_load_exists(const char *filepath)
 	BLI_path_abs(str, G.main->name);
 
 	/* first search an identical image */
-	for (ima = G.main->image.first; ima; ima = ima->id.next) {
+	for (ima = (Image *)G.main->image.first; ima; ima = (Image *)ima->id.next) {
 		if (ima->source != IMA_SRC_VIEWER && ima->source != IMA_SRC_GENERATED) {
 			BLI_strncpy(strtest, ima->name, sizeof(ima->name));
 			BLI_path_abs(strtest, G.main->name);
@@ -699,20 +695,20 @@ ImageLayer *BKE_add_image_file_as_layer(Image *ima, const char *name)
 	ImageLayer *iml, *layer_act;
 	int file, len;
 	const char *newname;
-	char str[FILE_MAX], strtest[FILE_MAX];
+	char str[FILE_MAX];
 	
 	BLI_strncpy(str, name, sizeof(str));
 	
 	/* exists? */
-	file = BLI_open(str, O_BINARY|O_RDONLY, 0);
+	file = BLI_open(str, O_BINARY | O_RDONLY, 0);
 	if (file == -1) return NULL;
 	close(file);
 	
 	/* create a short library name */
-	len= strlen(name);
+	len = strlen(name);
 	
 	while (len > 0 && name[len - 1] != '/' && name[len - 1] != '\\') len--;
-	newname= name+len;
+	newname = name + len;
 	
 	//iml = image_add_image_layer(ima, newname, alpha ? 32 : 24, color, 2);
 	
@@ -721,7 +717,6 @@ ImageLayer *BKE_add_image_file_as_layer(Image *ima, const char *name)
 	
 	iml = layer_alloc(ima, newname);
 	if (iml) {
-
 		BLI_addhead(&ima->imlayers, iml);
 		ima->Act_Layers = 0;
 		ima->Count_Layers += 1;
@@ -833,7 +828,7 @@ Image *BKE_image_add_from_imbuf(ImBuf *ibuf)
 /* packs rect from memory as PNG */
 void BKE_image_memorypack(Image *ima)
 {
-	ImBuf *ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0, IMA_IBUF_IMA);
+	ImBuf *ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0);
 
 	if (ibuf == NULL)
 		return;
@@ -2298,7 +2293,7 @@ void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 
 			if (ima->source == IMA_SRC_GENERATED) {
 				if (ima->gen_x == 0 || ima->gen_y == 0) {
-					ImBuf *ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0, IMA_IBUF_IMA);
+					ImBuf *ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0); //IMA_IBUF_IMA
 					if (ibuf) {
 						ima->gen_x = ibuf->x;
 						ima->gen_y = ibuf->y;
@@ -2308,7 +2303,7 @@ void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 
 #if 0
 			/* force reload on first use, but not for multilayer, that makes nodes and buttons in ui drawing fail */
-			if (ima->type != IMA_TYPE_MULTILAYER)
+			if (ima->type != IMA_TYPE_MULTILAYER) //&& (ima->type != IMA_TYPE_IMAGELAYER))
 				image_free_buffers(ima);
 #else
 			/* image buffers for non-sequence multilayer will share buffers with RenderResult,
@@ -2388,21 +2383,27 @@ void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 
 ImageLayer *BKE_image_multilayer_index(Image *ima, ImageUser *iuser)
 {
-	ImageLayer *iml;
+	ImageLayer *iml, *layer;
 		
 	if (ima == NULL)
 		return NULL;
 	
 	if (iuser) {
 		short index = 0, iml_index = 0;
-		
-		for (iml = ima->imlayers.last; iml; iml = iml->prev, iml_index++) {
-			if (iuser->layer == iml_index)
-					break;
-		}
+		//BLI_lock_thread(LOCK_IMAGE);
+			for (iml = ima->imlayers.last; iml; iml = iml->prev, iml_index++) {
+				if (iml->select & IMA_LAYER_SEL_CURRENT)
+					layer->select = !IMA_LAYER_SEL_CURRENT;
+				
+				if (iuser->layer == iml_index) {
+					iml->select = IMA_LAYER_SEL_CURRENT;
+					layer = iml;
+				}
+			}
+		//BLI_unlock_thread(LOCK_IMAGE);
 	}
 	
-	return iml;
+	return layer;
 }
 
 /* if layer or pass changes, we need an index for the imbufs list */
@@ -2886,7 +2887,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 		}
 	}
 
-	ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0, IMA_IBUF_IMA);
+	ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0);
 
 	/* make ibuf if needed, and initialize it */
 	if (ibuf == NULL) {
@@ -2950,9 +2951,6 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 	return ibuf;
 }
 
-<<<<<<< .mine
-static ImBuf *image_get_ibuf_threadsafe(Image *ima, ImageUser *iuser, int *frame_r, int *index_r, int type_ibuf)
-=======
 static void image_get_fame_and_index(Image *ima, ImageUser *iuser, int *frame_r, int *index_r)
 {
 	int frame = 0, index = 0;
@@ -2975,8 +2973,7 @@ static void image_get_fame_and_index(Image *ima, ImageUser *iuser, int *frame_r,
 	*index_r = index;
 }
 
-static ImBuf *image_get_ibuf_threadsafe(Image *ima, ImageUser *iuser, int *frame_r, int *index_r)
->>>>>>> .r55757
+static ImBuf *image_get_ibuf_threadsafe(Image *ima, ImageUser *iuser, int *frame_r, int *index_r, int type_ibuf)
 {
 	ImBuf *ibuf = NULL;
 	int frame = 0, index = 0;
@@ -2984,7 +2981,7 @@ static ImBuf *image_get_ibuf_threadsafe(Image *ima, ImageUser *iuser, int *frame
 	/* see if we already have an appropriate ibuf, with image source and type */
 	if (ima->source == IMA_SRC_MOVIE) {
 		frame = iuser ? iuser->framenr : ima->lastframe;
-		ibuf = image_get_ibuf(ima, 0, frame, IMA_IBUF_IMA);
+		ibuf = image_get_ibuf(ima, 0, frame);
 		/* XXX temp stuff? */
 		if (ima->lastframe != frame)
 			ima->tpageflag |= IMA_TPAGE_REFRESH;
@@ -2993,7 +2990,7 @@ static ImBuf *image_get_ibuf_threadsafe(Image *ima, ImageUser *iuser, int *frame
 	else if (ima->source == IMA_SRC_SEQUENCE) {
 		if (ima->type == IMA_TYPE_IMAGE) {
 			frame = iuser ? iuser->framenr : ima->lastframe;
-			ibuf = image_get_ibuf(ima, 0, frame, IMA_IBUF_IMA);
+			ibuf = image_get_ibuf(ima, 0, frame);
 
 			/* XXX temp stuff? */
 			if (ima->lastframe != frame) {
@@ -3004,17 +3001,24 @@ static ImBuf *image_get_ibuf_threadsafe(Image *ima, ImageUser *iuser, int *frame
 		else if (ima->type == IMA_TYPE_MULTILAYER) {
 			frame = iuser ? iuser->framenr : ima->lastframe;
 			index = iuser ? iuser->multi_index : IMA_NO_INDEX;
-			ibuf = image_get_ibuf(ima, index, frame, IMA_IBUF_IMA);
+			ibuf = image_get_ibuf(ima, index, frame);
 		}
 	}
 	else if (ima->source == IMA_SRC_FILE) {
-		if (ima->type == IMA_TYPE_IMAGE)
-			ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0, type_ibuf);
+		if (ima->type == IMA_TYPE_IMAGE) { //|| (ima->type == IMA_TYPE_IMAGELAYER)) {
+			if (type_ibuf == IMA_IBUF_LAYER)
+				ibuf = image_get_ibuf_layer(ima);
+			else
+				ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0); //type_ibuf
+		}
 		else if (ima->type == IMA_TYPE_MULTILAYER)
-			ibuf = image_get_ibuf(ima, iuser ? iuser->multi_index : IMA_NO_INDEX, 0, IMA_IBUF_IMA);
+			ibuf = image_get_ibuf(ima, iuser ? iuser->multi_index : IMA_NO_INDEX, 0);
 	}
 	else if (ima->source == IMA_SRC_GENERATED) {
-		ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0, type_ibuf);
+		if (type_ibuf == IMA_IBUF_LAYER)
+			ibuf = image_get_ibuf_layer(ima);
+		else
+			ibuf = image_get_ibuf(ima, IMA_NO_INDEX, 0); //type_ibuf
 	}
 	else if (ima->source == IMA_SRC_VIEWER) {
 		/* always verify entirely, not that this shouldn't happen
@@ -3031,14 +3035,7 @@ static ImBuf *image_get_ibuf_threadsafe(Image *ima, ImageUser *iuser, int *frame
 	return ibuf;
 }
 
-<<<<<<< .mine
-/* Checks optional ImageUser and verifies/creates ImBuf. */
-/* use this one if you want to get a render result in progress,
- * if not, use BKE_image_get_ibuf which doesn't require a release */
-ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r, int type_ibuf)
-=======
 BLI_INLINE int image_quick_test(Image *ima, ImageUser *iuser)
->>>>>>> .r55757
 {
 	if (ima == NULL)
 		return FALSE;
@@ -3057,7 +3054,7 @@ BLI_INLINE int image_quick_test(Image *ima, ImageUser *iuser)
  *
  * not thread-safe, so callee should worry about thread locks
  */
-static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
+static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r, int type_ibuf)
 {
 	ImBuf *ibuf = NULL;
 	float color[] = {0, 0, 0, 1};
@@ -3078,25 +3075,10 @@ static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
 			/* source is from single file, use flipbook to store ibuf */
 			ibuf = image_load_movie_file(ima, iuser, frame);
 		}
-<<<<<<< .mine
-		else if (ima->ok == 0) {
-			BLI_unlock_thread(LOCK_IMAGE);
-			return NULL;
-		}
-
-		ibuf = image_get_ibuf_threadsafe(ima, iuser, &frame, &index, type_ibuf);
-
-		if (ibuf == NULL) {
-			/* we are sure we have to load the ibuf, using source and type */
-			if (ima->source == IMA_SRC_MOVIE) {
-				/* source is from single file, use flipbook to store ibuf */
-				ibuf = image_load_movie_file(ima, iuser, frame);
-=======
 		else if (ima->source == IMA_SRC_SEQUENCE) {
 			if (ima->type == IMA_TYPE_IMAGE) {
 				/* regular files, ibufs in flipbook, allows saving */
 				ibuf = image_load_sequence_file(ima, iuser, frame);
->>>>>>> .r55757
 			}
 			/* no else; on load the ima type can change */
 			if (ima->type == IMA_TYPE_MULTILAYER) {
@@ -3105,9 +3087,10 @@ static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
 			}
 		}
 		else if (ima->source == IMA_SRC_FILE) {
-
 			if (ima->type == IMA_TYPE_IMAGE)
 				ibuf = image_load_image_file(ima, iuser, frame);  /* cfra only for '#', this global is OK */
+			//if (ima->type == IMA_TYPE_IMAGELAYER)
+				//ibuf = image_get_ibuf(ima, IMA_NO_INDEX, frame);
 			/* no else; on load the ima type can change */
 			if (ima->type == IMA_TYPE_MULTILAYER)
 				/* keeps render result, stores ibufs in listbase, allows saving */
@@ -3137,15 +3120,9 @@ static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
 					BLI_lock_thread(LOCK_VIEWER);
 					*lock_r = ima;
 
-<<<<<<< .mine
-						/* XXX anim play for viewer nodes not yet supported */
-						frame = 0; // XXX iuser?iuser->framenr:0;
-						ibuf = image_get_ibuf(ima, 0, frame, IMA_IBUF_IMA);//type_ibuf);
-=======
 					/* XXX anim play for viewer nodes not yet supported */
 					frame = 0; // XXX iuser ? iuser->framenr : 0;
 					ibuf = image_get_ibuf(ima, 0, frame);
->>>>>>> .r55757
 
 					if (!ibuf) {
 						/* Composite Viewer, all handled in compositor */
@@ -3170,13 +3147,13 @@ static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
  *
  * references the result, BKE_image_release_ibuf should be used to de-reference
  */
-ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
+ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r, int type_ibuf)
 {
 	ImBuf *ibuf;
 
 	BLI_spin_lock(&image_spin);
 
-	ibuf = image_acquire_ibuf(ima, iuser, lock_r);
+	ibuf = image_acquire_ibuf(ima, iuser, lock_r, type_ibuf);
 
 	if (ibuf)
 		IMB_refImBuf(ibuf);
@@ -3206,39 +3183,29 @@ void BKE_image_release_ibuf(Image *ima, ImBuf *ibuf, void *lock)
 	}
 }
 
-<<<<<<< .mine
-/* warning, this can allocate generated images */
-ImBuf *BKE_image_get_ibuf(Image *ima, ImageUser *iuser, int type_ibuf)
-=======
 /* checks whether there's an image buffer for given image and user */
-int BKE_image_has_ibuf(Image *ima, ImageUser *iuser)
->>>>>>> .r55757
+int BKE_image_has_ibuf(Image *ima, ImageUser *iuser, int type_ibuf)
 {
-<<<<<<< .mine
-	/* here (+fie_ima/2-1) makes sure that division happens correctly */
-	return BKE_image_acquire_ibuf(ima, iuser, NULL, type_ibuf);
-=======
 	ImBuf *ibuf;
 
 	/* quick reject tests */
 	if (!image_quick_test(ima, iuser))
 		return FALSE;
 
-	ibuf = image_get_ibuf_threadsafe(ima, iuser, NULL, NULL);
+	ibuf = image_get_ibuf_threadsafe(ima, iuser, NULL, NULL, type_ibuf);
 
 	if (!ibuf) {
 		BLI_spin_lock(&image_spin);
 
-		ibuf = image_get_ibuf_threadsafe(ima, iuser, NULL, NULL);
+		ibuf = image_get_ibuf_threadsafe(ima, iuser, NULL, NULL, type_ibuf);
 
 		if (!ibuf)
-			ibuf = image_acquire_ibuf(ima, iuser, NULL);
+			ibuf = image_acquire_ibuf(ima, iuser, NULL, type_ibuf);
 
 		BLI_spin_unlock(&image_spin);
 	}
 
 	return ibuf != NULL;
->>>>>>> .r55757
 }
 
 /* ******** Pool for image buffers ********  */
@@ -3299,7 +3266,7 @@ BLI_INLINE ImBuf *image_pool_find_entry(ImagePool *pool, Image *image, int frame
 	return NULL;
 }
 
-ImBuf *BKE_image_pool_acquire_ibuf(Image *ima, ImageUser *iuser, ImagePool *pool)
+ImBuf *BKE_image_pool_acquire_ibuf(Image *ima, ImageUser *iuser, ImagePool *pool, int type_ibuf)
 {
 	ImBuf *ibuf;
 	int index, frame, found;
@@ -3309,7 +3276,7 @@ ImBuf *BKE_image_pool_acquire_ibuf(Image *ima, ImageUser *iuser, ImagePool *pool
 
 	if (pool == NULL) {
 		/* pool could be NULL, in this case use general acquire function */
-		return BKE_image_acquire_ibuf(ima, iuser, NULL);
+		return BKE_image_acquire_ibuf(ima, iuser, NULL, type_ibuf);
 	}
 
 	image_get_fame_and_index(ima, iuser, &frame, &index);
@@ -3328,7 +3295,7 @@ ImBuf *BKE_image_pool_acquire_ibuf(Image *ima, ImageUser *iuser, ImagePool *pool
 	if (!found) {
 		ImagePoolEntry *entry;
 
-		ibuf = image_acquire_ibuf(ima, iuser, NULL);
+		ibuf = image_acquire_ibuf(ima, iuser, NULL, type_ibuf);
 
 		if (ibuf)
 			IMB_refImBuf(ibuf);
@@ -3530,7 +3497,7 @@ unsigned char *BKE_image_get_pixels_for_frame(struct Image *image, int frame)
 	iuser.framenr = frame;
 	iuser.ok = TRUE;
 
-	ibuf = BKE_image_acquire_ibuf(image, &iuser, &lock);
+	ibuf = BKE_image_acquire_ibuf(image, &iuser, &lock, IMA_IBUF_IMA);
 
 	if (ibuf) {
 		pixels = (unsigned char *) ibuf->rect;
@@ -3557,7 +3524,7 @@ float *BKE_image_get_float_pixels_for_frame(struct Image *image, int frame)
 	iuser.framenr = frame;
 	iuser.ok = TRUE;
 
-	ibuf = BKE_image_acquire_ibuf(image, &iuser, &lock);
+	ibuf = BKE_image_acquire_ibuf(image, &iuser, &lock, IMA_IBUF_IMA);
 
 	if (ibuf) {
 		pixels = ibuf->rect_float;

@@ -1875,29 +1875,6 @@ static PreviewImage *direct_link_preview_image(FileData *fd, PreviewImage *old_p
 	return prv;
 }
 
-/* ************ READ IMBUF *************** */
-
-static ImBuf *direct_link_ibufs(FileData *fd, ImBuf *ibuf)
-{
-	//ImBuf *imbuf= newdataadr(fd, imbuf_old);
-
-	if (ibuf) {
-		/*int i;
-		for (i=0; i < ibuf->x+ibuf->y; ++i) {
-			if (ibuf->rect[i]) {
-				ibuf->rect[i] = newdataadr(fd, ibuf->rect[i]);
-			}
-		}*/
-		if (ibuf->rect_float)
-			ibuf->rect_float = newdataadr(fd, ibuf->rect_float);
-		if (ibuf->rect)
-			ibuf->rect = newdataadr(fd, ibuf->rect);
-	}
-
-	return ibuf;
-}
-
-
 /* ************ READ ANIMATION STUFF ***************** */
 
 /* Legacy Data Support (for Version Patching) ----------------------------- */
@@ -3276,25 +3253,6 @@ static void link_ibuf_list(FileData *fd, ListBase *lb)
 	lb->last = prev;
 }
 
-static ImageLayer *link_ibuf(FileData *fd, ImageLayer *list)
-{
-	ImageLayer *iml;
-	//Link *ln, *prev;
-	ImBuf *ibuf, *ib;
-	
-	for (iml = list; iml; iml = iml->next) 
-		link_list(fd, &iml->ibufs);
-
-	for (iml = list; iml; iml = iml->next) {
-		ibuf = (ImBuf *)iml->ibufs.first;
-		for (ib = ibuf; ib; ib = ib->next) {
-			ib->rect_float = newdataadr(fd, ib->rect_float);
-			ib->rect = newdataadr(fd, ib->rect);
-		}
-	}
-	return list;
-}
-
 static void direct_link_image(FileData *fd, Image *ima)
 {
 	ImageLayer *iml;
@@ -3329,7 +3287,7 @@ static void direct_link_image(FileData *fd, Image *ima)
 	}
 	
 	ima->packedfile = direct_link_packedfile(fd, ima->packedfile);
-
+	//ima->colorspace_settings = newdataadr(fd, &ima->colorspace_settings);
 	link_list(fd, &ima->imlayers);
 
 	for (iml = (ImageLayer *)ima->imlayers.first; iml; iml = iml->next) 

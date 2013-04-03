@@ -758,9 +758,6 @@ static void node_buts_image_user(uiLayout *layout, bContext *C, PointerRNA *ptr,
                                  PointerRNA *imaptr, PointerRNA *iuserptr)
 {
 	uiLayout *col;
-	PointerRNA op_ptr;
-	PropertyRNA *prop;
-	const char *layer_name;
 	int source;
 
 	if (!imaptr->data)
@@ -796,12 +793,9 @@ static void node_buts_image_user(uiLayout *layout, bContext *C, PointerRNA *ptr,
 	if (RNA_enum_get(imaptr, "type") == IMA_TYPE_MULTILAYER)
 		uiItemR(col, ptr, "layer", 0, NULL, ICON_NONE);
 	if ((source == IMA_SRC_GENERATED) || (source == IMA_SRC_FILE)) {
-		int act_lay;
-		uiItemR(col, ptr, "use_layer_ima", 0, NULL, ICON_NONE);
-		act_lay = ((ImageUser *)iuserptr->data)->use_layer_ima;
-		if (act_lay) {
-			uiItemR(col, ptr, "layer_ima", 0, "", ICON_NONE);
-		}
+		Image *ima = imaptr->data;
+		if (ima->Count_Layers > 1)
+			uiItemR(col, ptr, "use_layer_ima", 0, NULL, ICON_NONE);
 	}
 
 }
@@ -1130,7 +1124,6 @@ static void node_composit_buts_image(uiLayout *layout, bContext *C, PointerRNA *
 {
 	bNode *node = ptr->data;
 	PointerRNA imaptr, iuserptr;
-	PointerRNA op_ptr;
 
 	uiTemplateID(layout, C, ptr, "image", NULL, "IMAGE_OT_open", NULL);
 	
@@ -3066,33 +3059,9 @@ void draw_nodespace_back_pix(const bContext *C, ARegion *ar, SpaceNode *snode)
 					        x + snode->zoom * viewer_border->xmax * ibuf->x,
 					        y + snode->zoom * viewer_border->ymax * ibuf->y);
 
-<<<<<<< .mine
-	draw_nodespace_grid(snode);
-	
-	if (snode->flag & SNODE_BACKDRAW) {
-		Image *ima = BKE_image_verify_viewer(IMA_TYPE_COMPOSITE, "Viewer Node");
-		ImBuf *ibuf = BKE_image_get_ibuf(ima, NULL, IMA_IBUF_IMA);
-		if (ibuf) {
-			int x, y;
-			float zoom = 1.0;
-
-			glMatrixMode(GL_PROJECTION);
-			glPushMatrix();
-			glMatrixMode(GL_MODELVIEW);
-			glPushMatrix();
-			
-			glaDefine2DArea(&sa->winrct);
-
-			if (ibuf->x > sa->winx || ibuf->y > sa->winy) {
-				float zoomx, zoomy;
-				zoomx = (float)sa->winx / ibuf->x;
-				zoomy = (float)sa->winy / ibuf->y;
-				zoom = min_ff(zoomx, zoomy);
-=======
 					setlinestyle(0);
 					glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 				}
->>>>>>> .r55757
 			}
 			
 			glMatrixMode(GL_PROJECTION);

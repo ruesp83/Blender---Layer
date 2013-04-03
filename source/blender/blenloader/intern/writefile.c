@@ -1988,6 +1988,7 @@ static void write_images(WriteData *wd, ListBase *idbase)
 	Image *ima;
 	PackedFile * pf;
 	ImageLayer *iml;
+	ColorManagedColorspaceSettings *cs_s;
 	ImBuf *ibuf;
 
 	ima = idbase->first;
@@ -2002,6 +2003,11 @@ static void write_images(WriteData *wd, ListBase *idbase)
 				writestruct(wd, DATA, "PackedFile", 1, pf);
 				writedata(wd, DATA, pf->size, pf->data);
 			}
+
+			//if (ima->colorspace_settings) {
+				cs_s = &ima->colorspace_settings;
+				writestruct(wd, DATA, "ColorManagedColorspaceSettings", 1, cs_s);
+			//}
 
 			if (ima->imlayers.last) {
 				for (iml = (ImageLayer *)ima->imlayers.first; iml; iml = iml->next)

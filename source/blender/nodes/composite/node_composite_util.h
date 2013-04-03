@@ -44,14 +44,7 @@
 
 #include "BKE_colortools.h"
 #include "BKE_image.h"
-<<<<<<< .mine
 #include "BKE_layer.h"
-#include "BKE_main.h"
-#include "BKE_material.h"
-#include "BKE_movieclip.h"
-#include "BKE_node.h"
-=======
->>>>>>> .r55757
 #include "BKE_texture.h"
 #include "BKE_tracking.h"
 

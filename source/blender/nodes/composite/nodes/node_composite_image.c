@@ -170,6 +170,24 @@ static void cmp_node_image_add_multilayer_outputs(bNodeTree *ntree, bNode *node,
 	}
 }
 
+static void cmp_node_image_add_imagelayer_outputs(bNodeTree *ntree, bNode *node, ImageLayer *layer)
+{
+	bNodeSocket *sock;
+	NodeImageLayer *sockdata;
+	ImageLayer *lpass;
+	int index;
+	for (lpass = layer, index=0; lpass; lpass = lpass->prev, ++index) {
+		
+		sock = nodeAddStaticSocket(ntree, node, SOCK_OUT, SOCK_RGBA, PROP_NONE, lpass->name, lpass->name);
+		/* extra socket info */
+		sockdata = MEM_callocN(sizeof(NodeImageLayer), "node image layer");
+		sock->storage = sockdata;
+		
+		sockdata->pass_index = index;
+		sockdata->pass_flag = SCE_PASS_COMBINED;//lpass->passtype;
+	}
+}
+
 static void cmp_node_image_create_outputs(bNodeTree *ntree, bNode *node)
 {
 	Image *ima= (Image *)node->id;
@@ -191,11 +209,7 @@ static void cmp_node_image_create_outputs(bNodeTree *ntree, bNode *node)
 		load_iuser.framenr = offset;
 
 		/* make sure ima->type is correct */
-<<<<<<< .mine
-		BKE_image_get_ibuf(ima, iuser, IMA_IBUF_IMA);
-=======
-		ibuf = BKE_image_acquire_ibuf(ima, &load_iuser, NULL);
->>>>>>> .r55757
+		ibuf = BKE_image_acquire_ibuf(ima, &load_iuser, NULL, IMA_IBUF_IMA);
 		
 		if (ima->rr) {
 			RenderLayer *rl= BLI_findlink(&ima->rr->layers, iuser->layer);
@@ -209,8 +223,13 @@ static void cmp_node_image_create_outputs(bNodeTree *ntree, bNode *node)
 			else
 				cmp_node_image_add_render_pass_outputs(ntree, node, RRES_OUT_IMAGE|RRES_OUT_ALPHA);
 		}
-		else
-			cmp_node_image_add_render_pass_outputs(ntree, node, RRES_OUT_IMAGE|RRES_OUT_ALPHA|RRES_OUT_Z);
+		else {
+			if (iuser->use_layer_ima) {
+				cmp_node_image_add_imagelayer_outputs(ntree, node, ima->imlayers.last);
+			}
+			else
+				cmp_node_image_add_render_pass_outputs(ntree, node, RRES_OUT_IMAGE|RRES_OUT_ALPHA|RRES_OUT_Z);
+		}
 		
 		BKE_image_release_ibuf(ima, ibuf, NULL);
 	}
@@ -303,240 +322,6 @@ static void cmp_node_image_update(bNodeTree *ntree, bNode *node)
 
 static void node_composit_init_image(bNodeTree *ntree, bNode *node)
 {
-<<<<<<< .mine
-	float *rect;
-	int predivide= (ibuf->flags & IB_cm_predivide);
-
-	*alloc= FALSE;
-
-	/* OCIO_TODO: this is a part of legacy compositor system, don't bother with porting this code
-	 *            to new color management system since this code would likely be simply removed soon
-	 */
-	if (rd->color_mgt_flag & R_COLOR_MANAGEMENT) {
-		rect= ibuf->rect_float;
-	}
-	else {
-		rect= MEM_mapallocN(sizeof(float) * 4 * ibuf->x * ibuf->y, "node_composit_get_image");
-
-		IMB_buffer_float_from_float(rect, ibuf->rect_float,
-			4, IB_PROFILE_SRGB, IB_PROFILE_LINEAR_RGB, predivide,
-			ibuf->x, ibuf->y, ibuf->x, ibuf->x);
-
-			*alloc= TRUE;
-	}
-
-	return rect;
-}
-
-/* note: this function is used for multilayer too, to ensure uniform 
- * handling with BKE_image_get_ibuf() */
-static CompBuf *node_composit_get_image(RenderData *rd, Image *ima, ImageUser *iuser)
-{
-	ImBuf *ibuf;
-	CompBuf *stackbuf;
-	int type;
-
-	float *rect;
-	int alloc= FALSE;
-
-	if (iuser->use_layer_ima) {
-		imalayer_set_current_act(ima, iuser->layer_ima);
-		ibuf = BKE_image_get_ibuf(ima, iuser, IMA_IBUF_LAYER);
-	}
-	else
-		ibuf = BKE_image_get_ibuf(ima, iuser, IMA_IBUF_IMA);
-
-	if (ibuf==NULL || (ibuf->rect==NULL && ibuf->rect_float==NULL)) {
-		return NULL;
-	}
-
-	if (ibuf->rect_float == NULL) {
-		IMB_float_from_rect(ibuf);
-	}
-
-	/* now we need a float buffer from the image with matching color management */
-	/* XXX weak code, multilayer is excluded from this */
-	if (ibuf->channels == 4 && ima->rr==NULL) {
-		rect = node_composit_get_float_buffer(rd, ibuf, &alloc);
-	}
-	else {
-		/* non-rgba passes can't use color profiles */
-		rect = ibuf->rect_float;
-	}
-	/* done coercing into the correct color management */
-
-
-	type = ibuf->channels;
-	
-	if (rd->scemode & R_COMP_CROP) {
-		stackbuf = get_cropped_compbuf(&rd->disprect, rect, ibuf->x, ibuf->y, type);
-		if (alloc)
-			MEM_freeN(rect);
-	}
-	else {
-		/* we put imbuf copy on stack, cbuf knows rect is from other ibuf when freed! */
-		stackbuf = alloc_compbuf(ibuf->x, ibuf->y, type, FALSE);
-		stackbuf->rect = rect;
-		stackbuf->malloc = alloc;
-	}
-	
-	/* code to respect the premul flag of images; I'm
-	 * not sure if this is a good idea for multilayer images,
-	 * since it never worked before for them.
-	 */
-#if 0
-	if (type==CB_RGBA && ima->flag & IMA_DO_PREMUL) {
-		//premul the image
-		int i;
-		float *pixel = stackbuf->rect;
-		
-		for (i=0; i<stackbuf->x*stackbuf->y; i++, pixel += 4) {
-			pixel[0] *= pixel[3];
-			pixel[1] *= pixel[3];
-			pixel[2] *= pixel[3];
-		}
-	}
-#endif
-	return stackbuf;
-}
-
-static CompBuf *node_composit_get_zimage(bNode *node, RenderData *rd)
-{
-	ImBuf *ibuf= BKE_image_get_ibuf((Image *)node->id, node->storage, IMA_IBUF_IMA);
-	CompBuf *zbuf= NULL;
-	
-	if (ibuf && ibuf->zbuf_float) {
-		if (rd->scemode & R_COMP_CROP) {
-			zbuf= get_cropped_compbuf(&rd->disprect, ibuf->zbuf_float, ibuf->x, ibuf->y, CB_VAL);
-		}
-		else {
-			zbuf= alloc_compbuf(ibuf->x, ibuf->y, CB_VAL, 0);
-			zbuf->rect= ibuf->zbuf_float;
-		}
-	}
-	return zbuf;
-}
-
-/* check if layer is available, returns pass buffer */
-static CompBuf *compbuf_multilayer_get(RenderData *rd, RenderLayer *rl, Image *ima, ImageUser *iuser, int passindex)
-{
-	RenderPass *rpass = BLI_findlink(&rl->passes, passindex);
-	if (rpass) {
-		CompBuf *cbuf;
-		
-		iuser->pass = passindex;
-		BKE_render_multilayer_index(ima->rr, iuser);
-		cbuf = node_composit_get_image(rd, ima, iuser);
-		
-		return cbuf;
-	}
-	return NULL;
-}
-
-static void node_composit_exec_image(void *data, bNode *node, bNodeStack **UNUSED(in), bNodeStack **out)
-{
-	/* image assigned to output */
-	/* stack order input sockets: col, alpha */
-	if (node->id) {
-		RenderData *rd= data;
-		Image *ima= (Image *)node->id;
-		ImageUser *iuser= (ImageUser *)node->storage;
-		
-		/* first set the right frame number in iuser */
-		BKE_image_user_frame_calc(iuser, rd->cfra, 0);
-		
-		/* force a load, we assume iuser index will be set OK anyway */
-		if (ima->type==IMA_TYPE_MULTILAYER)
-			BKE_image_get_ibuf(ima, iuser, IMA_IBUF_IMA);
-		
-		if (ima->type==IMA_TYPE_MULTILAYER && ima->rr) {
-			RenderLayer *rl = BLI_findlink(&ima->rr->layers, iuser->layer);
-			
-			if (rl) {
-				bNodeSocket *sock;
-				NodeImageLayer *sockdata;
-				int out_index;
-				CompBuf *combinedbuf= NULL, *firstbuf= NULL;
-				
-				for (sock=node->outputs.first, out_index=0; sock; sock=sock->next, ++out_index) {
-					sockdata = sock->storage;
-					if (out[out_index]->hasoutput) {
-						CompBuf *stackbuf = out[out_index]->data = compbuf_multilayer_get(rd, rl, ima, iuser, sockdata->pass_index);
-						if (stackbuf) {
-							/* preview policy: take first 'Combined' pass if available,
-							 * otherwise just use the first layer.
-							 */
-							if (!firstbuf) {
-								firstbuf = stackbuf;
-							}
-							if (!combinedbuf &&
-							    (strcmp(sock->name, "Combined") == 0 || strcmp(sock->name, "Image") == 0))
-							{
-								combinedbuf = stackbuf;
-							}
-						}
-					}
-				}
-				
-				/* preview */
-				if (combinedbuf)
-					generate_preview(data, node, combinedbuf);
-				else if (firstbuf)
-					generate_preview(data, node, firstbuf);
-			}
-		}
-		else {
-			CompBuf *stackbuf = node_composit_get_image(rd, ima, iuser);
-			if (stackbuf) {
-				int num_outputs = BLI_countlist(&node->outputs);
-				
-				/*respect image premul option*/
-				if (stackbuf->type==CB_RGBA && ima->flag & IMA_DO_PREMUL) {
-					int i;
-					float *pixel;
-			
-					/* first duplicate stackbuf->rect, since it's just a pointer
-					 * to the source imbuf, and we don't want to change that.*/
-					stackbuf->rect = MEM_dupallocN(stackbuf->rect);
-					
-					/* since stackbuf now has allocated memory, rather than just a pointer,
-					 * mark it as allocated so it can be freed properly */
-					stackbuf->malloc=1;
-					
-					/*premul the image*/
-					pixel = stackbuf->rect;
-					for (i=0; i<stackbuf->x*stackbuf->y; i++, pixel += 4) {
-						pixel[0] *= pixel[3];
-						pixel[1] *= pixel[3];
-						pixel[2] *= pixel[3];
-					}
-				}
-			
-				/* put image on stack */
-				if (num_outputs > 0)
-					out[0]->data= stackbuf;
-				
-				/* alpha output */
-				if (num_outputs > 1 && out[1]->hasoutput)
-					out[1]->data= valbuf_from_rgbabuf(stackbuf, CHAN_A);
-				
-				/* Z output */
-				if (num_outputs > 2 && out[2]->hasoutput)
-					out[2]->data= node_composit_get_zimage(node, rd);
-				
-				/* preview */
-				generate_preview(data, node, stackbuf);
-			}
-		}
-	}
-}
-
-#endif  /* WITH_COMPOSITOR_LEGACY */
-
-static void node_composit_init_image(bNodeTree *ntree, bNode *node, bNodeTemplate *UNUSED(ntemp))
-{
-=======
->>>>>>> .r55757
 	ImageUser *iuser= MEM_callocN(sizeof(ImageUser), "node image user");
 	node->storage= iuser;
 	iuser->frames= 1;

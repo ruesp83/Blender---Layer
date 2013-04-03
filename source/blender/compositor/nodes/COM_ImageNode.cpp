@@ -79,11 +79,7 @@ void ImageNode::convertToOperations(ExecutionSystem *graph, CompositorContext *c
 	/* force a load, we assume iuser index will be set OK anyway */
 	if (image && image->type == IMA_TYPE_MULTILAYER) {
 		bool is_multilayer_ok = false;
-<<<<<<< .mine
-		BKE_image_get_ibuf(image, imageuser, IMA_IBUF_LAYER);
-=======
-		ImBuf *ibuf = BKE_image_acquire_ibuf(image, imageuser, NULL);
->>>>>>> .r55757
+		ImBuf *ibuf = BKE_image_acquire_ibuf(image, imageuser, NULL, IMA_IBUF_IMA);
 		if (image->rr) {
 			RenderLayer *rl = (RenderLayer *)BLI_findlink(&image->rr->layers, imageuser->layer);
 			if (rl) {

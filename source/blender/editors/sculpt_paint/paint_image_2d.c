@@ -50,7 +50,7 @@
 #include "ED_screen.h"
 
 #include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "DNA_imbuf_types.h"
 #include "IMB_colormanagement.h"
 
 #include "WM_api.h"
@@ -589,7 +589,7 @@ static int paint_2d_op(void *state, ImBuf *ibufb, const float lastpos[2], const 
 	float liftpos[2];
 	int bpos[2], blastpos[2], bliftpos[2];
 	int a, tot;
-
+	
 	paint_2d_convert_brushco(ibufb, pos, bpos);
 
 	/* lift from canvas */
@@ -642,7 +642,7 @@ static int paint_2d_op(void *state, ImBuf *ibufb, const float lastpos[2], const 
 
 static int paint_2d_canvas_set(ImagePaintState *s, Image *ima)
 {
-	ImBuf *ibuf = BKE_image_acquire_ibuf(ima, s->sima ? &s->sima->iuser : NULL, NULL);
+	ImBuf *ibuf = BKE_image_acquire_ibuf(ima, s->sima ? &s->sima->iuser : NULL, NULL, IMA_IBUF_LAYER);
 
 	/* verify that we can paint and set canvas */
 	if (ima == NULL) {
@@ -665,7 +665,7 @@ static int paint_2d_canvas_set(ImagePaintState *s, Image *ima)
 	/* set clone canvas */
 	if (s->tool == PAINT_TOOL_CLONE) {
 		ima = s->brush->clone.image;
-		ibuf = BKE_image_acquire_ibuf(ima, s->sima ? &s->sima->iuser : NULL, NULL);
+		ibuf = BKE_image_acquire_ibuf(ima, s->sima ? &s->sima->iuser : NULL, NULL, IMA_IBUF_LAYER);
 
 		if (!ima || !ibuf || !(ibuf->rect || ibuf->rect_float)) {
 			BKE_image_release_ibuf(ima, ibuf, NULL);
@@ -698,7 +698,7 @@ int paint_2d_stroke(void *ps, const int prev_mval[2], const int mval[2], int era
 	int redraw = 0;
 	ImagePaintState *s = ps;
 	BrushPainter *painter = s->painter;
-	ImBuf *ibuf = BKE_image_acquire_ibuf(s->image, s->sima ? &s->sima->iuser : NULL, NULL);
+	ImBuf *ibuf = BKE_image_acquire_ibuf(s->image, s->sima ? &s->sima->iuser : NULL, NULL, IMA_IBUF_LAYER);
 	const bool is_data = (ibuf && ibuf->colormanage_flag & IMB_COLORMANAGE_IS_DATA);
 
 	if (!ibuf)
@@ -733,8 +733,12 @@ int paint_2d_stroke(void *ps, const int prev_mval[2], const int mval[2], int era
 	 */
 	brush_painter_2d_require_imbuf(painter, ((ibuf->rect_float) ? 1 : 0), 0);
 
+	if (s->image->color_space & IMA_COL_GRAY) {
+		painter->brush->rgb[0] = rgb_to_grayscale(painter->brush->rgb);
+		painter->brush->rgb[1] = painter->brush->rgb[0];
+		painter->brush->rgb[2] = painter->brush->rgb[0];
+	}
 	brush_painter_2d_refresh_cache(painter, newuv, is_data == false);
-
 	if (paint_2d_op(s, painter->cache.ibuf, olduv, newuv)) {
 		imapaint_image_update(s->sima, s->image, ibuf, false);
 		BKE_image_release_ibuf(s->image, ibuf, NULL);
