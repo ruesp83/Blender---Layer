@@ -28,12 +28,11 @@
  *  \ingroup spfile
  */
 
+#include "BLI_blenlib.h"
+#include "BLI_utildefines.h"
 
 #include "BKE_context.h"
 #include "BKE_screen.h"
-
-#include "BLI_blenlib.h"
-#include "BLI_utildefines.h"
 
 #include "BLF_translation.h"
 
@@ -116,6 +115,7 @@ static void file_panel_category(const bContext *C, Panel *pa, FSMenuCategory cat
 		/* create list item */
 		but = uiDefIconTextButS(block, LISTROW, 0, icon, dir, 0, 0, UI_UNIT_X * 10, UI_UNIT_Y, nr, 0, i, 0, 0, entry);
 		uiButSetFunc(but, file_panel_cb, entry, NULL);
+		uiButClearFlag(but, UI_BUT_UNDO); /* skip undo on screen buttons */
 		uiButSetFlag(but, UI_ICON_LEFT | UI_TEXT_LEFT);
 
 		/* create delete button */

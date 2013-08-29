@@ -42,6 +42,7 @@
 
 
 #include "BKE_cdderivedmesh.h"
+#include "BKE_library.h"
 #include "BKE_modifier.h"
 #include "BKE_texture.h"
 #include "BKE_deform.h"
@@ -79,6 +80,18 @@ static void copyData(ModifierData *md, ModifierData *target)
 	tdmd->texmapping = dmd->texmapping;
 	tdmd->map_object = dmd->map_object;
 	BLI_strncpy(tdmd->uvlayer_name, dmd->uvlayer_name, sizeof(tdmd->uvlayer_name));
+
+	if (tdmd->texture) {
+		id_us_plus(&tdmd->texture->id);
+	}
+}
+
+static void freeData(ModifierData *md)
+{
+	DisplaceModifierData *dmd = (DisplaceModifierData *) md;
+	if (dmd->texture) {
+		id_us_min(&dmd->texture->id);
+	}
 }
 
 static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
@@ -95,7 +108,7 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 	return dataMask;
 }
 
-static int dependsOnTime(ModifierData *md)
+static bool dependsOnTime(ModifierData *md)
 {
 	DisplaceModifierData *dmd = (DisplaceModifierData *)md;
 
@@ -103,11 +116,11 @@ static int dependsOnTime(ModifierData *md)
 		return BKE_texture_dependsOnTime(dmd->texture);
 	}
 	else {
-		return 0;
+		return false;
 	}
 }
 
-static int dependsOnNormals(ModifierData *md)
+static bool dependsOnNormals(ModifierData *md)
 {
 	DisplaceModifierData *dmd = (DisplaceModifierData *)md;
 	return (dmd->direction == MOD_DISP_DIR_NOR);
@@ -137,7 +150,7 @@ static void foreachTexLink(ModifierData *md, Object *ob,
 	walk(userData, ob, md, "texture");
 }
 
-static int isDisabled(ModifierData *md, int UNUSED(useRenderParams))
+static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
 {
 	DisplaceModifierData *dmd = (DisplaceModifierData *) md;
 	return ((!dmd->texture && dmd->direction == MOD_DISP_DIR_RGB_XYZ) || dmd->strength == 0.0f);
@@ -206,7 +219,7 @@ static void displaceModifier_do(
 
 		if (dmd->texture) {
 			texres.nor = NULL;
-			get_texture_value(dmd->texture, tex_co[i], &texres);
+			get_texture_value(dmd->modifier.scene, dmd->texture, tex_co[i], &texres, false);
 			delta = texres.tin - dmd->midlevel;
 		}
 		else {
@@ -252,7 +265,7 @@ static void deformVerts(ModifierData *md, Object *ob,
                         int numVerts,
                         ModifierApplyFlag UNUSED(flag))
 {
-	DerivedMesh *dm = get_cddm(ob, NULL, derivedData, vertexCos);
+	DerivedMesh *dm = get_cddm(ob, NULL, derivedData, vertexCos, dependsOnNormals(md));
 
 	displaceModifier_do((DisplaceModifierData *)md, ob, dm,
 	                    vertexCos, numVerts);
@@ -265,7 +278,7 @@ static void deformVertsEM(
         ModifierData *md, Object *ob, struct BMEditMesh *editData,
         DerivedMesh *derivedData, float (*vertexCos)[3], int numVerts)
 {
-	DerivedMesh *dm = get_cddm(ob, editData, derivedData, vertexCos);
+	DerivedMesh *dm = get_cddm(ob, editData, derivedData, vertexCos, dependsOnNormals(md));
 
 	displaceModifier_do((DisplaceModifierData *)md, ob, dm,
 	                    vertexCos, numVerts);
@@ -292,7 +305,7 @@ ModifierTypeInfo modifierType_Displace = {
 	/* applyModifierEM */   NULL,
 	/* initData */          initData,
 	/* requiredDataMask */  requiredDataMask,
-	/* freeData */          NULL,
+	/* freeData */          freeData,
 	/* isDisabled */        isDisabled,
 	/* updateDepgraph */    updateDepgraph,
 	/* dependsOnTime */     dependsOnTime,

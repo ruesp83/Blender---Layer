@@ -315,7 +315,8 @@ bool MeshImporter::primitive_has_faces(COLLADAFW::MeshPrimitive *mp) {
 		case COLLADAFW::MeshPrimitive::TRIANGLES:
 		case COLLADAFW::MeshPrimitive::TRIANGLE_FANS:
 		case COLLADAFW::MeshPrimitive::POLYLIST:
-		case COLLADAFW::MeshPrimitive::POLYGONS: {
+		case COLLADAFW::MeshPrimitive::POLYGONS:
+		{
 			has_faces = true;
 			break;
 		}
@@ -347,8 +348,8 @@ void MeshImporter::allocate_poly_data(COLLADAFW::Mesh *collada_mesh, Mesh *me)
 			case COLLADAFW::MeshPrimitive::TRIANGLES:
 			case COLLADAFW::MeshPrimitive::TRIANGLE_FANS:
 			case COLLADAFW::MeshPrimitive::POLYLIST:
-			case COLLADAFW::MeshPrimitive::POLYGONS: {
-
+			case COLLADAFW::MeshPrimitive::POLYGONS:
+			{
 				COLLADAFW::Polygons *mpvc = (COLLADAFW::Polygons *)mp;
 				size_t prim_poly_count    = mpvc->getFaceCount();
 
@@ -361,7 +362,8 @@ void MeshImporter::allocate_poly_data(COLLADAFW::Mesh *collada_mesh, Mesh *me)
 				total_loop_count += prim_loop_count;
 				break;
 			}
-			default: break;
+			default:
+				break;
 		}
 	}
 
@@ -400,16 +402,19 @@ unsigned int MeshImporter::get_vertex_count(COLLADAFW::Polygons *mp, int index) 
 	int result;
 	switch (type) {
 		case COLLADAFW::MeshPrimitive::TRIANGLES:
-		case COLLADAFW::MeshPrimitive::TRIANGLE_FANS: {
+		case COLLADAFW::MeshPrimitive::TRIANGLE_FANS:
+		{
 			result = 3;
 			break;
 		}
 		case COLLADAFW::MeshPrimitive::POLYLIST:
-		case COLLADAFW::MeshPrimitive::POLYGONS: {
+		case COLLADAFW::MeshPrimitive::POLYGONS:
+		{
 			result = mp->getGroupedVerticesVertexCountArray()[index];
 			break;
 		}
-		default: {
+		default:
+		{
 			result = -1;
 			break;
 		}
@@ -427,12 +432,14 @@ unsigned int MeshImporter::get_loose_edge_count(COLLADAFW::Mesh *mesh) {
 		COLLADAFW::MeshPrimitive *mp = prim_arr[i];
 		int type = mp->getPrimitiveType();
 		switch (type) {
-			case COLLADAFW::MeshPrimitive::LINES: {
+			case COLLADAFW::MeshPrimitive::LINES:
+			{
 				size_t prim_totface = mp->getFaceCount();
 				loose_edge_count += prim_totface;
 				break;
 			}
-			default: break;
+			default:
+				break;
 		}
 	}
 	return loose_edge_count;
@@ -602,6 +609,8 @@ void MeshImporter::read_polys(COLLADAFW::Mesh *collada_mesh, Mesh *me)
 			collada_meshtype == COLLADAFW::MeshPrimitive::POLYGONS ||
 			collada_meshtype == COLLADAFW::MeshPrimitive::TRIANGLES) {
 			COLLADAFW::Polygons *mpvc = (COLLADAFW::Polygons *)mp;
+			unsigned int start_index = 0;
+
 			for (unsigned int j = 0; j < prim_totpoly; j++) {
 				
 				// Vertices in polygon:
@@ -609,13 +618,10 @@ void MeshImporter::read_polys(COLLADAFW::Mesh *collada_mesh, Mesh *me)
 				set_poly_indices(mpoly, mloop, loop_index, position_indices, vcount);
 
 
-				for (unsigned int l = 0; l < index_list_array.getCount(); l++) {
-					int uvset_index = index_list_array[l]->getSetIndex();
-
+				for (unsigned int uvset_index = 0; uvset_index < index_list_array.getCount(); uvset_index++) {
 					// get mtface by face index and uv set index
 					MLoopUV  *mloopuv = (MLoopUV  *)CustomData_get_layer_n(&me->ldata, CD_MLOOPUV, uvset_index);
-
-					set_face_uv(mloopuv+loop_index, uvs, loop_index, *index_list_array[l], vcount);
+					set_face_uv(mloopuv+loop_index, uvs, start_index, *index_list_array[uvset_index], vcount);
 				}
 
 				if (mp_has_normals) {
@@ -626,6 +632,7 @@ void MeshImporter::read_polys(COLLADAFW::Mesh *collada_mesh, Mesh *me)
 				mpoly++;
 				mloop += vcount;
 				loop_index += vcount;
+				start_index += vcount;
 				prim.totpoly++;
 
 				if (mp_has_normals)
@@ -707,7 +714,7 @@ void MeshImporter::bmeshConversion()
 		if ((*m).second) {
 			Mesh *me = (*m).second;
 			BKE_mesh_tessface_clear(me);
-			BKE_mesh_calc_normals_mapping(me->mvert, me->totvert, me->mloop, me->mpoly, me->totloop, me->totpoly, NULL, NULL, 0, NULL, NULL);
+			BKE_mesh_calc_normals(me);
 			//BKE_mesh_validate(me, 1);
 		}
 	}
@@ -1030,7 +1037,8 @@ Object *MeshImporter::create_mesh_object(COLLADAFW::Node *node, COLLADAFW::Insta
 	Mesh *new_mesh = uid_mesh_map[*geom_uid];
 
 	BKE_mesh_assign_object(ob, new_mesh);
-	
+	BKE_mesh_calc_normals(new_mesh);
+
 	if (old_mesh->id.us == 0) BKE_libblock_free(&G.main->mesh, old_mesh);
 	
 	char layername[100];

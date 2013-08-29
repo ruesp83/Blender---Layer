@@ -83,6 +83,8 @@ EnumPropertyItem image_layer_mode_items[] = {
 	{IMA_LAYER_VIVID_LIGHT, "VIVID_LIGHT", 0, "Vivid Light", ""},
 	{IMA_LAYER_PIN_LIGHT, "PIN_LIGHT", 0, "Pin Light", ""}, 
 	{IMA_LAYER_HARD_MIX, "HARD_MIX", 0, "Hard Mix", ""},
+	{IMA_LAYER_INVERSE_COLOR_BURN, "INVERSE_COLOR_BURN", 0, "Inverse Color Burn", ""},
+	{IMA_LAYER_SOFT_BURN, "SOFT_BURN", 0, "Soft Burn", ""},
 	{0, NULL, 0, NULL, NULL}};
 
 #ifdef RNA_RUNTIME
@@ -185,7 +187,13 @@ static char *rna_ImageUser_path(PointerRNA *ptr)
 		
 		switch (GS(((ID *)ptr->id.data)->name)) {
 			case ID_TE:
+			{
 				return BLI_strdup("image_user");
+			}
+			case ID_NT:
+			{
+				return rna_Node_ImageUser_path(ptr);
+			}
 		}
 	}
 	
@@ -784,7 +792,7 @@ static void rna_def_image(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 	
 
-	prop = RNA_def_property(srna, "view_as_render", PROP_BOOLEAN, PROP_NONE);
+	prop = RNA_def_property(srna, "use_view_as_render", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", IMA_VIEW_AS_RENDER);
 	RNA_def_property_ui_text(prop, "View as Render", "Apply render part of display transformation when displaying this image on the screen");
 	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, NULL);

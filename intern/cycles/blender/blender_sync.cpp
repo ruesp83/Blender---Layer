@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 #include "background.h"
@@ -191,13 +189,35 @@ void BlenderSync::sync_integrator()
 	}
 #endif
 
-	integrator->diffuse_samples = get_int(cscene, "diffuse_samples");
-	integrator->glossy_samples = get_int(cscene, "glossy_samples");
-	integrator->transmission_samples = get_int(cscene, "transmission_samples");
-	integrator->ao_samples = get_int(cscene, "ao_samples");
-	integrator->mesh_light_samples = get_int(cscene, "mesh_light_samples");
-	integrator->subsurface_samples = get_int(cscene, "subsurface_samples");
-	integrator->progressive = get_boolean(cscene, "progressive");
+	integrator->method = (Integrator::Method)get_enum(cscene, "progressive");
+
+	int diffuse_samples = get_int(cscene, "diffuse_samples");
+	int glossy_samples = get_int(cscene, "glossy_samples");
+	int transmission_samples = get_int(cscene, "transmission_samples");
+	int ao_samples = get_int(cscene, "ao_samples");
+	int mesh_light_samples = get_int(cscene, "mesh_light_samples");
+	int subsurface_samples = get_int(cscene, "subsurface_samples");
+
+	if(get_boolean(cscene, "use_square_samples")) {
+		integrator->diffuse_samples = diffuse_samples * diffuse_samples;
+		integrator->glossy_samples = glossy_samples * glossy_samples;
+		integrator->transmission_samples = transmission_samples * transmission_samples;
+		integrator->ao_samples = ao_samples * ao_samples;
+		integrator->mesh_light_samples = mesh_light_samples * mesh_light_samples;
+		integrator->subsurface_samples = subsurface_samples * subsurface_samples;
+	} 
+	else {
+		integrator->diffuse_samples = diffuse_samples;
+		integrator->glossy_samples = glossy_samples;
+		integrator->transmission_samples = transmission_samples;
+		integrator->ao_samples = ao_samples;
+		integrator->mesh_light_samples = mesh_light_samples;
+		integrator->subsurface_samples = subsurface_samples;
+	}
+	
+
+	if(experimental)
+		integrator->sampling_pattern = (SamplingPattern)RNA_enum_get(&cscene, "sampling_pattern");
 
 	if(integrator->modified(previntegrator))
 		integrator->tag_update(scene);
@@ -216,6 +236,25 @@ void BlenderSync::sync_film()
 	film->filter_type = (FilterType)RNA_enum_get(&cscene, "filter_type");
 	film->filter_width = (film->filter_type == FILTER_BOX)? 1.0f: get_float(cscene, "filter_width");
 
+	if(b_scene.world()) {
+		BL::WorldMistSettings b_mist = b_scene.world().mist_settings();
+
+		film->mist_start = b_mist.start();
+		film->mist_depth = b_mist.depth();
+
+		switch(b_mist.falloff()) {
+			case BL::WorldMistSettings::falloff_QUADRATIC:
+				film->mist_falloff = 2.0f;
+				break;
+			case BL::WorldMistSettings::falloff_LINEAR:
+				film->mist_falloff = 1.0f;
+				break;
+			case BL::WorldMistSettings::falloff_INVERSE_QUADRATIC:
+				film->mist_falloff = 0.5f;
+				break;
+		}
+	}
+
 	if(film->modified(prevfilm))
 		film->tag_update(scene);
 }
@@ -224,12 +263,11 @@ void BlenderSync::sync_film()
 
 void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
 {
+	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 	string layername;
 
 	/* 3d view */
 	if(b_v3d) {
-		PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
-
 		if(RNA_boolean_get(&cscene, "preview_active_layer")) {
 			BL::RenderLayers layers(b_scene.render().ptr);
 			layername = layers.active().name();
@@ -243,8 +281,11 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
 			render_layer.holdout_layer = 0;
 			render_layer.material_override = PointerRNA_NULL;
 			render_layer.use_background = true;
+			render_layer.use_hair = true;
+			render_layer.use_surfaces = true;
 			render_layer.use_viewport_visibility = true;
 			render_layer.samples = 0;
+			render_layer.bound_samples = false;
 			return;
 		}
 	}
@@ -252,6 +293,7 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
 	/* render layer */
 	BL::RenderSettings r = b_scene.render();
 	BL::RenderSettings::layers_iterator b_rlay;
+	int use_layer_samples = RNA_enum_get(&cscene, "use_layer_samples");
 	bool first_layer = true;
 
 	for(r.layers.begin(b_rlay); b_rlay != r.layers.end(); ++b_rlay) {
@@ -269,9 +311,19 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
 
 			render_layer.material_override = b_rlay->material_override();
 			render_layer.use_background = b_rlay->use_sky();
+			render_layer.use_surfaces = b_rlay->use_solid();
+			render_layer.use_hair = b_rlay->use_strand();
 			render_layer.use_viewport_visibility = false;
 			render_layer.use_localview = false;
-			render_layer.samples = b_rlay->samples();
+
+			render_layer.bound_samples = (use_layer_samples == 1);
+			if(use_layer_samples != 2) {
+				int samples = b_rlay->samples();
+				if(get_boolean(cscene, "use_square_samples"))
+					render_layer.samples = samples * samples;
+				else
+					render_layer.samples = samples;
+			}
 		}
 
 		first_layer = false;
@@ -355,24 +407,37 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine, BL::Use
 	params.background = background;
 
 	/* samples */
-	if(get_boolean(cscene, "progressive") == 0 && params.device.type == DEVICE_CPU){
+	int samples = get_int(cscene, "samples");
+	int aa_samples = get_int(cscene, "aa_samples");
+	int preview_samples = get_int(cscene, "preview_samples");
+	int preview_aa_samples = get_int(cscene, "preview_aa_samples");
+	
+	if(get_boolean(cscene, "use_square_samples")) {
+		aa_samples = aa_samples * aa_samples;
+		preview_aa_samples = preview_aa_samples * preview_aa_samples;
+
+		samples = samples * samples;
+		preview_samples = preview_samples * preview_samples;
+	}
+
+	if(get_enum(cscene, "progressive") == 0) {
 		if(background) {
-			params.samples = get_int(cscene, "aa_samples");
+			params.samples = aa_samples;
 		}
 		else {
-			params.samples = get_int(cscene, "preview_aa_samples");
+			params.samples = preview_aa_samples;
 			if(params.samples == 0)
-				params.samples = INT_MAX;
+				params.samples = USHRT_MAX;
 		}
 	}
 	else {
 		if(background) {
-			params.samples = get_int(cscene, "samples");
+			params.samples = samples;
 		}
 		else {
-			params.samples = get_int(cscene, "preview_samples");
+			params.samples = preview_samples;
 			if(params.samples == 0)
-				params.samples = INT_MAX;
+				params.samples = USHRT_MAX;
 		}
 	}
 

@@ -245,8 +245,24 @@ void bmo_similar_faces_exec(BMesh *bm, BMOperator *op)
 							cont = false;
 						}
 						break;
+#ifdef WITH_FREESTYLE
+					case SIMFACE_FREESTYLE:
+						if (CustomData_has_layer(&bm->pdata, CD_FREESTYLE_FACE)) {
+							FreestyleEdge *ffa1, *ffa2;
+
+							ffa1 = CustomData_bmesh_get(&bm->pdata, fs->head.data, CD_FREESTYLE_FACE);
+							ffa2 = CustomData_bmesh_get(&bm->pdata, fm->head.data, CD_FREESTYLE_FACE);
+
+							if (ffa1 && ffa2 && (ffa1->flag & FREESTYLE_FACE_MARK) == (ffa2->flag & FREESTYLE_FACE_MARK)) {
+								BMO_elem_flag_enable(bm, fm, FACE_MARK);
+								cont = false;
+							}
+						}
+						break;
+#endif
 					default:
 						BLI_assert(0);
+						break;
 				}
 			}
 		}
@@ -463,8 +479,24 @@ void bmo_similar_edges_exec(BMesh *bm, BMOperator *op)
 							cont = false;
 						}
 						break;
+#ifdef WITH_FREESTYLE
+					case SIMEDGE_FREESTYLE:
+						if (CustomData_has_layer(&bm->edata, CD_FREESTYLE_EDGE)) {
+							FreestyleEdge *fed1, *fed2;
+
+							fed1 = CustomData_bmesh_get(&bm->edata, e->head.data, CD_FREESTYLE_EDGE);
+							fed2 = CustomData_bmesh_get(&bm->edata, es->head.data, CD_FREESTYLE_EDGE);
+
+							if (fed1 && fed2 && (fed1->flag & FREESTYLE_EDGE_MARK) == (fed2->flag & FREESTYLE_EDGE_MARK)) {
+								BMO_elem_flag_enable(bm, e, EDGE_MARK);
+								cont = false;
+							}
+						}
+						break;
+#endif
 					default:
 						BLI_assert(0);
+						break;
 				}
 			}
 		}
@@ -500,6 +532,7 @@ void bmo_similar_verts_exec(BMesh *bm, BMOperator *op)
 {
 #define VERT_MARK	1
 
+	const int cd_dvert_offset = CustomData_get_offset(&bm->vdata, CD_MDEFORMVERT);
 	BMOIter vs_iter;	/* selected verts iterator */
 	BMIter v_iter;		/* mesh verts iterator */
 	BMVert *vs;		/* selected vertex */
@@ -543,13 +576,9 @@ void bmo_similar_verts_exec(BMesh *bm, BMOperator *op)
 				break;
 
 			case SIMVERT_VGROUP:
-				if (CustomData_has_layer(&(bm->vdata), CD_MDEFORMVERT)) {
-					v_ext[i].dvert = CustomData_bmesh_get(&bm->vdata, v_ext[i].v->head.data, CD_MDEFORMVERT);
-				}
-				else {
-					v_ext[i].dvert = NULL;
-				}
+				v_ext[i].dvert = (cd_dvert_offset != -1) ? BM_ELEM_CD_GET_VOID_P(v_ext[i].v, cd_dvert_offset) : NULL;
 				break;
+
 			case SIMVERT_EDGE:
 				v_ext[i].num_edges = BM_vert_edge_count(v);
 				break;
@@ -600,6 +629,7 @@ void bmo_similar_verts_exec(BMesh *bm, BMOperator *op)
 						break;
 					default:
 						BLI_assert(0);
+						break;
 				}
 			}
 		}

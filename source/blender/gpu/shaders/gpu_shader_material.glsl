@@ -147,7 +147,7 @@ void geom(vec3 co, vec3 nor, mat4 viewinvmat, vec3 attorco, vec2 attuv, vec4 att
 	normal = -normalize(nor);	/* blender render normal is negated */
 	vcol_attribute(attvcol, vcol);
 	vcol_alpha = attvcol.a;
-	frontback = 1.0;
+	frontback = (gl_FrontFacing)? 1.0: 0.0;
 }
 
 void mapping(vec3 vec, mat4 mat, vec3 minvec, vec3 maxvec, float domin, float domax, out vec3 outvec)
@@ -277,6 +277,14 @@ void math_greater_than(float val1, float val2, out float outval)
 		outval = 1.0;
 	else
 		outval = 0.0;
+}
+
+void math_modulo(float val1, float val2, out float outval)
+{
+	if (val2 == 0.0)
+		outval = 0.0;
+	else
+		outval = mod(val1, val2);
 }
 
 void squeeze(float val, float width, float center, out float outval)
@@ -753,7 +761,7 @@ void texture_wood_sin(vec3 vec, out float value, out vec4 color, out vec3 normal
 void texture_image(vec3 vec, sampler2D ima, out float value, out vec4 color, out vec3 normal)
 {
 	color = texture2D(ima, (vec.xy + vec2(1.0, 1.0))*0.5);
-	value = 1.0;
+	value = color.a;
 
 	normal.x = 2.0*(color.r - 0.5);
 	normal.y = 2.0*(0.5 - color.g);
@@ -2055,6 +2063,11 @@ void node_bsdf_glass(vec4 color, float roughness, float ior, vec3 N, out vec4 re
 	node_bsdf_diffuse(color, 0.0, N, result);
 }
 
+void node_bsdf_toon(vec4 color, float size, float tsmooth, vec3 N, out vec4 result)
+{
+	node_bsdf_diffuse(color, 0.0, N, result);
+}
+
 void node_bsdf_translucent(vec4 color, vec3 N, out vec4 result)
 {
 	node_bsdf_diffuse(color, 0.0, N, result);
@@ -2103,10 +2116,17 @@ void node_add_shader(vec4 shader1, vec4 shader2, out vec4 shader)
 void node_fresnel(float ior, vec3 N, vec3 I, out float result)
 {
 	float eta = max(ior, 0.00001);
-	result = fresnel_dielectric(I, N, eta); //backfacing() ? 1.0/eta: eta);
+	result = fresnel_dielectric(I, N, (gl_FrontFacing)? eta: 1.0/eta);
 }
 
 /* geometry */
+
+void node_attribute(vec3 attr_uv, out vec4 outcol, out vec3 outvec, out float outf)
+{
+	outcol = vec4(attr_uv, 1.0);
+	outvec = attr_uv;
+	outf = (attr_uv.x + attr_uv.y + attr_uv.z)/3.0;
+}
 
 void node_geometry(vec3 I, vec3 N, mat4 toworld,
 	out vec3 position, out vec3 normal, out vec3 tangent,
@@ -2119,7 +2139,7 @@ void node_geometry(vec3 I, vec3 N, mat4 toworld,
 	true_normal = N;
 	incoming = I;
 	parametric = vec3(0.0);
-	backfacing = 0.0;
+	backfacing = (gl_FrontFacing)? 0.0: 1.0;
 }
 
 void node_tex_coord(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat,
@@ -2130,7 +2150,7 @@ void node_tex_coord(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat,
 	generated = attr_orco;
 	normal = normalize((obinvmat*(viewinvmat*vec4(N, 0.0))).xyz);
 	uv = attr_uv;
-	object = I;
+	object = (obinvmat*(viewinvmat*vec4(I, 1.0))).xyz;
 	camera = I;
 	window = gl_FragCoord.xyz;
 	reflection = reflect(N, I);
@@ -2260,7 +2280,12 @@ void node_object_info(out vec3 location, out float object_index, out float mater
 	random = 0.0;
 }
 
-void node_bump(float strength, float height, vec3 N, out vec3 result)
+void node_normal_map(float strength, vec4 color, vec3 N, out vec3 result)
+{
+	result = N;
+}
+
+void node_bump(float strength, float dist, float height, vec3 N, out vec3 result)
 {
 	result = N;
 }

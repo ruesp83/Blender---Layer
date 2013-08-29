@@ -70,7 +70,7 @@ static void copyData(ModifierData *md, ModifierData *target)
 	BLI_strncpy(tsmd->defgrp_name, smd->defgrp_name, sizeof(tsmd->defgrp_name));
 }
 
-static int isDisabled(ModifierData *md, int UNUSED(useRenderParams))
+static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
 {
 	SmoothModifierData *smd = (SmoothModifierData *) md;
 	short flag;
@@ -221,7 +221,7 @@ static void smoothModifier_do(
 static void deformVerts(ModifierData *md, Object *ob, DerivedMesh *derivedData,
                         float (*vertexCos)[3], int numVerts, ModifierApplyFlag UNUSED(flag))
 {
-	DerivedMesh *dm = get_dm(ob, NULL, derivedData, NULL, 0);
+	DerivedMesh *dm = get_dm(ob, NULL, derivedData, NULL, false, false);
 
 	smoothModifier_do((SmoothModifierData *)md, ob, dm,
 	                  vertexCos, numVerts);
@@ -234,7 +234,7 @@ static void deformVertsEM(
         ModifierData *md, Object *ob, struct BMEditMesh *editData,
         DerivedMesh *derivedData, float (*vertexCos)[3], int numVerts)
 {
-	DerivedMesh *dm = get_dm(ob, editData, derivedData, NULL, 0);
+	DerivedMesh *dm = get_dm(ob, editData, derivedData, NULL, false, false);
 
 	smoothModifier_do((SmoothModifierData *)md, ob, dm,
 	                  vertexCos, numVerts);

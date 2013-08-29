@@ -1,43 +1,34 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
-
-#include "svm_hsv.h"
 
 CCL_NAMESPACE_BEGIN
 
-__device float3 svm_lerp(const float3 a, const float3 b, float t)
-{
-	return (a * (1.0f - t) + b * t);
-}
-
 __device float3 svm_mix_blend(float t, float3 col1, float3 col2)
 {
-	return svm_lerp(col1, col2, t);
+	return interp(col1, col2, t);
 }
 
 __device float3 svm_mix_add(float t, float3 col1, float3 col2)
 {
-	return svm_lerp(col1, col1 + col2, t);
+	return interp(col1, col1 + col2, t);
 }
 
 __device float3 svm_mix_mul(float t, float3 col1, float3 col2)
 {
-	return svm_lerp(col1, col1 * col2, t);
+	return interp(col1, col1 * col2, t);
 }
 
 __device float3 svm_mix_screen(float t, float3 col1, float3 col2)
@@ -75,7 +66,7 @@ __device float3 svm_mix_overlay(float t, float3 col1, float3 col2)
 
 __device float3 svm_mix_sub(float t, float3 col1, float3 col2)
 {
-	return svm_lerp(col1, col1 - col2, t);
+	return interp(col1, col1 - col2, t);
 }
 
 __device float3 svm_mix_div(float t, float3 col1, float3 col2)
@@ -93,7 +84,7 @@ __device float3 svm_mix_div(float t, float3 col1, float3 col2)
 
 __device float3 svm_mix_diff(float t, float3 col1, float3 col2)
 {
-	return svm_lerp(col1, fabs(col1 - col2), t);
+	return interp(col1, fabs(col1 - col2), t);
 }
 
 __device float3 svm_mix_dark(float t, float3 col1, float3 col2)
@@ -191,7 +182,7 @@ __device float3 svm_mix_hue(float t, float3 col1, float3 col2)
 		hsv.x = hsv2.x;
 		float3 tmp = hsv_to_rgb(hsv); 
 
-		outcol = svm_lerp(outcol, tmp, t);
+		outcol = interp(outcol, tmp, t);
 	}
 
 	return outcol;
@@ -238,7 +229,7 @@ __device float3 svm_mix_color(float t, float3 col1, float3 col2)
 		hsv.y = hsv2.y;
 		float3 tmp = hsv_to_rgb(hsv); 
 
-		outcol = svm_lerp(outcol, tmp, t);
+		outcol = interp(outcol, tmp, t);
 	}
 
 	return outcol;

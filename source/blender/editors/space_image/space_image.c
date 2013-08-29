@@ -46,7 +46,7 @@
 #include "BKE_global.h"
 #include "BKE_scene.h"
 #include "BKE_screen.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
 #include "BKE_sequencer.h"
 #include "BKE_node.h"
 
@@ -246,7 +246,13 @@ static void image_operatortypes(void)
 	WM_operatortype_append(IMAGE_OT_unpack);
 	
 	WM_operatortype_append(IMAGE_OT_bright_contrast);
+	WM_operatortype_append(IMAGE_OT_desaturate);
+	WM_operatortype_append(IMAGE_OT_posterize);
+	WM_operatortype_append(IMAGE_OT_threshold);
+	WM_operatortype_append(IMAGE_OT_exposure);
+	WM_operatortype_append(IMAGE_OT_colorize);
 	WM_operatortype_append(IMAGE_OT_invert);
+	WM_operatortype_append(IMAGE_OT_invert_value);
 
 	WM_operatortype_append(IMAGE_OT_duplicate);
 	WM_operatortype_append(IMAGE_OT_flip);
@@ -329,6 +335,10 @@ static void image_keymap(struct wmKeyConfig *keyconf)
 	keymap = WM_keymap_find(keyconf, "Image", SPACE_IMAGE, 0);
 	
 	WM_keymap_add_item(keymap, "IMAGE_OT_view_all", HOMEKEY, KM_PRESS, 0, 0);
+
+	kmi = WM_keymap_add_item(keymap, "IMAGE_OT_view_all", FKEY, KM_PRESS, 0, 0);
+	RNA_boolean_set(kmi->ptr, "fit_view", TRUE);
+
 	WM_keymap_add_item(keymap, "IMAGE_OT_view_selected", PADPERIOD, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "IMAGE_OT_view_pan", MIDDLEMOUSE, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "IMAGE_OT_view_pan", MIDDLEMOUSE, KM_PRESS, KM_SHIFT, 0);
@@ -428,15 +438,10 @@ static void image_refresh(const bContext *C, ScrArea *sa)
 	
 	/* check if we have to set the image from the editmesh */
 	if (ima && (ima->source == IMA_SRC_VIEWER && sima->mode == SI_MODE_MASK)) {
-		if (sima->lock == FALSE && G.moving) {
-			/* pass */
-		}
-		else {
-			if (scene->nodetree) {
-				Mask *mask = ED_space_image_get_mask(sima);
-				if (mask) {
-					ED_node_composite_job(C, scene->nodetree, scene);
-				}
+		if (scene->nodetree) {
+			Mask *mask = ED_space_image_get_mask(sima);
+			if (mask) {
+				ED_node_composite_job(C, scene->nodetree, scene);
 			}
 		}
 	}
@@ -450,16 +455,7 @@ static void image_refresh(const bContext *C, ScrArea *sa)
 		int selected = !(scene->toolsettings->uv_flag & UV_SYNC_SELECTION); /* only selected active face? */
 
 		if (BKE_scene_use_new_shading_nodes(scene)) {
-			/* new shading system, get image from material */
-			BMFace *efa = BM_active_face_get(em->bm, sloppy, selected);
-
-			if (efa) {
-				Image *node_ima;
-				ED_object_get_active_image(obedit, efa->mat_nr + 1, &node_ima, NULL, NULL);
-
-				if (node_ima)
-					sima->image = node_ima;
-			}
+			/* new shading system does not alter image */
 		}
 		else {
 			/* old shading system, we set texface */
@@ -481,7 +477,7 @@ static void image_refresh(const bContext *C, ScrArea *sa)
 	}
 }
 
-static void image_listener(ScrArea *sa, wmNotifier *wmn)
+static void image_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn)
 {
 	SpaceImage *sima = (SpaceImage *)sa->spacedata.first;
 	
@@ -490,7 +486,6 @@ static void image_listener(ScrArea *sa, wmNotifier *wmn)
 		case NC_WINDOW:
 			/* notifier comes from editing color space */
 			image_scopes_tag_refresh(sa);
-			ED_area_tag_refresh(sa);
 			ED_area_tag_redraw(sa);
 			break;
 		case NC_SCENE:
@@ -516,9 +511,11 @@ static void image_listener(ScrArea *sa, wmNotifier *wmn)
 			break;
 		case NC_IMAGE:
 			if (wmn->reference == sima->image || !wmn->reference) {
-				image_scopes_tag_refresh(sa);
-				ED_area_tag_refresh(sa);
-				ED_area_tag_redraw(sa);
+				if (wmn->action != NA_PAINTING) {
+					image_scopes_tag_refresh(sa);
+					ED_area_tag_refresh(sa);
+					ED_area_tag_redraw(sa);
+				}
 			}
 			break;
 		case NC_SPACE:
@@ -557,6 +554,7 @@ static void image_listener(ScrArea *sa, wmNotifier *wmn)
 			break;
 		}
 		case NC_GEOM:
+		{
 			switch (wmn->data) {
 				case ND_DATA:
 				case ND_SELECT:
@@ -565,6 +563,8 @@ static void image_listener(ScrArea *sa, wmNotifier *wmn)
 					ED_area_tag_redraw(sa);
 					break;
 			}
+			break;
+		}
 		case NC_OBJECT:
 		{
 			Object *ob = (Object *)wmn->reference;
@@ -577,6 +577,7 @@ static void image_listener(ScrArea *sa, wmNotifier *wmn)
 					}
 					break;
 			}
+			break;
 		}
 	}
 }
@@ -720,6 +721,9 @@ static void image_main_area_draw(const bContext *C, ARegion *ar)
 
 	/* and uvs in 0.0-1.0 space */
 	UI_view2d_view_ortho(v2d);
+
+	ED_region_draw_cb_draw(C, ar, REGION_DRAW_PRE_VIEW);
+
 	draw_uvedit_main(sima, ar, scene, obedit, obact);
 
 	/* check for mask (delay draw) */
@@ -728,7 +732,7 @@ static void image_main_area_draw(const bContext *C, ARegion *ar)
 	}
 	else if (sima->mode == SI_MODE_MASK) {
 		mask = ED_space_image_get_mask(sima);
-		draw_image_cursor(sima, ar);
+		draw_image_cursor(ar, sima->cursor);
 	}
 
 	ED_region_draw_cb_draw(C, ar, REGION_DRAW_POST_VIEW);
@@ -777,7 +781,7 @@ static void image_main_area_draw(const bContext *C, ARegion *ar)
 
 		ED_mask_draw_frames(mask, ar, CFRA, mask->sfra, mask->efra);
 
-		draw_image_cursor(sima, ar);
+		draw_image_cursor(ar, sima->cursor);
 	}
 
 	/* scrollers? */
@@ -788,12 +792,16 @@ static void image_main_area_draw(const bContext *C, ARegion *ar)
 #endif
 }
 
-static void image_main_area_listener(ARegion *ar, wmNotifier *wmn)
+static void image_main_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
 {
 	/* context changes */
 	switch (wmn->category) {
 		case NC_GPENCIL:
 			if (wmn->action == NA_EDITED)
+				ED_region_tag_redraw(ar);
+			break;
+		case NC_IMAGE:
+			if (wmn->action == NA_PAINTING)
 				ED_region_tag_redraw(ar);
 			break;
 	}
@@ -819,7 +827,7 @@ static void image_buttons_area_draw(const bContext *C, ARegion *ar)
 	ED_region_panels(C, ar, 1, NULL, -1);
 }
 
-static void image_buttons_area_listener(ARegion *ar, wmNotifier *wmn)
+static void image_buttons_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -875,7 +883,7 @@ static void image_scope_area_draw(const bContext *C, ARegion *ar)
 	ED_region_panels(C, ar, 1, NULL, -1);
 }
 
-static void image_scope_area_listener(ARegion *ar, wmNotifier *wmn)
+static void image_scope_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -889,7 +897,8 @@ static void image_scope_area_listener(ARegion *ar, wmNotifier *wmn)
 			}
 			break;
 		case NC_IMAGE:
-			ED_region_tag_redraw(ar);
+			if (wmn->action != NA_PAINTING)
+				ED_region_tag_redraw(ar);
 			break;
 		case NC_NODE:
 			ED_region_tag_redraw(ar);
@@ -911,7 +920,7 @@ static void image_header_area_draw(const bContext *C, ARegion *ar)
 	ED_region_header(C, ar);
 }
 
-static void image_header_area_listener(ARegion *ar, wmNotifier *wmn)
+static void image_header_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -930,7 +939,7 @@ static void image_header_area_listener(ARegion *ar, wmNotifier *wmn)
 					ED_region_tag_redraw(ar);
 					break;
 			}
-			
+			break;
 	}
 }
 

@@ -30,9 +30,6 @@
 #include "BLI_ghash.h"
 #include "BLI_utildefines.h"
 
-/* Needed for BMesh functions used in the PBVH iterator macro */
-#include "bmesh.h"
-
 struct CCGElem;
 struct CCGKey;
 struct CustomData;
@@ -43,6 +40,8 @@ struct MFace;
 struct MVert;
 struct PBVH;
 struct PBVHNode;
+struct BMesh;
+struct BMLog;
 
 typedef struct PBVH PBVH;
 typedef struct PBVHNode PBVHNode;
@@ -123,7 +122,7 @@ unsigned int **BKE_pbvh_grid_hidden(const PBVH *bvh);
 void BKE_pbvh_get_grid_key(const PBVH *pbvh, struct CCGKey *key);
 
 /* Only valid for type == PBVH_BMESH */
-BMesh *BKE_pbvh_get_bmesh(PBVH *pbvh);
+struct BMesh *BKE_pbvh_get_bmesh(PBVH *pbvh);
 void BKE_pbvh_bmesh_detail_size_set(PBVH *pbvh, float detail_size);
 
 typedef enum {
@@ -173,8 +172,8 @@ int BKE_pbvh_node_planes_contain_AABB(PBVHNode *node, void *data);
 /* test if AABB is at least partially outside the planes' volume */
 int BKE_pbvh_node_planes_exclude_AABB(PBVHNode *node, void *data);
 
-struct GHash *BKE_pbvh_bmesh_node_unique_verts(PBVHNode *node);
-struct GHash *BKE_pbvh_bmesh_node_other_verts(PBVHNode *node); 
+struct GSet *BKE_pbvh_bmesh_node_unique_verts(PBVHNode *node);
+struct GSet *BKE_pbvh_bmesh_node_other_verts(PBVHNode *node);
 void BKE_pbvh_bmesh_node_save_orig(PBVHNode *node);
 void BKE_pbvh_bmesh_after_stroke(PBVH *bvh);
 
@@ -224,7 +223,7 @@ typedef struct PBVHVertexIter {
 	struct CCGElem **grids;
 	struct CCGElem *grid;
 	struct CCGKey *key;
-	BLI_bitmap *grid_hidden, gh;
+	BLI_bitmap **grid_hidden, *gh;
 	int *grid_indices;
 	int totgrid;
 	int gridsize;
@@ -236,9 +235,10 @@ typedef struct PBVHVertexIter {
 	float *vmask;
 
 	/* bmesh */
-	struct GHashIterator bm_unique_verts;
-	struct GHashIterator bm_other_verts;
+	struct GSetIterator bm_unique_verts;
+	struct GSetIterator bm_other_verts;
 	struct CustomData *bm_vdata;
+	int cd_vert_mask_offset;
 
 	/* result: these are all computed in the macro, but we assume
 	 * that compiler optimization's will skip the ones we don't use */
@@ -295,22 +295,20 @@ void pbvh_vertex_iter_init(PBVH *bvh, PBVHNode *node,
 						vi.mask = &vi.vmask[vi.vert_indices[vi.gx]]; \
 				} \
 				else { \
-					if (BLI_ghashIterator_notDone(&vi.bm_unique_verts)) {\
-						vi.bm_vert = BLI_ghashIterator_getKey(&vi.bm_unique_verts); \
-						BLI_ghashIterator_step(&vi.bm_unique_verts); \
+					if (!BLI_gsetIterator_done(&vi.bm_unique_verts)) {\
+						vi.bm_vert = BLI_gsetIterator_getKey(&vi.bm_unique_verts); \
+						BLI_gsetIterator_step(&vi.bm_unique_verts); \
 					} \
 					else { \
-						vi.bm_vert = BLI_ghashIterator_getKey(&vi.bm_other_verts); \
-						BLI_ghashIterator_step(&vi.bm_other_verts); \
+						vi.bm_vert = BLI_gsetIterator_getKey(&vi.bm_other_verts); \
+						BLI_gsetIterator_step(&vi.bm_other_verts); \
 					} \
 					if (mode == PBVH_ITER_UNIQUE && \
 						BM_elem_flag_test(vi.bm_vert, BM_ELEM_HIDDEN)) \
 						continue; \
 					vi.co = vi.bm_vert->co; \
 					vi.fno = vi.bm_vert->no; \
-					vi.mask = CustomData_bmesh_get(vi.bm_vdata, \
-												   vi.bm_vert->head.data, \
-												   CD_PAINT_MASK); \
+					vi.mask = BM_ELEM_CD_GET_VOID_P(vi.bm_vert, vi.cd_vert_mask_offset); \
 				}
 
 #define BKE_pbvh_vertex_iter_end \
@@ -329,4 +327,3 @@ void BKE_pbvh_gather_proxies(PBVH *pbvh, PBVHNode ***nodes,  int *totnode);
 void pbvh_show_diffuse_color_set(PBVH *bvh, int show_diffuse_color);
 
 #endif /* __BKE_PBVH_H__ */
-

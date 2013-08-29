@@ -40,7 +40,7 @@
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_main.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
 #include "BKE_library.h"
 
 #include "ED_image.h"  /* own include */
@@ -312,7 +312,7 @@ int ED_space_image_show_uvedit(SpaceImage *sima, Object *obedit)
 		return 0;
 
 	if (obedit && obedit->type == OB_MESH) {
-		struct BMEditMesh *em = BMEdit_FromObject(obedit);
+		struct BMEditMesh *em = BKE_editmesh_from_object(obedit);
 		int ret;
 
 		ret = EDBM_mtexpoly_check(em);
@@ -330,7 +330,7 @@ int ED_space_image_show_uvshadow(SpaceImage *sima, Object *obedit)
 
 	if (ED_space_image_show_paint(sima))
 		if (obedit && obedit->type == OB_MESH) {
-			struct BMEditMesh *em = BMEdit_FromObject(obedit);
+			struct BMEditMesh *em = BKE_editmesh_from_object(obedit);
 			int ret;
 
 			ret = EDBM_mtexpoly_check(em);
@@ -375,20 +375,3 @@ int ED_space_image_maskedit_mask_poll(bContext *C)
 	return FALSE;
 }
 
-/******************** TODO ********************/
-
-/* XXX notifier? */
-
-/* goes over all ImageUsers, and sets frame numbers if auto-refresh is set */
-
-static void image_update_frame(struct Image *UNUSED(ima), struct ImageUser *iuser, void *customdata)
-{
-	int cfra = *(int *)customdata;
-
-	BKE_image_user_check_frame_calc(iuser, cfra, 0);
-}
-
-void ED_image_update_frame(const Main *mainp, int cfra)
-{
-	BKE_image_walk_all_users(mainp, &cfra, image_update_frame);
-}

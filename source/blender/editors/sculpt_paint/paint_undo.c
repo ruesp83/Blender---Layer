@@ -150,9 +150,10 @@ static void undo_stack_push_end(UndoStack *stack)
 static int undo_stack_step(bContext *C, UndoStack *stack, int step, const char *name)
 {
 	UndoElem *undo;
-
+	
 	if (step == 1) {
 		if (stack->current == NULL) {
+			return 2;
 			/* pass */
 		}
 		else {
@@ -168,6 +169,7 @@ static int undo_stack_step(bContext *C, UndoStack *stack, int step, const char *
 	}
 	else if (step == -1) {
 		if ((stack->current != NULL && stack->current->next == NULL) || stack->elems.first == NULL) {
+			return 2;
 			/* pass */
 		}
 		else {

@@ -64,13 +64,11 @@
 
 /* XXX Does some additional initialization on top of nodeAddNode
  * Can be used with both custom and static nodes, if idname==NULL the static int type will be used instead.
- * Can be called from menus too, but they should do own undopush and redraws.
  */
 bNode *node_add_node(const bContext *C, const char *idname, int type, float locx, float locy)
 {
 	SpaceNode *snode = CTX_wm_space_node(C);
 	Main *bmain = CTX_data_main(C);
-	Scene *scene = CTX_data_scene(C);
 	bNode *node = NULL;
 	
 	node_deselect_all(snode);
@@ -93,22 +91,8 @@ bNode *node_add_node(const bContext *C, const char *idname, int type, float locx
 	node->locx = locx;
 	node->locy = locy + 60.0f;
 	
-	ntreeUpdateTree(snode->edittree);
+	ntreeUpdateTree(bmain, snode->edittree);
 	ED_node_set_active(bmain, snode->edittree, node);
-	
-	if (snode->nodetree->type == NTREE_COMPOSIT) {
-		if (ELEM4(node->type, CMP_NODE_R_LAYERS, CMP_NODE_COMPOSITE, CMP_NODE_DEFOCUS, CMP_NODE_OUTPUT_FILE)) {
-			node->id = &scene->id;
-		}
-		else if (ELEM3(node->type, CMP_NODE_MOVIECLIP, CMP_NODE_MOVIEDISTORTION, CMP_NODE_STABILIZE2D)) {
-			node->id = (ID *)scene->clip;
-		}
-		
-		ntreeCompositForceHidden(snode->edittree, scene);
-	}
-	
-	if (node->id)
-		id_us_plus(node->id);
 	
 	if (snode->flag & SNODE_USE_HIDDEN_PREVIEW)
 		node->flag &= ~NODE_PREVIEW;
@@ -149,7 +133,7 @@ typedef struct bNodeSocketLink {
 	float point[2];
 } bNodeSocketLink;
 
-static bNodeSocketLink *add_reroute_insert_socket_link(ListBase *lb, bNodeSocket *sock, bNodeLink *link, float point[2])
+static bNodeSocketLink *add_reroute_insert_socket_link(ListBase *lb, bNodeSocket *sock, bNodeLink *link, const float point[2])
 {
 	bNodeSocketLink *socklink, *prev;
 	
@@ -231,7 +215,7 @@ static int add_reroute_exec(bContext *C, wmOperator *op)
 	int i = 0;
 	
 	/* Get the cut path */
-	RNA_BEGIN(op->ptr, itemptr, "path")
+	RNA_BEGIN (op->ptr, itemptr, "path")
 	{
 		float loc[2];
 
@@ -285,7 +269,7 @@ static int add_reroute_exec(bContext *C, wmOperator *op)
 		BLI_freelistN(&input_links);
 		
 		/* always last */
-		ntreeUpdateTree(ntree);
+		ntreeUpdateTree(CTX_data_main(C), ntree);
 		snode_notify(C, snode);
 		snode_dag_update(C, snode);
 		
@@ -308,7 +292,7 @@ void NODE_OT_add_reroute(wmOperatorType *ot)
 	ot->exec = add_reroute_exec;
 	ot->cancel = WM_gesture_lines_cancel;
 
-	ot->poll = ED_operator_node_active;
+	ot->poll = ED_operator_node_editable;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -354,8 +338,6 @@ static int node_add_file_exec(bContext *C, wmOperator *op)
 			return OPERATOR_CANCELLED;
 		}
 	}
-
-	node_deselect_all(snode);
 
 	switch (snode->nodetree->type) {
 		case NTREE_SHADER:
@@ -416,7 +398,7 @@ void NODE_OT_add_file(wmOperatorType *ot)
 	/* callbacks */
 	ot->exec = node_add_file_exec;
 	ot->invoke = node_add_file_invoke;
-	ot->poll = ED_operator_node_active;
+	ot->poll = ED_operator_node_editable;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -424,6 +406,69 @@ void NODE_OT_add_file(wmOperatorType *ot)
 	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE, FILE_SPECIAL, FILE_OPENFILE,
 	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);  //XXX TODO, relative_path
 	RNA_def_string(ot->srna, "name", "Image", MAX_ID_NAME - 2, "Name", "Datablock name to assign");
+}
+
+/* ****************** Add Mask Node Operator  ******************* */
+
+static int node_add_mask_poll(bContext *C)
+{
+	SpaceNode *snode = CTX_wm_space_node(C);
+
+	return ED_operator_node_editable(C) && snode->nodetree->type == NTREE_COMPOSIT;
+}
+
+static int node_add_mask_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+	ARegion *ar = CTX_wm_region(C);
+	SpaceNode *snode = CTX_wm_space_node(C);
+	bNode *node;
+	ID *mask = NULL;
+
+	/* check input variables */
+	char name[MAX_ID_NAME - 2];
+	RNA_string_get(op->ptr, "name", name);
+	mask = BKE_libblock_find_name(ID_MSK, name);
+	if (!mask) {
+		BKE_reportf(op->reports, RPT_ERROR, "Mask '%s' not found", name);
+		return OPERATOR_CANCELLED;
+	}
+
+	ED_preview_kill_jobs(C);
+
+	/* convert mouse coordinates to v2d space */
+	UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1],
+	                         &snode->cursor[0], &snode->cursor[1]);
+	node = node_add_node(C, NULL, CMP_NODE_MASK, snode->cursor[0], snode->cursor[1]);
+
+	if (!node) {
+		BKE_report(op->reports, RPT_WARNING, "Could not add a mask node");
+		return OPERATOR_CANCELLED;
+	}
+
+	node->id = mask;
+	id_us_plus(mask);
+
+	snode_notify(C, snode);
+	snode_dag_update(C, snode);
+
+	return OPERATOR_FINISHED;
+}
+
+void NODE_OT_add_mask(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Add Mask Node";
+	ot->description = "Add a mask node to the current node editor";
+	ot->idname = "NODE_OT_add_mask";
+
+	/* callbacks */
+	ot->invoke = node_add_mask_invoke;
+	ot->poll = node_add_mask_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	RNA_def_string(ot->srna, "name", "Mask", MAX_ID_NAME - 2, "Name", "Datablock name to assign");
 }
 
 /********************** New node tree operator *********************/
@@ -445,6 +490,8 @@ static int new_node_tree_exec(bContext *C, wmOperator *op)
 	}
 	else if (snode)
 		idname = snode->tree_idname;
+	else
+		return OPERATOR_CANCELLED;
 	
 	if (RNA_struct_property_is_set(op->ptr, "name")) {
 		RNA_string_get(op->ptr, "name", treename);
@@ -464,12 +511,13 @@ static int new_node_tree_exec(bContext *C, wmOperator *op)
 	uiIDContextProperty(C, &ptr, &prop);
 
 	if (prop) {
-		RNA_id_pointer_create(&ntree->id, &idptr);
-		RNA_property_pointer_set(&ptr, prop, idptr);
 		/* RNA_property_pointer_set increases the user count,
 		 * fixed here as the editor is the initial user.
 		 */
-		ntree->id.us++;
+		ntree->id.us--;
+
+		RNA_id_pointer_create(&ntree->id, &idptr);
+		RNA_property_pointer_set(&ptr, prop, idptr);
 		RNA_property_update(C, &ptr, prop);
 	}
 	else if (snode) {

@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 #ifndef __UTIL_TRANSFORM_H__
@@ -97,17 +95,6 @@ __device_inline float3 transform_direction_transposed(const Transform *t, const 
 	return make_float3(dot(x, a), dot(y, a), dot(z, a));
 }
 
-#ifndef __KERNEL_GPU__
-
-__device_inline void print_transform(const char *label, const Transform& t)
-{
-	print_float4(label, t.x);
-	print_float4(label, t.y);
-	print_float4(label, t.z);
-	print_float4(label, t.w);
-	printf("\n");
-}
-
 __device_inline Transform transform_transpose(const Transform a)
 {
 	Transform t;
@@ -116,19 +103,6 @@ __device_inline Transform transform_transpose(const Transform a)
 	t.y.x = a.x.y; t.y.y = a.y.y; t.y.z = a.z.y; t.y.w = a.w.y;
 	t.z.x = a.x.z; t.z.y = a.y.z; t.z.z = a.z.z; t.z.w = a.w.z;
 	t.w.x = a.x.w; t.w.y = a.y.w; t.w.z = a.z.w; t.w.w = a.w.w;
-
-	return t;
-}
-
-__device_inline Transform operator*(const Transform a, const Transform b)
-{
-	Transform c = transform_transpose(b);
-	Transform t;
-
-	t.x = make_float4(dot(a.x, c.x), dot(a.x, c.y), dot(a.x, c.z), dot(a.x, c.w));
-	t.y = make_float4(dot(a.y, c.x), dot(a.y, c.y), dot(a.y, c.z), dot(a.y, c.w));
-	t.z = make_float4(dot(a.z, c.x), dot(a.z, c.y), dot(a.z, c.z), dot(a.z, c.w));
-	t.w = make_float4(dot(a.w, c.x), dot(a.w, c.y), dot(a.w, c.z), dot(a.w, c.w));
 
 	return t;
 }
@@ -146,6 +120,30 @@ __device_inline Transform make_transform(float a, float b, float c, float d,
 	t.w.x = m; t.w.y = n; t.w.z = o; t.w.w = p;
 
 	return t;
+}
+
+#ifndef __KERNEL_GPU__
+
+__device_inline Transform operator*(const Transform a, const Transform b)
+{
+	Transform c = transform_transpose(b);
+	Transform t;
+
+	t.x = make_float4(dot(a.x, c.x), dot(a.x, c.y), dot(a.x, c.z), dot(a.x, c.w));
+	t.y = make_float4(dot(a.y, c.x), dot(a.y, c.y), dot(a.y, c.z), dot(a.y, c.w));
+	t.z = make_float4(dot(a.z, c.x), dot(a.z, c.y), dot(a.z, c.z), dot(a.z, c.w));
+	t.w = make_float4(dot(a.w, c.x), dot(a.w, c.y), dot(a.w, c.z), dot(a.w, c.w));
+
+	return t;
+}
+
+__device_inline void print_transform(const char *label, const Transform& t)
+{
+	print_float4(label, t.x);
+	print_float4(label, t.y);
+	print_float4(label, t.z);
+	print_float4(label, t.w);
+	printf("\n");
 }
 
 __device_inline Transform transform_translate(float3 t)
@@ -195,7 +193,7 @@ __device_inline Transform transform_rotate(float angle, float3 axis)
 {
 	float s = sinf(angle);
 	float c = cosf(angle);
-	float t = 1.f - c;
+	float t = 1.0f - c;
 
 	axis = normalize(axis);
 
@@ -454,6 +452,7 @@ __device_inline bool operator==(const MotionTransform& A, const MotionTransform&
 	return (A.pre == B.pre && A.post == B.post);
 }
 
+float4 transform_to_quat(const Transform& tfm);
 void transform_motion_decompose(DecompMotionTransform *decomp, const MotionTransform *motion, const Transform *mid);
 
 #endif

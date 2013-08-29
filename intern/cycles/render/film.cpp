@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 #include "camera.h"
@@ -65,6 +63,9 @@ void Pass::add(PassType type, vector<Pass>& passes)
 			pass.components = 1;
 			pass.filter = false;
 			break;
+		case PASS_MIST:
+			pass.components = 1;
+			break;
 		case PASS_NORMAL:
 			pass.components = 4;
 			break;
@@ -95,6 +96,9 @@ void Pass::add(PassType type, vector<Pass>& passes)
 		case PASS_TRANSMISSION_COLOR:
 			pass.components = 4;
 			break;
+		case PASS_SUBSURFACE_COLOR:
+			pass.components = 4;
+			break;
 		case PASS_DIFFUSE_INDIRECT:
 			pass.components = 4;
 			pass.exposure = true;
@@ -110,6 +114,11 @@ void Pass::add(PassType type, vector<Pass>& passes)
 			pass.exposure = true;
 			pass.divide_type = PASS_TRANSMISSION_COLOR;
 			break;
+		case PASS_SUBSURFACE_INDIRECT:
+			pass.components = 4;
+			pass.exposure = true;
+			pass.divide_type = PASS_SUBSURFACE_COLOR;
+			break;
 		case PASS_DIFFUSE_DIRECT:
 			pass.components = 4;
 			pass.exposure = true;
@@ -124,6 +133,11 @@ void Pass::add(PassType type, vector<Pass>& passes)
 			pass.components = 4;
 			pass.exposure = true;
 			pass.divide_type = PASS_TRANSMISSION_COLOR;
+			break;
+		case PASS_SUBSURFACE_DIRECT:
+			pass.components = 4;
+			pass.exposure = true;
+			pass.divide_type = PASS_SUBSURFACE_COLOR;
 			break;
 
 		case PASS_EMISSION:
@@ -178,13 +192,13 @@ bool Pass::contains(const vector<Pass>& passes, PassType type)
 
 static float filter_func_box(float v, float width)
 {
-	return (float)1;
+	return 1.0f;
 }
 
 static float filter_func_gaussian(float v, float width)
 {
-	v *= (float)2/width;
-	return (float)expf((float)-2*v*v);
+	v *= 2.0f/width;
+	return expf(-2.0f*v*v);
 }
 
 static vector<float> filter_table(FilterType type, float width)
@@ -252,6 +266,12 @@ Film::Film()
 	filter_width = 1.0f;
 	filter_table_offset = TABLE_OFFSET_INVALID;
 
+	mist_start = 0.0f;
+	mist_depth = 100.0f;
+	mist_falloff = 1.0f;
+
+	use_light_visibility = false;
+
 	need_update = true;
 }
 
@@ -272,7 +292,7 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 	kfilm->exposure = exposure;
 	kfilm->pass_flag = 0;
 	kfilm->pass_stride = 0;
-	kfilm->use_light_pass = 0;
+	kfilm->use_light_pass = use_light_visibility;
 
 	foreach(Pass& pass, passes) {
 		kfilm->pass_flag |= pass.type;
@@ -283,6 +303,10 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 				break;
 			case PASS_DEPTH:
 				kfilm->pass_depth = kfilm->pass_stride;
+				break;
+			case PASS_MIST:
+				kfilm->pass_mist = kfilm->pass_stride;
+				kfilm->use_light_pass = 1;
 				break;
 			case PASS_NORMAL:
 				kfilm->pass_normal = kfilm->pass_stride;
@@ -314,6 +338,10 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 				kfilm->pass_transmission_color = kfilm->pass_stride;
 				kfilm->use_light_pass = 1;
 				break;
+			case PASS_SUBSURFACE_COLOR:
+				kfilm->pass_subsurface_color = kfilm->pass_stride;
+				kfilm->use_light_pass = 1;
+				break;
 			case PASS_DIFFUSE_INDIRECT:
 				kfilm->pass_diffuse_indirect = kfilm->pass_stride;
 				kfilm->use_light_pass = 1;
@@ -324,6 +352,10 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 				break;
 			case PASS_TRANSMISSION_INDIRECT:
 				kfilm->pass_transmission_indirect = kfilm->pass_stride;
+				kfilm->use_light_pass = 1;
+				break;
+			case PASS_SUBSURFACE_INDIRECT:
+				kfilm->pass_subsurface_indirect = kfilm->pass_stride;
 				kfilm->use_light_pass = 1;
 				break;
 			case PASS_DIFFUSE_DIRECT:
@@ -338,6 +370,10 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 				kfilm->pass_transmission_direct = kfilm->pass_stride;
 				kfilm->use_light_pass = 1;
 				break;
+			case PASS_SUBSURFACE_DIRECT:
+				kfilm->pass_subsurface_direct = kfilm->pass_stride;
+				kfilm->use_light_pass = 1;
+				break;
 
 			case PASS_EMISSION:
 				kfilm->pass_emission = kfilm->pass_stride;
@@ -346,12 +382,15 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 			case PASS_BACKGROUND:
 				kfilm->pass_background = kfilm->pass_stride;
 				kfilm->use_light_pass = 1;
+				break;
 			case PASS_AO:
 				kfilm->pass_ao = kfilm->pass_stride;
 				kfilm->use_light_pass = 1;
+				break;
 			case PASS_SHADOW:
 				kfilm->pass_shadow = kfilm->pass_stride;
 				kfilm->use_light_pass = 1;
+				break;
 			case PASS_NONE:
 				break;
 		}
@@ -365,6 +404,11 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 	vector<float> table = filter_table(filter_type, filter_width);
 	filter_table_offset = scene->lookup_tables->add_table(dscene, table);
 	kfilm->filter_table_offset = (int)filter_table_offset;
+
+	/* mist pass parameters */
+	kfilm->mist_start = mist_start;
+	kfilm->mist_inv_depth = (mist_depth > 0.0f)? 1.0f/mist_depth: 0.0f;
+	kfilm->mist_falloff = mist_falloff;
 
 	need_update = false;
 }

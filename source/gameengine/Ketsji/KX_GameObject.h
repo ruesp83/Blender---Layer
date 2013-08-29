@@ -52,7 +52,6 @@
 #include "KX_IPhysicsController.h" /* for suspend/resume */
 #include "DNA_object_types.h"
 #include "SCA_LogicManager.h" /* for ConvertPythonToGameObject to search object names */
-#define KX_OB_DYNAMIC 1
 
 //Forward declarations.
 struct KX_ClientObjectInfo;
@@ -256,7 +255,8 @@ public:
 					short play_mode=0,
 					float layer_weight=0.f,
 					short ipo_flags=0,
-					float playback_speed=1.f);
+					float playback_speed=1.f,
+					short blend_mode=0);
 
 	/**
 	 * Gets the current frame of an action

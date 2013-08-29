@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 #include <stdio.h>
@@ -45,6 +43,7 @@ public:
 	CUmodule cuModule;
 	map<device_ptr, bool> tex_interp_map;
 	int cuDevId;
+	bool first_error;
 
 	struct PixelMem {
 		GLuint cuPBO;
@@ -114,6 +113,14 @@ public:
 #else
 #define cuda_abort() abort()
 #endif*/
+	void cuda_error_documentation()
+	{
+		if(first_error) {
+			fprintf(stderr, "\nRefer to the Cycles GPU rendering documentation for possible solutions:\n");
+			fprintf(stderr, "http://wiki.blender.org/index.php/Doc:2.6/Manual/Render/Cycles/GPU_Rendering\n\n");
+			first_error = false;
+		}
+	}
 
 #define cuda_assert(stmt) \
 	{ \
@@ -125,6 +132,7 @@ public:
 				error_msg = message; \
 			fprintf(stderr, "%s\n", message.c_str()); \
 			/*cuda_abort();*/ \
+			cuda_error_documentation(); \
 		} \
 	}
 
@@ -137,6 +145,7 @@ public:
 		if(error_msg == "")
 			error_msg = message;
 		fprintf(stderr, "%s\n", message.c_str());
+		cuda_error_documentation();
 		return true;
 	}
 
@@ -147,6 +156,7 @@ public:
 		if(error_msg == "")
 			error_msg = message;
 		fprintf(stderr, "%s\n", message.c_str());
+		cuda_error_documentation();
 	}
 
 	void cuda_push_context()
@@ -161,6 +171,7 @@ public:
 
 	CUDADevice(DeviceInfo& info, Stats &stats, bool background_) : Device(stats)
 	{
+		first_error = true;
 		background = background_;
 
 		cuDevId = info.num;
@@ -258,11 +269,53 @@ public:
 			return "";
 		}
 
+		int cuda_version = cuCompilerVersion();
+
+		if(cuda_version == 0) {
+			cuda_error_message("CUDA nvcc compiler version could not be parsed.");
+			return "";
+		}
+
+		if(cuda_version != 50)
+			printf("CUDA version %d.%d detected, build may succeed but only CUDA 5.0 is officially supported.\n", cuda_version/10, cuda_version%10);
+
 		/* compile */
 		string kernel = path_join(kernel_path, "kernel.cu");
 		string include = kernel_path;
 		const int machine = system_cpu_bits();
-		const int maxreg = 24;
+		string arch_flags;
+
+		/* build flags depending on CUDA version and arch */
+		if(cuda_version < 50) {
+			/* CUDA 4.x */
+			if(major == 1) {
+				/* sm_1x */
+				arch_flags = "--maxrregcount=24 --opencc-options -OPT:Olimit=0";
+			}
+			else if(major == 2) {
+				/* sm_2x */
+				arch_flags = "--maxrregcount=24";
+			}
+			else {
+				/* sm_3x */
+				arch_flags = "--maxrregcount=32";
+			}
+		}
+		else {
+			/* CUDA 5.x */
+			if(major == 1) {
+				/* sm_1x */
+				arch_flags = "--maxrregcount=24 --opencc-options -OPT:Olimit=0 --use_fast_math";
+			}
+			else if(major == 2) {
+				/* sm_2x */
+				arch_flags = "--maxrregcount=32 --use_fast_math";
+			}
+			else {
+				/* sm_3x */
+				arch_flags = "--maxrregcount=32 --use_fast_math";
+			}
+		}
 
 		double starttime = time_dt();
 		printf("Compiling CUDA kernel ...\n");
@@ -270,8 +323,10 @@ public:
 		path_create_directories(cubin);
 
 		string command = string_printf("\"%s\" -arch=sm_%d%d -m%d --cubin \"%s\" "
-			"-o \"%s\" --ptxas-options=\"-v\" --maxrregcount=%d --opencc-options -OPT:Olimit=0 -I\"%s\" -DNVCC",
-			nvcc.c_str(), major, minor, machine, kernel.c_str(), cubin.c_str(), maxreg, include.c_str());
+			"-o \"%s\" --ptxas-options=\"-v\" %s -I\"%s\" -DNVCC -D__KERNEL_CUDA_VERSION__=%d",
+			nvcc.c_str(), major, minor, machine, kernel.c_str(), cubin.c_str(), arch_flags.c_str(), include.c_str(), cuda_version);
+
+		printf("%s\n", command.c_str());
 
 		if(system(command.c_str()) == -1) {
 			cuda_error_message("Failed to execute compilation command, see console for details.");
@@ -501,7 +556,7 @@ public:
 		}
 	}
 
-	void path_trace(RenderTile& rtile, int sample)
+	void path_trace(RenderTile& rtile, int sample, bool branched)
 	{
 		if(have_error())
 			return;
@@ -513,8 +568,14 @@ public:
 		CUdeviceptr d_rng_state = cuda_device_ptr(rtile.rng_state);
 
 		/* get kernel function */
-		cuda_assert(cuModuleGetFunction(&cuPathTrace, cuModule, "kernel_cuda_path_trace"))
-		
+		if(branched)
+			cuda_assert(cuModuleGetFunction(&cuPathTrace, cuModule, "kernel_cuda_branched_path_trace"))
+		else
+			cuda_assert(cuModuleGetFunction(&cuPathTrace, cuModule, "kernel_cuda_path_trace"))
+
+		if(have_error())
+			return;
+	
 		/* pass in parameters */
 		int offset = 0;
 		
@@ -550,13 +611,8 @@ public:
 		cuda_assert(cuParamSetSize(cuPathTrace, offset))
 
 		/* launch kernel: todo find optimal size, cache config for fermi */
-#ifndef __APPLE__
 		int xthreads = 16;
 		int ythreads = 16;
-#else
-		int xthreads = 8;
-		int ythreads = 8;
-#endif
 		int xblocks = (rtile.w + xthreads - 1)/xthreads;
 		int yblocks = (rtile.h + ythreads - 1)/ythreads;
 
@@ -598,9 +654,6 @@ public:
 		cuda_assert(cuParamSeti(cuFilmConvert, offset, task.sample))
 		offset += sizeof(task.sample);
 
-		cuda_assert(cuParamSeti(cuFilmConvert, offset, task.resolution))
-		offset += sizeof(task.resolution);
-
 		cuda_assert(cuParamSeti(cuFilmConvert, offset, task.x))
 		offset += sizeof(task.x);
 
@@ -622,13 +675,8 @@ public:
 		cuda_assert(cuParamSetSize(cuFilmConvert, offset))
 
 		/* launch kernel: todo find optimal size, cache config for fermi */
-#ifndef __APPLE__
 		int xthreads = 16;
 		int ythreads = 16;
-#else
-		int xthreads = 8;
-		int ythreads = 8;
-#endif
 		int xblocks = (task.w + xthreads - 1)/xthreads;
 		int yblocks = (task.h + ythreads - 1)/ythreads;
 
@@ -650,7 +698,7 @@ public:
 
 		CUfunction cuDisplace;
 		CUdeviceptr d_input = cuda_device_ptr(task.shader_input);
-		CUdeviceptr d_offset = cuda_device_ptr(task.shader_output);
+		CUdeviceptr d_output = cuda_device_ptr(task.shader_output);
 
 		/* get kernel function */
 		cuda_assert(cuModuleGetFunction(&cuDisplace, cuModule, "kernel_cuda_shader"))
@@ -661,8 +709,8 @@ public:
 		cuda_assert(cuParamSetv(cuDisplace, offset, &d_input, sizeof(d_input)))
 		offset += sizeof(d_input);
 
-		cuda_assert(cuParamSetv(cuDisplace, offset, &d_offset, sizeof(d_offset)))
-		offset += sizeof(d_offset);
+		cuda_assert(cuParamSetv(cuDisplace, offset, &d_output, sizeof(d_output)))
+		offset += sizeof(d_output);
 
 		int shader_eval_type = task.shader_eval_type;
 		offset = align_up(offset, __alignof(shader_eval_type));
@@ -676,11 +724,7 @@ public:
 		cuda_assert(cuParamSetSize(cuDisplace, offset))
 
 		/* launch kernel: todo find optimal size, cache config for fermi */
-#ifndef __APPLE__
 		int xthreads = 16;
-#else
-		int xthreads = 8;
-#endif
 		int xblocks = (task.shader_w + xthreads - 1)/xthreads;
 
 		cuda_assert(cuFuncSetCacheConfig(cuDisplace, CU_FUNC_CACHE_PREFER_L1))
@@ -874,6 +918,8 @@ public:
 		if(task->type == DeviceTask::PATH_TRACE) {
 			RenderTile tile;
 			
+			bool branched = task->integrator_branched;
+			
 			/* keep rendering tiles until done */
 			while(task->acquire_tile(this, tile)) {
 				int start_sample = tile.start_sample;
@@ -885,7 +931,7 @@ public:
 							break;
 					}
 
-					path_trace(tile, sample);
+					path_trace(tile, sample, branched);
 
 					tile.sample = sample + 1;
 

@@ -23,59 +23,6 @@ from bpy.app.translations import pgettext_iface as iface_
 from bpy.app.translations import contexts as i18n_contexts
 
 
-def ui_style_items(col, context):
-    """ UI Style settings """
-
-    split = col.split()
-
-    col = split.column()
-    col.label(text="Kerning Style:")
-    col.row().prop(context, "font_kerning_style", expand=True)
-    col.prop(context, "points")
-
-    col = split.column()
-    col.label(text="Shadow Offset:")
-    col.prop(context, "shadow_offset_x", text="X")
-    col.prop(context, "shadow_offset_y", text="Y")
-
-    col = split.column()
-    col.prop(context, "shadow")
-    col.prop(context, "shadowalpha")
-    col.prop(context, "shadowcolor")
-
-
-def ui_items_general(col, context):
-    """ General UI Theme Settings (User Interface)
-    """
-
-    row = col.row()
-
-    subsplit = row.split(percentage=0.95)
-
-    padding = subsplit.split(percentage=0.15)
-    colsub = padding.column()
-    colsub = padding.column()
-    colsub.row().prop(context, "outline")
-    colsub.row().prop(context, "item", slider=True)
-    colsub.row().prop(context, "inner", slider=True)
-    colsub.row().prop(context, "inner_sel", slider=True)
-
-    subsplit = row.split(percentage=0.85)
-
-    padding = subsplit.split(percentage=0.15)
-    colsub = padding.column()
-    colsub = padding.column()
-    colsub.row().prop(context, "text")
-    colsub.row().prop(context, "text_sel")
-    colsub.prop(context, "show_shaded")
-    subsub = colsub.column(align=True)
-    subsub.active = context.show_shaded
-    subsub.prop(context, "shadetop")
-    subsub.prop(context, "shadedown")
-
-    col.separator()
-
-
 def opengl_lamp_buttons(column, lamp):
     split = column.split(percentage=0.1)
 
@@ -482,8 +429,8 @@ class USERPREF_PT_system(Panel):
 
         col.separator()
 
-        col.label(text="Images:")
-        col.prop(system, "image_gpubuffer_limit")
+        col.label(text="Images Draw Method:")
+        col.prop(system, "image_draw_method", text="")
 
         col.separator()
         col.separator()
@@ -530,7 +477,7 @@ class USERPREF_PT_system(Panel):
                 column.prop(system, "language")
                 row = column.row()
                 row.label(text="Translate:", text_ctxt=i18n_contexts.id_windowmanager)
-                row = column.row(True)
+                row = column.row(align=True)
                 row.prop(system, "use_translate_interface", text="Interface", toggle=True)
                 row.prop(system, "use_translate_tooltips", text="Tooltips", toggle=True)
                 row.prop(system, "use_translate_new_dataname", text="New Data", toggle=True)
@@ -541,7 +488,10 @@ class USERPREF_MT_interface_theme_presets(Menu):
     preset_subdir = "interface_theme"
     preset_operator = "script.execute_preset"
     preset_type = 'XML'
-    preset_xml_map = (("user_preferences.themes[0]", "Theme"), )
+    preset_xml_map = (
+        ("user_preferences.themes[0]", "Theme"),
+        ("user_preferences.ui_styles[0]", "ThemeStyle"),
+        )
     draw = Menu.draw_preset
 
 
@@ -589,6 +539,58 @@ class USERPREF_PT_theme(Panel):
 
         theme_generic_recurse(themedata)
 
+    @staticmethod
+    def _theme_widget_style(layout, widget_style):
+
+        row = layout.row()
+
+        subsplit = row.split(percentage=0.95)
+
+        padding = subsplit.split(percentage=0.15)
+        colsub = padding.column()
+        colsub = padding.column()
+        colsub.row().prop(widget_style, "outline")
+        colsub.row().prop(widget_style, "item", slider=True)
+        colsub.row().prop(widget_style, "inner", slider=True)
+        colsub.row().prop(widget_style, "inner_sel", slider=True)
+
+        subsplit = row.split(percentage=0.85)
+
+        padding = subsplit.split(percentage=0.15)
+        colsub = padding.column()
+        colsub = padding.column()
+        colsub.row().prop(widget_style, "text")
+        colsub.row().prop(widget_style, "text_sel")
+        colsub.prop(widget_style, "show_shaded")
+        subsub = colsub.column(align=True)
+        subsub.active = widget_style.show_shaded
+        subsub.prop(widget_style, "shadetop")
+        subsub.prop(widget_style, "shadedown")
+
+        layout.separator()
+
+    @staticmethod
+    def _ui_font_style(layout, font_style):
+
+        split = layout.split()
+
+        col = split.column()
+        col.label(text="Kerning Style:")
+        col.row().prop(font_style, "font_kerning_style", expand=True)
+        col.prop(font_style, "points")
+
+        col = split.column()
+        col.label(text="Shadow Offset:")
+        col.prop(font_style, "shadow_offset_x", text="X")
+        col.prop(font_style, "shadow_offset_y", text="Y")
+
+        col = split.column()
+        col.prop(font_style, "shadow")
+        col.prop(font_style, "shadow_alpha")
+        col.prop(font_style, "shadow_value")
+
+        layout.separator()
+
     @classmethod
     def poll(cls, context):
         userpref = context.user_preferences
@@ -622,76 +624,60 @@ class USERPREF_PT_theme(Panel):
 
         if theme.theme_area == 'USER_INTERFACE':
             col = split.column()
+            ui = theme.user_interface
 
-            ui = theme.user_interface.wcol_regular
             col.label(text="Regular:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_regular)
 
-            ui = theme.user_interface.wcol_tool
             col.label(text="Tool:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_tool)
 
-            ui = theme.user_interface.wcol_radio
             col.label(text="Radio Buttons:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_radio)
 
-            ui = theme.user_interface.wcol_text
             col.label(text="Text:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_text)
 
-            ui = theme.user_interface.wcol_option
             col.label(text="Option:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_option)
 
-            ui = theme.user_interface.wcol_toggle
             col.label(text="Toggle:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_toggle)
 
-            ui = theme.user_interface.wcol_num
             col.label(text="Number Field:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_num)
 
-            ui = theme.user_interface.wcol_numslider
             col.label(text="Value Slider:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_numslider)
 
-            ui = theme.user_interface.wcol_box
             col.label(text="Box:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_box)
 
-            ui = theme.user_interface.wcol_menu
             col.label(text="Menu:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_menu)
 
-            ui = theme.user_interface.wcol_pulldown
             col.label(text="Pulldown:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_pulldown)
 
-            ui = theme.user_interface.wcol_menu_back
             col.label(text="Menu Back:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_menu_back)
 
-            ui = theme.user_interface.wcol_tooltip
             col.label(text="Tooltip:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_tooltip)
 
-            ui = theme.user_interface.wcol_menu_item
             col.label(text="Menu Item:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_menu_item)
 
-            ui = theme.user_interface.wcol_scroll
             col.label(text="Scroll Bar:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_scroll)
 
-            ui = theme.user_interface.wcol_progress
             col.label(text="Progress Bar:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_progress)
 
-            ui = theme.user_interface.wcol_list_item
             col.label(text="List Item:")
-            ui_items_general(col, ui)
+            self._theme_widget_style(col, ui.wcol_list_item)
 
-            ui = theme.user_interface.wcol_state
+            ui_state = theme.user_interface.wcol_state
             col.label(text="State:")
 
             row = col.row()
@@ -701,24 +687,22 @@ class USERPREF_PT_theme(Panel):
             padding = subsplit.split(percentage=0.15)
             colsub = padding.column()
             colsub = padding.column()
-            colsub.row().prop(ui, "inner_anim")
-            colsub.row().prop(ui, "inner_anim_sel")
-            colsub.row().prop(ui, "inner_driven")
-            colsub.row().prop(ui, "inner_driven_sel")
+            colsub.row().prop(ui_state, "inner_anim")
+            colsub.row().prop(ui_state, "inner_anim_sel")
+            colsub.row().prop(ui_state, "inner_driven")
+            colsub.row().prop(ui_state, "inner_driven_sel")
 
             subsplit = row.split(percentage=0.85)
 
             padding = subsplit.split(percentage=0.15)
             colsub = padding.column()
             colsub = padding.column()
-            colsub.row().prop(ui, "inner_key")
-            colsub.row().prop(ui, "inner_key_sel")
-            colsub.row().prop(ui, "blend")
+            colsub.row().prop(ui_state, "inner_key")
+            colsub.row().prop(ui_state, "inner_key_sel")
+            colsub.row().prop(ui_state, "blend")
 
             col.separator()
             col.separator()
-
-            ui = theme.user_interface
 
             col.label("Menu Shadow:")
 
@@ -750,8 +734,9 @@ class USERPREF_PT_theme(Panel):
             padding = subsplit.split(percentage=0.15)
             colsub = padding.column()
             colsub = padding.column()
-            colsub.active = False
-            colsub.row().prop(ui, "icon_file")
+            # Not working yet.
+            #~ colsub.active = False
+            #~ colsub.row().prop(ui, "icon_file")
 
             subsplit = row.split(percentage=0.85)
 
@@ -763,7 +748,6 @@ class USERPREF_PT_theme(Panel):
             col.separator()
             col.separator()
 
-            ui = theme.user_interface
             col.label("Axis Colors:")
 
             row = col.row()
@@ -894,23 +878,18 @@ class USERPREF_PT_theme(Panel):
 
             style = context.user_preferences.ui_styles[0]
 
-            ui = style.panel_title
             col.label(text="Panel Title:")
-            ui_style_items(col, ui)
+            self._ui_font_style(col, style.panel_title)
 
             col.separator()
-            col.separator()
 
-            ui = style.widget
             col.label(text="Widget:")
-            ui_style_items(col, ui)
+            self._ui_font_style(col, style.widget)
 
             col.separator()
-            col.separator()
 
-            ui = style.widget_label
             col.label(text="Widget Label:")
-            ui_style_items(col, ui)
+            self._ui_font_style(col, style.widget_label)
         else:
             self._theme_generic(split, getattr(theme, theme.theme_area.lower()))
 
@@ -970,8 +949,21 @@ class USERPREF_PT_file(Panel):
 
         colsplit = col.split(percentage=0.95)
         sub = colsplit.column()
-        sub.label(text="Author:")
-        sub.prop(system, "author", text="")
+
+        row = sub.split(percentage=0.3)
+        row.label(text="Auto Execution:")
+        row.prop(system, "use_scripts_auto_execute")
+
+        if system.use_scripts_auto_execute:
+            box = sub.box()
+            row = box.row()
+            row.label(text="Excluded Paths:")
+            row.operator("wm.userpref_autoexec_path_add", text="", icon='ZOOMIN', emboss=False)
+            for i, path_cmp in enumerate(userpref.autoexec_paths):
+                row = box.row()
+                row.prop(path_cmp, "path", text="")
+                row.prop(path_cmp, "use_glob", text="", icon='FILTER')
+                row.operator("wm.userpref_autoexec_path_remove", text="", icon='X', emboss=False).index = i
 
         col = split.column()
         col.label(text="Save & Load:")
@@ -999,12 +991,11 @@ class USERPREF_PT_file(Panel):
 
         col.separator()
 
-        col.label(text="Scripts:")
-        col.prop(system, "use_scripts_auto_execute")
+        col.label(text="Text Editor:")
         col.prop(system, "use_tabs_as_spaces")
 
-
-from bl_ui.space_userpref_keymap import InputKeyMapPanel
+        col.label(text="Author:")
+        col.prop(system, "author", text="")
 
 
 class USERPREF_MT_ndof_settings(Menu):
@@ -1047,9 +1038,25 @@ class USERPREF_MT_ndof_settings(Menu):
             layout.prop(input_prefs, "ndof_lock_horizon", icon='NDOF_DOM')
 
 
-class USERPREF_PT_input(Panel, InputKeyMapPanel):
+class USERPREF_MT_keyconfigs(Menu):
+    bl_label = "KeyPresets"
+    preset_subdir = "keyconfig"
+    preset_operator = "wm.keyconfig_activate"
+
+    def draw(self, context):
+        props = self.layout.operator("wm.context_set_value", text="Blender (default)")
+        props.data_path = "window_manager.keyconfigs.active"
+        props.value = "context.window_manager.keyconfigs.default"
+
+        # now draw the presets
+        Menu.draw_preset(self, context)
+
+
+class USERPREF_PT_input(Panel):
     bl_space_type = 'USER_PREFERENCES'
     bl_label = "Input"
+    bl_region_type = 'WINDOW'
+    bl_options = {'HIDE_HEADER'}
 
     @classmethod
     def poll(cls, context):
@@ -1126,6 +1133,8 @@ class USERPREF_PT_input(Panel, InputKeyMapPanel):
         row.separator()
 
     def draw(self, context):
+        from rna_keymap_ui import draw_keymaps
+
         layout = self.layout
 
         #import time
@@ -1142,7 +1151,7 @@ class USERPREF_PT_input(Panel, InputKeyMapPanel):
         self.draw_input_prefs(inputs, split)
 
         # Keymap Settings
-        self.draw_keymaps(context, split)
+        draw_keymaps(context, split)
 
         #print("runtime", time.time() - start)
 
@@ -1195,9 +1204,9 @@ class USERPREF_PT_addons(Panel):
     def draw_error(layout, message):
         lines = message.split("\n")
         box = layout.box()
-        rowsub = box.row()
-        rowsub.label(lines[0])
-        rowsub.label(icon='ERROR')
+        sub = box.row()
+        sub.label(lines[0])
+        sub.label(icon='ERROR')
         for l in lines[1:]:
             box.label(l)
 
@@ -1214,11 +1223,12 @@ class USERPREF_PT_addons(Panel):
         scripts_addons_folder = bpy.utils.user_resource('SCRIPTS', "addons")
 
         # collect the categories that can be filtered on
-        addons = [(mod, addon_utils.module_bl_info(mod)) for mod in addon_utils.modules(addon_utils.addons_fake_modules)]
+        addons = [(mod, addon_utils.module_bl_info(mod)) for mod in addon_utils.modules(refresh=False)]
 
         split = layout.split(percentage=0.2)
         col = split.column()
         col.prop(context.window_manager, "addon_search", text="", icon='VIEWZOOM')
+        col.operator("wm.addon_refresh", icon='FILE_REFRESH')
 
         col.label(text="Supported Level")
         col.prop(context.window_manager, "addon_support", expand=True)
@@ -1228,7 +1238,7 @@ class USERPREF_PT_addons(Panel):
 
         col = split.column()
 
-        # set in addon_utils.modules(...)
+        # set in addon_utils.modules_refresh()
         if addon_utils.error_duplicates:
             self.draw_error(col,
                             "Multiple addons using the same name found!\n"
@@ -1258,12 +1268,12 @@ class USERPREF_PT_addons(Panel):
                 continue
 
             # check if addon should be visible with current filters
-            if     ((filter == "All") or
-                    (filter == info["category"]) or
-                    (filter == "Enabled" and is_enabled) or
-                    (filter == "Disabled" and not is_enabled) or
-                    (filter == "User" and (mod.__file__.startswith((scripts_addons_folder, userpref_addons_folder))))
-                    ):
+            if ((filter == "All") or
+                (filter == info["category"]) or
+                (filter == "Enabled" and is_enabled) or
+                (filter == "Disabled" and not is_enabled) or
+                (filter == "User" and (mod.__file__.startswith((scripts_addons_folder, userpref_addons_folder))))
+                ):
 
                 if search and search not in info["name"].lower():
                     if info["author"]:
@@ -1280,14 +1290,14 @@ class USERPREF_PT_addons(Panel):
 
                 row.operator("wm.addon_expand", icon='TRIA_DOWN' if info["show_expanded"] else 'TRIA_RIGHT', emboss=False).module = module_name
 
-                rowsub = row.row()
-                rowsub.active = is_enabled
-                rowsub.label(text='%s: %s' % (info["category"], info["name"]))
+                sub = row.row()
+                sub.active = is_enabled
+                sub.label(text='%s: %s' % (info["category"], info["name"]))
                 if info["warning"]:
-                    rowsub.label(icon='ERROR')
+                    sub.label(icon='ERROR')
 
                 # icon showing support level.
-                rowsub.label(icon=self._support_icon_mapping.get(info["support"], 'QUESTION'))
+                sub.label(icon=self._support_icon_mapping.get(info["support"], 'QUESTION'))
 
                 if is_enabled:
                     row.operator("wm.addon_disable", icon='CHECKBOX_HLT', text="", emboss=False).module = module_name

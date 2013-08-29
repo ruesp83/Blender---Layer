@@ -39,7 +39,6 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
-#include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
 #include "BLF_translation.h"
@@ -678,7 +677,7 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 
 			col = uiLayoutColumn(layout, FALSE);
 			uiTemplateColorspaceSettings(col, &imaptr, "colorspace_settings");
-			uiItemR(col, &imaptr, "view_as_render", 0, NULL, ICON_NONE);
+			uiItemR(col, &imaptr, "use_view_as_render", 0, NULL, ICON_NONE);
 
 			if (ima->source != IMA_SRC_GENERATED) {
 				if (compact == 0) { /* background image view doesnt need these */
@@ -892,7 +891,7 @@ void image_buttons_register(ARegionType *art)
 	BLI_addtail(&art->paneltypes, pt);
 }
 
-static int image_properties(bContext *C, wmOperator *UNUSED(op))
+static int image_properties_toggle_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	ScrArea *sa = CTX_wm_area(C);
 	ARegion *ar = image_has_buttons_region(sa);
@@ -909,14 +908,14 @@ void IMAGE_OT_properties(wmOperatorType *ot)
 	ot->idname = "IMAGE_OT_properties";
 	ot->description = "Toggle display properties panel";
 	
-	ot->exec = image_properties;
+	ot->exec = image_properties_toggle_exec;
 	ot->poll = ED_operator_image_active;
 	
 	/* flags */
 	ot->flag = 0;
 }
 
-static int image_scopes(bContext *C, wmOperator *UNUSED(op))
+static int image_scopes_toggle_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	ScrArea *sa = CTX_wm_area(C);
 	ARegion *ar = image_has_scope_region(sa);
@@ -933,7 +932,7 @@ void IMAGE_OT_scopes(wmOperatorType *ot)
 	ot->idname = "IMAGE_OT_scopes";
 	ot->description = "Toggle display scopes panel";
 	
-	ot->exec = image_scopes;
+	ot->exec = image_scopes_toggle_exec;
 	ot->poll = ED_operator_image_active;
 	
 	/* flags */

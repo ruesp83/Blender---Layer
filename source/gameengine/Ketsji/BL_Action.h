@@ -34,7 +34,6 @@
 #include "MEM_guardedalloc.h"
 #endif
 
-
 class BL_Action
 {
 private:
@@ -42,7 +41,6 @@ private:
 	struct bPose* m_pose;
 	struct bPose* m_blendpose;
 	struct bPose* m_blendinpose;
-	struct PointerRNA *m_ptrrna;
 	std::vector<class SG_Controller*> m_sg_contr_list;
 	class KX_GameObject* m_obj;
 	std::vector<float>	m_blendshape;
@@ -65,6 +63,7 @@ private:
 	short m_priority;
 
 	short m_playmode;
+	short m_blendmode;
 
 	short m_ipo_flags;
 
@@ -92,7 +91,8 @@ public:
 			short play_mode,
 			float layer_weight,
 			short ipo_flags,
-			float playback_speed);
+			float playback_speed,
+			short blend_mode);
 	/**
 	 * Stop playing the action
 	 */
@@ -115,12 +115,19 @@ public:
 	void SetPlayMode(short play_mode);
 	void SetTimes(float start, float end);
 
-	enum 
+	enum
 	{
 		ACT_MODE_PLAY = 0,
 		ACT_MODE_LOOP,
 		ACT_MODE_PING_PONG,
 		ACT_MODE_MAX,
+	};
+
+	enum
+	{
+		ACT_BLEND_BLEND=0,
+		ACT_BLEND_ADD=1,
+		ACT_BLEND_MAX,
 	};
 
 	enum

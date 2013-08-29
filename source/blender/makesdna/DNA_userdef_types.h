@@ -226,8 +226,8 @@ typedef struct ThemeSpace {
 	char hilite[4];
 	char grid[4]; 
 	
-	char wire[4], select[4];
-	char lamp[4], speaker[4], empty[4], camera[4], pad[8];
+	char wire[4], wire_edit[4], select[4];
+	char lamp[4], speaker[4], empty[4], camera[4], pad[4];
 	char active[4], group[4], group_active[4], transform[4];
 	char vertex[4], vertex_select[4], vertex_unreferenced[4];
 	char edge[4], edge_select[4];
@@ -240,6 +240,7 @@ typedef struct ThemeSpace {
 	char bone_solid[4], bone_pose[4], bone_pose_active[4];
 	char strip[4], strip_select[4];
 	char cframe[4];
+	char freestyle_edge_mark[4], freestyle_face_mark[4];
 	
 	char nurb_uline[4], nurb_vline[4];
 	char act_spline[4], nurb_sel_uline[4], nurb_sel_vline[4], lastsel_point[4];
@@ -367,6 +368,12 @@ typedef struct bAddon {
 	IDProperty *prop;  /* User-Defined Properties on this  Addon (for storing preferences) */
 } bAddon;
 
+typedef struct bPathCompare {
+	struct bPathCompare *next, *prev;
+	char path[768];  /* FILE_MAXDIR */
+	char flag, pad[7];
+} bPathCompare;
+
 typedef struct SolidLight {
 	int flag, pad;
 	float col[4], spec[4], vec[4];
@@ -419,6 +426,7 @@ typedef struct UserDef {
 	struct ListBase keymaps  DNA_DEPRECATED; /* deprecated in favor of user_keymaps */
 	struct ListBase user_keymaps;
 	struct ListBase addons;
+	struct ListBase autoexec_paths;
 	char keyconfigstr[64];
 	
 	short undosteps;
@@ -459,7 +467,7 @@ typedef struct UserDef {
 
 	short ogl_multisamples;	/* amount of samples for OpenGL FSA, if zero no FSA */
 
-	short image_gpubuffer_limit; /* If set, amount of mega-pixels to use for texture drawing of images */
+	short image_draw_method; /* Method to be used to draw the images (AUTO, GLSL, Textures or DrawPixels) */
 	
 	float glalphaclip;
 	
@@ -529,7 +537,12 @@ typedef enum eUserPref_Flag {
 	USER_TXT_TABSTOSPACES_DISABLE	= (1 << 25),
 	USER_TOOLTIPS_PYTHON    = (1 << 26),
 } eUserPref_Flag;
-	
+
+/* flag */
+typedef enum ePathCompare_Flag {
+	USER_PATHCMP_GLOB		= (1 << 0),
+} ePathCompare_Flag;
+
 /* helper macro for checking frame clamping */
 #define FRAMENUMBER_MIN_CLAMP(cfra)  {                                        \
 	if ((U.flag & USER_NONEGFRAMES) && (cfra < 0))                            \
@@ -763,7 +776,12 @@ typedef enum eMultiSample_Type {
 	USER_MULTISAMPLE_16	= 16,
 } eMultiSample_Type;
 	
-	
+typedef enum eImageDrawMethod {
+	/* IMAGE_DRAW_METHOD_AUTO = 0, */ /* Currently unused */
+	IMAGE_DRAW_METHOD_GLSL = 1,
+	IMAGE_DRAW_METHOD_2DTEXTURE = 2,
+	IMAGE_DRAW_METHOD_DRAWPIXELS = 3,
+} eImageDrawMethod;
 
 #ifdef __cplusplus
 }

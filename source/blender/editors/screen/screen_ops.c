@@ -60,7 +60,7 @@
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_screen.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
 #include "BKE_sound.h"
 #include "BKE_mask.h"
 
@@ -260,6 +260,16 @@ int ED_operator_node_active(bContext *C)
 	return 0;
 }
 
+int ED_operator_node_editable(bContext *C)
+{
+	SpaceNode *snode = CTX_wm_space_node(C);
+	
+	if (snode && snode->edittree && snode->edittree->id.lib == NULL)
+		return 1;
+	
+	return 0;
+}
+
 /* XXX rename */
 int ED_operator_graphedit_active(bContext *C)
 {
@@ -333,7 +343,7 @@ int ED_operator_editmesh(bContext *C)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	if (obedit && obedit->type == OB_MESH)
-		return NULL != BMEdit_FromObject(obedit);
+		return NULL != BKE_editmesh_from_object(obedit);
 	return 0;
 }
 
@@ -421,13 +431,20 @@ int ED_operator_uvedit(bContext *C)
 	return ED_space_image_show_uvedit(sima, obedit);
 }
 
+int ED_operator_uvedit_space_image(bContext *C)
+{
+	SpaceImage *sima = CTX_wm_space_image(C);
+	Object *obedit = CTX_data_edit_object(C);
+	return sima && ED_space_image_show_uvedit(sima, obedit);
+}
+
 int ED_operator_uvmap(bContext *C)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = NULL;
 	
 	if (obedit && obedit->type == OB_MESH) {
-		em = BMEdit_FromObject(obedit);
+		em = BKE_editmesh_from_object(obedit);
 	}
 	
 	if (em && (em->bm->totface)) {
@@ -582,13 +599,12 @@ static int actionzone_area_poll(bContext *C)
 	wmWindow *win = CTX_wm_window(C);
 	ScrArea *sa = CTX_wm_area(C);
 	
-	if (sa && win) {
+	if (sa && win && win->eventstate) {
+		const int *xy = &win->eventstate->x;
 		AZone *az;
-		int x = win->eventstate->x;
-		int y = win->eventstate->y;
 		
 		for (az = sa->actionzones.first; az; az = az->next)
-			if (BLI_rcti_isect_pt(&az->rect, x, y))
+			if (BLI_rcti_isect_pt_v(&az->rect, xy))
 				return 1;
 	}
 	return 0;
@@ -633,7 +649,8 @@ static void actionzone_apply(bContext *C, wmOperator *op, int type)
 	
 	sad->modifier = RNA_int_get(op->ptr, "modifier");
 	
-	event = *(win->eventstate);  /* XXX huh huh? make api call */
+	wm_event_init_from_window(win, &event);
+
 	if (type == AZONE_AREA)
 		event.type = EVT_ACTIONZONE_AREA;
 	else
@@ -899,6 +916,9 @@ static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	/* adds window to WM */
 	rect = sa->totrct;
 	BLI_rcti_translate(&rect, win->posx, win->posy);
+	rect.xmax = rect.xmin + BLI_rcti_size_x(&rect) / U.pixelsize;
+	rect.ymax = rect.ymin + BLI_rcti_size_y(&rect) / U.pixelsize;
+
 	newwin = WM_window_open(C, &rect);
 	
 	/* allocs new screen and adds to newly created window, using window size */
@@ -1135,7 +1155,7 @@ static int area_move_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	/* execute the events */
 	switch (event->type) {
 		case MOUSEMOVE:
-			
+		{
 			x = RNA_int_get(op->ptr, "x");
 			y = RNA_int_get(op->ptr, "y");
 			
@@ -1145,9 +1165,9 @@ static int area_move_modal(bContext *C, wmOperator *op, const wmEvent *event)
 			
 			area_move_apply(C, op);
 			break;
-			
+		}
 		case EVT_MODAL_MAP:
-			
+		{
 			switch (event->val) {
 				case KM_MODAL_APPLY:
 					area_move_exit(C, op);
@@ -1163,6 +1183,8 @@ static int area_move_modal(bContext *C, wmOperator *op, const wmEvent *event)
 					md->step = 0;
 					break;
 			}
+			break;
+		}
 	}
 	
 	return OPERATOR_RUNNING_MODAL;
@@ -2444,8 +2466,8 @@ static int area_join_modal(bContext *C, wmOperator *op, const wmEvent *event)
 					WM_event_add_notifier(C, NC_WINDOW, NULL);
 				}
 			}
+			break;
 		}
-		break;
 		case LEFTMOUSE:
 			if (event->val == KM_RELEASE) {
 				ED_area_tag_redraw(jd->sa1);
@@ -2543,7 +2565,7 @@ static void SCREEN_OT_area_options(wmOperatorType *ot)
 /* ******************************* */
 
 
-static int spacedata_cleanup(bContext *C, wmOperator *op)
+static int spacedata_cleanup_exec(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
 	bScreen *screen;
@@ -2575,7 +2597,7 @@ static void SCREEN_OT_spacedata_cleanup(wmOperatorType *ot)
 	ot->idname = "SCREEN_OT_spacedata_cleanup";
 	
 	/* api callbacks */
-	ot->exec = spacedata_cleanup;
+	ot->exec = spacedata_cleanup_exec;
 	ot->poll = WM_operator_winactive;
 	
 }
@@ -2697,6 +2719,22 @@ static void view3d_localview_update_rv3d(struct RegionView3D *rv3d)
 	}
 }
 
+static void region_quadview_init_rv3d(ScrArea *sa, ARegion *ar,
+                                      const char viewlock, const char view, const char persp)
+{
+	RegionView3D *rv3d = ar->regiondata;
+
+	rv3d->viewlock = viewlock;
+	rv3d->view = view;
+	rv3d->persp = persp;
+
+	ED_view3d_lock(rv3d);
+	view3d_localview_update_rv3d(rv3d);
+	if ((viewlock & RV3D_BOXCLIP) && (persp == RV3D_ORTHO)) {
+		ED_view3d_quadview_update(sa, ar, true);
+	}
+}
+
 /* insert a region in the area region list */
 static int region_quadview_exec(bContext *C, wmOperator *op)
 {
@@ -2714,6 +2752,7 @@ static int region_quadview_exec(bContext *C, wmOperator *op)
 		
 		if (sa->spacetype == SPACE_VIEW3D) {
 			RegionView3D *rv3d = ar->regiondata;
+			rv3d->viewlock_quad = rv3d->viewlock | RV3D_VIEWLOCK_INIT;
 			rv3d->viewlock = 0;
 			rv3d->rflag &= ~RV3D_CLIPPING;
 		}
@@ -2754,38 +2793,16 @@ static int region_quadview_exec(bContext *C, wmOperator *op)
 			 *
 			 * We could avoid manipulating rv3d->localvd here if exiting
 			 * localview with a 4-split would assign these view locks */
-			RegionView3D *rv3d;
+			RegionView3D *rv3d = ar->regiondata;
+			const char viewlock = (rv3d->viewlock_quad & RV3D_VIEWLOCK_INIT) ?
+			                      (rv3d->viewlock_quad & ~RV3D_VIEWLOCK_INIT) : RV3D_LOCKED;
 
-			rv3d = ar->regiondata;
-			rv3d->viewlock = RV3D_LOCKED; rv3d->view = RV3D_VIEW_FRONT; rv3d->persp = RV3D_ORTHO;
-			ED_view3d_lock(rv3d);
-			view3d_localview_update_rv3d(rv3d);
-			
-			ar = ar->next;
-			rv3d = ar->regiondata;
-			rv3d->viewlock = RV3D_LOCKED; rv3d->view = RV3D_VIEW_TOP; rv3d->persp = RV3D_ORTHO;
-			ED_view3d_lock(rv3d);
-			view3d_localview_update_rv3d(rv3d);
-			
-			ar = ar->next;
-			rv3d = ar->regiondata;
-			rv3d->viewlock = RV3D_LOCKED; rv3d->view = RV3D_VIEW_RIGHT; rv3d->persp = RV3D_ORTHO;
-			ED_view3d_lock(rv3d);
-			view3d_localview_update_rv3d(rv3d);
-			
-			ar = ar->next;
-			rv3d = ar->regiondata;
+			region_quadview_init_rv3d(sa, ar,              viewlock, RV3D_VIEW_FRONT, RV3D_ORTHO);
+			region_quadview_init_rv3d(sa, (ar = ar->next), viewlock, RV3D_VIEW_TOP,   RV3D_ORTHO);
+			region_quadview_init_rv3d(sa, (ar = ar->next), viewlock, RV3D_VIEW_RIGHT, RV3D_ORTHO);
+			if (v3d->camera) region_quadview_init_rv3d(sa, (ar = ar->next), 0, RV3D_VIEW_CAMERA,     RV3D_CAMOB);
+			else             region_quadview_init_rv3d(sa, (ar = ar->next), 0, RV3D_VIEW_PERSPORTHO, RV3D_PERSP);
 
-			/* check if we have a camera */
-			if (v3d->camera) {
-				rv3d->view = RV3D_VIEW_CAMERA; rv3d->persp = RV3D_CAMOB;
-			}
-			else {
-				rv3d->view = RV3D_VIEW_PERSPORTHO; rv3d->persp = RV3D_PERSP;
-			}
-
-			ED_view3d_lock(rv3d);
-			view3d_localview_update_rv3d(rv3d);
 		}
 		ED_area_tag_redraw(sa);
 		WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
@@ -3168,7 +3185,7 @@ static int screen_animation_step(bContext *C, wmOperator *UNUSED(op), const wmEv
 			sound_seek_scene(bmain, scene);
 		
 		/* since we follow drawflags, we can't send notifier but tag regions ourselves */
-		ED_update_for_newframe(CTX_data_main(C), scene, 1);
+		ED_update_for_newframe(bmain, scene, 1);
 
 		for (window = wm->windows.first; window; window = window->next) {
 			for (sa = window->screen->areabase.first; sa; sa = sa->next) {
@@ -3353,7 +3370,7 @@ static void SCREEN_OT_animation_cancel(wmOperatorType *ot)
  * poll()	has to be filled in by user for context
  */
 #if 0
-static int border_select_do(bContext *C, wmOperator *op)
+static int border_select_exec(bContext *C, wmOperator *op)
 {
 	int event_type = RNA_int_get(op->ptr, "event_type");
 	
@@ -3374,7 +3391,7 @@ static void SCREEN_OT_border_select(wmOperatorType *ot)
 	ot->idname = "SCREEN_OT_border_select";
 	
 	/* api callbacks */
-	ot->exec = border_select_do;
+	ot->exec = border_select_exec;
 	ot->invoke = WM_border_select_invoke;
 	ot->modal = WM_border_select_modal;
 	ot->cancel = WM_border_select_cancel;
@@ -3527,10 +3544,10 @@ static int scene_new_exec(bContext *C, wmOperator *op)
 
 		/* these can't be handled in blenkernel curently, so do them here */
 		if (type == SCE_COPY_LINK_DATA) {
-			ED_object_single_users(bmain, newscene, 0);
+			ED_object_single_users(bmain, newscene, false, true);
 		}
 		else if (type == SCE_COPY_FULL) {
-			ED_object_single_users(bmain, newscene, 1);
+			ED_object_single_users(bmain, newscene, true, true);
 		}
 	}
 	

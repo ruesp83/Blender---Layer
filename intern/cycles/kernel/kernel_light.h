@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 CCL_NAMESPACE_BEGIN
@@ -106,7 +104,7 @@ __device float3 background_light_sample(KernelGlobals *kg, float randu, float ra
 	if(sin_theta == 0.0f || denom == 0.0f)
 		*pdf = 0.0f;
 	else
-		*pdf = (cdf_u.x * cdf_v.x)/(2.0f * M_PI_F * M_PI_F * sin_theta * denom);
+		*pdf = (cdf_u.x * cdf_v.x)/(M_2PI_F * M_PI_F * sin_theta * denom);
 
 	*pdf *= kernel_data.integrator.pdf_lights;
 
@@ -124,8 +122,8 @@ __device float background_light_pdf(KernelGlobals *kg, float3 direction)
 	if(sin_theta == 0.0f)
 		return 0.0f;
 
-	int index_u = clamp((int)(uv.x * res), 0, res - 1);
-	int index_v = clamp((int)(uv.y * res), 0, res - 1);
+	int index_u = clamp(float_to_int(uv.x * res), 0, res - 1);
+	int index_v = clamp(float_to_int(uv.y * res), 0, res - 1);
 
 	/* pdfs in V direction */
 	float2 cdf_last_u = kernel_tex_fetch(__light_background_conditional_cdf, index_v * (res + 1) + res);
@@ -140,7 +138,7 @@ __device float background_light_pdf(KernelGlobals *kg, float3 direction)
 	float2 cdf_u = kernel_tex_fetch(__light_background_conditional_cdf, index_v * (res + 1) + index_u);
 	float2 cdf_v = kernel_tex_fetch(__light_background_marginal_cdf, index_v);
 
-	float pdf = (cdf_u.x * cdf_v.x)/(2.0f * M_PI_F * M_PI_F * sin_theta * denom);
+	float pdf = (cdf_u.x * cdf_v.x)/(M_2PI_F * M_PI_F * sin_theta * denom);
 
 	return pdf * kernel_data.integrator.pdf_lights;
 }
@@ -271,7 +269,7 @@ __device void lamp_light_sample(KernelGlobals *kg, int lamp,
 			ls->pdf = invarea;
 
 			if(type == LIGHT_SPOT) {
-				/* spot light attentuation */
+				/* spot light attenuation */
 				float4 data2 = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 2);
 				ls->eval_fac *= spot_light_attenuation(data1, data2, ls);
 			}
@@ -375,7 +373,7 @@ __device bool lamp_light_eval(KernelGlobals *kg, int lamp, float3 P, float3 D, f
 		ls->pdf = invarea;
 
 		if(type == LIGHT_SPOT) {
-			/* spot light attentuation */
+			/* spot light attenuation */
 			float4 data2 = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 2);
 			ls->eval_fac *= spot_light_attenuation(data1, data2, ls);
 
@@ -434,7 +432,6 @@ __device void object_transform_light_sample(KernelGlobals *kg, LightSample *ls, 
 		Transform tfm = object_fetch_transform_motion_test(kg, object, time, &itfm);
 #else
 		Transform tfm = object_fetch_transform(kg, object, OBJECT_TRANSFORM);
-		Transform itfm = object_fetch_transform(kg, object, OBJECT_INVERSE_TRANSFORM);
 #endif
 
 		ls->P = transform_point(&tfm, ls->P);
@@ -488,20 +485,20 @@ __device void curve_segment_light_sample(KernelGlobals *kg, int prim, int object
 	float4 P1 = kernel_tex_fetch(__curve_keys, k0);
 	float4 P2 = kernel_tex_fetch(__curve_keys, k1);
 
-	float l = len(P2 - P1);
+	float l = len(float4_to_float3(P2) - float4_to_float3(P1));
 
 	float r1 = P1.w;
 	float r2 = P2.w;
-	float3 tg = float4_to_float3(P2 - P1) / l;
+	float3 tg = (float4_to_float3(P2) - float4_to_float3(P1)) / l;
 	float3 xc = make_float3(tg.x * tg.z, tg.y * tg.z, -(tg.x * tg.x + tg.y * tg.y));
-	if (dot(xc, xc) == 0.0f)
+	if (is_zero(xc))
 		xc = make_float3(tg.x * tg.y, -(tg.x * tg.x + tg.z * tg.z), tg.z * tg.y);
 	xc = normalize(xc);
 	float3 yc = cross(tg, xc);
 	float gd = ((r2 - r1)/l);
 
 	/* normal currently ignores gradient */
-	ls->Ng = sinf(2 * M_PI_F * randv) * xc + cosf(2 * M_PI_F * randv) * yc;
+	ls->Ng = sinf(M_2PI_F * randv) * xc + cosf(M_2PI_F * randv) * yc;
 	ls->P = randu * l * tg + (gd * l + r1) * ls->Ng;
 	ls->object = object;
 	ls->prim = prim;
@@ -559,11 +556,11 @@ __device void light_sample(KernelGlobals *kg, float randt, float randu, float ra
 	if(prim >= 0) {
 		int object = __float_as_int(l.w);
 #ifdef __HAIR__
-		int segment = __float_as_int(l.z);
+		int segment = __float_as_int(l.z) & SHADER_MASK;
 #endif
 
 #ifdef __HAIR__
-		if (segment != ~0)
+		if (segment != SHADER_MASK)
 			curve_segment_light_sample(kg, prim, object, segment, randu, randv, time, ls);
 		else
 #endif
@@ -572,6 +569,7 @@ __device void light_sample(KernelGlobals *kg, float randt, float randu, float ra
 		/* compute incoming direction, distance and pdf */
 		ls->D = normalize_len(ls->P - P, &ls->t);
 		ls->pdf = triangle_light_pdf(kg, ls->Ng, -ls->D, ls->t);
+		ls->shader |= __float_as_int(l.z) & (~SHADER_MASK);
 	}
 	else {
 		int lamp = -prim-1;

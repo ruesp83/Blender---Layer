@@ -206,6 +206,7 @@ static int  tree_element_set_active_object(bContext *C, Scene *scene, SpaceOops 
 	sce = (Scene *)outliner_search_back(soops, te, ID_SCE);
 	if (sce && scene != sce) {
 		ED_screen_set_scene(C, CTX_wm_screen(C), sce);
+		scene = sce;
 	}
 	
 	/* find associated base in current scene */
@@ -281,7 +282,7 @@ static int tree_element_active_material(bContext *C, Scene *scene, SpaceOops *so
 	return 0;
 }
 
-static int tree_element_active_texture(bContext *C, Scene *scene, SpaceOops *soops, TreeElement *te, int set)
+static int tree_element_active_texture(bContext *C, Scene *scene, SpaceOops *UNUSED(soops), TreeElement *te, int set)
 {
 	TreeElement *tep;
 	TreeStoreElem /* *tselem,*/ *tselemp;
@@ -383,7 +384,7 @@ static int tree_element_active_camera(bContext *UNUSED(C), Scene *scene, SpaceOo
 	return scene->camera == ob;
 }
 
-static int tree_element_active_world(bContext *C, Scene *scene, SpaceOops *soops, TreeElement *te, int set)
+static int tree_element_active_world(bContext *C, Scene *scene, SpaceOops *UNUSED(soops), TreeElement *te, int set)
 {
 	TreeElement *tep;
 	TreeStoreElem *tselem = NULL;
@@ -703,7 +704,7 @@ static int tree_element_active_sequence_dup(Scene *scene, TreeElement *te, TreeS
 // XXX	select_single_seq(seq, 1);
 	p = ed->seqbasep->first;
 	while (p) {
-		if ((!p->strip) || (!p->strip->stripdata) || (!p->strip->stripdata->name)) {
+		if ((!p->strip) || (!p->strip->stripdata) || (p->strip->stripdata->name[0] == '\0')) {
 			p = p->next;
 			continue;
 		}

@@ -46,7 +46,7 @@
 #include "BKE_mesh.h"
 #include "BKE_modifier.h"
 #include "BKE_deform.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
 
 #include "depsgraph_private.h"
 
@@ -96,7 +96,7 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 	return dataMask;
 }
 
-static int isDisabled(ModifierData *md, int UNUSED(useRenderParams))
+static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
 {
 	MeshDeformModifierData *mmd = (MeshDeformModifierData *) md;
 
@@ -212,7 +212,7 @@ static void meshdeformModifier_do(
 	/* if we don't have one computed, use derivedmesh from data
 	 * without any modifiers */
 	if (!cagedm) {
-		cagedm = get_dm(mmd->object, NULL, NULL, NULL, 0);
+		cagedm = get_dm(mmd->object, NULL, NULL, NULL, false, false);
 		if (cagedm)
 			cagedm->needsFree = 1;
 	}
@@ -224,8 +224,8 @@ static void meshdeformModifier_do(
 
 	/* compute matrices to go in and out of cage object space */
 	invert_m4_m4(imat, mmd->object->obmat);
-	mult_m4_m4m4(cagemat, imat, ob->obmat);
-	mult_m4_m4m4(cmat, mmd->bindmat, cagemat);
+	mul_m4_m4m4(cagemat, imat, ob->obmat);
+	mul_m4_m4m4(cmat, mmd->bindmat, cagemat);
 	invert_m4_m4(iobmat, cmat);
 	copy_m3_m4(icagemat, iobmat);
 
@@ -343,7 +343,7 @@ static void deformVerts(ModifierData *md, Object *ob,
                         int numVerts,
                         ModifierApplyFlag UNUSED(flag))
 {
-	DerivedMesh *dm = get_dm(ob, NULL, derivedData, NULL, 0);
+	DerivedMesh *dm = get_dm(ob, NULL, derivedData, NULL, false, false);
 
 	modifier_vgroup_cache(md, vertexCos); /* if next modifier needs original vertices */
 	
@@ -359,7 +359,7 @@ static void deformVertsEM(ModifierData *md, Object *ob,
                           float (*vertexCos)[3],
                           int numVerts)
 {
-	DerivedMesh *dm = get_dm(ob, NULL, derivedData, NULL, 0);
+	DerivedMesh *dm = get_dm(ob, NULL, derivedData, NULL, false, false);
 
 	meshdeformModifier_do(md, ob, dm, vertexCos, numVerts);
 

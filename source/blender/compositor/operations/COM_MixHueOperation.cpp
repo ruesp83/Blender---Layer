@@ -35,12 +35,13 @@ void MixHueOperation::executePixel(float output[4], float x, float y, PixelSampl
 {
 	float inputColor1[4];
 	float inputColor2[4];
-	float value;
+	float inputValue[4];
 
-	this->m_inputValueOperation->read(&value, x, y, sampler);
-	this->m_inputColor1Operation->read(&inputColor1[0], x, y, sampler);
-	this->m_inputColor2Operation->read(&inputColor2[0], x, y, sampler);
+	this->m_inputValueOperation->read(inputValue, x, y, sampler);
+	this->m_inputColor1Operation->read(inputColor1, x, y, sampler);
+	this->m_inputColor2Operation->read(inputColor2, x, y, sampler);
 
+	float value = inputValue[0];
 	if (this->useValueAlphaMultiply()) {
 		value *= inputColor2[3];
 	}
@@ -56,6 +57,9 @@ void MixHueOperation::executePixel(float output[4], float x, float y, PixelSampl
 		output[0] = valuem * (inputColor1[0]) + value * tmpr;
 		output[1] = valuem * (inputColor1[1]) + value * tmpg;
 		output[2] = valuem * (inputColor1[2]) + value * tmpb;
+	}
+	else {
+		copy_v3_v3(output, inputColor1);
 	}
 	output[3] = inputColor1[3];
 

@@ -202,7 +202,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 		/* calc the matrix relative to the axis object */
 		invert_m4_m4(mtx_tmp_a, ob->obmat);
 		copy_m4_m4(mtx_tx_inv, ltmd->ob_axis->obmat);
-		mult_m4_m4m4(mtx_tx, mtx_tmp_a, mtx_tx_inv);
+		mul_m4_m4m4(mtx_tx, mtx_tmp_a, mtx_tx_inv);
 
 		/* calc the axis vec */
 		mul_mat3_m4_v3(mtx_tx, axis_vec); /* only rotation component */
@@ -349,7 +349,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 		 * The new array for vert_connect must be at least sizeof(ScrewVertConnect) * totvert
 		 * and the size of our resulting meshes array is sizeof(MVert) * totvert * 3
 		 * so its safe to use the second 2 thrids of MVert the array for vert_connect,
-		 * just make sure ScrewVertConnect struct is no more then twice as big as MVert,
+		 * just make sure ScrewVertConnect struct is no more than twice as big as MVert,
 		 * at the moment there is no chance of that being a problem,
 		 * unless MVert becomes half its current size.
 		 *
@@ -636,7 +636,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 						 *
 						 * Use the edge order to make the subtraction, flip the normal the right way
 						 * edge should be there but check just in case... */
-						if (vc->e && vc->e[0]->v1 == i) {
+						if (vc->e[0]->v1 == i) {
 							sub_v3_v3(tmp_vec1, tmp_vec2);
 						}
 						else {
@@ -646,7 +646,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 					else {
 						/* only 1 edge connected - same as above except
 						 * don't need to average edge direction */
-						if (vc->e && vc->e[0]->v2 == i) {
+						if (vc->e[0]->v2 == i) {
 							sub_v3_v3v3(tmp_vec1, mvert_new[i].co, mvert_new[vc->v[0]].co);
 						}
 						else {
@@ -697,7 +697,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 		step_angle = (angle / (step_tot - (!close))) * step;
 
 		if (ltmd->ob_axis) {
-			axis_angle_to_mat3(mat3, axis_vec, step_angle);
+			axis_angle_normalized_to_mat3(mat3, axis_vec, step_angle);
 			copy_m4_m3(mat, mat3);
 		}
 		else {
@@ -897,8 +897,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 #endif
 
 	if ((ltmd->flag & MOD_SCREW_NORMAL_CALC) == 0) {
-		/* BMESH_TODO, we only need to get vertex normals here, this is way overkill */
-		CDDM_calc_normals(result);
+		result->dirty |= DM_DIRTY_NORMALS;
 	}
 
 	return result;
@@ -931,22 +930,6 @@ static void foreachObjectLink(
 	walk(userData, ob, &ltmd->ob_axis);
 }
 
-/* This dosnt work with material*/
-static DerivedMesh *applyModifierEM(
-        ModifierData *md,
-        Object *ob,
-        struct BMEditMesh *UNUSED(editData),
-        DerivedMesh *derivedData)
-{
-	return applyModifier(md, ob, derivedData, MOD_APPLY_USECACHE);
-}
-
-static int dependsOnTime(ModifierData *UNUSED(md))
-{
-	return 0;
-}
-
-
 ModifierTypeInfo modifierType_Screw = {
 	/* name */              "Screw",
 	/* structName */        "ScrewModifierData",
@@ -964,13 +947,13 @@ ModifierTypeInfo modifierType_Screw = {
 	/* deformVertsEM */     NULL,
 	/* deformMatricesEM */  NULL,
 	/* applyModifier */     applyModifier,
-	/* applyModifierEM */   applyModifierEM,
+	/* applyModifierEM */   NULL,
 	/* initData */          initData,
 	/* requiredDataMask */  NULL,
 	/* freeData */          NULL,
 	/* isDisabled */        NULL,
 	/* updateDepgraph */    updateDepgraph,
-	/* dependsOnTime */     dependsOnTime,
+	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */	NULL,
 	/* foreachObjectLink */ foreachObjectLink,
 	/* foreachIDLink */     NULL,

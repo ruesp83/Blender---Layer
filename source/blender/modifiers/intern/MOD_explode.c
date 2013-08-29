@@ -80,9 +80,9 @@ static void copyData(ModifierData *md, ModifierData *target)
 	temd->protect = emd->protect;
 	temd->vgroup = emd->vgroup;
 }
-static int dependsOnTime(ModifierData *UNUSED(md)) 
+static bool dependsOnTime(ModifierData *UNUSED(md))
 {
-	return 1;
+	return true;
 }
 static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 {
@@ -104,6 +104,7 @@ static void createFacepa(ExplodeModifierData *emd,
 	MVert *mvert = NULL;
 	ParticleData *pa;
 	KDTree *tree;
+	RNG *rng;
 	float center[3], co[3];
 	int *facepa = NULL, *vertpa = NULL, totvert = 0, totface = 0, totpart = 0;
 	int i, p, v1, v2, v3, v4 = 0;
@@ -114,7 +115,7 @@ static void createFacepa(ExplodeModifierData *emd,
 	totvert = dm->getNumVerts(dm);
 	totpart = psmd->psys->totpart;
 
-	BLI_srandom(psys->seed);
+	rng = BLI_rng_new_srandom(psys->seed);
 
 	if (emd->facepa)
 		MEM_freeN(emd->facepa);
@@ -136,7 +137,7 @@ static void createFacepa(ExplodeModifierData *emd,
 		if (dvert) {
 			const int defgrp_index = emd->vgroup - 1;
 			for (i = 0; i < totvert; i++, dvert++) {
-				float val = BLI_frand();
+				float val = BLI_rng_get_float(rng);
 				val = (1.0f - emd->protect) * val + emd->protect * 0.5f;
 				if (val < defvert_find_weight(dvert, defgrp_index))
 					vertpa[i] = -1;
@@ -182,6 +183,8 @@ static void createFacepa(ExplodeModifierData *emd,
 
 	if (vertpa) MEM_freeN(vertpa);
 	BLI_kdtree_free(tree);
+
+	BLI_rng_free(rng);
 }
 
 static int edgecut_get(EdgeHash *edgehash, unsigned int v1, unsigned int v2)
@@ -565,7 +568,7 @@ static DerivedMesh *cutEdges(ExplodeModifierData *emd, DerivedMesh *dm)
 	int numlayer;
 	unsigned int ed_v1, ed_v2;
 
-	edgehash = BLI_edgehash_new();
+	edgehash = BLI_edgehash_new(__func__);
 
 	/* recreate vertpa from facepa calculation */
 	for (i = 0, mf = mface; i < totface; i++, mf++) {
@@ -818,7 +821,7 @@ static DerivedMesh *explodeMesh(ExplodeModifierData *emd,
 	cfra = BKE_scene_frame_get(scene);
 
 	/* hash table for vertice <-> particle relations */
-	vertpahash = BLI_edgehash_new();
+	vertpahash = BLI_edgehash_new(__func__);
 
 	for (i = 0; i < totface; i++) {
 		if (facepa[i] != totpart) {
@@ -866,7 +869,7 @@ static DerivedMesh *explodeMesh(ExplodeModifierData *emd,
 	/* getting back to object space */
 	invert_m4_m4(imat, ob->obmat);
 
-	psmd->psys->lattice = psys_get_lattice(&sim);
+	psmd->psys->lattice_deform_data = psys_create_lattice_deform_data(&sim);
 
 	/* duplicate & displace vertices */
 	ehi = BLI_edgehashIterator_new(vertpahash);
@@ -968,11 +971,11 @@ static DerivedMesh *explodeMesh(ExplodeModifierData *emd,
 	/* finalization */
 	CDDM_calc_edges_tessface(explode);
 	CDDM_tessfaces_to_faces(explode);
-	CDDM_calc_normals(explode);
+	explode->dirty |= DM_DIRTY_NORMALS;
 
-	if (psmd->psys->lattice) {
-		end_latt_deform(psmd->psys->lattice);
-		psmd->psys->lattice = NULL;
+	if (psmd->psys->lattice_deform_data) {
+		end_latt_deform(psmd->psys->lattice_deform_data);
+		psmd->psys->lattice_deform_data = NULL;
 	}
 
 	return explode;

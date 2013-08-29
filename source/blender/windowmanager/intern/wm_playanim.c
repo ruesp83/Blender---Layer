@@ -788,24 +788,19 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr ps_void)
 	return 1;
 }
 
-static void playanim_window_open(const char *title, int posx, int posy, int sizex, int sizey, int start_maximized)
+static void playanim_window_open(const char *title, int posx, int posy, int sizex, int sizey)
 {
-	GHOST_TWindowState inital_state;
 	GHOST_TUns32 scr_w, scr_h;
 
 	GHOST_GetMainDisplayDimensions(g_WS.ghost_system, &scr_w, &scr_h);
 
 	posy = (scr_h - posy - sizey);
 
-	if (start_maximized == G_WINDOWSTATE_FULLSCREEN)
-		inital_state = start_maximized ? GHOST_kWindowStateFullScreen : GHOST_kWindowStateNormal;
-	else
-		inital_state = start_maximized ? GHOST_kWindowStateMaximized : GHOST_kWindowStateNormal;
-
 	g_WS.ghost_window = GHOST_CreateWindow(g_WS.ghost_system,
 	                                       title,
 	                                       posx, posy, sizex, sizey,
-	                                       inital_state,
+	                                       /* could optionally start fullscreen */
+	                                       GHOST_kWindowStateNormal,
 	                                       GHOST_kDrawingContextTypeOpenGL,
 	                                       FALSE /* no stereo */, FALSE);
 }
@@ -945,6 +940,7 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 		}
 	}
 	else if (!IMB_ispic(filepath)) {
+		printf("%s: '%s' not an image file\n", __func__, filepath);
 		exit(1);
 	}
 
@@ -954,7 +950,7 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 	}
 
 	if (ibuf == NULL) {
-		printf("couldn't open %s\n", filepath);
+		printf("%s: '%s' couldn't open\n", __func__, filepath);
 		exit(1);
 	}
 
@@ -971,7 +967,7 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 		g_WS.ghost_system = GHOST_CreateSystem();
 		GHOST_AddEventConsumer(g_WS.ghost_system, consumer);
 
-		playanim_window_open("Blender:Anim", start_x, start_y, ibuf->x, ibuf->y, 0);
+		playanim_window_open("Blender:Anim", start_x, start_y, ibuf->x, ibuf->y);
 
 		/* unified matrix, note it affects offset for drawing */
 		glMatrixMode(GL_PROJECTION);
@@ -1195,7 +1191,7 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 	GHOST_DisposeWindow(g_WS.ghost_system, g_WS.ghost_window);
 
 	/* early exit, IMB and BKE should be exited only in end */
-	if (ps.dropped_file) {
+	if (ps.dropped_file[0]) {
 		BLI_strncpy(filepath, ps.dropped_file, sizeof(filepath));
 		return filepath;
 	}

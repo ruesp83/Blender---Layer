@@ -28,11 +28,10 @@
  *  \ingroup wm
  */
 
-
 #include <string.h>
 #include <stddef.h>
 
-#include "BLO_sys_types.h"
+#include "BLI_sys_types.h"
 
 #include "DNA_windowmanager_types.h"
 
@@ -108,6 +107,22 @@ void WM_operator_free(wmOperator *op)
 	MEM_freeN(op);
 }
 
+/**
+ * Use with extreme care!,
+ * properties, customdata etc - must be compatible.
+ *
+ * \param op  Operator to assign the type to.
+ * \param ot  OperatorType to assign.
+ */
+void WM_operator_type_set(wmOperator *op, wmOperatorType *ot)
+{
+	/* not supported for Python */
+	BLI_assert(op->py_instance == NULL);
+
+	op->type = ot;
+	op->ptr->type = ot->srna;
+}
+
 static void wm_reports_free(wmWindowManager *wm)
 {
 	BKE_reports_clear(&wm->reports);
@@ -141,8 +156,7 @@ void WM_operator_stack_clear(wmWindowManager *wm)
 {
 	wmOperator *op;
 	
-	while ((op = wm->operators.first)) {
-		BLI_remlink(&wm->operators, op);
+	while ((op = BLI_pophead(&wm->operators))) {
 		WM_operator_free(op);
 	}
 	
@@ -179,7 +193,7 @@ void WM_operator_handlers_clear(wmWindowManager *wm, wmOperatorType *ot)
 
 static GHash *uilisttypes_hash = NULL;
 
-uiListType *WM_uilisttype_find(const char *idname, int quiet)
+uiListType *WM_uilisttype_find(const char *idname, bool quiet)
 {
 	uiListType *ult;
 
@@ -205,20 +219,20 @@ int WM_uilisttype_add(uiListType *ult)
 
 void WM_uilisttype_freelink(uiListType *ult)
 {
-	BLI_ghash_remove(uilisttypes_hash, ult->idname, NULL, (GHashValFreeFP)MEM_freeN);
+	BLI_ghash_remove(uilisttypes_hash, ult->idname, NULL, MEM_freeN);
 }
 
 /* called on initialize WM_init() */
 void WM_uilisttype_init(void)
 {
-	uilisttypes_hash = BLI_ghash_str_new("uilisttypes_hash gh");
+	uilisttypes_hash = BLI_ghash_str_new_ex("uilisttypes_hash gh", 16);
 }
 
 void WM_uilisttype_free(void)
 {
 	GHashIterator *iter = BLI_ghashIterator_new(uilisttypes_hash);
 
-	for (; BLI_ghashIterator_notDone(iter); BLI_ghashIterator_step(iter)) {
+	for (; !BLI_ghashIterator_done(iter); BLI_ghashIterator_step(iter)) {
 		uiListType *ult = BLI_ghashIterator_getValue(iter);
 		if (ult->ext.free) {
 			ult->ext.free(ult->ext.data);
@@ -226,7 +240,7 @@ void WM_uilisttype_free(void)
 	}
 	BLI_ghashIterator_free(iter);
 
-	BLI_ghash_free(uilisttypes_hash, NULL, (GHashValFreeFP)MEM_freeN);
+	BLI_ghash_free(uilisttypes_hash, NULL, MEM_freeN);
 	uilisttypes_hash = NULL;
 }
 
@@ -234,7 +248,7 @@ void WM_uilisttype_free(void)
 
 static GHash *menutypes_hash = NULL;
 
-MenuType *WM_menutype_find(const char *idname, int quiet)
+MenuType *WM_menutype_find(const char *idname, bool quiet)
 {
 	MenuType *mt;
 
@@ -258,20 +272,21 @@ int WM_menutype_add(MenuType *mt)
 
 void WM_menutype_freelink(MenuType *mt)
 {
-	BLI_ghash_remove(menutypes_hash, mt->idname, NULL, (GHashValFreeFP)MEM_freeN);
+	BLI_ghash_remove(menutypes_hash, mt->idname, NULL, MEM_freeN);
 }
 
 /* called on initialize WM_init() */
 void WM_menutype_init(void)
 {
-	menutypes_hash = BLI_ghash_str_new("menutypes_hash gh");
+	/* reserve size is set based on blender default setup */
+	menutypes_hash = BLI_ghash_str_new_ex("menutypes_hash gh", 512);
 }
 
 void WM_menutype_free(void)
 {
 	GHashIterator *iter = BLI_ghashIterator_new(menutypes_hash);
 
-	for (; BLI_ghashIterator_notDone(iter); BLI_ghashIterator_step(iter)) {
+	for (; !BLI_ghashIterator_done(iter); BLI_ghashIterator_step(iter)) {
 		MenuType *mt = BLI_ghashIterator_getValue(iter);
 		if (mt->ext.free) {
 			mt->ext.free(mt->ext.data);
@@ -279,7 +294,7 @@ void WM_menutype_free(void)
 	}
 	BLI_ghashIterator_free(iter);
 
-	BLI_ghash_free(menutypes_hash, NULL, (GHashValFreeFP)MEM_freeN);
+	BLI_ghash_free(menutypes_hash, NULL, MEM_freeN);
 	menutypes_hash = NULL;
 }
 
@@ -384,7 +399,7 @@ void wm_add_default(bContext *C)
 	
 	wm->winactive = win;
 	wm->file_saved = 1;
-	wm_window_make_drawable(C, win); 
+	wm_window_make_drawable(wm, win); 
 }
 
 
@@ -398,20 +413,17 @@ void wm_close_and_free(bContext *C, wmWindowManager *wm)
 	if (wm->autosavetimer)
 		wm_autosave_timer_ended(wm);
 
-	while ((win = wm->windows.first)) {
-		BLI_remlink(&wm->windows, win);
+	while ((win = BLI_pophead(&wm->windows))) {
 		win->screen = NULL; /* prevent draw clear to use screen */
 		wm_draw_window_clear(win);
 		wm_window_free(C, wm, win);
 	}
 	
-	while ((op = wm->operators.first)) {
-		BLI_remlink(&wm->operators, op);
+	while ((op = BLI_pophead(&wm->operators))) {
 		WM_operator_free(op);
 	}
 
-	while ((keyconf = wm->keyconfigs.first)) {
-		BLI_remlink(&wm->keyconfigs, keyconf);
+	while ((keyconf = BLI_pophead(&wm->keyconfigs))) {
 		WM_keyconfig_free(keyconf);
 	}
 

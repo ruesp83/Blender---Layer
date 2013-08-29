@@ -846,7 +846,7 @@ class VIEW3D_MT_SelectEditMenu(bpy.types.Menu):
         layout.operator("mesh.select_face_by_sides", text="By Number of Verts")
         if context.scene.tool_settings.mesh_select_mode[2] == False:
             layout.operator("mesh.select_non_manifold", text="Non Manifold")
-        layout.operator("mesh.select_loose_verts", text="Loose Verts/Edges")
+        layout.operator("mesh.select_loose", text="Loose Geometry")
         layout.operator("mesh.select_similar", text="Similar")
 
         layout.separator()
@@ -858,7 +858,7 @@ class VIEW3D_MT_SelectEditMenu(bpy.types.Menu):
         layout.operator("mesh.select_mirror", text="Mirror")
 
         layout.operator("mesh.select_linked", text="Linked")
-        layout.operator("mesh.select_vertex_path", text="Vertex Path")
+        layout.operator("mesh.shortest_path_select", text="Shortest Path")
         layout.operator("mesh.loop_multi_select", text="Edge Loop")
         layout.operator("mesh.loop_multi_select", text="Edge Ring").ring = True
         layout.separator()
@@ -1165,7 +1165,9 @@ class VIEW3D_MT_EditCurveSpecials(bpy.types.Menu):
         layout.operator("curve.spline_weight_set")
         layout.operator("curve.radius_set")
         layout.operator("curve.smooth")
+        layout.operator("curve.smooth_weight")
         layout.operator("curve.smooth_radius")
+        layout.operator("curve.smooth_tilt")
 
 class VIEW3D_MT_EditArmatureTK(bpy.types.Menu):
     bl_label = "Armature Tools"

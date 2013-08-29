@@ -238,13 +238,21 @@ void RAS_BucketManager::Renderbuckets(
 	BucketList::iterator bit;
 	list<RAS_MeshSlot>::iterator mit;
 	for (bit = m_SolidBuckets.begin(); bit != m_SolidBuckets.end(); ++bit) {
-		// RAS_MaterialBucket *bucket = *bit;  /* UNUSED */
+		/* This (and the similar lines of code for the alpha buckets) is kind of a hacky fix for #34382. If we're
+		 * drawing shadows and the material doesn't cast shadows, then the mesh is still modified, so we don't want to
+		 * set MeshModified to false yet. This will happen correctly in the main render pass.
+		 */
+		if (rasty->GetDrawingMode() == RAS_IRasterizer::KX_SHADOW && !(*bit)->GetPolyMaterial()->CastsShadows())
+			continue;
+
 		for (mit = (*bit)->msBegin(); mit != (*bit)->msEnd(); ++mit) {
 			mit->m_mesh->SetMeshModified(false);
 		}
 	}
 	for (bit = m_AlphaBuckets.begin(); bit != m_AlphaBuckets.end(); ++bit) {
-		// RAS_MaterialBucket* bucket = *bit;  /* UNUSED */
+		if (rasty->GetDrawingMode() == RAS_IRasterizer::KX_SHADOW && !(*bit)->GetPolyMaterial()->CastsShadows())
+			continue;
+
 		for (mit = (*bit)->msBegin(); mit != (*bit)->msEnd(); ++mit) {
 			mit->m_mesh->SetMeshModified(false);
 		}
@@ -370,16 +378,9 @@ void RAS_BucketManager::MergeBucketManager(RAS_BucketManager *other, SCA_IScene 
 {
 	/* concatinate lists */
 	// printf("BEFORE %d %d\n", GetSolidBuckets().size(), GetAlphaBuckets().size());
-	BucketList::iterator it;
-
-	for (it = other->GetSolidBuckets().begin(); it != other->GetSolidBuckets().end(); ++it)
-		(*it)->GetPolyMaterial()->Replace_IScene(scene);
 
 	GetSolidBuckets().insert( GetSolidBuckets().end(), other->GetSolidBuckets().begin(), other->GetSolidBuckets().end() );
 	other->GetSolidBuckets().clear();
-
-	for (it = other->GetAlphaBuckets().begin(); it != other->GetAlphaBuckets().end(); ++it)
-		(*it)->GetPolyMaterial()->Replace_IScene(scene);
 
 	GetAlphaBuckets().insert( GetAlphaBuckets().end(), other->GetAlphaBuckets().begin(), other->GetAlphaBuckets().end() );
 	other->GetAlphaBuckets().clear();

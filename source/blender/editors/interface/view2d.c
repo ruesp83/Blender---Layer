@@ -209,9 +209,8 @@ void UI_view2d_region_reinit(View2D *v2d, short type, int winx, int winy)
 			}
 			/* scrollers - should we have these by default? */
 			/* XXX for now, we don't override this, or set it either! */
+			break;
 		}
-		break;
-		
 		/* 'list/channel view' - zoom, aspect ratio, and alignment restrictions are set here */
 		case V2D_COMMONVIEW_LIST:
 		{
@@ -225,9 +224,8 @@ void UI_view2d_region_reinit(View2D *v2d, short type, int winx, int winy)
 			tot_changed = do_init;
 			
 			/* scroller settings are currently not set here... that is left for regions... */
+			break;
 		}
-		break;
-			
 		/* 'stack view' - practically the same as list/channel view, except is located in the pos y half instead. 
 		 *  zoom, aspect ratio, and alignment restrictions are set here */
 		case V2D_COMMONVIEW_STACK:
@@ -242,9 +240,8 @@ void UI_view2d_region_reinit(View2D *v2d, short type, int winx, int winy)
 			tot_changed = do_init;
 			
 			/* scroller settings are currently not set here... that is left for regions... */
+			break;
 		}
-		break;
-			
 		/* 'header' regions - zoom, aspect ratio, alignment, and panning restrictions are set here */
 		case V2D_COMMONVIEW_HEADER:
 		{
@@ -272,10 +269,8 @@ void UI_view2d_region_reinit(View2D *v2d, short type, int winx, int winy)
 			
 			/* absolutely no scrollers allowed */
 			v2d->scroll = 0;
-			
+			break;
 		}
-		break;
-		
 		/* panels view, with horizontal/vertical align */
 		case V2D_COMMONVIEW_PANELS_UI:
 		{
@@ -308,9 +303,8 @@ void UI_view2d_region_reinit(View2D *v2d, short type, int winx, int winy)
 				v2d->cur.ymax = 0.0f;
 				v2d->cur.ymin = (-winy) * panelzoom;
 			}
+			break;
 		}
-		break;
-			
 		/* other view types are completely defined using their own settings already */
 		default:
 			/* we don't do anything here, as settings should be fine, but just make sure that rect */
@@ -997,19 +991,24 @@ static void view2d_map_cur_using_mask(View2D *v2d, rctf *curmasked)
 	*curmasked = v2d->cur;
 	
 	if (view2d_scroll_mapped(v2d->scroll)) {
-		float dx = BLI_rctf_size_x(&v2d->cur) / ((float)(BLI_rcti_size_x(&v2d->mask) + 1));
-		float dy = BLI_rctf_size_y(&v2d->cur) / ((float)(BLI_rcti_size_y(&v2d->mask) + 1));
+		float sizex = BLI_rcti_size_x(&v2d->mask);
+		float sizey = BLI_rcti_size_y(&v2d->mask);
 		
-		if (v2d->mask.xmin != 0)
-			curmasked->xmin -= dx * (float)v2d->mask.xmin;
-		if (v2d->mask.xmax + 1 != v2d->winx)
-			curmasked->xmax += dx * (float)(v2d->winx - v2d->mask.xmax - 1);
-		
-		if (v2d->mask.ymin != 0)
-			curmasked->ymin -= dy * (float)v2d->mask.ymin;
-		if (v2d->mask.ymax + 1 != v2d->winy)
-			curmasked->ymax += dy * (float)(v2d->winy - v2d->mask.ymax - 1);
-		
+		/* prevent tiny or narrow regions to get invalid coordinates - mask can get negative even... */
+		if (sizex > 0.0f && sizey > 0.0f) {
+			float dx = BLI_rctf_size_x(&v2d->cur) / (sizex + 1);
+			float dy = BLI_rctf_size_y(&v2d->cur) / (sizey + 1);
+			
+			if (v2d->mask.xmin != 0)
+				curmasked->xmin -= dx * (float)v2d->mask.xmin;
+			if (v2d->mask.xmax + 1 != v2d->winx)
+				curmasked->xmax += dx * (float)(v2d->winx - v2d->mask.xmax - 1);
+			
+			if (v2d->mask.ymin != 0)
+				curmasked->ymin -= dy * (float)v2d->mask.ymin;
+			if (v2d->mask.ymax + 1 != v2d->winy)
+				curmasked->ymax += dy * (float)(v2d->winy - v2d->mask.ymax - 1);
+		}
 	}
 }
 
@@ -1017,15 +1016,19 @@ static void view2d_map_cur_using_mask(View2D *v2d, rctf *curmasked)
 void UI_view2d_view_ortho(View2D *v2d)
 {
 	rctf curmasked;
-	float xofs, yofs;
+	int sizex = BLI_rcti_size_x(&v2d->mask);
+	int sizey = BLI_rcti_size_y(&v2d->mask);
+	float xofs = 0.0f, yofs = 0.0f;
 	
 	/* pixel offsets (-GLA_PIXEL_OFS) are needed to get 1:1 correspondence with pixels for smooth UI drawing,
 	 * but only applied where requested
 	 */
 	/* XXX brecht: instead of zero at least use a tiny offset, otherwise
 	 * pixel rounding is effectively random due to float inaccuracy */
-	xofs = 0.001f * BLI_rctf_size_x(&v2d->cur) / BLI_rcti_size_x(&v2d->mask);
-	yofs = 0.001f * BLI_rctf_size_y(&v2d->cur) / BLI_rcti_size_y(&v2d->mask);
+	if (sizex > 0)
+		xofs = 0.001f * BLI_rctf_size_x(&v2d->cur) / BLI_rcti_size_x(&v2d->mask);
+	if (sizey > 0)
+		yofs = 0.001f * BLI_rctf_size_y(&v2d->cur) / BLI_rcti_size_y(&v2d->mask);
 	
 	/* apply mask-based adjustments to cur rect (due to scrollers), to eliminate scaling artifacts */
 	view2d_map_cur_using_mask(v2d, &curmasked);
@@ -1730,9 +1733,8 @@ void UI_view2d_scrollers_draw(const bContext *C, View2D *v2d, View2DScrollers *v
 							fac2 = fac2 - time;
 							
 							scroll_printstr(scene, fac, h, time + (float)FPS * fac2 / 100.0f, grid->powerx, V2D_UNIT_SECONDSSEQ, 'h');
+							break;
 						}
-						break;
-							
 						case V2D_UNIT_DEGREES:      /* Graph Editor for rotation Drivers */
 							/* HACK: although we're drawing horizontal, we make this draw as 'vertical', just to get degree signs */
 							scroll_printstr(scene, fac, h, val, grid->powerx, V2D_UNIT_DEGREES, 'v');
@@ -1851,7 +1853,7 @@ void UI_view2d_scrollers_free(View2DScrollers *scrollers)
  *	- column, row				= the 2d-coordinates (in 2D-view / 'tot' rect space) the cell exists at
  *	- rect					= coordinates of the cell (passed as single var instead of 4 separate, as it's more useful this way)
  */
-void UI_view2d_listview_cell_to_view(View2D *v2d, short columnwidth, short rowheight,
+void UI_view2d_listview_cell_to_view(View2D *v2d, float columnwidth, float rowheight,
                                      float startx, float starty,
                                      int column, int row, rctf *rect)
 {
@@ -1896,7 +1898,7 @@ void UI_view2d_listview_cell_to_view(View2D *v2d, short columnwidth, short rowhe
  *	- viewx, viewy			= 2D-coordinates (in 2D-view / 'tot' rect space) to get the cell for
  *	- column, row				= the 'coordinates' of the relevant 'cell'
  */
-void UI_view2d_listview_view_to_cell(View2D *v2d, short columnwidth, short rowheight, float startx, float starty, 
+void UI_view2d_listview_view_to_cell(View2D *v2d, float columnwidth, float rowheight, float startx, float starty,
                                      float viewx, float viewy, int *column, int *row)
 {
 	/* adjust view coordinates to be all positive ints, corrected for the start offset */
@@ -1929,7 +1931,7 @@ void UI_view2d_listview_view_to_cell(View2D *v2d, short columnwidth, short rowhe
  *	- startx, starty			= coordinates that the list starts from, which should be (0,0) for most views
  *	- column/row_min/max		= the starting and ending column/row indices
  */
-void UI_view2d_listview_visible_cells(View2D *v2d, short columnwidth, short rowheight, float startx, float starty, 
+void UI_view2d_listview_visible_cells(View2D *v2d, float columnwidth, float rowheight, float startx, float starty,
                                       int *column_min, int *column_max, int *row_min, int *row_max)
 {
 	/* using 'cur' rect coordinates, call the cell-getting function to get the cells for this */
@@ -1952,7 +1954,7 @@ void UI_view2d_listview_visible_cells(View2D *v2d, short columnwidth, short rowh
  *	- x,y           = coordinates to convert
  *	- viewx,viewy		= resultant coordinates
  */
-void UI_view2d_region_to_view(View2D *v2d, int x, int y, float *r_viewx, float *r_viewy)
+void UI_view2d_region_to_view(View2D *v2d, float x, float y, float *r_viewx, float *r_viewy)
 {
 	float div, ofs;
 
@@ -2025,6 +2027,17 @@ void UI_view2d_to_region_no_clip(View2D *v2d, float x, float y, int *regionx, in
 		else if (y > INT_MAX) *regiony = INT_MAX;
 		else *regiony = (int)y;
 	}
+}
+
+void UI_view2d_to_region_float(View2D *v2d, float x, float y, float *regionx, float *regiony)
+{
+	/* express given coordinates as proportional values */
+	x = -v2d->cur.xmin / BLI_rctf_size_x(&v2d->cur);
+	y = -v2d->cur.ymin / BLI_rctf_size_y(&v2d->cur);
+
+	/* convert proportional distances to screen coordinates */
+	*regionx = v2d->mask.xmin + x * BLI_rcti_size_x(&v2d->mask);
+	*regiony = v2d->mask.ymin + y * BLI_rcti_size_y(&v2d->mask);
 }
 
 /* *********************************************************************** */

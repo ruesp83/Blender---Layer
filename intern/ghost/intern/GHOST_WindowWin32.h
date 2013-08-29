@@ -212,6 +212,19 @@ public:
 	virtual GHOST_TSuccess swapBuffers();
 
 	/**
+	 * Sets the swap interval for swapBuffers.
+	 * \param interval The swap interval to use.
+	 * \return A boolean success indicator.
+	 */
+	virtual GHOST_TSuccess setSwapInterval(int interval);
+
+	/**
+	 * Gets the current swap interval for swapBuffers.
+	 * \return An integer.
+	 */
+	virtual int getSwapInterval();
+
+	/**
 	 * Activates the drawing context of this window.
 	 * \return Indication of success.
 	 */
@@ -279,6 +292,9 @@ public:
 	GHOST_TSuccess beginFullScreen() const {return GHOST_kFailure;}
 
 	GHOST_TSuccess endFullScreen() const {return GHOST_kFailure;}
+
+	/** if the window currently resizing */
+	bool m_inLiveResize;
 
 protected:
 	GHOST_TSuccess initMultisample(PIXELFORMATDESCRIPTOR pfd);

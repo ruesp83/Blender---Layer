@@ -65,9 +65,7 @@ void BKE_group_free(Group *group)
 	/* don't free group itself */
 	GroupObject *go;
 	
-	while (group->gobject.first) {
-		go = group->gobject.first;
-		BLI_remlink(&group->gobject, go);
+	while ((go = BLI_pophead(&group->gobject))) {
 		free_group_object(go);
 	}
 }
@@ -103,8 +101,14 @@ void BKE_group_unlink(Group *group)
 		}
 		
 		for (srl = sce->r.layers.first; srl; srl = srl->next) {
+			FreestyleLineSet *lineset;
+
 			if (srl->light_override == group)
 				srl->light_override = NULL;
+			for (lineset = srl->freestyleConfig.linesets.first; lineset; lineset = lineset->next) {
+				if (lineset->group == group)
+					lineset->group = NULL;
+			}
 		}
 	}
 	
@@ -142,7 +146,7 @@ Group *BKE_group_copy(Group *group)
 {
 	Group *groupn;
 
-	groupn = MEM_dupallocN(group);
+	groupn = BKE_libblock_copy(&group->id);
 	BLI_duplicatelist(&groupn->gobject, &group->gobject);
 
 	return groupn;

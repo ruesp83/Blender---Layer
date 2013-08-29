@@ -71,7 +71,7 @@ extern struct Render R;
 ListBase *get_lights(ShadeInput *shi)
 {
 	
-	if (R.r.scemode & R_PREVIEWBUTS)
+	if (R.r.scemode & R_BUTS_PREVIEW)
 		return &R.lights;
 	if (shi->light_override)
 		return &shi->light_override->gobject;
@@ -181,7 +181,7 @@ static void spothalo(struct LampRen *lar, ShadeInput *shi, float *intens)
 	double a, b, c, disc, nray[3], npos[3];
 	double t0, t1 = 0.0f, t2= 0.0f, t3;
 	float p1[3], p2[3], ladist, maxz = 0.0f, maxy = 0.0f, haint;
-	int snijp, do_clip = TRUE, use_yco = FALSE;
+	int cuts, do_clip = TRUE, use_yco = FALSE;
 
 	*intens= 0.0f;
 	haint= lar->haint;
@@ -244,7 +244,7 @@ static void spothalo(struct LampRen *lar, ShadeInput *shi, float *intens)
 	b = nray[0] * npos[0] + nray[1] * npos[1] - nray[2]*npos[2];
 	c = npos[0] * npos[0] + npos[1] * npos[1] - npos[2]*npos[2];
 
-	snijp= 0;
+	cuts= 0;
 	if (fabs(a) < DBL_EPSILON) {
 		/*
 		 * Only one intersection point...
@@ -256,16 +256,16 @@ static void spothalo(struct LampRen *lar, ShadeInput *shi, float *intens)
 		
 		if (disc==0.0) {
 			t1=t2= (-b)/ a;
-			snijp= 2;
+			cuts= 2;
 		}
 		else if (disc > 0.0) {
 			disc = sqrt(disc);
 			t1 = (-b + disc) / a;
 			t2 = (-b - disc) / a;
-			snijp= 2;
+			cuts= 2;
 		}
 	}
-	if (snijp==2) {
+	if (cuts==2) {
 		int ok1=0, ok2=0;
 
 		/* sort */
@@ -924,6 +924,19 @@ void shade_color(ShadeInput *shi, ShadeResult *shr)
 	shr->diff[1]= shi->g;
 	shr->diff[2]= shi->b;
 	shr->alpha= shi->alpha;
+
+	/* modulate by the object color */
+	if ((ma->shade_flag & MA_OBCOLOR) && shi->obr->ob) {
+		float obcol[4];
+
+		copy_v4_v4(obcol, shi->obr->ob->col);
+		CLAMP(obcol[3], 0.0f, 1.0f);
+
+		shr->diff[0] *= obcol[0];
+		shr->diff[1] *= obcol[1];
+		shr->diff[2] *= obcol[2];
+		if (shi->mode & MA_TRANSP) shr->alpha *= obcol[3];
+	}
 }
 
 /* ramp for at end of shade */
@@ -1713,6 +1726,14 @@ void shade_lamp_loop(ShadeInput *shi, ShadeResult *shr)
 			if (ma->mode & (MA_FACETEXTURE_ALPHA))
 				shi->alpha= shi->vcol[3];
 		}
+#ifdef WITH_FREESTYLE
+		else if (ma->vcol_alpha) {
+			shi->r= shi->vcol[0];
+			shi->g= shi->vcol[1];
+			shi->b= shi->vcol[2];
+			shi->alpha= shi->vcol[3];
+		}
+#endif
 		else if (ma->mode & (MA_VERTEXCOLP)) {
 			float neg_alpha = 1.0f - shi->vcol[3];
 			shi->r= shi->r*neg_alpha + shi->vcol[0]*shi->vcol[3];

@@ -268,8 +268,9 @@ static int  ptcache_particle_write(int index, void *psys_v, void **data, int cfr
 	PTCACHE_DATA_FROM(data, BPHYS_DATA_SIZE, &pa->size);
 	PTCACHE_DATA_FROM(data, BPHYS_DATA_TIMES, times);
 
-	if (boid)
+	if (boid) {
 		PTCACHE_DATA_FROM(data, BPHYS_DATA_BOIDS, &boid->data);
+	}
 
 	/* return flag 1+1=2 for newly born particles to copy exact birth location to previously cached frame */
 	return 1 + (pa->state.time >= pa->time && pa->prev_state.time <= pa->time);
@@ -304,8 +305,9 @@ static void ptcache_particle_read(int index, void *psys_v, void **data, float cf
 	else if (cfra > pa->dietime)
 		pa->state.time = pa->dietime;
 
-	if (data[BPHYS_DATA_SIZE])
+	if (data[BPHYS_DATA_SIZE]) {
 		PTCACHE_DATA_TO(data, BPHYS_DATA_SIZE, 0, &pa->size);
+	}
 	
 	if (data[BPHYS_DATA_TIMES]) {
 		float times[3];
@@ -926,7 +928,7 @@ static int ptcache_dynamicpaint_read(PTCacheFile *pf, void *dp_v)
 	/* version header */
 	ptcache_file_read(pf, version, 1, sizeof(char) * 4);
 	if (strncmp(version, DPAINT_CACHE_VERSION, 4)) {
-		printf("Dynamic Paint: Invalid cache version: %s!\n", version);
+		printf("Dynamic Paint: Invalid cache version: '%c%c%c%c'!\n", UNPACK4(version));
 		return 0;
 	}
 
@@ -1388,7 +1390,7 @@ void BKE_ptcache_ids_from_object(ListBase *lb, Object *ob, Scene *scene, int dup
 /* Takes an Object ID and returns a unique name
  * - id: object id
  * - cfra: frame for the cache, can be negative
- * - stack_index: index in the modifier stack. we can have cache for more then one stack_index
+ * - stack_index: index in the modifier stack. we can have cache for more than one stack_index
  */
 
 #define MAX_PTCACHE_PATH FILE_MAX
@@ -2800,7 +2802,7 @@ int  BKE_ptcache_id_reset(Scene *scene, PTCacheID *pid, int mode)
 			smokeModifier_reset_turbulence(pid->calldata);
 #endif
 		else if (pid->type == PTCACHE_TYPE_DYNAMICPAINT)
-			dynamicPaint_clearSurface((DynamicPaintSurface*)pid->calldata);
+			dynamicPaint_clearSurface(scene, (DynamicPaintSurface*)pid->calldata);
 	}
 	if (clear)
 		BKE_ptcache_id_clear(pid, PTCACHE_CLEAR_ALL, 0);
@@ -2967,12 +2969,10 @@ void BKE_ptcache_free(PointCache *cache)
 }
 void BKE_ptcache_free_list(ListBase *ptcaches)
 {
-	PointCache *cache = ptcaches->first;
+	PointCache *cache;
 
-	while (cache) {
-		BLI_remlink(ptcaches, cache);
+	while ((cache = BLI_pophead(ptcaches))) {
 		BKE_ptcache_free(cache);
-		cache = ptcaches->first;
 	}
 }
 
@@ -3118,8 +3118,9 @@ static void *ptcache_bake_thread(void *ptr)
 	}
 
 	if (use_timer) {
+		/* start with newline because of \r above */
 		ptcache_dt_to_str(run, PIL_check_seconds_timer()-stime);
-		printf("Bake %s %s (%i frames simulated).\n", (data->break_operation ? "canceled after" : "finished in"), run, *data->cfra_ptr-sfra);
+		printf("\nBake %s %s (%i frames simulated).\n", (data->break_operation ? "canceled after" : "finished in"), run, *data->cfra_ptr-sfra);
 	}
 
 	data->thread_ended = TRUE;
@@ -3575,6 +3576,11 @@ void BKE_ptcache_load_external(PTCacheID *pid)
 		cache->flag &= ~(PTCACHE_OUTDATED|PTCACHE_FRAMES_SKIPPED);
 	}
 
+	/* make sure all new frames are loaded */
+	if (cache->cached_frames) {
+		MEM_freeN(cache->cached_frames);
+		cache->cached_frames=NULL;
+	}
 	BKE_ptcache_update_info(pid);
 }
 

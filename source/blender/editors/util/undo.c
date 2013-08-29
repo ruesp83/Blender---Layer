@@ -39,6 +39,7 @@
 
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
+#include "DNA_scene_types.h"
 
 #include "BLI_blenlib.h"
 #include "BLI_dynstr.h"
@@ -58,6 +59,7 @@
 #include "ED_mball.h"
 #include "ED_mesh.h"
 #include "ED_object.h"
+#include "ED_render.h"
 #include "ED_screen.h"
 #include "ED_sculpt.h"
 #include "ED_util.h"
@@ -134,15 +136,31 @@ static int ed_undo_step(bContext *C, int step, const char *undoname)
 	if (ED_gpencil_session_active()) {
 		return ED_undo_gpencil_step(C, step, undoname);
 	}
-
+	
 	if (sa && (sa->spacetype == SPACE_IMAGE)) {
 		SpaceImage *sima = (SpaceImage *)sa->spacedata.first;
-		
+
 		if ((obact && (obact->mode & OB_MODE_TEXTURE_PAINT)) || (sima->mode == SI_MODE_PAINT)) {
-			if (!ED_undo_paint_step(C, UNDO_PAINT_IMAGE, step, undoname) && undoname)
-				if (U.uiflag & USER_GLOBALUNDO)
+			int r_undo_paint;
+
+			r_undo_paint = ED_undo_paint_step(C, UNDO_PAINT_IMAGE, step, undoname);
+			if (!r_undo_paint && undoname) {
+				if (U.uiflag & USER_GLOBALUNDO) {
+					ED_viewport_render_kill_jobs(C, true);
 					BKE_undo_name(C, undoname);
-			
+				}
+			}
+			if (r_undo_paint == 2) {
+				if (U.uiflag & USER_GLOBALUNDO) {
+					undo_editmode_clear();
+					ED_viewport_render_kill_jobs(C, true);
+					if (undoname)
+						BKE_undo_name(C, undoname);
+					else
+						BKE_undo_step(C, step);
+					WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, CTX_data_scene(C));
+				}
+			}
 			WM_event_add_notifier(C, NC_WINDOW, NULL);
 			return OPERATOR_FINISHED;
 		}
@@ -186,11 +204,18 @@ static int ed_undo_step(bContext *C, int step, const char *undoname)
 			//#ifdef WITH_PYTHON
 			// XXX		BPY_scripts_clear_pyobjects();
 			//#endif
+			
+			/* for global undo/redo we should just clear the editmode stack */
+			/* for example, texface stores image pointers */
+			undo_editmode_clear();
+			
+			ED_viewport_render_kill_jobs(C, true);
+
 			if (undoname)
 				BKE_undo_name(C, undoname);
 			else
 				BKE_undo_step(C, step);
-				
+
 			WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, CTX_data_scene(C));
 		}
 	}
@@ -227,7 +252,7 @@ int ED_undo_valid(const bContext *C, const char *undoname)
 	Object *obedit = CTX_data_edit_object(C);
 	Object *obact = CTX_data_active_object(C);
 	ScrArea *sa = CTX_wm_area(C);
-	
+
 	if (sa && sa->spacetype == SPACE_IMAGE) {
 		SpaceImage *sima = (SpaceImage *)sa->spacedata.first;
 		
@@ -356,6 +381,8 @@ int ED_undo_operator_repeat(bContext *C, struct wmOperator *op)
 		     (WM_jobs_test(wm, scene, WM_JOB_TYPE_ANY) == 0))
 		{
 			int retval;
+
+			ED_viewport_render_kill_jobs(C, true);
 
 			if (G.debug & G_DEBUG)
 				printf("redo_cb: operator redo %s\n", op->type->name);
@@ -523,6 +550,7 @@ static int undo_history_exec(bContext *C, wmOperator *op)
 			WM_event_add_notifier(C, NC_GEOM | ND_DATA, NULL);
 		}
 		else {
+			ED_viewport_render_kill_jobs(C, true);
 			BKE_undo_number(C, item);
 			WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, CTX_data_scene(C));
 		}

@@ -148,7 +148,9 @@ class InfoStructRNA:
         import types
         functions = []
         for identifier, attr in self._get_py_visible_attrs():
-            if type(attr) in {types.FunctionType, types.MethodType}:
+            # methods may be python wrappers to C functions
+            attr_func = getattr(attr, "__func__", attr)
+            if type(attr_func) in {types.FunctionType, types.MethodType}:
                 functions.append((identifier, attr))
         return functions
 
@@ -156,7 +158,9 @@ class InfoStructRNA:
         import types
         functions = []
         for identifier, attr in self._get_py_visible_attrs():
-            if type(attr) in {types.BuiltinMethodType, types.BuiltinFunctionType}:
+            # methods may be python wrappers to C functions
+            attr_func = getattr(attr, "__func__", attr)
+            if type(attr_func) in {types.BuiltinMethodType, types.BuiltinFunctionType}:
                 functions.append((identifier, attr))
         return functions
 
@@ -292,6 +296,8 @@ class InfoPropertyRNA:
         elif as_arg:
             if not self.is_required:
                 type_info.append("optional")
+            if self.is_argument_optional:
+                type_info.append("optional argument")
         else:  # readonly is only useful for self's, not args
             if self.is_readonly:
                 type_info.append("readonly")

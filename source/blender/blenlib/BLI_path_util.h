@@ -89,7 +89,18 @@ void BLI_make_existing_file(const char *name);
 void BLI_split_dirfile(const char *string, char *dir, char *file, const size_t dirlen, const size_t filelen);
 void BLI_split_dir_part(const char *string, char *dir, const size_t dirlen);
 void BLI_split_file_part(const char *string, char *file, const size_t filelen);
-void BLI_join_dirfile(char *string, const size_t maxlen, const char *dir, const char *file);
+void BLI_path_append(char *__restrict dst, const size_t maxlen,
+                     const char *__restrict file)
+#ifdef __GNUC__
+__attribute__((nonnull))
+#endif
+;
+void BLI_join_dirfile(char *__restrict string, const size_t maxlen,
+                      const char *__restrict dir, const char *__restrict file)
+#ifdef __GNUC__
+__attribute__((nonnull))
+#endif
+;
 const char *BLI_path_basename(const char *path);
 
 typedef enum bli_rebase_state {
@@ -111,6 +122,7 @@ bool BLI_testextensie_array(const char *str, const char **ext_array);
 bool BLI_testextensie_glob(const char *str, const char *ext_fnmatch);
 bool BLI_replace_extension(char *path, size_t maxlen, const char *ext);
 bool BLI_ensure_extension(char *path, size_t maxlen, const char *ext);
+bool BLI_ensure_filename(char *filepath, size_t maxlen, const char *filename);
 void BLI_uniquename(struct ListBase *list, void *vlink, const char *defname, char delim, short name_offs, short len);
 bool BLI_uniquename_cb(bool (*unique_check)(void *arg, const char *name),
                        void *arg, const char * defname, char delim, char *name, short name_len);
@@ -162,7 +174,7 @@ void BLI_path_rel(char *file, const char *relfile);
 bool BLI_path_is_rel(const char *path);
 
 /* path string comparisons: case-insensitive for Windows, case-sensitive otherwise */
-#ifdef WIN32
+#if defined(WIN32)
 #  define BLI_path_cmp BLI_strcasecmp
 #  define BLI_path_ncmp BLI_strncasecmp
 #else

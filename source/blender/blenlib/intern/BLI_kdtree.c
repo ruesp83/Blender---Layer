@@ -15,11 +15,6 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- * The Original Code is: none of this file.
- *
  * Contributor(s): Janne Karhu
  *                 Brecht Van Lommel
  *
@@ -354,7 +349,7 @@ static void add_in_range(KDTreeNearest **ptn, int found, int *totfoundstack, int
 {
 	KDTreeNearest *to;
 
-	if (found + 1 > *totfoundstack) {
+	if (found >= *totfoundstack) {
 		KDTreeNearest *temp = MEM_callocN((*totfoundstack + 50) * sizeof(KDTreeNode), "psys_treefoundstack");
 		memcpy(temp, *ptn, *totfoundstack * sizeof(KDTreeNearest));
 		if (*ptn)

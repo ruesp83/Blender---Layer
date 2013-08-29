@@ -97,7 +97,8 @@ class Mem_IStream : public Imf::IStream
 public:
 
 	Mem_IStream (unsigned char *exrbuf, size_t exrsize) :
-		IStream("dummy"), _exrpos(0), _exrsize(exrsize) {
+		IStream("dummy"), _exrpos(0), _exrsize(exrsize)
+	{
 		_exrbuf = exrbuf;
 	}
 
@@ -304,8 +305,8 @@ static void openexr_header_metadata(Header *header, struct ImBuf *ibuf)
 	for (info = ibuf->metadata; info; info = info->next)
 		header->insert(info->key, StringAttribute(info->value));
 
-	if (ibuf->ppm[0] > 0.0f)
-		addXDensity(*header, ibuf->ppm[0] / 39.3700787f); /* 1 meter = 39.3700787 inches */
+	if (ibuf->ppm[0] > 0.0)
+		addXDensity(*header, ibuf->ppm[0] / 39.3700787); /* 1 meter = 39.3700787 inches */
 }
 
 static int imb_save_openexr_half(struct ImBuf *ibuf, const char *name, int flags)
@@ -393,7 +394,6 @@ static int imb_save_openexr_half(struct ImBuf *ibuf, const char *name, int flags
 	catch (const std::exception &exc)
 	{
 		printf("OpenEXR-save: ERROR: %s\n", exc.what());
-		if (ibuf) IMB_freeImBuf(ibuf);
 
 		return (0);
 	}
@@ -454,7 +454,6 @@ static int imb_save_openexr_float(struct ImBuf *ibuf, const char *name, int flag
 	catch (const std::exception &exc)
 	{
 		printf("OpenEXR-save: ERROR: %s\n", exc.what());
-		if (ibuf) IMB_freeImBuf(ibuf);
 
 		return (0);
 	}
@@ -642,7 +641,7 @@ void IMB_exrtile_begin_write(void *handle, const char *filename, int mipmap, int
 		data->ofile_stream = new OFileStream(filename);
 		data->tofile = new TiledOutputFile(*(data->ofile_stream), header);
 	}
-	catch (const std::exception &exc) {
+	catch (const std::exception &) {
 		delete data->tofile;
 		delete data->ofile_stream;
 
@@ -662,7 +661,7 @@ int IMB_exr_begin_read(void *handle, const char *filename, int *width, int *heig
 			data->ifile_stream = new IFileStream(filename);
 			data->ifile = new InputFile(*(data->ifile_stream));
 		}
-		catch (const std::exception &exc) {
+		catch (const std::exception &) {
 			delete data->ifile;
 			delete data->ifile_stream;
 
@@ -901,12 +900,36 @@ static int imb_exr_split_channel_name(ExrChannel *echan, char *layname, char *pa
 		printf("multilayer read: bad channel name: %s\n", name);
 		return 0;
 	}
-	else if (len > 1) {
-		BLI_strncpy(tokenbuf, token, len);
-		printf("multilayer read: channel token too long: %s\n", tokenbuf);
-		return 0;
+	else if (len == 1) {
+		echan->chan_id = token[0];
 	}
-	echan->chan_id = token[0];
+	else if (len > 1) {
+		bool ok = false;
+
+		if (len == 2) {
+			/* some multilayers are using two-letter channels name,
+			 * like, MX or NZ, which is basically has structure of
+			 *   <pass_prefix><component>
+			 *
+			 * This is a bit silly, but see file from [#35658].
+			 *
+			 * Here we do some magic to distinguish such cases.
+			 */
+			if (ELEM3(token[1], 'X', 'Y', 'Z') ||
+			    ELEM3(token[1], 'R', 'G', 'B') ||
+			    ELEM3(token[1], 'U', 'V', 'A'))
+			{
+				echan->chan_id = token[1];
+				ok = true;
+			}
+		}
+
+		if (ok == false) {
+			BLI_strncpy(tokenbuf, token, std::min(len + 1, EXR_TOT_MAXNAME));
+			printf("multilayer read: channel token too long: %s\n", tokenbuf);
+			return 0;
+		}
+	}
 	end -= len + 1; /* +1 to skip '.' separator */
 
 	/* second token is pass name */
@@ -1169,7 +1192,7 @@ struct ImBuf *imb_load_openexr(unsigned char *mem, size_t size, int flags, char 
 
 			if (hasXDensity(file->header())) {
 				ibuf->ppm[0] = xDensity(file->header()) * 39.3700787f;
-				ibuf->ppm[1] = ibuf->ppm[0] * file->header().pixelAspectRatio();
+				ibuf->ppm[1] = ibuf->ppm[0] * (double)file->header().pixelAspectRatio();
 			}
 
 			ibuf->ftype = OPENEXR;

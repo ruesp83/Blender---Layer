@@ -78,7 +78,7 @@ MINLINE void linearrgb_to_srgb_uchar4(unsigned char srgb[4], const float linear[
 	F4TOCHAR4(srgb_f, srgb);
 }
 
-/* predivide versions to work on associated/pre-multipled alpha. if this should
+/* predivide versions to work on associated/pre-multiplied alpha. if this should
  * be done or not depends on the background the image will be composited over,
  * ideally you would never do color space conversion on an image with alpha
  * because it is ill defined */
@@ -271,6 +271,13 @@ MINLINE int compare_rgb_uchar(const unsigned char col_a[3], const unsigned char 
 
 /**************** Alpha Transformations *****************/
 
+MINLINE char pixel_is_transparent(const unsigned char pix[4])
+{	
+	if ((pix[0] == 0) && (pix[1] == 0) && (pix[2] == 0) && (pix[3] == 0))
+		return 1;
+	return 0;
+}
+
 MINLINE void premul_to_straight_v4_v4(float straight[4], const float premul[4])
 {
 	if (premul[3] == 0.0f || premul[3] == 1.0f) {
@@ -309,8 +316,8 @@ MINLINE void straight_to_premul_v4(float color[4])
 
 MINLINE void straight_uchar_to_premul_float(float result[4], const unsigned char color[4])
 {
-	float alpha = color[3] / 255.0f;
-	float fac = alpha / 255.0f;
+	float alpha = color[3] * (1.0f / 255.0f);
+	float fac = alpha * (1.0f / 255.0f);
 
 	result[0] = color[0] * fac;
 	result[1] = color[1] * fac;

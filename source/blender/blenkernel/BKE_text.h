@@ -48,6 +48,8 @@ int 			txt_get_undostate	(void);
 struct Text    *BKE_text_add	(struct Main *bmain, const char *name);
 int				txt_extended_ascii_as_utf8(char **str);
 int				BKE_text_reload		(struct Text *text);
+struct Text    *BKE_text_load_ex(struct Main *bmain, const char *file, const char *relpath,
+                                 const bool is_internal);
 struct Text    *BKE_text_load	(struct Main *bmain, const char *file, const char *relpath);
 struct Text    *BKE_text_copy		(struct Text *ta);
 void			BKE_text_unlink		(struct Main *bmain, struct Text *text);
@@ -84,7 +86,6 @@ void	txt_sel_all			(struct Text *text);
 void	txt_sel_line		(struct Text *text);
 char   *txt_sel_to_buf		(struct Text *text);
 void	txt_insert_buf		(struct Text *text, const char *in_buffer);
-void	txt_print_undo		(struct Text *text);
 void	txt_undo_add_op		(struct Text *text, int op);
 void	txt_do_undo			(struct Text *text);
 void	txt_do_redo			(struct Text *text);
@@ -101,6 +102,12 @@ void	txt_uncomment		(struct Text *text);
 void	txt_move_lines		(struct Text *text, const int direction);
 void	txt_duplicate_line	(struct Text *text);
 int		txt_setcurr_tab_spaces(struct Text *text, int space);
+bool	txt_cursor_is_line_start(struct Text *text);
+bool	txt_cursor_is_line_end(struct Text *text);
+
+#if 0
+void	txt_print_undo		(struct Text *text);
+#endif
 
 /* utility functions, could be moved somewhere more generic but are python/text related  */
 int text_check_bracket(const char ch);

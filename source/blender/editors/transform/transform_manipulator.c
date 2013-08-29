@@ -64,7 +64,8 @@
 #include "BKE_mesh.h"
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
+#include "BKE_lattice.h"
 
 #include "BIF_gl.h"
 
@@ -293,7 +294,7 @@ int calc_manipulator_stats(const bContext *C)
 		if ((ob->lay & v3d->lay) == 0) return 0;
 
 		if (obedit->type == OB_MESH) {
-			BMEditMesh *em = BMEdit_FromObject(obedit);
+			BMEditMesh *em = BKE_editmesh_from_object(obedit);
 			BMEditSelection ese;
 			float vec[3] = {0, 0, 0};
 
@@ -469,18 +470,23 @@ int calc_manipulator_stats(const bContext *C)
 			}
 		}
 		else if (obedit->type == OB_LATTICE) {
+			Lattice *lt = ((Lattice *)obedit->data)->editlatt->latt;
 			BPoint *bp;
-			Lattice *lt = obedit->data;
 
-			bp = lt->editlatt->latt->def;
-
-			a = lt->editlatt->latt->pntsu * lt->editlatt->latt->pntsv * lt->editlatt->latt->pntsw;
-			while (a--) {
-				if (bp->f1 & SELECT) {
-					calc_tw_center(scene, bp->vec);
-					totsel++;
+			if ((v3d->around == V3D_ACTIVE) && (bp = BKE_lattice_active_point_get(lt))) {
+				calc_tw_center(scene, bp->vec);
+				totsel++;
+			}
+			else {
+				bp = lt->def;
+				a = lt->pntsu * lt->pntsv * lt->pntsw;
+				while (a--) {
+					if (bp->f1 & SELECT) {
+						calc_tw_center(scene, bp->vec);
+						totsel++;
+					}
+					bp++;
 				}
-				bp++;
 			}
 		}
 
@@ -596,7 +602,7 @@ int calc_manipulator_stats(const bContext *C)
 					break;
 				}
 				/* if not gimbal, fall through to normal */
-				/* pass through */
+				/* fall-through */
 			}
 			case V3D_MANIP_NORMAL:
 			{
@@ -607,7 +613,7 @@ int calc_manipulator_stats(const bContext *C)
 					break;
 				}
 				/* no break we define 'normal' as 'local' in Object mode */
-				/* pass through */
+				/* fall-through */
 			}
 			case V3D_MANIP_LOCAL:
 			{
@@ -719,13 +725,13 @@ static void partial_doughnut(float radring, float radhole, int start, int end, i
 	side_delta = 2.0f * (float)M_PI / (float)nsides;
 
 	theta = (float)M_PI + 0.5f * ring_delta;
-	cos_theta = (float)cos(theta);
-	sin_theta = (float)sin(theta);
+	cos_theta = cosf(theta);
+	sin_theta = sinf(theta);
 
 	for (i = nrings - 1; i >= 0; i--) {
 		theta1 = theta + ring_delta;
-		cos_theta1 = (float)cos(theta1);
-		sin_theta1 = (float)sin(theta1);
+		cos_theta1 = cosf(theta1);
+		sin_theta1 = sinf(theta1);
 
 		if (do_caps && i == start) {  // cap
 			glBegin(GL_POLYGON);
@@ -766,8 +772,8 @@ static void partial_doughnut(float radring, float radhole, int start, int end, i
 				float cos_phi, sin_phi, dist;
 
 				phi -= side_delta;
-				cos_phi = (float)cos(phi);
-				sin_phi = (float)sin(phi);
+				cos_phi = cosf(phi);
+				sin_phi = sinf(phi);
 				dist = radhole + radring * cos_phi;
 
 				glVertex3f(cos_theta * dist, -sin_theta * dist,  radring * sin_phi);
@@ -834,34 +840,14 @@ static void manipulator_setcolor(View3D *v3d, char axis, int colcode, unsigned c
 				UI_GetThemeColor3ubv(TH_AXIS_Z, col);
 				break;
 			default:
-				BLI_assert(!"invalid axis arg");
+				BLI_assert(0);
+				break;
 		}
 	}
 
 	glColor4ubv(col);
 }
 
-static void axis_sort_v3(const float axis_values[3], int r_axis_order[3])
-{
-	float v[3];
-	copy_v3_v3(v, axis_values);
-
-#define SWAP_AXIS(a, b) { \
-	SWAP(float, v[a],            v[b]); \
-	SWAP(int,   r_axis_order[a], r_axis_order[b]); \
-} (void)0
-
-	if (v[0] < v[1]) {
-		if (v[2] < v[0]) {  SWAP_AXIS(0, 2); }
-	}
-	else {
-		if (v[1] < v[2]) { SWAP_AXIS(0, 1); }
-		else             { SWAP_AXIS(0, 2); }
-	}
-	if (v[2] < v[1])     { SWAP_AXIS(1, 2); }
-
-#undef SWAP_AXIS
-}
 static void manipulator_axis_order(RegionView3D *rv3d, int r_axis_order[3])
 {
 	float axis_values[3];
@@ -1607,7 +1593,6 @@ static void draw_manipulator_rotate_cyl(View3D *v3d, RegionView3D *rv3d, int mov
 /* ********************************************* */
 
 /* main call, does calc centers & orientation too */
-/* uses global G.moving */
 static int drawflags = 0xFFFF;       // only for the calls below, belongs in scene...?
 
 void BIF_draw_manipulator(const bContext *C)
@@ -1620,9 +1605,7 @@ void BIF_draw_manipulator(const bContext *C)
 	int totsel;
 
 	if (!(v3d->twflag & V3D_USE_MANIPULATOR)) return;
-//	if (G.moving && (G.moving & G_TRANSFORM_MANIP)==0) return;
 
-//	if (G.moving==0) {
 	{
 		v3d->twflag &= ~V3D_DRAW_MANIPULATOR;
 
@@ -1635,15 +1618,18 @@ void BIF_draw_manipulator(const bContext *C)
 		switch (v3d->around) {
 			case V3D_CENTER:
 			case V3D_ACTIVE:
-				rv3d->twmat[3][0] = (scene->twmin[0] + scene->twmax[0]) / 2.0f;
-				rv3d->twmat[3][1] = (scene->twmin[1] + scene->twmax[1]) / 2.0f;
-				rv3d->twmat[3][2] = (scene->twmin[2] + scene->twmax[2]) / 2.0f;
-				if (v3d->around == V3D_ACTIVE && scene->obedit == NULL) {
-					Object *ob = OBACT;
-					if (ob && !(ob->mode & OB_MODE_POSE))
-						copy_v3_v3(rv3d->twmat[3], ob->obmat[3]);
+			{
+				Object *ob;
+				if (((v3d->around == V3D_ACTIVE) && (scene->obedit == NULL)) &&
+				    ((ob = OBACT) && !(ob->mode & OB_MODE_POSE)))
+				{
+					copy_v3_v3(rv3d->twmat[3], ob->obmat[3]);
+				}
+				else {
+					mid_v3_v3v3(rv3d->twmat[3], scene->twmin, scene->twmax);
 				}
 				break;
+			}
 			case V3D_LOCAL:
 			case V3D_CENTROID:
 				copy_v3_v3(rv3d->twmat[3], scene->twcent);
@@ -1656,6 +1642,11 @@ void BIF_draw_manipulator(const bContext *C)
 		mul_mat3_m4_fl(rv3d->twmat, ED_view3d_pixel_size(rv3d, rv3d->twmat[3]) * U.tw_size * 5.0f);
 	}
 
+	/* when looking through a selected camera, the manipulator can be at the
+	 * exact same position as the view, skip so we don't break selection */
+	if (fabsf(mat4_to_scale(rv3d->twmat)) < 1e-7f)
+		return;
+
 	test_manipulator_axis(C);
 	drawflags = rv3d->twdrawflag;    /* set in calc_manipulator_stats */
 
@@ -1666,11 +1657,13 @@ void BIF_draw_manipulator(const bContext *C)
 		if (v3d->twtype & V3D_MANIP_ROTATE) {
 
 			if (G.debug_value == 3) {
-				if (G.moving) draw_manipulator_rotate_cyl(v3d, rv3d, 1, drawflags, v3d->twtype, MAN_MOVECOL);
-				else draw_manipulator_rotate_cyl(v3d, rv3d, 0, drawflags, v3d->twtype, MAN_RGB);
+				if (G.moving & (G_TRANSFORM_OBJ | G_TRANSFORM_EDIT))
+					draw_manipulator_rotate_cyl(v3d, rv3d, 1, drawflags, v3d->twtype, MAN_MOVECOL);
+				else
+					draw_manipulator_rotate_cyl(v3d, rv3d, 0, drawflags, v3d->twtype, MAN_RGB);
 			}
 			else
-				draw_manipulator_rotate(v3d, rv3d, 0 /* G.moving*/, drawflags, v3d->twtype);
+				draw_manipulator_rotate(v3d, rv3d, 0, drawflags, v3d->twtype);
 		}
 		if (v3d->twtype & V3D_MANIP_SCALE) {
 			draw_manipulator_scale(v3d, rv3d, 0, drawflags, v3d->twtype, MAN_RGB);
@@ -1690,7 +1683,12 @@ static int manipulator_selectbuf(ScrArea *sa, ARegion *ar, const int mval[2], fl
 	rctf rect;
 	GLuint buffer[64];      // max 4 items per select, so large enuf
 	short hits;
-	extern void setwinmatrixview3d(ARegion *ar, View3D *v3d, rctf *rect); // XXX check a bit later on this... (ton)
+	extern void setwinmatrixview3d(ARegion *, View3D *, rctf *); // XXX check a bit later on this... (ton)
+
+	/* when looking through a selected camera, the manipulator can be at the
+	 * exact same position as the view, skip so we don't break selection */
+	if (fabsf(mat4_to_scale(rv3d->twmat)) < 1e-7f)
+		return 0;
 
 	G.f |= G_PICKSEL;
 
@@ -1700,7 +1698,7 @@ static int manipulator_selectbuf(ScrArea *sa, ARegion *ar, const int mval[2], fl
 	rect.ymax = mval[1] + hotspot;
 
 	setwinmatrixview3d(ar, v3d, &rect);
-	mult_m4_m4m4(rv3d->persmat, rv3d->winmat, rv3d->viewmat);
+	mul_m4_m4m4(rv3d->persmat, rv3d->winmat, rv3d->viewmat);
 
 	glSelectBuffer(64, buffer);
 	glRenderMode(GL_SELECT);
@@ -1722,7 +1720,7 @@ static int manipulator_selectbuf(ScrArea *sa, ARegion *ar, const int mval[2], fl
 
 	G.f &= ~G_PICKSEL;
 	setwinmatrixview3d(ar, v3d, NULL);
-	mult_m4_m4m4(rv3d->persmat, rv3d->winmat, rv3d->viewmat);
+	mul_m4_m4m4(rv3d->persmat, rv3d->winmat, rv3d->viewmat);
 
 	if (hits == 1) return buffer[3];
 	else if (hits > 1) {

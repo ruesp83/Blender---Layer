@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 #include "device.h"
@@ -28,7 +26,7 @@
 
 CCL_NAMESPACE_BEGIN
 
-bool MeshManager::displace(Device *device, Scene *scene, Mesh *mesh, Progress& progress)
+bool MeshManager::displace(Device *device, DeviceScene *dscene, Scene *scene, Mesh *mesh, Progress& progress)
 {
 	/* verify if we have a displacement shader */
 	bool has_displacement = false;
@@ -79,18 +77,20 @@ bool MeshManager::displace(Device *device, Scene *scene, Mesh *mesh, Progress& p
 			int object = ~object_index;
 			int prim = mesh->tri_offset + i;
 			float u, v;
-
-			if(j == 0) {
-				u = 1.0f;
-				v = 0.0f;
-			}
-			else if(j == 1) {
-				u = 0.0f;
-				v = 1.0f;
-			}
-			else {
-				u = 0.0f;
-				v = 0.0f;
+			
+			switch (j) {
+				case 0:
+					u = 1.0f;
+					v = 0.0f;
+					break;
+				case 1:
+					u = 0.0f;
+					v = 1.0f;
+					break;
+				default:
+					u = 0.0f;
+					v = 0.0f;
+					break;
 			}
 
 			/* back */
@@ -105,6 +105,9 @@ bool MeshManager::displace(Device *device, Scene *scene, Mesh *mesh, Progress& p
 	/* run device task */
 	device_vector<float4> d_output;
 	d_output.resize(d_input_size);
+
+	/* needs to be up to data for attribute access */
+	device->const_copy_to("__data", &dscene->data, sizeof(dscene->data));
 
 	device->mem_alloc(d_input, MEM_READ_ONLY);
 	device->mem_copy_to(d_input);

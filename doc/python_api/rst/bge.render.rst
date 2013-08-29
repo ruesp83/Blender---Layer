@@ -62,6 +62,18 @@ Constants
 .. data:: KX_BLENDER_GLSL_MATERIAL
 
    Materials approximating blender materials with GLSL.
+   
+.. DATA:: VSYNC_OFF
+
+   Disables vsync
+
+.. DATA:: VSYNC_ON
+
+   Enables vsync
+
+.. DATA:: VSYNC_ADAPTIVE
+
+   Enables adaptive vsync if supported. Adaptive vsync enables vsync if the framerate is above the monitors refresh rate. Otherwise, vsync is diabled if the framerate is too low.
 
 *********
 Functions
@@ -86,6 +98,17 @@ Functions
    :type width: integer
    :type height: integer
 
+.. function:: setFullScreen(enable)
+
+   Set whether or not the window should be fullscreen.
+   
+   :type enable: bool
+
+.. function:: getFullScreen()
+
+   Returns whether or not the window is fullscreen.
+   
+   :rtype: bool
 
 .. function:: makeScreenshot(filename)
 
@@ -97,7 +120,7 @@ Functions
    The standalone player saves .png files. It does not support color space conversion 
    or gamma correction.
    
-   When run from Blender, makeScreenshot supports Iris, IrisZ, TGA, Raw TGA, PNG, HamX, and Jpeg.
+   When run from Blender, makeScreenshot supports all Blender image file formats like PNG, TGA, Jpeg and OpenEXR.
    Gamma, Colorspace conversion and Jpeg compression are taken from the Render settings panels.
    
    :type filename: string
@@ -232,11 +255,27 @@ Functions
    :arg level: The new anisotropic filtering level to use
    :type level: integer (must be one of 1, 2, 4, 8, 16)
    
+   .. note:: Changing this value can cause all textures to be recreated, which can be slow.
+   
 .. function:: getAnisotropicFiltering()
 
    Get the anisotropic filtering level used for textures.
    
    :rtype: integer (one of 1, 2, 4, 8, 16)
+
+.. function:: setMipmapping(value)
+
+   Change how to use mipmapping.
+   
+   :type value: RAS_MIPMAP_NONE, RAS_MIPMAP_NEAREST, RAS_MIPMAP_LINEAR
+   
+   .. note:: Changing this value can cause all textures to be recreated, which can be slow.
+
+.. function:: getMipmapping()
+
+   Get the current mipmapping setting.
+   
+   :rtype: RAS_MIPMAP_NONE, RAS_MIPMAP_NEAREST, RAS_MIPMAP_LINEAR
    
 .. function:: drawLine(fromVec,toVec,color)
 
@@ -262,3 +301,15 @@ Functions
 
    Disable the motion blur effect.
 
+.. function:: setVsync(value)
+
+   Set the vsync value
+
+   :arg value: One of VSYNC_OFF, VSYNC_ON, VSYNC_ADAPTIVE
+   :type value: integer
+
+.. function:: getVsync()
+
+   Get the current vsync value
+
+   :rtype: One of VSYNC_OFF, VSYNC_ON, VSYNC_ADAPTIVE

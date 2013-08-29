@@ -39,11 +39,11 @@ set(INC
 	../../../blender/makesdna
 	../../../../intern/container
 	../../../../intern/guardedalloc
-	../../../../intern/moto/include
 	../../../../intern/string
 )
 
 set(INC_SYS
+	../../../../intern/moto/include
 	${GLEW_INCLUDE_PATH}
 	${PYTHON_INCLUDE_DIRS}
 )
@@ -59,7 +59,7 @@ set(SRC
 )
 
 if(WITH_BULLET)
-	list(APPEND INC
+	list(APPEND INC_SYS
 		${BULLET_INCLUDE_DIRS}
 	)
 	add_definitions(-DWITH_BULLET)

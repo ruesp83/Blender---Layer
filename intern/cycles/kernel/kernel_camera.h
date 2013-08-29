@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 CCL_NAMESPACE_BEGIN
@@ -53,7 +51,7 @@ __device void camera_sample_perspective(KernelGlobals *kg, float raster_x, float
 
 		/* compute point on plane of focus */
 		float ft = kernel_data.cam.focaldistance/ray->D.z;
-		float3 Pfocus = ray->P + ray->D*ft;
+		float3 Pfocus = ray->D*ft;
 
 		/* update ray for effect of lens */
 		ray->P = make_float3(lensuv.x, lensuv.y, 0.0f);
@@ -76,8 +74,7 @@ __device void camera_sample_perspective(KernelGlobals *kg, float raster_x, float
 	/* ray differential */
 	float3 Ddiff = transform_direction(&cameratoworld, Pcamera);
 
-	ray->dP.dx = make_float3(0.0f, 0.0f, 0.0f);
-	ray->dP.dy = make_float3(0.0f, 0.0f, 0.0f);
+	ray->dP = differential3_zero();
 
 	ray->dD.dx = normalize(Ddiff + float4_to_float3(kernel_data.cam.dx)) - normalize(Ddiff);
 	ray->dD.dy = normalize(Ddiff + float4_to_float3(kernel_data.cam.dy)) - normalize(Ddiff);
@@ -100,7 +97,6 @@ __device void camera_sample_orthographic(KernelGlobals *kg, float raster_x, floa
 	Transform rastertocamera = kernel_data.cam.rastertocamera;
 	float3 Pcamera = transform_perspective(&rastertocamera, make_float3(raster_x, raster_y, 0.0f));
 
-	ray->P = Pcamera;
 	ray->D = make_float3(0.0f, 0.0f, 1.0f);
 
 	/* modify ray for depth of field */
@@ -111,14 +107,16 @@ __device void camera_sample_orthographic(KernelGlobals *kg, float raster_x, floa
 		float2 lensuv = camera_sample_aperture(kg, lens_u, lens_v)*aperturesize;
 
 		/* compute point on plane of focus */
-		float ft = kernel_data.cam.focaldistance/ray->D.z;
-		float3 Pfocus = ray->P + ray->D*ft;
+		float3 Pfocus = ray->D * kernel_data.cam.focaldistance;
 
 		/* update ray for effect of lens */
-		ray->P = make_float3(lensuv.x, lensuv.y, 0.0f);
-		ray->D = normalize(Pfocus - ray->P);
+		float3 lensuvw = make_float3(lensuv.x, lensuv.y, 0.0f);
+		ray->P = Pcamera + lensuvw;
+		ray->D = normalize(Pfocus - lensuvw);
 	}
-
+	else {
+		ray->P = Pcamera;
+	}
 	/* transform ray from camera to world */
 	Transform cameratoworld = kernel_data.cam.cameratoworld;
 
@@ -136,8 +134,7 @@ __device void camera_sample_orthographic(KernelGlobals *kg, float raster_x, floa
 	ray->dP.dx = float4_to_float3(kernel_data.cam.dx);
 	ray->dP.dy = float4_to_float3(kernel_data.cam.dy);
 
-	ray->dD.dx = make_float3(0.0f, 0.0f, 0.0f);
-	ray->dD.dy = make_float3(0.0f, 0.0f, 0.0f);
+	ray->dD = differential3_zero();
 #endif
 
 #ifdef __CAMERA_CLIPPING__
@@ -167,6 +164,12 @@ __device void camera_sample_panorama(KernelGlobals *kg, float raster_x, float ra
 
 	ray->D = panorama_to_direction(kg, Pcamera.x, Pcamera.y);
 
+	/* indicates ray should not receive any light, outside of the lens */
+	if(is_zero(ray->D)) {	
+		ray->t = 0.0f;
+		return;
+	}
+
 	/* modify ray for depth of field */
 	float aperturesize = kernel_data.cam.aperturesize;
 
@@ -187,12 +190,6 @@ __device void camera_sample_panorama(KernelGlobals *kg, float raster_x, float ra
 		ray->D = normalize(Pfocus - ray->P);
 	}
 
-	/* indicates ray should not receive any light, outside of the lens */
-	if(len_squared(ray->D) == 0.0f) {
-		ray->t = 0.0f;
-		return;
-	}
-
 	/* transform ray from camera to world */
 	Transform cameratoworld = kernel_data.cam.cameratoworld;
 
@@ -207,8 +204,7 @@ __device void camera_sample_panorama(KernelGlobals *kg, float raster_x, float ra
 
 #ifdef __RAY_DIFFERENTIALS__
 	/* ray differential */
-	ray->dP.dx = make_float3(0.0f, 0.0f, 0.0f);
-	ray->dP.dy = make_float3(0.0f, 0.0f, 0.0f);
+	ray->dP = differential3_zero();
 
 	Pcamera = transform_perspective(&rastertocamera, make_float3(raster_x + 1.0f, raster_y, 0.0f));
 	ray->dD.dx = normalize(transform_direction(&cameratoworld, panorama_to_direction(kg, Pcamera.x, Pcamera.y))) - ray->D;
@@ -247,6 +243,12 @@ __device void camera_sample(KernelGlobals *kg, int x, int y, float filter_u, flo
 
 /* Utilities */
 
+__device_inline float3 camera_position(KernelGlobals *kg)
+{
+	Transform cameratoworld = kernel_data.cam.cameratoworld;
+	return make_float3(cameratoworld.x.w, cameratoworld.y.w, cameratoworld.z.w);
+}
+
 __device_inline float camera_distance(KernelGlobals *kg, float3 P)
 {
 	Transform cameratoworld = kernel_data.cam.cameratoworld;
@@ -258,6 +260,31 @@ __device_inline float camera_distance(KernelGlobals *kg, float3 P)
 	}
 	else
 		return len(P - camP);
+}
+
+__device_inline float3 camera_world_to_ndc(KernelGlobals *kg, ShaderData *sd, float3 P)
+{
+	if(kernel_data.cam.type != CAMERA_PANORAMA) {
+		/* perspective / ortho */
+		if(sd->object == ~0 && kernel_data.cam.type == CAMERA_PERSPECTIVE)
+			P += camera_position(kg);
+
+		Transform tfm = kernel_data.cam.worldtondc;
+		return transform_perspective(&tfm, P);
+	}
+	else {
+		/* panorama */
+		Transform tfm = kernel_data.cam.worldtocamera;
+
+		if(sd->object != ~0)
+			P = normalize(transform_point(&tfm, P));
+		else
+			P = normalize(transform_direction(&tfm, P));
+
+		float2 uv = direction_to_panorama(kg, P);
+
+		return make_float3(uv.x, uv.y, 0.0f);
+	}
 }
 
 CCL_NAMESPACE_END

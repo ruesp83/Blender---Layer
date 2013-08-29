@@ -143,6 +143,13 @@ if(WITH_CYCLES_OSL)
 	add_definitions(-DWITH_CYCLES_OSL)
 endif()
 
+if(WITH_FREESTYLE)
+	list(APPEND INC
+		../../freestyle/intern/python
+	)
+	add_definitions(-DWITH_FREESTYLE)
+endif()
+
 if(WITH_GAMEENGINE)
 	add_definitions(-DWITH_GAMEENGINE)
 endif()
@@ -234,8 +241,6 @@ endif()
 if(WITH_PLAYER)
 	add_definitions(-DWITH_PLAYER)
 endif()
-
-
 
 
 blender_add_lib(bf_python "${SRC}" "${INC}" "${INC_SYS}")

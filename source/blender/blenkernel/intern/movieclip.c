@@ -299,7 +299,6 @@ static void movieclip_calc_length(MovieClip *clip)
 		}
 	}
 	else if (clip->source == MCLIP_SRC_SEQUENCE) {
-		int framenr = 1;
 		unsigned short numlen;
 		char name[FILE_MAX], head[FILE_MAX], tail[FILE_MAX];
 
@@ -307,18 +306,17 @@ static void movieclip_calc_length(MovieClip *clip)
 
 		if (numlen == 0) {
 			/* there's no number group in file name, assume it's single framed sequence */
-			clip->len = framenr + 1;
+			clip->len = 1;
 		}
 		else {
+			clip->len = 0;
 			for (;;) {
-				get_sequence_fname(clip, framenr, name);
+				get_sequence_fname(clip, clip->len + clip->start_frame, name);
 
-				if (!BLI_exists(name)) {
-					clip->len = framenr;
+				if (BLI_exists(name))
+					clip->len++;
+				else
 					break;
-				}
-
-				framenr++;
 			}
 		}
 	}
@@ -442,7 +440,7 @@ static void *moviecache_getprioritydata(void *key_v)
 	MovieClipImBufCacheKey *key = (MovieClipImBufCacheKey *) key_v;
 	MovieClipCachePriorityData *priority_data;
 
-	priority_data = MEM_callocN(sizeof(priority_data), "movie cache clip priority data");
+	priority_data = MEM_callocN(sizeof(*priority_data), "movie cache clip priority data");
 	priority_data->framenr = key->framenr;
 
 	return priority_data;
@@ -627,7 +625,7 @@ MovieClip *BKE_movieclip_file_add(Main *bmain, const char *name)
 
 	/* exists? */
 	file = BLI_open(str, O_BINARY | O_RDONLY, 0);
-	if (file == -1)
+	if (file < 0)
 		return NULL;
 	close(file);
 
@@ -973,6 +971,7 @@ static ImBuf *put_stabilized_frame_to_cache(MovieClip *clip, MovieClipUser *user
 
 	copy_v2_v2(cache->stabilized.loc, tloc);
 
+	cache->stabilized.reference_ibuf = ibuf;
 	cache->stabilized.scale = tscale;
 	cache->stabilized.angle = tangle;
 	cache->stabilized.framenr = framenr;
@@ -1162,13 +1161,17 @@ static void free_buffers(MovieClip *clip)
 	BKE_free_animdata((ID *) clip);
 }
 
+void BKE_movieclip_clear_cache(MovieClip *clip)
+{
+	free_buffers(clip);
+}
+
 void BKE_movieclip_reload(MovieClip *clip)
 {
 	/* clear cache */
 	free_buffers(clip);
 
 	clip->tracking.stabilization.ok = FALSE;
-	clip->prefetch_ok = FALSE;
 
 	/* update clip source */
 	detect_clip_source(clip);
@@ -1392,8 +1395,6 @@ void BKE_movieclip_build_proxy_frame_for_ibuf(MovieClip *clip, ImBuf *ibuf, stru
 
 void BKE_movieclip_free(MovieClip *clip)
 {
-	BKE_sequencer_clear_movieclip_in_clipboard(clip);
-
 	free_buffers(clip);
 
 	BKE_tracking_free(&clip->tracking);
@@ -1438,21 +1439,19 @@ void BKE_movieclip_unlink(Main *bmain, MovieClip *clip)
 		bConstraint *con;
 
 		for (con = ob->constraints.first; con; con = con->next) {
-			bConstraintTypeInfo *cti = BKE_constraint_get_typeinfo(con);
-
-			if (cti->type == CONSTRAINT_TYPE_FOLLOWTRACK) {
+			if (con->type == CONSTRAINT_TYPE_FOLLOWTRACK) {
 				bFollowTrackConstraint *data = (bFollowTrackConstraint *) con->data;
 
 				if (data->clip == clip)
 					data->clip = NULL;
 			}
-			else if (cti->type == CONSTRAINT_TYPE_CAMERASOLVER) {
+			else if (con->type == CONSTRAINT_TYPE_CAMERASOLVER) {
 				bCameraSolverConstraint *data = (bCameraSolverConstraint *) con->data;
 
 				if (data->clip == clip)
 					data->clip = NULL;
 			}
-			else if (cti->type == CONSTRAINT_TYPE_OBJECTSOLVER) {
+			else if (con->type == CONSTRAINT_TYPE_OBJECTSOLVER) {
 				bObjectSolverConstraint *data = (bObjectSolverConstraint *) con->data;
 
 				if (data->clip == clip)

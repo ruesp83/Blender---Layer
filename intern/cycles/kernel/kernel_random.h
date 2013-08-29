@@ -1,20 +1,20 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
+
+#include "kernel_jitter.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -100,8 +100,16 @@ __device uint sobol_lookup(const uint m, const uint frame, const uint ex, const 
 	return index;
 }
 
-__device_inline float path_rng(KernelGlobals *kg, RNG *rng, int sample, int dimension)
+__device_inline float path_rng_1D(KernelGlobals *kg, RNG *rng, int sample, int num_samples, int dimension)
 {
+#ifdef __CMJ__
+	if(kernel_data.integrator.sampling_pattern == SAMPLING_PATTERN_CMJ) {
+		/* correlated multi-jittered */
+		int p = *rng + dimension;
+		return cmj_sample_1D(sample, num_samples, p);
+	}
+#endif
+
 #ifdef __SOBOL_FULL_SCREEN__
 	uint result = sobol_dimension(kg, *rng, dimension);
 	float r = (float)result * (1.0f/(float)0xFFFFFFFF);
@@ -115,15 +123,32 @@ __device_inline float path_rng(KernelGlobals *kg, RNG *rng, int sample, int dime
 	float shift;
 
 	if(dimension & 1)
-		shift = (*rng >> 16)/((float)0xFFFF);
+		shift = (*rng >> 16) * (1.0f/(float)0xFFFF);
 	else
-		shift = (*rng & 0xFFFF)/((float)0xFFFF);
+		shift = (*rng & 0xFFFF) * (1.0f/(float)0xFFFF);
 
 	return r + shift - floorf(r + shift);
 #endif
 }
 
-__device_inline void path_rng_init(KernelGlobals *kg, __global uint *rng_state, int sample, RNG *rng, int x, int y, float *fx, float *fy)
+__device_inline void path_rng_2D(KernelGlobals *kg, RNG *rng, int sample, int num_samples, int dimension, float *fx, float *fy)
+{
+#ifdef __CMJ__
+	if(kernel_data.integrator.sampling_pattern == SAMPLING_PATTERN_CMJ) {
+		/* correlated multi-jittered */
+		int p = *rng + dimension;
+		cmj_sample_2D(sample, num_samples, p, fx, fy);
+	}
+	else
+#endif
+	{
+		/* sobol */
+		*fx = path_rng_1D(kg, rng, sample, num_samples, dimension);
+		*fy = path_rng_1D(kg, rng, sample, num_samples, dimension + 1);
+	}
+}
+
+__device_inline void path_rng_init(KernelGlobals *kg, __global uint *rng_state, int sample, int num_samples, RNG *rng, int x, int y, float *fx, float *fy)
 {
 #ifdef __SOBOL_FULL_SCREEN__
 	uint px, py;
@@ -153,8 +178,7 @@ __device_inline void path_rng_init(KernelGlobals *kg, __global uint *rng_state, 
 		*fy = 0.5f;
 	}
 	else {
-		*fx = path_rng(kg, rng, sample, PRNG_FILTER_U);
-		*fy = path_rng(kg, rng, sample, PRNG_FILTER_V);
+		path_rng_2D(kg, rng, sample, num_samples, PRNG_FILTER_U, fx, fy);
 	}
 #endif
 }
@@ -168,14 +192,24 @@ __device void path_rng_end(KernelGlobals *kg, __global uint *rng_state, RNG rng)
 
 /* Linear Congruential Generator */
 
-__device float path_rng(KernelGlobals *kg, RNG *rng, int sample, int dimension)
+__device float path_rng(KernelGlobals *kg, RNG& rng, int sample, int dimension)
 {
-	/* implicit mod 2^32 */
-	*rng = (1103515245*(*rng) + 12345);
-	return (float)*rng * (1.0f/(float)0xFFFFFFFF);
 }
 
-__device void path_rng_init(KernelGlobals *kg, __global uint *rng_state, int sample, RNG *rng, int x, int y, float *fx, float *fy)
+__device_inline float path_rng_1D(KernelGlobals *kg, RNG& rng, int sample, int num_samples, int dimension)
+{
+	/* implicit mod 2^32 */
+	rng = (1103515245*(rng) + 12345);
+	return (float)rng * (1.0f/(float)0xFFFFFFFF);
+}
+
+__device_inline void path_rng_2D(KernelGlobals *kg, RNG& rng, int sample, int num_samples, int dimension, float *fx, float *fy)
+{
+	*fx = path_rng_1D(kg, rng, sample, num_samples, dimension);
+	*fy = path_rng_1D(kg, rng, sample, num_samples, dimension + 1);
+}
+
+__device void path_rng_init(KernelGlobals *kg, __global uint *rng_state, int sample, int num_samples, RNG *rng, int x, int y, float *fx, float *fy)
 {
 	/* load state */
 	*rng = *rng_state;
@@ -187,8 +221,7 @@ __device void path_rng_init(KernelGlobals *kg, __global uint *rng_state, int sam
 		*fy = 0.5f;
 	}
 	else {
-		*fx = path_rng(kg, rng, sample, PRNG_FILTER_U);
-		*fy = path_rng(kg, rng, sample, PRNG_FILTER_V);
+		path_rng_2D(kg, rng, sample, num_samples, PRNG_FILTER_U, fx, fy);
 	}
 }
 
@@ -200,17 +233,24 @@ __device void path_rng_end(KernelGlobals *kg, __global uint *rng_state, RNG rng)
 
 #endif
 
-__device float lcg_step(uint *rng)
+__device uint lcg_step_uint(uint *rng)
+{
+	/* implicit mod 2^32 */
+	*rng = (1103515245*(*rng) + 12345);
+	return *rng;
+}
+
+__device float lcg_step_float(uint *rng)
 {
 	/* implicit mod 2^32 */
 	*rng = (1103515245*(*rng) + 12345);
 	return (float)*rng * (1.0f/(float)0xFFFFFFFF);
 }
 
-__device uint lcg_init(float seed)
+__device uint lcg_init(uint seed)
 {
-	uint rng = __float_as_int(seed);
-	lcg_step(&rng);
+	uint rng = seed;
+	lcg_step_uint(&rng);
 	return rng;
 }
 

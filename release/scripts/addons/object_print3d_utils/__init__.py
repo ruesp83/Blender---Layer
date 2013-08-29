@@ -66,6 +66,16 @@ class Print3DSettings(PropertyGroup):
                    ('OBJ', "OBJ", "")),
             default='STL',
             )
+    use_export_texture = BoolProperty(
+            name="Copy Textures",
+            description="Copy textures on export to the output path",
+            default=False,
+            )
+    use_apply_scale = BoolProperty(
+            name="Apply Scale",
+            description="Apply scene scale setting on export",
+            default=False,
+            )
     export_path = StringProperty(
             name="Export Directory",
             description="Path to directory where the files are created",
@@ -76,7 +86,7 @@ class Print3DSettings(PropertyGroup):
             description="Minimum thickness",
             subtype='DISTANCE',
             default=0.001,  # 1mm
-            min=0.0, max=1.0,
+            min=0.0, max=10.0,
             )
     threshold_zero = FloatProperty(
             name="Threshold",
@@ -89,7 +99,7 @@ class Print3DSettings(PropertyGroup):
             name="Angle",
             description="Limit for checking distorted faces",
             subtype='ANGLE',
-            default=math.radians(15.0),
+            default=math.radians(45.0),
             min=0.0, max=math.radians(180.0),
             )
     angle_sharp = FloatProperty(
@@ -126,6 +136,9 @@ classes = (
     operators.Print3DCleanThin,
 
     operators.Print3DSelectReport,
+
+    operators.Print3DScaleToVolume,
+    operators.Print3DScaleToBounds,
 
     operators.Print3DExport,
 

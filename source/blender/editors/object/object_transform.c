@@ -54,10 +54,11 @@
 #include "BKE_mesh.h"
 #include "BKE_object.h"
 #include "BKE_report.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
 #include "BKE_multires.h"
 #include "BKE_armature.h"
 #include "BKE_lattice.h"
+#include "BKE_tracking.h"
 
 #include "RNA_define.h"
 #include "RNA_access.h"
@@ -502,7 +503,7 @@ static int apply_objects_internal(bContext *C, ReportList *reports, int apply_lo
 			}
 			
 			/* update normals */
-			BKE_mesh_calc_normals_mapping(me->mvert, me->totvert, me->mloop, me->mpoly, me->totloop, me->totpoly, NULL, NULL, 0, NULL, NULL);
+			BKE_mesh_calc_normals(me);
 		}
 		else if (ob->type == OB_ARMATURE) {
 			ED_armature_apply_transform(ob, mat);
@@ -549,8 +550,21 @@ static int apply_objects_internal(bContext *C, ReportList *reports, int apply_lo
 				}
 			}
 		}
-		else
+		else if (ob->type == OB_CAMERA) {
+			MovieClip *clip = BKE_object_movieclip_get(scene, ob, FALSE);
+
+			/* applying scale on camera actually scales clip's reconstruction.
+			 * of there's clip assigned to camera nothing to do actually.
+			 */
+			if (!clip)
+				continue;
+
+			if (apply_scale)
+				BKE_tracking_reconstruction_scale(&clip->tracking, ob->size);
+		}
+		else {
 			continue;
+		}
 
 		if (apply_loc)
 			zero_v3(ob->loc);
@@ -575,8 +589,10 @@ static int apply_objects_internal(bContext *C, ReportList *reports, int apply_lo
 	}
 	CTX_DATA_END;
 
-	if (!change)
+	if (!change) {
+		BKE_report(reports, RPT_WARNING, "Objects have no data to transform");
 		return OPERATOR_CANCELLED;
+	}
 
 	WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, NULL);
 	return OPERATOR_FINISHED;
@@ -668,11 +684,16 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
+	Object *obact = CTX_data_active_object(C);
 	Object *obedit = CTX_data_edit_object(C);
 	Object *tob;
 	float cursor[3], cent[3], cent_neg[3], centn[3];
 	int centermode = RNA_enum_get(op->ptr, "type");
 	int around = RNA_enum_get(op->ptr, "center"); /* initialized from v3d->around */
+
+	ListBase ctx_data_list;
+	CollectionPointerLink *ctx_ob;
+	CollectionPointerLink *ctx_ob_act = NULL;
 
 	/* keep track of what is changed */
 	int tot_change = 0, tot_lib_error = 0, tot_multiuser_arm_error = 0;
@@ -732,12 +753,25 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 		}
 	}
 
+	CTX_data_selected_editable_objects(C, &ctx_data_list);
+
 	/* reset flags */
-	CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects)
+	for (ctx_ob = ctx_data_list.first;
+	     ctx_ob;
+	     ctx_ob = ctx_ob->next)
 	{
+		Object *ob = ctx_ob->ptr.data;
 		ob->flag &= ~OB_DONE;
+
+		/* move active first */
+		if (ob == obact) {
+			ctx_ob_act = ctx_ob;
+		}
 	}
-	CTX_DATA_END;
+
+	if (ctx_ob_act) {
+		BLI_rotatelist(&ctx_data_list, (LinkData *)ctx_ob_act);
+	}
 
 	for (tob = bmain->object.first; tob; tob = tob->id.next) {
 		if (tob->data)
@@ -746,8 +780,12 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 			((ID *)tob->dup_group)->flag &= ~LIB_DOIT;
 	}
 
-	CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects)
+	for (ctx_ob = ctx_data_list.first;
+	     ctx_ob;
+	     ctx_ob = ctx_ob->next)
 	{
+		Object *ob = ctx_ob->ptr.data;
+
 		if ((ob->flag & OB_DONE) == 0) {
 			int do_inverse_offset = FALSE;
 			ob->flag |= OB_DONE;
@@ -978,7 +1016,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 			}
 		}
 	}
-	CTX_DATA_END;
+	BLI_freelistN(&ctx_data_list);
 
 	for (tob = bmain->object.first; tob; tob = tob->id.next)
 		if (tob->data && (((ID *)tob->data)->flag & LIB_DOIT))

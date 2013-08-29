@@ -40,6 +40,7 @@ extern "C" {
 
 char *BLI_strdupn(const char *str, const size_t len)
 #ifdef __GNUC__
+__attribute__((malloc))
 __attribute__((warn_unused_result))
 __attribute__((nonnull))
 #endif
@@ -47,6 +48,7 @@ __attribute__((nonnull))
 
 char *BLI_strdup(const char *str)
 #ifdef __GNUC__
+__attribute__((malloc))
 __attribute__((warn_unused_result))
 __attribute__((nonnull))
 #endif
@@ -54,6 +56,7 @@ __attribute__((nonnull))
 
 char *BLI_strdupcat(const char *__restrict str1, const char *__restrict str2)
 #ifdef __GNUC__
+__attribute__((malloc))
 __attribute__((warn_unused_result))
 __attribute__((nonnull))
 #endif
@@ -72,28 +75,37 @@ __attribute__((nonnull))
 #endif
 ;
 
+size_t BLI_strcpy_rlen(char *__restrict dst, const char *__restrict src)
+#ifdef __GNUC__
+__attribute__((warn_unused_result))
+__attribute__((nonnull))
+#endif
+;
+
 char *BLI_str_quoted_substrN(const char *__restrict str, const char *__restrict prefix)
 #ifdef __GNUC__
+__attribute__((malloc))
 __attribute__((warn_unused_result))
 __attribute__((nonnull))
 #endif
 ;
 
-char *BLI_replacestr(char *__restrict str, const char *__restrict oldText, const char *__restrict newText)
+char *BLI_replacestrN(const char *__restrict str, const char *__restrict substr_old, const char *__restrict substr_new)
 #ifdef __GNUC__
+__attribute__((malloc))
 __attribute__((warn_unused_result))
 __attribute__((nonnull))
 #endif
 ;
 
-size_t BLI_snprintf(char *__restrict buffer, size_t len, const char *__restrict format, ...)
+size_t BLI_snprintf(char *__restrict dst, size_t maxncpy, const char *__restrict format, ...)
 #ifdef __GNUC__
 __attribute__ ((format(printf, 3, 4)))
 __attribute__((nonnull))
 #endif
 ;
 
-size_t BLI_vsnprintf(char *__restrict buffer, size_t count, const char *__restrict format, va_list arg)
+size_t BLI_vsnprintf(char *__restrict dst, size_t maxncpy, const char *__restrict format, va_list arg)
 #ifdef __GNUC__
 __attribute__ ((format(printf, 3, 0)))
 #endif
@@ -101,6 +113,7 @@ __attribute__ ((format(printf, 3, 0)))
 
 char *BLI_sprintfN(const char *__restrict format, ...)
 #ifdef __GNUC__
+__attribute__((malloc))
 __attribute__ ((format(printf, 1, 2)))
 __attribute__((warn_unused_result))
 __attribute__((nonnull))
@@ -176,4 +189,4 @@ __attribute__((nonnull))
 }
 #endif
 
-#endif
+#endif  /* __BLI_STRING_H__ */

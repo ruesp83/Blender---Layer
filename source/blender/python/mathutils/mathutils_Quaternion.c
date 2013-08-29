@@ -15,10 +15,6 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- *
  * Contributor(s): Joseph Gilbert
  *
  * ***** END GPL LICENSE BLOCK *****
@@ -533,7 +529,8 @@ static PyObject *Quaternion_richcmpr(PyObject *a, PyObject *b, int op)
 
 	switch (op) {
 		case Py_NE:
-			ok = !ok; /* pass through */
+			ok = !ok;
+			/* fall-through */
 		case Py_EQ:
 			res = ok ? Py_False : Py_True;
 			break;
@@ -1089,7 +1086,7 @@ static PyObject *Quaternion_new(PyTypeObject *type, PyObject *args, PyObject *kw
 			angle = angle_wrap_rad(angle); /* clamp because of precision issues */
 			axis_angle_to_quat(quat, axis, angle);
 			break;
-			/* PyArg_ParseTuple assures no more then 2 */
+			/* PyArg_ParseTuple assures no more than 2 */
 		}
 	}
 	return Quaternion_CreatePyObject(quat, Py_NEW, type);

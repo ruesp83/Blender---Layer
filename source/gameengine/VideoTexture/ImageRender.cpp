@@ -70,7 +70,9 @@ ImageRender::ImageRender (KX_Scene *scene, KX_Camera * camera) :
     m_owncamera(false),
     m_observer(NULL),
     m_mirror(NULL),
-    m_clip(100.f)
+    m_clip(100.f),
+    m_mirrorHalfWidth(0.f),
+    m_mirrorHalfHeight(0.f)
 {
 	// initialize background color
 	setBackground(0, 0, 255, 255);
@@ -275,6 +277,8 @@ void ImageRender::Render()
 
 	m_scene->RenderBuckets(camtrans, m_rasterizer, m_rendertools);
 
+	m_scene->RenderFonts();
+
 	// restore the canvas area now that the render is completed
 	m_canvas->GetWindowArea() = area;
 }
@@ -288,9 +292,9 @@ inline ImageRender * getImageRender (PyImage *self)
 // python methods
 
 // Blender Scene type
-BlendType<KX_Scene> sceneType ("KX_Scene");
+static BlendType<KX_Scene> sceneType ("KX_Scene");
 // Blender Camera type
-BlendType<KX_Camera> cameraType ("KX_Camera");
+static BlendType<KX_Camera> cameraType ("KX_Camera");
 
 
 // object initialization
@@ -398,8 +402,7 @@ static PyGetSetDef imageRenderGetSets[] =
 
 
 // define python type
-PyTypeObject ImageRenderType =
-{ 
+PyTypeObject ImageRenderType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	"VideoTexture.ImageRender",   /*tp_name*/
 	sizeof(PyImage),          /*tp_basicsize*/
@@ -733,8 +736,7 @@ ImageRender::ImageRender (KX_Scene *scene, KX_GameObject *observer, KX_GameObjec
 
 
 // define python type
-PyTypeObject ImageMirrorType =
-{ 
+PyTypeObject ImageMirrorType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	"VideoTexture.ImageMirror",   /*tp_name*/
 	sizeof(PyImage),          /*tp_basicsize*/

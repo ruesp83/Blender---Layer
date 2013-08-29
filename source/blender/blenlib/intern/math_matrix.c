@@ -142,7 +142,7 @@ void swap_m4m4(float m1[4][4], float m2[4][4])
 
 /******************************** Arithmetic *********************************/
 
-void mult_m4_m4m4(float m1[4][4], float m3_[4][4], float m2_[4][4])
+void mul_m4_m4m4(float m1[4][4], float m3_[4][4], float m2_[4][4])
 {
 	float m2[4][4], m3[4][4];
 
@@ -215,7 +215,7 @@ void mul_m4_m4m3(float m1[4][4], float m3_[4][4], float m2_[3][3])
 }
 
 /* m1 = m2 * m3, ignore the elements on the 4th row/column of m3 */
-void mult_m3_m3m4(float m1[3][3], float m3_[4][4], float m2_[3][3])
+void mul_m3_m3m4(float m1[3][3], float m3_[4][4], float m2_[3][3])
 {
 	float m2[3][3], m3[4][4];
 
@@ -298,19 +298,19 @@ void mul_serie_m4(float answ[4][4], float m1[4][4],
 
 	if (m1 == NULL || m2 == NULL) return;
 
-	mult_m4_m4m4(answ, m1, m2);
+	mul_m4_m4m4(answ, m1, m2);
 	if (m3) {
-		mult_m4_m4m4(temp, answ, m3);
+		mul_m4_m4m4(temp, answ, m3);
 		if (m4) {
-			mult_m4_m4m4(answ, temp, m4);
+			mul_m4_m4m4(answ, temp, m4);
 			if (m5) {
-				mult_m4_m4m4(temp, answ, m5);
+				mul_m4_m4m4(temp, answ, m5);
 				if (m6) {
-					mult_m4_m4m4(answ, temp, m6);
+					mul_m4_m4m4(answ, temp, m6);
 					if (m7) {
-						mult_m4_m4m4(temp, answ, m7);
+						mul_m4_m4m4(temp, answ, m7);
 						if (m8) {
-							mult_m4_m4m4(answ, temp, m8);
+							mul_m4_m4m4(answ, temp, m8);
 						}
 						else copy_m4_m4(answ, temp);
 					}
@@ -344,6 +344,15 @@ void mul_v3_m4v3(float r[3], float mat[4][4], const float vec[3])
 	r[2] = x * mat[0][2] + y * mat[1][2] + mat[2][2] * vec[2] + mat[3][2];
 }
 
+void mul_v2_m4v3(float r[2], float mat[4][4], const float vec[3])
+{
+	float x;
+
+	x = vec[0];
+	r[0] = x * mat[0][0] + vec[1] * mat[1][0] + mat[2][0] * vec[2] + mat[3][0];
+	r[1] = x * mat[0][1] + vec[1] * mat[1][1] + mat[2][1] * vec[2] + mat[3][1];
+}
+
 void mul_v2_m2v2(float r[2], float mat[2][2], const float vec[2])
 {
 	float x;
@@ -373,6 +382,15 @@ void mul_project_m4_v3(float mat[4][4], float vec[3])
 	vec[0] /= w;
 	vec[1] /= w;
 	vec[2] /= w;
+}
+
+void mul_v2_project_m4_v3(float r[2], float mat[4][4], const float vec[3])
+{
+	const float w = mul_project_m4_v3_zfac(mat, vec);
+	mul_v2_m4v3(r, mat, vec);
+
+	r[0] /= w;
+	r[1] /= w;
 }
 
 void mul_v4_m4v4(float r[4], float mat[4][4], const float v[4])
@@ -415,6 +433,8 @@ void mul_m4_v4d(float mat[4][4], double r[4])
 
 void mul_v3_m3v3(float r[3], float M[3][3], const float a[3])
 {
+	BLI_assert(r != a);
+
 	r[0] = M[0][0] * a[0] + M[1][0] * a[1] + M[2][0] * a[2];
 	r[1] = M[0][1] * a[0] + M[1][1] * a[1] + M[2][1] * a[2];
 	r[2] = M[0][2] * a[0] + M[1][2] * a[1] + M[2][2] * a[2];
@@ -422,6 +442,8 @@ void mul_v3_m3v3(float r[3], float M[3][3], const float a[3])
 
 void mul_v2_m3v3(float r[2], float M[3][3], const float a[3])
 {
+	BLI_assert(r != a);
+
 	r[0] = M[0][0] * a[0] + M[1][0] * a[1] + M[2][0] * a[2];
 	r[1] = M[0][1] * a[0] + M[1][1] * a[1] + M[2][1] * a[2];
 }
@@ -444,6 +466,18 @@ void mul_transposed_m3_v3(float mat[3][3], float vec[3])
 	vec[1] = x * mat[1][0] + y * mat[1][1] + mat[1][2] * vec[2];
 	vec[2] = x * mat[2][0] + y * mat[2][1] + mat[2][2] * vec[2];
 }
+
+void mul_transposed_mat3_m4_v3(float mat[4][4], float vec[3])
+{
+	float x, y;
+
+	x = vec[0];
+	y = vec[1];
+	vec[0] = x * mat[0][0] + y * mat[0][1] + mat[0][2] * vec[2];
+	vec[1] = x * mat[1][0] + y * mat[1][1] + mat[1][2] * vec[2];
+	vec[2] = x * mat[2][0] + y * mat[2][1] + mat[2][2] * vec[2];
+}
+
 
 void mul_m3_fl(float m[3][3], float f)
 {
@@ -722,6 +756,16 @@ void transpose_m4(float mat[4][4])
 	mat[3][2] = t;
 }
 
+int compare_m4m4(float mat1[4][4], float mat2[4][4], float limit)
+{
+	if (compare_v4v4(mat1[0], mat2[0], limit))
+		if (compare_v4v4(mat1[1], mat2[1], limit))
+			if (compare_v4v4(mat1[2], mat2[2], limit))
+				if (compare_v4v4(mat1[3], mat2[3], limit))
+					return 1;
+	return 0;
+}
+
 void orthogonalize_m3(float mat[3][3], int axis)
 {
 	float size[3];
@@ -750,6 +794,7 @@ void orthogonalize_m3(float mat[3][3], int axis)
 				normalize_v3(mat[2]);
 				cross_v3_v3v3(mat[1], mat[2], mat[0]);
 			}
+			break;
 		case 1:
 			if (dot_v3v3(mat[1], mat[0]) < 1) {
 				cross_v3_v3v3(mat[2], mat[0], mat[1]);
@@ -772,6 +817,7 @@ void orthogonalize_m3(float mat[3][3], int axis)
 				normalize_v3(mat[0]);
 				cross_v3_v3v3(mat[2], mat[0], mat[1]);
 			}
+			break;
 		case 2:
 			if (dot_v3v3(mat[2], mat[0]) < 1) {
 				cross_v3_v3v3(mat[1], mat[2], mat[0]);
@@ -794,6 +840,10 @@ void orthogonalize_m3(float mat[3][3], int axis)
 				normalize_v3(mat[0]);
 				cross_v3_v3v3(mat[1], mat[2], mat[0]);
 			}
+			break;
+		default:
+			BLI_assert(0);
+			break;
 	}
 	mul_v3_fl(mat[0], size[0]);
 	mul_v3_fl(mat[1], size[1]);
@@ -828,8 +878,8 @@ void orthogonalize_m4(float mat[4][4], int axis)
 				normalize_v3(mat[2]);
 				cross_v3_v3v3(mat[1], mat[2], mat[0]);
 			}
+			break;
 		case 1:
-			normalize_v3(mat[0]);
 			if (dot_v3v3(mat[1], mat[0]) < 1) {
 				cross_v3_v3v3(mat[2], mat[0], mat[1]);
 				normalize_v3(mat[2]);
@@ -851,6 +901,7 @@ void orthogonalize_m4(float mat[4][4], int axis)
 				normalize_v3(mat[0]);
 				cross_v3_v3v3(mat[2], mat[0], mat[1]);
 			}
+			break;
 		case 2:
 			if (dot_v3v3(mat[2], mat[0]) < 1) {
 				cross_v3_v3v3(mat[1], mat[2], mat[0]);
@@ -873,13 +924,17 @@ void orthogonalize_m4(float mat[4][4], int axis)
 				normalize_v3(mat[0]);
 				cross_v3_v3v3(mat[1], mat[2], mat[0]);
 			}
+			break;
+		default:
+			BLI_assert(0);
+			break;
 	}
 	mul_v3_fl(mat[0], size[0]);
 	mul_v3_fl(mat[1], size[1]);
 	mul_v3_fl(mat[2], size[2]);
 }
 
-int is_orthogonal_m3(float m[3][3])
+bool is_orthogonal_m3(float m[3][3])
 {
 	int i, j;
 
@@ -893,7 +948,7 @@ int is_orthogonal_m3(float m[3][3])
 	return 1;
 }
 
-int is_orthogonal_m4(float m[4][4])
+bool is_orthogonal_m4(float m[4][4])
 {
 	int i, j;
 
@@ -908,7 +963,7 @@ int is_orthogonal_m4(float m[4][4])
 	return 1;
 }
 
-int is_orthonormal_m3(float m[3][3])
+bool is_orthonormal_m3(float m[3][3])
 {
 	if (is_orthogonal_m3(m)) {
 		int i;
@@ -923,7 +978,7 @@ int is_orthonormal_m3(float m[3][3])
 	return 0;
 }
 
-int is_orthonormal_m4(float m[4][4])
+bool is_orthonormal_m4(float m[4][4])
 {
 	if (is_orthogonal_m4(m)) {
 		int i;
@@ -938,7 +993,7 @@ int is_orthonormal_m4(float m[4][4])
 	return 0;
 }
 
-int is_uniform_scaled_m3(float m[3][3])
+bool is_uniform_scaled_m3(float m[3][3])
 {
 	const float eps = 1e-7;
 	float t[3][3];
@@ -1003,8 +1058,8 @@ void adjoint_m2_m2(float m1[2][2], float m[2][2])
 {
 	BLI_assert(m1 != m);
 	m1[0][0] =  m[1][1];
-	m1[0][1] = -m[1][0];
-	m1[1][0] = -m[0][1];
+	m1[0][1] = -m[0][1];
+	m1[1][0] = -m[1][0];
 	m1[1][1] =  m[0][0];
 }
 
@@ -1167,16 +1222,19 @@ void mat4_to_size(float size[3], float mat[4][4])
 float mat3_to_scale(float mat[3][3])
 {
 	/* unit length vector */
-	float unit_vec[3] = {0.577350269189626f, 0.577350269189626f, 0.577350269189626f};
+	float unit_vec[3];
+	copy_v3_fl(unit_vec, 0.577350269189626f);
 	mul_m3_v3(mat, unit_vec);
 	return len_v3(unit_vec);
 }
 
 float mat4_to_scale(float mat[4][4])
 {
-	float tmat[3][3];
-	copy_m3_m4(tmat, mat);
-	return mat3_to_scale(tmat);
+	/* unit length vector */
+	float unit_vec[3];
+	copy_v3_fl(unit_vec, 0.577350269189626f);
+	mul_mat3_m4_v3(mat, unit_vec);
+	return len_v3(unit_vec);
 }
 
 void mat3_to_rot_size(float rot[3][3], float size[3], float mat3[3][3])
@@ -1320,6 +1378,28 @@ void rotate_m2(float mat[2][2], const float angle)
 	mat[1][0] = -mat[0][1];
 }
 
+/**
+ * Scale or rotate around a pivot point,
+ * a convenience function to avoid having to do inline.
+ *
+ * Since its common to make a scale/rotation matrix that pivots around an arbitrary point.
+ *
+ * Typical use case is to make 3x3 matrix, copy to 4x4, then pass to this function.
+ */
+void transform_pivot_set_m4(float mat[4][4], const float pivot[3])
+{
+	float tmat[4][4];
+
+	unit_m4(tmat);
+
+	copy_v3_v3(tmat[3], pivot);
+	mul_m4_m4m4(mat, tmat, mat);
+
+	/* invert the matrix */
+	negate_v3(tmat[3]);
+	mul_m4_m4m4(mat, mat, tmat);
+}
+
 void blend_m3_m3m3(float out[3][3], float dst[3][3], float src[3][3], const float srcweight)
 {
 	float srot[3][3], drot[3][3];
@@ -1365,18 +1445,32 @@ void blend_m4_m4m4(float out[4][4], float dst[4][4], float src[4][4], const floa
 	loc_quat_size_to_mat4(out, floc, fquat, fsize);
 }
 
-int is_negative_m3(float mat[3][3])
+bool is_negative_m3(float mat[3][3])
 {
 	float vec[3];
 	cross_v3_v3v3(vec, mat[0], mat[1]);
 	return (dot_v3v3(vec, mat[2]) < 0.0f);
 }
 
-int is_negative_m4(float mat[4][4])
+bool is_negative_m4(float mat[4][4])
 {
 	float vec[3];
 	cross_v3_v3v3(vec, mat[0], mat[1]);
 	return (dot_v3v3(vec, mat[2]) < 0.0f);
+}
+
+bool is_zero_m3(float mat[3][3])
+{
+	return (is_zero_v3(mat[0]) &&
+	        is_zero_v3(mat[1]) &&
+	        is_zero_v3(mat[2]));
+}
+bool is_zero_m4(float mat[4][4])
+{
+	return (is_zero_v4(mat[0]) &&
+	        is_zero_v4(mat[1]) &&
+	        is_zero_v4(mat[2]) &&
+	        is_zero_v4(mat[3]));
 }
 
 /* make a 4x4 matrix out of 3 transform components */

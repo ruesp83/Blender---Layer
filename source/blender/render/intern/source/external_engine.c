@@ -115,7 +115,7 @@ RenderEngineType *RE_engines_find(const char *idname)
 	type = BLI_findstring(&R_engines, idname, offsetof(RenderEngineType, idname));
 	if (!type)
 		type = &internal_render_type;
-
+	
 	return type;
 }
 
@@ -157,9 +157,6 @@ void RE_engine_free(RenderEngine *engine)
 	if (engine->flag & RE_ENGINE_USED_FOR_VIEWPORT) {
 		BLI_end_threaded_malloc();
 	}
-
-	if (engine->text)
-		MEM_freeN(engine->text);
 
 	MEM_freeN(engine);
 }
@@ -253,12 +250,18 @@ void RE_engine_end_result(RenderEngine *engine, RenderResult *result, int cancel
 		/* for exr tile render, detect tiles that are done */
 		RenderPart *pa = get_part_from_result(re, result);
 
-		if (pa)
+		if (pa) {
 			pa->status = PART_STATUS_READY;
+		}
+		else if (re->result->do_exr_tile) {
+			/* if written result does not match any tile and we are using save
+			 * buffers, we are going to get openexr save errors */
+			fprintf(stderr, "RenderEngine.end_result: dimensions do not match any OpenEXR tile.\n");
+		}
 
 		if (re->result->do_exr_tile)
 			render_result_exr_file_merge(re->result, result);
-		else if (!(re->test_break(re->tbh) && (re->r.scemode & R_PREVIEWBUTS)))
+		else if (!(re->test_break(re->tbh) && (re->r.scemode & R_BUTS_PREVIEW)))
 			render_result_merge(re->result, result);
 
 		/* draw */
@@ -301,17 +304,14 @@ void RE_engine_update_stats(RenderEngine *engine, const char *stats, const char 
 	}
 
 	/* set engine text */
-	if (engine->text) {
-		MEM_freeN(engine->text);
-		engine->text = NULL;
-	}
+	engine->text[0] = '\0';
 
 	if (stats && stats[0] && info && info[0])
-		engine->text = BLI_sprintfN("%s | %s", stats, info);
+		BLI_snprintf(engine->text, sizeof(engine->text), "%s | %s", stats, info);
 	else if (info && info[0])
-		engine->text = BLI_strdup(info);
+		BLI_strncpy(engine->text, info, sizeof(engine->text));
 	else if (stats && stats[0])
-		engine->text = BLI_strdup(stats);
+		BLI_strncpy(engine->text, stats, sizeof(engine->text));
 }
 
 void RE_engine_update_progress(RenderEngine *engine, float progress)
@@ -401,22 +401,50 @@ int RE_engine_render(Render *re, int do_all)
 	/* verify if we can render */
 	if (!type->render)
 		return 0;
-	if ((re->r.scemode & R_PREVIEWBUTS) && !(type->flag & RE_USE_PREVIEW))
+	if ((re->r.scemode & R_BUTS_PREVIEW) && !(type->flag & RE_USE_PREVIEW))
 		return 0;
 	if (do_all && !(type->flag & RE_USE_POSTPROCESS))
 		return 0;
 	if (!do_all && (type->flag & RE_USE_POSTPROCESS))
 		return 0;
 
+	/* update animation here so any render layer animation is applied before
+	 * creating the render result */
+	if ((re->r.scemode & (R_NO_FRAME_UPDATE | R_BUTS_PREVIEW)) == 0) {
+		unsigned int lay = re->lay;
+
+		/* don't update layers excluded on all render layers */
+		if (type->flag & RE_USE_EXCLUDE_LAYERS) {
+			SceneRenderLayer *srl;
+			unsigned int non_excluded_lay = 0;
+
+			if (re->r.scemode & R_SINGLE_LAYER) {
+				srl = BLI_findlink(&re->r.layers, re->r.actlay);
+				if (srl)
+					non_excluded_lay |= ~srl->lay_exclude;
+			}
+			else {
+				for (srl = re->r.layers.first; srl; srl = srl->next)
+					if (!(srl->layflag & SCE_LAY_DISABLE))
+						non_excluded_lay |= ~srl->lay_exclude;
+			}
+
+			lay &= non_excluded_lay;
+		}
+
+		BKE_scene_update_for_newframe(re->main, re->scene, lay);
+	}
+
 	/* create render result */
 	BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
-	if (re->result == NULL || !(re->r.scemode & R_PREVIEWBUTS)) {
-		int savebuffers;
+	if (re->result == NULL || !(re->r.scemode & R_BUTS_PREVIEW)) {
+		int savebuffers = RR_USE_MEM;
 
 		if (re->result)
 			render_result_free(re->result);
 
-		savebuffers = (re->r.scemode & R_EXR_TILE_FILE) ? RR_USE_EXR : RR_USE_MEM;
+		if ((type->flag & RE_USE_SAVE_BUFFERS) && (re->r.scemode & R_EXR_TILE_FILE))
+			savebuffers = RR_USE_EXR;
 		re->result = render_result_new(re, &re->disprect, 0, savebuffers, RR_ALL_LAYERS);
 	}
 	BLI_rw_mutex_unlock(&re->resultmutex);
@@ -444,15 +472,12 @@ int RE_engine_render(Render *re, int do_all)
 
 	if (re->flag & R_ANIMATION)
 		engine->flag |= RE_ENGINE_ANIMATION;
-	if (re->r.scemode & R_PREVIEWBUTS)
+	if (re->r.scemode & R_BUTS_PREVIEW)
 		engine->flag |= RE_ENGINE_PREVIEW;
 	engine->camera_override = re->camera_override;
 
 	engine->resolution_x = re->winx;
 	engine->resolution_y = re->winy;
-
-	if ((re->r.scemode & (R_NO_FRAME_UPDATE | R_PREVIEWBUTS)) == 0)
-		BKE_scene_update_for_newframe(re->main, re->scene, re->lay);
 
 	RE_parts_init(re, FALSE);
 	engine->tile_x = re->partx;

@@ -55,6 +55,7 @@
 #include "DNA_camera_types.h"
 #include "DNA_lamp_types.h"
 #include "DNA_lattice_types.h"
+#include "DNA_linestyle_types.h"
 #include "DNA_key_types.h"
 #include "DNA_mask_types.h"
 #include "DNA_material_types.h"
@@ -86,6 +87,7 @@
 #include "BKE_key.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
+#include "BKE_modifier.h"
 #include "BKE_node.h"
 #include "BKE_mask.h"
 #include "BKE_sequencer.h"
@@ -299,22 +301,20 @@ short ANIM_animdata_context_getdata(bAnimContext *ac)
 			{
 				SpaceAction *saction = (SpaceAction *)sl;
 				ok = actedit_get_context(ac, saction);
+				break;
 			}
-			break;
-				
 			case SPACE_IPO:
 			{
 				SpaceIpo *sipo = (SpaceIpo *)sl;
 				ok = graphedit_get_context(ac, sipo);
+				break;
 			}
-			break;
-				
 			case SPACE_NLA:
 			{
 				SpaceNla *snla = (SpaceNla *)sl;
 				ok = nlaedit_get_context(ac, snla);
+				break;
 			}
-			break;
 		}
 	}
 	
@@ -541,9 +541,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				 */
 				ale->key_data = NULL;
 				ale->datatype = ALE_ALL;
+				break;
 			}
-			break;
-			
 			case ANIMTYPE_SCENE:
 			{
 				Scene *sce = (Scene *)data;
@@ -554,8 +553,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_SCE;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
 			case ANIMTYPE_OBJECT:
 			{
 				Base *base = (Base *)data;
@@ -567,8 +566,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_OB;
 				
 				ale->adt = BKE_animdata_from_id(&ob->id);
+				break;
 			}
-			break;
 			case ANIMTYPE_FILLACTD:
 			{
 				bAction *act = (bAction *)data;
@@ -577,8 +576,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				
 				ale->key_data = act;
 				ale->datatype = ALE_ACT;
+				break;
 			}
-			break;
 			case ANIMTYPE_FILLDRIVERS:
 			{
 				AnimData *adt = (AnimData *)data;
@@ -588,9 +587,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				// XXX... drivers don't show summary for now
 				ale->key_data = NULL;
 				ale->datatype = ALE_NONE;
+				break;
 			}
-			break;
-			
 			case ANIMTYPE_DSMAT:
 			{
 				Material *ma = (Material *)data;
@@ -602,8 +600,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_ACT;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
 			case ANIMTYPE_DSLAM:
 			{
 				Lamp *la = (Lamp *)data;
@@ -615,8 +613,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_ACT;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
 			case ANIMTYPE_DSCAM:
 			{
 				Camera *ca = (Camera *)data;
@@ -628,8 +626,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_ACT;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
 			case ANIMTYPE_DSCUR:
 			{
 				Curve *cu = (Curve *)data;
@@ -641,8 +639,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_ACT;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
 			case ANIMTYPE_DSARM:
 			{
 				bArmature *arm = (bArmature *)data;
@@ -654,8 +652,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_ACT;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
 			case ANIMTYPE_DSMESH:
 			{
 				Mesh *me = (Mesh *)data;
@@ -667,8 +665,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_ACT;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
 			case ANIMTYPE_DSLAT:
 			{
 				Lattice *lt = (Lattice *)data;
@@ -680,8 +678,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_ACT;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
 			case ANIMTYPE_DSSPK:
 			{
 				Speaker *spk = (Speaker *)data;
@@ -693,8 +691,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_ACT;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
 			case ANIMTYPE_DSSKEY:
 			{
 				Key *key = (Key *)data;
@@ -706,8 +704,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_ACT;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
 			case ANIMTYPE_DSWOR:
 			{
 				World *wo = (World *)data;
@@ -719,8 +717,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_ACT;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
 			case ANIMTYPE_DSNTREE:
 			{
 				bNodeTree *ntree = (bNodeTree *)data;
@@ -732,8 +730,21 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_ACT;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
+			case ANIMTYPE_DSLINESTYLE:
+			{
+				FreestyleLineStyle *linestyle = (FreestyleLineStyle *)data;
+				AnimData *adt = linestyle->adt;
+				
+				ale->flag = FILTER_LS_SCED(linestyle); 
+				
+				ale->key_data = (adt) ? adt->action : NULL;
+				ale->datatype = ALE_ACT;
+				
+				ale->adt = BKE_animdata_from_id(data);
+				break;
+			}
 			case ANIMTYPE_DSPART:
 			{
 				ParticleSettings *part = (ParticleSettings *)ale->data;
@@ -745,8 +756,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_ACT;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
 			case ANIMTYPE_DSTEX:
 			{
 				Tex *tex = (Tex *)data;
@@ -758,9 +769,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				ale->datatype = ALE_ACT;
 				
 				ale->adt = BKE_animdata_from_id(data);
+				break;
 			}
-			break;
-				
 			case ANIMTYPE_GROUP:
 			{
 				bActionGroup *agrp = (bActionGroup *)data;
@@ -769,8 +779,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				
 				ale->key_data = NULL;
 				ale->datatype = ALE_GROUP;
+				break;
 			}
-			break;
 			case ANIMTYPE_FCURVE:
 			{
 				FCurve *fcu = (FCurve *)data;
@@ -779,9 +789,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				
 				ale->key_data = fcu;
 				ale->datatype = ALE_FCURVE;
+				break;
 			}
-			break;
-				
 			case ANIMTYPE_SHAPEKEY:
 			{
 				KeyBlock *kb = (KeyBlock *)data;
@@ -809,9 +818,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 					}
 					ale->datatype = (ale->key_data) ? ALE_FCURVE : ALE_NONE;
 				}
+				break;
 			}
-			break;
-			
 			case ANIMTYPE_GPLAYER:
 			{
 				bGPDlayer *gpl = (bGPDlayer *)data;
@@ -820,9 +828,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				
 				ale->key_data = NULL;
 				ale->datatype = ALE_GPFRAME;
+				break;
 			}
-			break;
-			
 			case ANIMTYPE_MASKLAYER:
 			{
 				MaskLayer *masklay = (MaskLayer *)data;
@@ -831,9 +838,8 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				
 				ale->key_data = NULL;
 				ale->datatype = ALE_MASKLAY;
+				break;
 			}
-			break;
-			
 			case ANIMTYPE_NLATRACK:
 			{
 				NlaTrack *nlt = (NlaTrack *)data;
@@ -842,15 +848,15 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
 				
 				ale->key_data = &nlt->strips;
 				ale->datatype = ALE_NLASTRIP;
+				break;
 			}
-			break;
 			case ANIMTYPE_NLAACTION:
 			{
 				/* nothing to include for now... nothing editable from NLA-perspective here */
 				ale->key_data = NULL;
 				ale->datatype = ALE_NONE;
+				break;
 			}
-			break;
 		}
 	}
 	
@@ -1532,6 +1538,97 @@ static size_t animdata_filter_ds_nodetree(bAnimContext *ac, ListBase *anim_data,
 	return items;
 }
 
+static size_t animdata_filter_ds_linestyle(bAnimContext *ac, ListBase *anim_data, bDopeSheet *ads, Scene *sce, int filter_mode)
+{
+	SceneRenderLayer *srl;
+	size_t items = 0;
+	
+	for (srl = sce->r.layers.first; srl; srl = srl->next) {
+		FreestyleLineSet *lineset;
+		
+		/* skip render layers without Freestyle enabled */
+		if (!(srl->layflag & SCE_LAY_FRS))
+			continue;
+		
+		/* loop over linesets defined in the render layer */
+		for (lineset = srl->freestyleConfig.linesets.first; lineset; lineset = lineset->next) {
+			FreestyleLineStyle *linestyle = lineset->linestyle;
+			ListBase tmp_data = {NULL, NULL};
+			size_t tmp_items = 0;
+			
+			/* add scene-level animation channels */
+			BEGIN_ANIMFILTER_SUBCHANNELS(FILTER_LS_SCED(linestyle))
+			{
+				/* animation data filtering */
+				tmp_items += animfilter_block_data(ac, &tmp_data, ads, (ID *)linestyle, filter_mode);
+			}
+			END_ANIMFILTER_SUBCHANNELS;
+			
+			/* did we find anything? */
+			if (tmp_items) {
+				/* include anim-expand widget first */
+				if (filter_mode & ANIMFILTER_LIST_CHANNELS) {
+					/* check if filtering by active status */
+					if (ANIMCHANNEL_ACTIVEOK(linestyle)) {
+						ANIMCHANNEL_NEW_CHANNEL(linestyle, ANIMTYPE_DSLINESTYLE, sce);
+					}
+				}
+				
+				/* now add the list of collected channels */
+				BLI_movelisttolist(anim_data, &tmp_data);
+				BLI_assert((tmp_data.first == tmp_data.last) && (tmp_data.first == NULL));
+				items += tmp_items;
+			}
+		}
+	}
+	
+	/* return the number of items added to the list */
+	return items;
+}
+
+static size_t animdata_filter_ds_texture(bAnimContext *ac, ListBase *anim_data, bDopeSheet *ads, 
+                                         Tex *tex, ID *owner_id, int filter_mode)
+{
+	ListBase tmp_data = {NULL, NULL};
+	size_t tmp_items = 0;
+	size_t items = 0;
+	
+	/* add texture's animation data to temp collection */
+	BEGIN_ANIMFILTER_SUBCHANNELS(FILTER_TEX_DATA(tex)) 
+	{
+		/* texture animdata */
+		tmp_items += animfilter_block_data(ac, &tmp_data, ads, (ID *)tex, filter_mode);
+		
+		/* nodes */
+		if ((tex->nodetree) && !(ads->filterflag & ADS_FILTER_NONTREE)) {
+			/* owner_id as id instead of texture, since it'll otherwise be impossible to track the depth */
+			// FIXME: perhaps as a result, textures should NOT be included under materials, but under their own section instead
+			// so that free-floating textures can also be animated
+			tmp_items += animdata_filter_ds_nodetree(ac, &tmp_data, ads, (ID *)tex, tex->nodetree, filter_mode);
+		}
+	}
+	END_ANIMFILTER_SUBCHANNELS;
+	
+	/* did we find anything? */
+	if (tmp_items) {
+		/* include texture-expand widget? */
+		if (filter_mode & ANIMFILTER_LIST_CHANNELS) {
+			/* check if filtering by active status */
+			if (ANIMCHANNEL_ACTIVEOK(tex)) {
+				ANIMCHANNEL_NEW_CHANNEL(tex, ANIMTYPE_DSTEX, owner_id);
+			}
+		}
+		
+		/* now add the list of collected channels */
+		BLI_movelisttolist(anim_data, &tmp_data);
+		BLI_assert((tmp_data.first == tmp_data.last) && (tmp_data.first == NULL));
+		items += tmp_items;
+	}
+	
+	/* return the number of items added to the list */
+	return items;
+}
+
 /* NOTE: owner_id is either material, lamp, or world block, which is the direct owner of the texture stack in question */
 static size_t animdata_filter_ds_textures(bAnimContext *ac, ListBase *anim_data, bDopeSheet *ads, ID *owner_id, int filter_mode)
 {
@@ -1548,20 +1645,20 @@ static size_t animdata_filter_ds_textures(bAnimContext *ac, ListBase *anim_data,
 		{
 			Material *ma = (Material *)owner_id;
 			mtex = (MTex **)(&ma->mtex);
+			break;
 		}
-		break;
 		case ID_LA:
 		{
 			Lamp *la = (Lamp *)owner_id;
 			mtex = (MTex **)(&la->mtex);
+			break;
 		}
-		break;
 		case ID_WO:
 		{
 			World *wo = (World *)owner_id;
 			mtex = (MTex **)(&wo->mtex);
+			break;
 		}
-		break;
 		default: 
 		{
 			/* invalid/unsupported option */
@@ -1574,44 +1671,13 @@ static size_t animdata_filter_ds_textures(bAnimContext *ac, ListBase *anim_data,
 	/* firstly check that we actuallly have some textures, by gathering all textures in a temp list */
 	for (a = 0; a < MAX_MTEX; a++) {
 		Tex *tex = (mtex[a]) ? mtex[a]->tex : NULL;
-		ListBase tmp_data = {NULL, NULL};
-		size_t tmp_items = 0;
 		
 		/* for now, if no texture returned, skip (this shouldn't confuse the user I hope) */
 		if (tex == NULL) 
 			continue;
 		
-		/* add texture's animation data to temp collection */
-		BEGIN_ANIMFILTER_SUBCHANNELS(FILTER_TEX_DATA(tex)) 
-		{
-			/* texture animdata */
-			tmp_items += animfilter_block_data(ac, &tmp_data, ads, (ID *)tex, filter_mode);
-			
-			/* nodes */
-			if ((tex->nodetree) && !(ads->filterflag & ADS_FILTER_NONTREE)) {
-				/* owner_id as id instead of texture, since it'll otherwise be impossible to track the depth */
-				// FIXME: perhaps as a result, textures should NOT be included under materials, but under their own section instead
-				// so that free-floating textures can also be animated
-				tmp_items += animdata_filter_ds_nodetree(ac, &tmp_data, ads, (ID *)tex, tex->nodetree, filter_mode);
-			}
-		}
-		END_ANIMFILTER_SUBCHANNELS;
-		
-		/* did we find anything? */
-		if (tmp_items) {
-			/* include texture-expand widget? */
-			if (filter_mode & ANIMFILTER_LIST_CHANNELS) {
-				/* check if filtering by active status */
-				if (ANIMCHANNEL_ACTIVEOK(tex)) {
-					ANIMCHANNEL_NEW_CHANNEL(tex, ANIMTYPE_DSTEX, owner_id);
-				}
-			}
-			
-			/* now add the list of collected channels */
-			BLI_movelisttolist(anim_data, &tmp_data);
-			BLI_assert((tmp_data.first == tmp_data.last) && (tmp_data.first == NULL));
-			items += tmp_items;
-		}
+		/* add texture's anim channels */
+		items += animdata_filter_ds_texture(ac, anim_data, ads, tex, owner_id, filter_mode);
 	}
 	
 	/* return the number of items added to the list */
@@ -1701,6 +1767,87 @@ static size_t animdata_filter_ds_materials(bAnimContext *ac, ListBase *anim_data
 	return items;
 }
 
+
+/* ............ */
+
+/* Temporary context for modifier linked-data channel extraction */
+typedef struct tAnimFilterModifiersContext {
+	bAnimContext *ac;	/* anim editor context */
+	bDopeSheet *ads;    /* dopesheet filtering settings */
+	
+	ListBase tmp_data;  /* list of channels created (but not yet added to the main list) */
+	size_t items;       /* number of channels created */
+	
+	int filter_mode;    /* flags for stuff we want to filter */
+} tAnimFilterModifiersContext;
+
+
+/* dependency walker callback for modifier dependencies */
+static void animfilter_modifier_idpoin_cb(void *afm_ptr, Object *ob, ID **idpoin)
+{
+	tAnimFilterModifiersContext *afm = (tAnimFilterModifiersContext *)afm_ptr;
+	ID *owner_id = &ob->id;
+	ID *id = *idpoin;
+	
+	/* NOTE: the walker only guarantees to give us all the ID-ptr *slots*, 
+	 * not just the ones which are actually used, so be careful!
+	 */
+	if (id == NULL)
+		return;
+		
+	/* check if this is something we're interested in... */
+	switch (GS(id->name)) {
+		case ID_TE: /* Textures */
+		{
+			Tex *tex = (Tex *)id;
+			if (!(afm->ads->filterflag & ADS_FILTER_NOTEX)) {	
+				afm->items += animdata_filter_ds_texture(afm->ac, &afm->tmp_data, afm->ads, tex, owner_id, afm->filter_mode);
+			}
+			break;
+		}
+		
+		/* TODO: images? */
+	}
+}
+
+/* animation linked to data used by modifiers 
+ * NOTE: strictly speaking, modifier animation is already included under Object level
+ *       but for some modifiers (e.g. Displace), there can be linked data that has settings
+ *       which would be nice to animate (i.e. texture parameters) but which are not actually
+ *       attached to any other objects/materials/etc. in the scene
+ */
+// TODO: do we want an expander for this?
+static size_t animdata_filter_ds_modifiers(bAnimContext *ac, ListBase *anim_data, bDopeSheet *ads, Object *ob, int filter_mode)
+{
+	tAnimFilterModifiersContext afm = {NULL};
+	size_t items = 0;
+	
+	/* 1) create a temporary "context" containing all the info we have here to pass to the callback 
+	 *    use to walk thorugh the dependencies of the modifiers
+	 *
+	 * ! Assumes that all other unspecified values (i.e. accumulation buffers) are zero'd out properly
+	 */
+	afm.ac          = ac;
+	afm.ads         = ads;
+	afm.filter_mode = filter_mode;
+	
+	/* 2) walk over dependencies */
+	modifiers_foreachIDLink(ob, animfilter_modifier_idpoin_cb, &afm);
+	
+	/* 3) extract data from the context, merging it back into the standard list */
+	if (afm.items) {
+		/* now add the list of collected channels */
+		BLI_movelisttolist(anim_data, &afm.tmp_data);
+		BLI_assert((afm.tmp_data.first == afm.tmp_data.last) && (afm.tmp_data.first == NULL));
+		items += afm.items;
+	}
+	
+	return items;
+}
+
+/* ............ */
+
+
 static size_t animdata_filter_ds_particles(bAnimContext *ac, ListBase *anim_data, bDopeSheet *ads, Object *ob, int filter_mode)
 {
 	ParticleSystem *psys;
@@ -1743,6 +1890,7 @@ static size_t animdata_filter_ds_particles(bAnimContext *ac, ListBase *anim_data
 	return items;
 }
 
+
 static size_t animdata_filter_ds_obdata(bAnimContext *ac, ListBase *anim_data, bDopeSheet *ads, Object *ob, int filter_mode)
 {
 	ListBase tmp_data = {NULL, NULL};
@@ -1763,8 +1911,8 @@ static size_t animdata_filter_ds_obdata(bAnimContext *ac, ListBase *anim_data, b
 			
 			type = ANIMTYPE_DSCAM;
 			expanded = FILTER_CAM_OBJD(ca);
+			break;
 		}
-		break;
 		case OB_LAMP: /* ---------- Lamp ----------- */
 		{
 			Lamp *la = (Lamp *)ob->data;
@@ -1774,8 +1922,8 @@ static size_t animdata_filter_ds_obdata(bAnimContext *ac, ListBase *anim_data, b
 			
 			type = ANIMTYPE_DSLAM;
 			expanded = FILTER_LAM_OBJD(la);
+			break;
 		}
-		break;
 		case OB_CURVE: /* ------- Curve ---------- */
 		case OB_SURF: /* ------- Nurbs Surface ---------- */
 		case OB_FONT: /* ------- Text Curve ---------- */
@@ -1787,8 +1935,8 @@ static size_t animdata_filter_ds_obdata(bAnimContext *ac, ListBase *anim_data, b
 			
 			type = ANIMTYPE_DSCUR;
 			expanded = FILTER_CUR_OBJD(cu);
+			break;
 		}
-		break;
 		case OB_MBALL: /* ------- MetaBall ---------- */
 		{
 			MetaBall *mb = (MetaBall *)ob->data;
@@ -1798,8 +1946,8 @@ static size_t animdata_filter_ds_obdata(bAnimContext *ac, ListBase *anim_data, b
 			
 			type = ANIMTYPE_DSMBALL;
 			expanded = FILTER_MBALL_OBJD(mb);
+			break;
 		}
-		break;
 		case OB_ARMATURE: /* ------- Armature ---------- */
 		{
 			bArmature *arm = (bArmature *)ob->data;
@@ -1809,8 +1957,8 @@ static size_t animdata_filter_ds_obdata(bAnimContext *ac, ListBase *anim_data, b
 			
 			type = ANIMTYPE_DSARM;
 			expanded = FILTER_ARM_OBJD(arm);
+			break;
 		}
-		break;
 		case OB_MESH: /* ------- Mesh ---------- */
 		{
 			Mesh *me = (Mesh *)ob->data;
@@ -1820,8 +1968,8 @@ static size_t animdata_filter_ds_obdata(bAnimContext *ac, ListBase *anim_data, b
 			
 			type = ANIMTYPE_DSMESH;
 			expanded = FILTER_MESH_OBJD(me);
+			break;
 		}
-		break;
 		case OB_LATTICE: /* ---- Lattice ---- */
 		{
 			Lattice *lt = (Lattice *)ob->data;
@@ -1831,16 +1979,16 @@ static size_t animdata_filter_ds_obdata(bAnimContext *ac, ListBase *anim_data, b
 			
 			type = ANIMTYPE_DSLAT;
 			expanded = FILTER_LATTICE_OBJD(lt);
+			break;
 		}
-		break;
 		case OB_SPEAKER: /* ---------- Speaker ----------- */
 		{
 			Speaker *spk = (Speaker *)ob->data;
 			
 			type = ANIMTYPE_DSSPK;
 			expanded = FILTER_SPK_OBJD(spk);
+			break;
 		}
-		break;
 	}
 	
 	/* add object data animation channels */
@@ -1863,8 +2011,8 @@ static size_t animdata_filter_ds_obdata(bAnimContext *ac, ListBase *anim_data, b
 				/* textures */
 				if (!(ads->filterflag & ADS_FILTER_NOTEX))
 					tmp_items += animdata_filter_ds_textures(ac, &tmp_data, ads, &la->id, filter_mode);
+				break;
 			}
-			break;
 		}
 	}
 	END_ANIMFILTER_SUBCHANNELS;
@@ -1922,6 +2070,7 @@ static size_t animdata_filter_ds_keyanim(bAnimContext *ac, ListBase *anim_data, 
 	/* return the number of items added to the list */
 	return items;
 }
+
 
 /* object-level animation */
 static size_t animdata_filter_ds_obanim(bAnimContext *ac, ListBase *anim_data, bDopeSheet *ads, Object *ob, int filter_mode)
@@ -1999,6 +2148,11 @@ static size_t animdata_filter_dopesheet_ob(bAnimContext *ac, ListBase *anim_data
 		/* shape-key */
 		if ((key && key->adt) && !(ads->filterflag & ADS_FILTER_NOSHAPEKEYS)) {
 			tmp_items += animdata_filter_ds_keyanim(ac, &tmp_data, ads, ob, key, filter_mode);
+		}
+		
+		/* modifiers */
+		if ((ob->modifiers.first) && !(ads->filterflag & ADS_FILTER_NOMODIFIERS)) {
+			tmp_items += animdata_filter_ds_modifiers(ac, &tmp_data, ads, ob, filter_mode);
 		}
 		
 		/* materials */
@@ -2166,6 +2320,11 @@ static size_t animdata_filter_dopesheet_scene(bAnimContext *ac, ListBase *anim_d
 			tmp_items += animdata_filter_ds_nodetree(ac, &tmp_data, ads, (ID *)sce, ntree, filter_mode);
 		}
 		
+		/* line styles */
+		if ((ads->filterflag & ADS_FILTER_NOLINESTYLE) == 0) {
+			tmp_items += animdata_filter_ds_linestyle(ac, &tmp_data, ads, sce, filter_mode);
+		}
+		
 		/* TODO: one day, when sequencer becomes its own datatype, perhaps it should be included here */
 	}
 	END_ANIMFILTER_SUBCHANNELS;
@@ -2200,7 +2359,7 @@ static size_t animdata_filter_dopesheet(bAnimContext *ac, ListBase *anim_data, b
 	
 	/* check that we do indeed have a scene */
 	if ((ads->source == NULL) || (GS(ads->source->name) != ID_SCE)) {
-		printf("DopeSheet Error: Not scene!\n");
+		printf("Dope Sheet Error: No scene!\n");
 		if (G.debug & G_DEBUG)
 			printf("\tPointer = %p, Name = '%s'\n", (void *)ads->source, (ads->source) ? ads->source->name : NULL);
 		return 0;
@@ -2374,13 +2533,13 @@ static size_t animdata_filter_remove_invalid(ListBase *anim_data)
 static size_t animdata_filter_remove_duplis(ListBase *anim_data)
 {
 	bAnimListElem *ale, *next;
-	GHash *gh;
+	GSet *gs;
 	size_t items = 0;
 	
 	/* build new hashtable to efficiently store and retrieve which entries have been 
 	 * encountered already while searching
 	 */
-	gh = BLI_ghash_ptr_new("animdata_filter_duplis_remove gh");
+	gs = BLI_gset_ptr_new(__func__);
 	
 	/* loop through items, removing them from the list if a similar item occurs already */
 	for (ale = anim_data->first; ale; ale = next) {
@@ -2390,9 +2549,8 @@ static size_t animdata_filter_remove_duplis(ListBase *anim_data)
 		 *	- just use ale->data for now, though it would be nicer to involve 
 		 *	  ale->type in combination too to capture corner cases (where same data performs differently)
 		 */
-		if (BLI_ghash_haskey(gh, ale->data) == 0) {
+		if (BLI_gset_reinsert(gs, ale->data, NULL)) {
 			/* this entry is 'unique' and can be kept */
-			BLI_ghash_insert(gh, ale->data, NULL);
 			items++;
 		}
 		else {
@@ -2402,7 +2560,7 @@ static size_t animdata_filter_remove_duplis(ListBase *anim_data)
 	}
 	
 	/* free the hash... */
-	BLI_ghash_free(gh, NULL, NULL);
+	BLI_gset_free(gs, NULL);
 	
 	/* return the number of items still in the list */
 	return items;
@@ -2435,58 +2593,52 @@ size_t ANIM_animdata_filter(bAnimContext *ac, ListBase *anim_data, int filter_mo
 				/* the check for the DopeSheet summary is included here since the summary works here too */
 				if (animdata_filter_dopesheet_summary(ac, anim_data, filter_mode, &items))
 					items += animfilter_action(ac, anim_data, ads, data, filter_mode, (ID *)obact);
+				break;
 			}
-			break;
-			
 			case ANIMCONT_SHAPEKEY: /* 'ShapeKey Editor' */
 			{
 				/* the check for the DopeSheet summary is included here since the summary works here too */
 				if (animdata_filter_dopesheet_summary(ac, anim_data, filter_mode, &items))
 					items = animdata_filter_shapekey(ac, anim_data, data, filter_mode);
+				break;
 			}
-			break;
-				
 			case ANIMCONT_GPENCIL:
 			{
 				if (animdata_filter_dopesheet_summary(ac, anim_data, filter_mode, &items))
 					items = animdata_filter_gpencil(anim_data, data, filter_mode);
+				break;
 			}
-			break;
-			
 			case ANIMCONT_MASK:
 			{
 				if (animdata_filter_dopesheet_summary(ac, anim_data, filter_mode, &items))
 					items = animdata_filter_mask(anim_data, data, filter_mode);
+				break;
 			}
-			break;
-			
 			case ANIMCONT_DOPESHEET: /* 'DopeSheet Editor' */
 			{
 				/* the DopeSheet editor is the primary place where the DopeSheet summaries are useful */
 				if (animdata_filter_dopesheet_summary(ac, anim_data, filter_mode, &items))
 					items += animdata_filter_dopesheet(ac, anim_data, data, filter_mode);
+				break;
 			}
-			break;
-				
 			case ANIMCONT_FCURVES: /* Graph Editor -> F-Curves/Animation Editing */
 			case ANIMCONT_DRIVERS: /* Graph Editor -> Drivers Editing */
 			case ANIMCONT_NLA:     /* NLA Editor */
 			{
 				/* all of these editors use the basic DopeSheet data for filtering options, but don't have all the same features */
 				items = animdata_filter_dopesheet(ac, anim_data, data, filter_mode);
+				break;
 			}
-			break;
-			
 			case ANIMCONT_CHANNEL: /* animation channel */
 			{
 				bDopeSheet *ads = ac->ads;
 				
 				/* based on the channel type, filter relevant data for this */
 				items = animdata_filter_animchan(ac, anim_data, ads, data, filter_mode);
+				break;
 			}
-			break;
 		}
-			
+
 		/* remove any 'weedy' entries */
 		items = animdata_filter_remove_invalid(anim_data);
 		

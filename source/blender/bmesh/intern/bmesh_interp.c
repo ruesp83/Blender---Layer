@@ -36,11 +36,11 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
+#include "BLI_alloca.h"
+#include "BLI_math.h"
+
 #include "BKE_customdata.h"
 #include "BKE_multires.h"
-
-#include "BLI_array.h"
-#include "BLI_math.h"
 
 #include "bmesh.h"
 #include "intern/bmesh_private.h"
@@ -55,7 +55,7 @@ static void bm_data_interp_from_elem(CustomData *data_layer, BMElem *ele1, BMEle
 				/* do nothing */
 			}
 			else {
-				CustomData_bmesh_free_block(data_layer, &ele_dst->head.data);
+				CustomData_bmesh_free_block_data(data_layer, &ele_dst->head.data);
 				CustomData_bmesh_copy_data(data_layer, data_layer, ele1->head.data, &ele_dst->head.data);
 			}
 		}
@@ -64,7 +64,7 @@ static void bm_data_interp_from_elem(CustomData *data_layer, BMElem *ele1, BMEle
 				/* do nothing */
 			}
 			else {
-				CustomData_bmesh_free_block(data_layer, &ele_dst->head.data);
+				CustomData_bmesh_free_block_data(data_layer, &ele_dst->head.data);
 				CustomData_bmesh_copy_data(data_layer, data_layer, ele2->head.data, &ele_dst->head.data);
 			}
 		}
@@ -167,33 +167,57 @@ void BM_data_interp_face_vert_edge(BMesh *bm, BMVert *v1, BMVert *UNUSED(v2), BM
  *
  * \note Only handles loop customdata. multires is handled.
  */
-void BM_face_interp_from_face(BMesh *bm, BMFace *target, BMFace *source)
+void BM_face_interp_from_face_ex(BMesh *bm, BMFace *target, BMFace *source, const bool do_vertex,
+                                 void **blocks_l, void **blocks_v, float (*cos_2d)[2], float axis_mat[3][3])
 {
 	BMLoop *l_iter;
 	BMLoop *l_first;
 
-	void **blocks   = BLI_array_alloca(blocks, source->len);
-	float (*cos)[3] = BLI_array_alloca(cos,    source->len);
-	float *w        = BLI_array_alloca(w,      source->len);
+	float *w = BLI_array_alloca(w, source->len);
+	float co[2];
 	int i;
-	
-	BM_elem_attrs_copy(bm, bm, source, target);
+
+	if (source != target)
+		BM_elem_attrs_copy(bm, bm, source, target);
+
+	/* interpolate */
+	i = 0;
+	l_iter = l_first = BM_FACE_FIRST_LOOP(target);
+	do {
+		mul_v2_m3v3(co, axis_mat, l_iter->v->co);
+		interp_weights_poly_v2(w, cos_2d, source->len, co);
+		CustomData_bmesh_interp(&bm->ldata, blocks_l, w, NULL, source->len, l_iter->head.data);
+		if (do_vertex) {
+			CustomData_bmesh_interp(&bm->vdata, blocks_v, w, NULL, source->len, l_iter->v->head.data);
+		}
+	} while (i++, (l_iter = l_iter->next) != l_first);
+}
+
+void BM_face_interp_from_face(BMesh *bm, BMFace *target, BMFace *source, const bool do_vertex)
+{
+	BMLoop *l_iter;
+	BMLoop *l_first;
+
+	void **blocks_l    = BLI_array_alloca(blocks_l, source->len);
+	void **blocks_v    = do_vertex ? BLI_array_alloca(blocks_v, source->len) : NULL;
+	float (*cos_2d)[2] = BLI_array_alloca(cos_2d, source->len);
+	float axis_mat[3][3];  /* use normal to transform into 2d xy coords */
+	int i;
+
+	/* convert the 3d coords into 2d for projection */
+	BLI_assert(BM_face_is_normal_valid(source));
+	axis_dominant_v3_to_m3(axis_mat, source->no);
 
 	i = 0;
 	l_iter = l_first = BM_FACE_FIRST_LOOP(source);
 	do {
-		copy_v3_v3(cos[i], l_iter->v->co);
-		blocks[i] = l_iter->head.data;
-		i++;
-	} while ((l_iter = l_iter->next) != l_first);
+		mul_v2_m3v3(cos_2d[i], axis_mat, l_iter->v->co);
+		blocks_l[i] = l_iter->head.data;
+		if (do_vertex) blocks_v[i] = l_iter->v->head.data;
+	} while (i++, (l_iter = l_iter->next) != l_first);
 
-	i = 0;
-	l_iter = l_first = BM_FACE_FIRST_LOOP(target);
-	do {
-		interp_weights_poly_v3(w, cos, source->len, l_iter->v->co);
-		CustomData_bmesh_interp(&bm->ldata, blocks, w, NULL, source->len, l_iter->head.data);
-		i++;
-	} while ((l_iter = l_iter->next) != l_first);
+	BM_face_interp_from_face_ex(bm, target, source, do_vertex,
+	                            blocks_l, blocks_v, cos_2d, axis_mat);
 }
 
 /**
@@ -406,34 +430,32 @@ static void bm_loop_flip_disp(float source_axis_x[3], float source_axis_y[3],
 	disp[1] = (mat[0][0] * b[1] - b[0] * mat[1][0]) / d;
 }
 
-static void bm_loop_interp_mdisps(BMesh *bm, BMLoop *target, BMFace *source)
+static void bm_loop_interp_mdisps(BMesh *bm, BMLoop *l_dst, BMFace *f_src)
 {
-	MDisps *mdisps;
-	BMLoop *l_iter;
-	BMLoop *l_first;
-	float x, y, d, v1[3], v2[3], v3[3], v4[3] = {0.0f, 0.0f, 0.0f}, e1[3], e2[3];
-	int ix, iy, res;
+	const int cd_loop_mdisp_offset = CustomData_get_offset(&bm->ldata, CD_MDISPS);
+	MDisps *md_dst;
+	float d, v1[3], v2[3], v3[3], v4[3] = {0.0f, 0.0f, 0.0f}, e1[3], e2[3];
+	int ix, res;
 	float axis_x[3], axis_y[3];
+
+	if (cd_loop_mdisp_offset == -1)
+		return;
 	
 	/* ignore 2-edged faces */
-	if (UNLIKELY(target->f->len < 3))
+	if (UNLIKELY(l_dst->f->len < 3))
 		return;
+
+	md_dst = BM_ELEM_CD_GET_VOID_P(l_dst, cd_loop_mdisp_offset);
+	compute_mdisp_quad(l_dst, v1, v2, v3, v4, e1, e2);
 	
-	if (!CustomData_has_layer(&bm->ldata, CD_MDISPS))
-		return;
-	
-	mdisps = CustomData_bmesh_get(&bm->ldata, target->head.data, CD_MDISPS);
-	compute_mdisp_quad(target, v1, v2, v3, v4, e1, e2);
-	
-	/* if no disps data allocate a new grid, the size of the first grid in source. */
-	if (!mdisps->totdisp) {
-		MDisps *md2 = CustomData_bmesh_get(&bm->ldata, BM_FACE_FIRST_LOOP(source)->head.data, CD_MDISPS);
+	/* if no disps data allocate a new grid, the size of the first grid in f_src. */
+	if (!md_dst->totdisp) {
+		MDisps *md_src = BM_ELEM_CD_GET_VOID_P(BM_FACE_FIRST_LOOP(f_src), cd_loop_mdisp_offset);
 		
-		mdisps->totdisp = md2->totdisp;
-		mdisps->level = md2->level;
-		if (mdisps->totdisp) {
-			mdisps->disps = MEM_callocN(sizeof(float) * 3 * mdisps->totdisp,
-			                            "mdisp->disps in bmesh_loop_intern_mdisps");
+		md_dst->totdisp = md_src->totdisp;
+		md_dst->level = md_src->level;
+		if (md_dst->totdisp) {
+			md_dst->disps = MEM_callocN(sizeof(float) * 3 * md_dst->totdisp, __func__);
 		}
 		else {
 			return;
@@ -442,12 +464,17 @@ static void bm_loop_interp_mdisps(BMesh *bm, BMLoop *target, BMFace *source)
 	
 	mdisp_axis_from_quad(v1, v2, v3, v4, axis_x, axis_y);
 
-	res = (int)sqrt(mdisps->totdisp);
+	res = (int)sqrt(md_dst->totdisp);
 	d = 1.0f / (float)(res - 1);
-	for (x = 0.0f, ix = 0; ix < res; x += d, ix++) {
+#pragma omp parallel for if (res > 3)
+	for (ix = 0; ix < res; ix++) {
+		float x = d * ix, y;
+		int iy;
 		for (y = 0.0f, iy = 0; iy < res; y += d, iy++) {
+			BMLoop *l_iter;
+			BMLoop *l_first;
 			float co1[3], co2[3], co[3];
-			
+
 			copy_v3_v3(co1, e1);
 			
 			mul_v3_fl(co1, y);
@@ -461,18 +488,17 @@ static void bm_loop_interp_mdisps(BMesh *bm, BMLoop *target, BMFace *source)
 			mul_v3_fl(co, x);
 			add_v3_v3(co, co1);
 			
-			l_iter = l_first = BM_FACE_FIRST_LOOP(source);
+			l_iter = l_first = BM_FACE_FIRST_LOOP(f_src);
 			do {
 				float x2, y2;
-				MDisps *md1, *md2;
+				MDisps *md_src;
 				float src_axis_x[3], src_axis_y[3];
 
-				md1 = CustomData_bmesh_get(&bm->ldata, target->head.data, CD_MDISPS);
-				md2 = CustomData_bmesh_get(&bm->ldata, l_iter->head.data, CD_MDISPS);
+				md_src = BM_ELEM_CD_GET_VOID_P(l_iter, cd_loop_mdisp_offset);
 				
-				if (mdisp_in_mdispquad(target, l_iter, co, &x2, &y2, res, src_axis_x, src_axis_y)) {
-					old_mdisps_bilinear(md1->disps[iy * res + ix], md2->disps, res, (float)x2, (float)y2);
-					bm_loop_flip_disp(src_axis_x, src_axis_y, axis_x, axis_y, md1->disps[iy * res + ix]);
+				if (mdisp_in_mdispquad(l_dst, l_iter, co, &x2, &y2, res, src_axis_x, src_axis_y)) {
+					old_mdisps_bilinear(md_dst->disps[iy * res + ix], md_src->disps, res, (float)x2, (float)y2);
+					bm_loop_flip_disp(src_axis_x, src_axis_y, axis_x, axis_y, md_dst->disps[iy * res + ix]);
 
 					break;
 				}
@@ -487,16 +513,17 @@ static void bm_loop_interp_mdisps(BMesh *bm, BMLoop *target, BMFace *source)
  */
 void BM_face_multires_bounds_smooth(BMesh *bm, BMFace *f)
 {
+	const int cd_loop_mdisp_offset = CustomData_get_offset(&bm->ldata, CD_MDISPS);
 	BMLoop *l;
 	BMIter liter;
 	
-	if (!CustomData_has_layer(&bm->ldata, CD_MDISPS))
+	if (cd_loop_mdisp_offset == -1)
 		return;
 	
 	BM_ITER_ELEM (l, &liter, f, BM_LOOPS_OF_FACE) {
-		MDisps *mdp = CustomData_bmesh_get(&bm->ldata, l->prev->head.data, CD_MDISPS);
-		MDisps *mdl = CustomData_bmesh_get(&bm->ldata, l->head.data, CD_MDISPS);
-		MDisps *mdn = CustomData_bmesh_get(&bm->ldata, l->next->head.data, CD_MDISPS);
+		MDisps *mdp = BM_ELEM_CD_GET_VOID_P(l->prev, cd_loop_mdisp_offset);
+		MDisps *mdl = BM_ELEM_CD_GET_VOID_P(l, cd_loop_mdisp_offset);
+		MDisps *mdn = BM_ELEM_CD_GET_VOID_P(l->next, cd_loop_mdisp_offset);
 		float co1[3];
 		int sides;
 		int y;
@@ -525,7 +552,7 @@ void BM_face_multires_bounds_smooth(BMesh *bm, BMFace *f)
 	}
 	
 	BM_ITER_ELEM (l, &liter, f, BM_LOOPS_OF_FACE) {
-		MDisps *mdl1 = CustomData_bmesh_get(&bm->ldata, l->head.data, CD_MDISPS);
+		MDisps *mdl1 = BM_ELEM_CD_GET_VOID_P(l, cd_loop_mdisp_offset);
 		MDisps *mdl2;
 		float co1[3], co2[3], co[3];
 		int sides;
@@ -549,9 +576,9 @@ void BM_face_multires_bounds_smooth(BMesh *bm, BMFace *f)
 			continue;
 
 		if (l->radial_next->v == l->v)
-			mdl2 = CustomData_bmesh_get(&bm->ldata, l->radial_next->head.data, CD_MDISPS);
+			mdl2 = BM_ELEM_CD_GET_VOID_P(l->radial_next, cd_loop_mdisp_offset);
 		else
-			mdl2 = CustomData_bmesh_get(&bm->ldata, l->radial_next->next->head.data, CD_MDISPS);
+			mdl2 = BM_ELEM_CD_GET_VOID_P(l->radial_next->next, cd_loop_mdisp_offset);
 
 		sides = (int)sqrt(mdl1->totdisp);
 		for (y = 0; y < sides; y++) {
@@ -604,45 +631,31 @@ void BM_loop_interp_from_face(BMesh *bm, BMLoop *target, BMFace *source,
 	BMLoop *l_iter;
 	BMLoop *l_first;
 	void **vblocks  = do_vertex ? BLI_array_alloca(vblocks, source->len) : NULL;
-	void **blocks   = BLI_array_alloca(blocks,  source->len);
-	float (*cos)[3] = BLI_array_alloca(cos,     source->len);
-	float (*cos_2d)[2] = BLI_array_alloca(cos_2d,     source->len);
-	float *w        = BLI_array_alloca(w,       source->len);
+	void **blocks   = BLI_array_alloca(blocks, source->len);
+	float (*cos_2d)[2] = BLI_array_alloca(cos_2d, source->len);
+	float *w        = BLI_array_alloca(w, source->len);
+	float axis_mat[3][3];  /* use normal to transform into 2d xy coords */
 	float co[2];
-	int i, ax, ay;
+	int i;
 
-	BM_elem_attrs_copy(bm, bm, source, target->f);
+	/* convert the 3d coords into 2d for projection */
+	BLI_assert(BM_face_is_normal_valid(source));
+	axis_dominant_v3_to_m3(axis_mat, source->no);
 
 	i = 0;
 	l_iter = l_first = BM_FACE_FIRST_LOOP(source);
 	do {
-		copy_v3_v3(cos[i], l_iter->v->co);
-
-		w[i] = 0.0f;
+		mul_v2_m3v3(cos_2d[i], axis_mat, l_iter->v->co);
 		blocks[i] = l_iter->head.data;
 
 		if (do_vertex) {
 			vblocks[i] = l_iter->v->head.data;
 		}
-		i++;
+	} while (i++, (l_iter = l_iter->next) != l_first);
 
-	} while ((l_iter = l_iter->next) != l_first);
-
-	/* find best projection of face XY, XZ or YZ: barycentric weights of
-	 * the 2d projected coords are the same and faster to compute */
-
-	axis_dominant_v3(&ax, &ay, source->no);
-
-	for (i = 0; i < source->len; i++) {
-		cos_2d[i][0] = cos[i][ax];
-		cos_2d[i][1] = cos[i][ay];
-	}
-
+	mul_v2_m3v3(co, axis_mat, target->v->co);
 
 	/* interpolate */
-	co[0] = target->v->co[ax];
-	co[1] = target->v->co[ay];
-
 	interp_weights_poly_v2(w, cos_2d, source->len, co);
 	CustomData_bmesh_interp(&bm->ldata, blocks, w, NULL, source->len, target->head.data);
 	if (do_vertex) {
@@ -650,9 +663,7 @@ void BM_loop_interp_from_face(BMesh *bm, BMLoop *target, BMFace *source,
 	}
 
 	if (do_multires) {
-		if (CustomData_has_layer(&bm->ldata, CD_MDISPS)) {
-			bm_loop_interp_mdisps(bm, target, source);
-		}
+		bm_loop_interp_mdisps(bm, target, source);
 	}
 }
 
@@ -662,22 +673,27 @@ void BM_vert_interp_from_face(BMesh *bm, BMVert *v, BMFace *source)
 	BMLoop *l_iter;
 	BMLoop *l_first;
 	void **blocks   = BLI_array_alloca(blocks, source->len);
-	float (*cos)[3] = BLI_array_alloca(cos,    source->len);
+	float (*cos_2d)[2] = BLI_array_alloca(cos_2d, source->len);
 	float *w        = BLI_array_alloca(w,      source->len);
+	float axis_mat[3][3];  /* use normal to transform into 2d xy coords */
+	float co[2];
 	int i;
+
+	/* convert the 3d coords into 2d for projection */
+	BLI_assert(BM_face_is_normal_valid(source));
+	axis_dominant_v3_to_m3(axis_mat, source->no);
 
 	i = 0;
 	l_iter = l_first = BM_FACE_FIRST_LOOP(source);
 	do {
-		copy_v3_v3(cos[i], l_iter->v->co);
-
-		w[i] = 0.0f;
+		mul_v2_m3v3(cos_2d[i], axis_mat, l_iter->v->co);
 		blocks[i] = l_iter->v->head.data;
-		i++;
-	} while ((l_iter = l_iter->next) != l_first);
+	} while (i++, (l_iter = l_iter->next) != l_first);
+
+	mul_v2_m3v3(co, axis_mat, v->co);
 
 	/* interpolate */
-	interp_weights_poly_v3(w, cos, source->len, v->co);
+	interp_weights_poly_v2(w, cos_2d, source->len, co);
 	CustomData_bmesh_interp(&bm->vdata, blocks, w, NULL, source->len, v->head.data);
 }
 
@@ -790,6 +806,7 @@ void BM_data_layer_add_named(BMesh *bm, CustomData *data, int type, const char *
 void BM_data_layer_free(BMesh *bm, CustomData *data, int type)
 {
 	CustomData olddata;
+	bool has_layer;
 
 	olddata = *data;
 	olddata.layers = (olddata.layers) ? MEM_dupallocN(olddata.layers): NULL;
@@ -797,7 +814,9 @@ void BM_data_layer_free(BMesh *bm, CustomData *data, int type)
 	/* the pool is now owned by olddata and must not be shared */
 	data->pool = NULL;
 
-	CustomData_free_layer_active(data, type, 0);
+	has_layer = CustomData_free_layer_active(data, type, 0);
+	/* assert because its expensive to realloc - better not do if layer isnt present */
+	BLI_assert(has_layer != false);
 
 	update_data_blocks(bm, &olddata, data);
 	if (olddata.layers) MEM_freeN(olddata.layers);
@@ -806,6 +825,7 @@ void BM_data_layer_free(BMesh *bm, CustomData *data, int type)
 void BM_data_layer_free_n(BMesh *bm, CustomData *data, int type, int n)
 {
 	CustomData olddata;
+	bool has_layer;
 
 	olddata = *data;
 	olddata.layers = (olddata.layers) ? MEM_dupallocN(olddata.layers): NULL;
@@ -813,7 +833,9 @@ void BM_data_layer_free_n(BMesh *bm, CustomData *data, int type, int n)
 	/* the pool is now owned by olddata and must not be shared */
 	data->pool = NULL;
 
-	CustomData_free_layer(data, type, 0, CustomData_get_layer_index_n(data, type, n));
+	has_layer = CustomData_free_layer(data, type, 0, CustomData_get_layer_index_n(data, type, n));
+	/* assert because its expensive to realloc - better not do if layer isnt present */
+	BLI_assert(has_layer != false);
 	
 	update_data_blocks(bm, &olddata, data);
 	if (olddata.layers) MEM_freeN(olddata.layers);

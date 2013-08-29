@@ -35,6 +35,7 @@ __all__ = (
     "extensions_audio",
     "is_subdir",
     "module_names",
+    "reduce_dirs",
     "relpath",
     "resolve_ncase",
     )
@@ -46,6 +47,10 @@ from _bpy_path import (extensions_audio,
                        extensions_movie,
                        extensions_image,
                        )
+
+
+def _getattr_bytes(var, attr):
+    return var.path_resolve(attr, False).as_bytes()
 
 
 def abspath(path, start=None, library=None):
@@ -60,13 +65,22 @@ def abspath(path, start=None, library=None):
        convenience, when the library is not None its path replaces *start*.
     :type library: :class:`bpy.types.Library`
     """
-    if path.startswith("//"):
-        if library:
-            start = _os.path.dirname(abspath(library.filepath))
-        return _os.path.join(_os.path.dirname(_bpy.data.filepath)
-                             if start is None else start,
-                             path[2:],
-                             )
+    if isinstance(path, bytes):
+        if path.startswith(b"//"):
+            if library:
+                start = _os.path.dirname(abspath(_getattr_bytes(library, "filepath")))
+            return _os.path.join(_os.path.dirname(_getattr_bytes(_bpy.data, "filepath"))
+                                 if start is None else start,
+                                 path[2:],
+                                 )
+    else:
+        if path.startswith("//"):
+            if library:
+                start = _os.path.dirname(abspath(library.filepath))
+            return _os.path.join(_os.path.dirname(_bpy.data.filepath)
+                                 if start is None else start,
+                                 path[2:],
+                                 )
 
     return path
 
@@ -79,10 +93,16 @@ def relpath(path, start=None):
        when not set the current filename is used.
     :type start: string
     """
-    if not path.startswith("//"):
-        if start is None:
-            start = _os.path.dirname(_bpy.data.filepath)
-        return "//" + _os.path.relpath(path, start)
+    if isinstance(path, bytes):
+        if not path.startswith(b"//"):
+            if start is None:
+                start = _os.path.dirname(_getattr_bytes(_bpy.data, "filepath"))
+            return b"//" + _os.path.relpath(path, start)
+    else:
+        if not path.startswith("//"):
+            if start is None:
+                start = _os.path.dirname(_bpy.data.filepath)
+            return "//" + _os.path.relpath(path, start)
 
     return path
 
@@ -285,3 +305,27 @@ def basename(path):
     Use for Windows compatibility.
     """
     return _os.path.basename(path[2:] if path[:2] in {"//", b"//"} else path)
+
+
+def reduce_dirs(dirs):
+    """
+    Given a sequence of directories, remove duplicates and
+    any directories nested in one of the other paths.
+    (Useful for recursive path searching).
+
+    :arg dirs: Sequence of directory paths.
+    :type dirs: sequence
+    :return: A unique list of paths.
+    :rtype: list
+    """
+    dirs = list({_os.path.normpath(_os.path.abspath(d)) for d in dirs})
+    dirs.sort(key=lambda d: len(d))
+    for i in range(len(dirs) -1, -1, -1):
+        for j in range(i):
+            print(i, j)
+            if len(dirs[i]) == len(dirs[j]):
+                break
+            elif is_subdir(dirs[i], dirs[j]):
+                del dirs[i]
+                break
+    return dirs

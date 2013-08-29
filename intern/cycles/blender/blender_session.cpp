@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 #include "background.h"
@@ -46,11 +44,12 @@ BlenderSession::BlenderSession(BL::RenderEngine b_engine_, BL::UserPreferences b
 {
 	/* offline render */
 
-	width = (int)(b_render.resolution_x()*b_render.resolution_percentage()/100);
-	height = (int)(b_render.resolution_y()*b_render.resolution_percentage()/100);
+	width = render_resolution_x(b_render);
+	height = render_resolution_y(b_render);
 
 	background = true;
-	last_redraw_time = 0.0f;
+	last_redraw_time = 0.0;
+	start_resize_time = 0.0;
 
 	create_session();
 }
@@ -66,7 +65,8 @@ BlenderSession::BlenderSession(BL::RenderEngine b_engine_, BL::UserPreferences b
 	width = width_;
 	height = height_;
 	background = false;
-	last_redraw_time = 0.0f;
+	last_redraw_time = 0.0;
+	start_resize_time = 0.0;
 
 	create_session();
 	session->start();
@@ -85,6 +85,7 @@ void BlenderSession::create_session()
 	/* reset status/progress */
 	last_status = "";
 	last_progress = -1.0f;
+	start_resize_time = 0.0;
 
 	/* create scene */
 	scene = new Scene(scene_params, session_params.device);
@@ -98,12 +99,19 @@ void BlenderSession::create_session()
 
 	/* create sync */
 	sync = new BlenderSync(b_engine, b_data, b_scene, scene, !background, session->progress, session_params.device.type == DEVICE_CPU);
-	sync->sync_data(b_v3d, b_engine.camera_override());
 
-	if(b_rv3d)
+	if(b_v3d) {
+		/* full data sync */
+		sync->sync_data(b_v3d, b_engine.camera_override());
 		sync->sync_view(b_v3d, b_rv3d, width, height);
-	else
+	}
+	else {
+		/* for final render we will do full data sync per render layer, only
+		 * do some basic syncing here, no objects or materials for speed */
+		sync->sync_render_layers(b_v3d, NULL);
+		sync->sync_integrator();
 		sync->sync_camera(b_render, b_engine.camera_override(), width, height);
+	}
 
 	/* set buffer parameters */
 	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
@@ -126,8 +134,8 @@ void BlenderSession::reset_session(BL::BlendData b_data_, BL::Scene b_scene_)
 	SceneParams scene_params = BlenderSync::get_scene_params(b_scene, background);
 	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
 
-	width = (int)(b_render.resolution_x()*b_render.resolution_percentage()/100);
-	height = (int)(b_render.resolution_y()*b_render.resolution_percentage()/100);
+	width = render_resolution_x(b_render);
+	height = render_resolution_y(b_render);
 
 	if(scene->params.modified(scene_params) ||
 	   session->params.modified(session_params) ||
@@ -156,13 +164,19 @@ void BlenderSession::reset_session(BL::BlendData b_data_, BL::Scene b_scene_)
 
 	/* sync object should be re-created */
 	sync = new BlenderSync(b_engine, b_data, b_scene, scene, !background, session->progress, session_params.device.type == DEVICE_CPU);
-	sync->sync_data(b_v3d, b_engine.camera_override());
-	sync->sync_camera(b_render, b_engine.camera_override(), width, height);
+
+	if(b_rv3d) {
+		sync->sync_data(b_v3d, b_engine.camera_override());
+		sync->sync_camera(b_render, b_engine.camera_override(), width, height);
+	}
 
 	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, PointerRNA_NULL, PointerRNA_NULL, scene->camera, width, height);
 	session->reset(buffer_params, session_params.samples);
 
 	b_engine.use_highlight_tiles(session_params.progressive_refine == false);
+
+	/* reset time */
+	start_resize_time = 0.0;
 }
 
 void BlenderSession::free_session()
@@ -181,6 +195,8 @@ static PassType get_pass_type(BL::RenderPass b_pass)
 
 		case BL::RenderPass::type_Z:
 			return PASS_DEPTH;
+		case BL::RenderPass::type_MIST:
+			return PASS_MIST;
 		case BL::RenderPass::type_NORMAL:
 			return PASS_NORMAL;
 		case BL::RenderPass::type_OBJECT_INDEX:
@@ -198,6 +214,8 @@ static PassType get_pass_type(BL::RenderPass b_pass)
 			return PASS_GLOSSY_DIRECT;
 		case BL::RenderPass::type_TRANSMISSION_DIRECT:
 			return PASS_TRANSMISSION_DIRECT;
+		case BL::RenderPass::type_SUBSURFACE_DIRECT:
+			return PASS_SUBSURFACE_DIRECT;
 
 		case BL::RenderPass::type_DIFFUSE_INDIRECT:
 			return PASS_DIFFUSE_INDIRECT;
@@ -205,6 +223,8 @@ static PassType get_pass_type(BL::RenderPass b_pass)
 			return PASS_GLOSSY_INDIRECT;
 		case BL::RenderPass::type_TRANSMISSION_INDIRECT:
 			return PASS_TRANSMISSION_INDIRECT;
+		case BL::RenderPass::type_SUBSURFACE_INDIRECT:
+			return PASS_SUBSURFACE_INDIRECT;
 
 		case BL::RenderPass::type_DIFFUSE_COLOR:
 			return PASS_DIFFUSE_COLOR;
@@ -212,6 +232,8 @@ static PassType get_pass_type(BL::RenderPass b_pass)
 			return PASS_GLOSSY_COLOR;
 		case BL::RenderPass::type_TRANSMISSION_COLOR:
 			return PASS_TRANSMISSION_COLOR;
+		case BL::RenderPass::type_SUBSURFACE_COLOR:
+			return PASS_SUBSURFACE_COLOR;
 
 		case BL::RenderPass::type_EMIT:
 			return PASS_EMISSION;
@@ -227,7 +249,6 @@ static PassType get_pass_type(BL::RenderPass b_pass)
 		case BL::RenderPass::type_REFRACTION:
 		case BL::RenderPass::type_SPECULAR:
 		case BL::RenderPass::type_REFLECTION:
-		case BL::RenderPass::type_MIST:
 			return PASS_NONE;
 	}
 	
@@ -262,6 +283,11 @@ void BlenderSession::do_write_update_render_tile(RenderTile& rtile, bool do_upda
 
 	BL::RenderResult::layers_iterator b_single_rlay;
 	b_rr.layers.begin(b_single_rlay);
+
+	/* layer will be missing if it was disabled in the UI */
+	if(b_single_rlay == b_rr.layers.end())
+		return;
+
 	BL::RenderLayer b_rlay = *b_single_rlay;
 
 	if (do_update_only) {
@@ -360,11 +386,17 @@ void BlenderSession::render()
 		scene->integrator->tag_update(scene);
 
 		/* update scene */
+		sync->sync_camera(b_render, b_engine.camera_override(), width, height);
 		sync->sync_data(b_v3d, b_engine.camera_override(), b_rlay_name.c_str());
 
-		/* update session */
+		/* update number of samples per layer */
 		int samples = sync->get_layer_samples();
-		session->reset(buffer_params, (samples == 0)? session_params.samples: samples);
+		bool bound_samples = sync->get_layer_bound_samples();
+
+		if(samples != 0 && (!bound_samples || (samples < session_params.samples)))
+			session->reset(buffer_params, samples);
+		else
+			session->reset(buffer_params, session_params.samples);
 
 		/* render */
 		session->start();
@@ -440,6 +472,10 @@ void BlenderSession::update_render_result(BL::RenderResult b_rr, BL::RenderLayer
 
 void BlenderSession::synchronize()
 {
+	/* only used for viewport render */
+	if(!b_v3d)
+		return;
+
 	/* on session/scene parameter changes, we recreate session entirely */
 	SceneParams scene_params = BlenderSync::get_scene_params(b_scene, background);
 	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
@@ -482,15 +518,40 @@ void BlenderSession::synchronize()
 	if(scene->need_reset()) {
 		BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
 		session->reset(buffer_params, session_params.samples);
+
+		/* reset time */
+		start_resize_time = 0.0;
 	}
 }
 
 bool BlenderSession::draw(int w, int h)
 {
+	/* pause in redraw in case update is not being called due to final render */
+	session->set_pause(BlenderSync::get_session_pause(b_scene, background));
+
 	/* before drawing, we verify camera and viewport size changes, because
 	 * we do not get update callbacks for those, we must detect them here */
 	if(session->ready_to_reset()) {
 		bool reset = false;
+
+		/* if dimensions changed, reset */
+		if(width != w || height != h) {
+			if(start_resize_time == 0.0) {
+				/* don't react immediately to resizes to avoid flickery resizing
+				 * of the viewport, and some window managers changing the window
+				 * size temporarily on unminimize */
+				start_resize_time = time_dt();
+				tag_redraw();
+			}
+			else if(time_dt() - start_resize_time < 0.2) {
+				tag_redraw();
+			}
+			else {
+				width = w;
+				height = h;
+				reset = true;
+			}
+		}
 
 		/* try to acquire mutex. if we can't, come back later */
 		if(!session->scene->mutex.try_lock()) {
@@ -499,7 +560,7 @@ bool BlenderSession::draw(int w, int h)
 		else {
 			/* update camera from 3d view */
 
-			sync->sync_view(b_v3d, b_rv3d, w, h);
+			sync->sync_view(b_v3d, b_rv3d, width, height);
 
 			if(scene->camera->need_update)
 				reset = true;
@@ -507,19 +568,14 @@ bool BlenderSession::draw(int w, int h)
 			session->scene->mutex.unlock();
 		}
 
-		/* if dimensions changed, reset */
-		if(width != w || height != h) {
-			width = w;
-			height = h;
-			reset = true;
-		}
-
 		/* reset if requested */
 		if(reset) {
 			SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
-			BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, w, h);
+			BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
 
 			session->reset(buffer_params, session_params.samples);
+
+			start_resize_time = 0.0;
 		}
 	}
 	else {
@@ -549,7 +605,7 @@ void BlenderSession::get_progress(float& progress, double& total_time)
 	session->progress.get_tile(tile, total_time, tile_time);
 
 	sample = session->progress.get_sample();
-	samples_per_tile = session->params.samples;
+	samples_per_tile = session->tile_manager.num_samples;
 
 	if(samples_per_tile && tile_total)
 		progress = ((float)sample / (float)(tile_total * samples_per_tile));
@@ -569,16 +625,22 @@ void BlenderSession::update_status_progress()
 	get_status(status, substatus);
 	get_progress(progress, total_time);
 
-	timestatus = string_printf("Mem: %.2fM, Peak: %.2fM | ", mem_used, mem_peak);
+	timestatus = string_printf("Mem:%.2fM, Peak:%.2fM", mem_used, mem_peak);
 
-	timestatus += b_scene.name();
-	if(b_rlay_name != "")
-		timestatus += ", "  + b_rlay_name;
-	timestatus += " | ";
+	if(background) {
+		timestatus += " | " + b_scene.name();
+		if(b_rlay_name != "")
+			timestatus += ", "  + b_rlay_name;
+	}
+	else {
+		timestatus += " | ";
 
-	BLI_timestr(total_time, time_str, sizeof(time_str));
-	timestatus += "Elapsed: " + string(time_str) + " | ";
+		BLI_timestr(total_time, time_str, sizeof(time_str));
+		timestatus += "Time:" + string(time_str);
+	}
 
+	if(status.size() > 0)
+		status = " | " + status;
 	if(substatus.size() > 0)
 		status += " | " + substatus;
 
@@ -691,6 +753,14 @@ bool BlenderSession::builtin_image_pixels(const string &builtin_name, void *buil
 						cp[3] = 255;
 				}
 			}
+		}
+
+		/* premultiply, byte images are always straight for blender */
+		unsigned char *cp = pixels;
+		for(int i = 0; i < width * height; i++, cp += channels) {
+			cp[0] = (cp[0] * cp[3]) >> 8;
+			cp[1] = (cp[1] * cp[3]) >> 8;
+			cp[2] = (cp[2] * cp[3]) >> 8;
 		}
 
 		return true;

@@ -151,16 +151,10 @@ def setup_staticlibs(lenv):
         libincs += Split(lenv['BF_JACK_LIBPATH'])
     if lenv['WITH_BF_SNDFILE']:
         libincs += Split(lenv['BF_SNDFILE_LIBPATH'])
-    if lenv['WITH_BF_OPENEXR']:
-        libincs += Split(lenv['BF_OPENEXR_LIBPATH'])
-        if lenv['WITH_BF_STATICOPENEXR']:
-            statlibs += Split(lenv['BF_OPENEXR_LIB_STATIC'])
     if lenv['WITH_BF_TIFF']:
         libincs += Split(lenv['BF_TIFF_LIBPATH'])
         if lenv['WITH_BF_STATICTIFF']:
             statlibs += Split(lenv['BF_TIFF_LIB_STATIC'])
-    if lenv['WITH_BF_ZLIB'] and lenv['WITH_BF_STATICZLIB']:
-        statlibs += Split(lenv['BF_ZLIB_LIB_STATIC'])
     if lenv['WITH_BF_FFTW3']:
         libincs += Split(lenv['BF_FFTW3_LIBPATH'])
         if lenv['WITH_BF_STATICFFTW3']:
@@ -212,6 +206,12 @@ def setup_staticlibs(lenv):
         libincs += Split(lenv['BF_OIIO_LIBPATH'])
         if lenv['WITH_BF_STATICOIIO']:
             statlibs += Split(lenv['BF_OIIO_LIB_STATIC'])
+    if lenv['WITH_BF_OPENEXR']:
+        libincs += Split(lenv['BF_OPENEXR_LIBPATH'])
+        if lenv['WITH_BF_STATICOPENEXR']:
+            statlibs += Split(lenv['BF_OPENEXR_LIB_STATIC'])
+    if lenv['WITH_BF_ZLIB'] and lenv['WITH_BF_STATICZLIB']:
+        statlibs += Split(lenv['BF_ZLIB_LIB_STATIC'])
 
     if lenv['WITH_BF_OCIO']:
         libincs += Split(lenv['BF_OCIO_LIBPATH'])
@@ -282,10 +282,10 @@ def setup_syslibs(lenv):
 
     if lenv['WITH_BF_OPENEXR'] and not lenv['WITH_BF_STATICOPENEXR']:
         syslibs += Split(lenv['BF_OPENEXR_LIB'])
-    if lenv['WITH_BF_TIFF'] and not lenv['WITH_BF_STATICTIFF']:
-        syslibs += Split(lenv['BF_TIFF_LIB'])
     if lenv['WITH_BF_ZLIB'] and not lenv['WITH_BF_STATICZLIB']:
         syslibs += Split(lenv['BF_ZLIB_LIB'])
+    if lenv['WITH_BF_TIFF'] and not lenv['WITH_BF_STATICTIFF']:
+        syslibs += Split(lenv['BF_TIFF_LIB'])
     if lenv['WITH_BF_FFMPEG'] and not lenv['WITH_BF_STATICFFMPEG']:
         syslibs += Split(lenv['BF_FFMPEG_LIB'])
         if lenv['WITH_BF_OGG']:
@@ -388,6 +388,10 @@ def creator(env):
         defs.append('WITH_PYTHON')
         if env['BF_DEBUG']:
             defs.append('_DEBUG')
+
+    if env['WITH_BF_FREESTYLE']:
+        incs.append('#/source/blender/freestyle')
+        defs.append('WITH_FREESTYLE')
 
     if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'linuxcross', 'win64-vc', 'win64-mingw'):
         incs.append(env['BF_PTHREADS_INC'])
@@ -683,15 +687,11 @@ def AppIt(target=None, source=None, env=None):
         cmd = 'mkdir %s/%s.app/Contents/MacOS/lib'%(installdir, binary)
         commands.getoutput(cmd)
         instname = env['BF_CXX']
-        cmd = 'cp %s/lib/libgcc_s.1.dylib %s/%s.app/Contents/MacOS/lib/'%(instname, installdir, binary)
+        cmd = 'ditto --arch %s %s/lib/libgcc_s.1.dylib %s/%s.app/Contents/MacOS/lib/'%(osxarch, instname, installdir, binary)
         commands.getoutput(cmd)
         cmd = 'install_name_tool -id @executable_path/lib/libgcc_s.1.dylib %s/%s.app/Contents/MacOS/lib/libgcc_s.1.dylib'%(installdir, binary)
         commands.getoutput(cmd)
         cmd = 'install_name_tool -change %s/lib/libgcc_s.1.dylib  @executable_path/lib/libgcc_s.1.dylib %s/%s.app/Contents/MacOS/%s'%(instname, installdir, binary, binary)
-        commands.getoutput(cmd)
-        cmd = 'rm -rf  %s/set_simulation_threads.app'%(installdir) # first clear omp_num_threads applescript
-        commands.getoutput(cmd)
-        cmd = 'cp -R %s/release/darwin/set_simulation_threads.app %s/'%(bldroot, installdir) # copy the omp_num_threads applescript
         commands.getoutput(cmd)
 
 # extract copy system python, be sure to update other build systems
@@ -762,6 +762,14 @@ def UnixPyBundle(target=None, source=None, env=None):
             print '\t"%s"\n' % numpy_target
 
             run("cp -R '%s' '%s'" % (numpy_src, os.path.dirname(numpy_target)))
+            run("rm -rf '%s/distutils'" % numpy_target)
+            run("rm -rf '%s/oldnumeric'" % numpy_target)
+            run("rm -rf '%s/doc'" % numpy_target)
+            run("rm -rf '%s/tests'" % numpy_target)
+            run("rm -rf '%s/f2py'" % numpy_target)
+            run("find '%s' -type d -name 'include' -prune -exec rm -rf {} ';'" % numpy_target)
+            run("find '%s' -type d -name '*.h' -prune -exec rm -rf {} ';'" % numpy_target)
+            run("find '%s' -type d -name '*.a' -prune -exec rm -rf {} ';'" % numpy_target)
         else:
             print 'Failed to find numpy at %s, skipping copying' % numpy_src
 
@@ -839,7 +847,7 @@ class BlenderEnvironment(SConsEnvironment):
 
         def list_substring(quickie, libname):
             for q in quickie:
-                if libname.find(q) != -1:
+                if q in libname:
                     return True
             return False
 

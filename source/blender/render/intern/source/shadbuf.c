@@ -60,12 +60,12 @@
 
 /* XXX, could be better implemented... this is for endian issues */
 #ifdef __BIG_ENDIAN__
-#  define RCOMP	3
+//#  define RCOMP	3
 #  define GCOMP	2
 #  define BCOMP	1
 #  define ACOMP	0
 #else
-#  define RCOMP	0
+//#  define RCOMP	0
 #  define GCOMP	1
 #  define BCOMP	2
 #  define ACOMP	3
@@ -645,7 +645,7 @@ static void shadowbuf_autoclip(Render *re, LampRen *lar)
 		obr= obi->obr;
 
 		if (obi->flag & R_TRANSFORMED)
-			mult_m4_m4m4(obviewmat, viewmat, obi->mat);
+			mul_m4_m4m4(obviewmat, viewmat, obi->mat);
 		else
 			copy_m4_m4(obviewmat, viewmat);
 
@@ -782,7 +782,7 @@ void makeshadowbuf(Render *re, LampRen *lar)
 	wsize= shb->pixsize*(shb->size/2.0f);
 	
 	perspective_m4(shb->winmat, -wsize, wsize, -wsize, wsize, shb->d, shb->clipend);
-	mult_m4_m4m4(shb->persmat, shb->winmat, shb->viewmat);
+	mul_m4_m4m4(shb->persmat, shb->winmat, shb->viewmat);
 
 	if (ELEM3(lar->buftype, LA_SHADBUF_REGULAR, LA_SHADBUF_HALFWAY, LA_SHADBUF_DEEP)) {
 		shb->totbuf= lar->buffers;
@@ -1026,7 +1026,7 @@ static float readdeepshadowbuf(ShadBuf *shb, ShadSampleBuf *shsample, int bias, 
 
 	if (biast != 0.0f) {
 		/* in soft bias area */
-		biasv= readdeepvisibility(shsample->deepbuf[ofs], tot, zs, 0, 0);
+		biasv = readdeepvisibility(shsample->deepbuf[ofs], tot, zs, 0, NULL);
 
 		biast= biast*biast;
 		return (1.0f-biast)*v + biast*biasv;
@@ -1394,7 +1394,6 @@ float shadow_halo(LampRen *lar, const float p1[3], const float p2[3])
 		}
 		
 		lambda = min_ff(lambda_x, lambda_y);
-		if (lambda==lambda_o || lambda>=1.0f) break;
 		
 		zf= zf1 + lambda*(zf2-zf1);
 		count+= (float)shb->totbuf;
@@ -1410,6 +1409,8 @@ float shadow_halo(LampRen *lar, const float p1[3], const float p2[3])
 				lightcount+= readshadowbuf_halo(shb, shsample, x, y, z);
 			
 		}
+		/* break after sample, so it takes at least one */
+		if (lambda==lambda_o || lambda>=1.0f) break;
 	}
 	
 	if (count!=0.0f) return (lightcount/count);
@@ -1994,7 +1995,7 @@ static void isb_bsp_fillfaces(Render *re, LampRen *lar, ISBBranch *root)
 		obr= obi->obr;
 
 		if (obi->flag & R_TRANSFORMED)
-			mult_m4_m4m4(winmat, shb->persmat, obi->mat);
+			mul_m4_m4m4(winmat, shb->persmat, obi->mat);
 		else
 			copy_m4_m4(winmat, shb->persmat);
 
@@ -2044,7 +2045,7 @@ static void isb_bsp_fillfaces(Render *re, LampRen *lar, ISBBranch *root)
 						if (vlr->v4)
 							zbufclipwire(&zspan, i, a+1, vlr->ec, hoco[0], hoco[1], hoco[2], hoco[3], c1, c2, c3, c4);
 						else
-							zbufclipwire(&zspan, i, a+1, vlr->ec, hoco[0], hoco[1], hoco[2], 0, c1, c2, c3, 0);
+							zbufclipwire(&zspan, i, a+1, vlr->ec, hoco[0], hoco[1], hoco[2], NULL, c1, c2, c3, 0);
 					}
 					else if (vlr->v4) {
 						if (vlr->flag & R_STRAND)

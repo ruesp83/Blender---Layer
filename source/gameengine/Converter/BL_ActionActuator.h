@@ -48,6 +48,7 @@ public:
 						float endtime,
 						struct bAction *action,
 						short	playtype,
+						short	blend_mode,
 						short	blendin,
 						short	priority,
 						short	layer,
@@ -61,9 +62,9 @@ public:
 	virtual CValue* GetReplica();
 	virtual void ProcessReplica();
 	
-	void SetBlendTime (float newtime);
-	void SetLocalTime (float curtime);
-	void ResetStartTime (float curtime);
+	void SetBlendTime(float newtime);
+	void SetLocalTime(float curtime);
+	void ResetStartTime(float curtime);
 	
 	bAction*	GetAction() { return m_action; }
 	void		SetAction(bAction* act) { m_action= act; }
@@ -129,6 +130,7 @@ protected:
 	float	m_stridelength;
 	float	m_layer_weight;
 	short	m_playtype;
+	short   m_blendmode;
 	short	m_priority;
 	short	m_layer;
 	short	m_ipo_flags;

@@ -27,11 +27,11 @@
 #ifndef __RNA_INTERNAL_H__
 #define __RNA_INTERNAL_H__
 
-#include "UI_resources.h"
-
 #include "BLI_utildefines.h"
 
 #include "rna_internal_types.h"
+
+#include "UI_resources.h"
 
 #define RNA_MAGIC ((int)~0)
 
@@ -152,6 +152,7 @@ void RNA_def_image(struct BlenderRNA *brna);
 void RNA_def_key(struct BlenderRNA *brna);
 void RNA_def_lamp(struct BlenderRNA *brna);
 void RNA_def_lattice(struct BlenderRNA *brna);
+void RNA_def_linestyle(struct BlenderRNA *brna);
 void RNA_def_main(struct BlenderRNA *brna);
 void RNA_def_material(struct BlenderRNA *brna);
 void RNA_def_mesh(struct BlenderRNA *brna);
@@ -231,6 +232,7 @@ int rna_object_shapekey_index_set(struct ID *id, PointerRNA value, int current);
 void rna_Object_internal_update_data(struct Main *bmain, struct Scene *scene, struct PointerRNA *ptr);
 void rna_Mesh_update_draw(struct Main *bmain, struct Scene *scene, struct PointerRNA *ptr);
 void rna_TextureSlot_update(struct Main *bmain, struct Scene *scene, struct PointerRNA *ptr);
+void rna_TextureSlot_brush_update(struct Main *bmain, struct Scene *scene, struct PointerRNA *ptr);
 
 /* basic poll functions for object types */
 int rna_Armature_object_poll(struct PointerRNA *ptr, struct PointerRNA value);
@@ -244,6 +246,7 @@ int rna_Action_id_poll(struct PointerRNA *ptr, struct PointerRNA value);
 int rna_Action_actedit_assign_poll(struct PointerRNA *ptr, struct PointerRNA value);
 
 char *rna_TextureSlot_path(struct PointerRNA *ptr);
+char *rna_Node_ImageUser_path(struct PointerRNA *ptr);
 
 /* API functions */
 
@@ -313,6 +316,7 @@ void RNA_def_main_particles(BlenderRNA *brna, PropertyRNA *cprop);
 void RNA_def_main_gpencil(BlenderRNA *brna, PropertyRNA *cprop);
 void RNA_def_main_movieclips(BlenderRNA *brna, PropertyRNA *cprop);
 void RNA_def_main_masks(BlenderRNA *brna, PropertyRNA *cprop);
+void RNA_def_main_linestyles(BlenderRNA *brna, PropertyRNA *cprop);
 
 /* ID Properties */
 
@@ -398,11 +402,10 @@ PointerRNA rna_pointer_inherit_refine(struct PointerRNA *ptr, struct StructRNA *
 /* Functions */
 
 int rna_parameter_size(struct PropertyRNA *parm);
-int rna_parameter_size_alloc(struct PropertyRNA *parm);
 
 struct Mesh *rna_Main_meshes_new_from_object(
         struct Main *bmain, struct ReportList *reports, struct Scene *sce,
-        struct Object *ob, int apply_modifiers, int settings, int calc_tessface);
+        struct Object *ob, int apply_modifiers, int settings, int calc_tessface, int calc_undeformed);
 
 /* XXX, these should not need to be defined here~! */
 struct MTex *rna_mtex_texture_slots_add(struct ID *self, struct bContext *C, struct ReportList *reports);

@@ -138,6 +138,9 @@ static void console_main_area_init(wmWindowManager *wm, ARegion *ar)
 
 	const float prev_y_min = ar->v2d.cur.ymin; /* so re-sizing keeps the cursor visible */
 
+	/* force it on init, for old files, until it becomes config */
+	ar->v2d.scroll = (V2D_SCROLL_RIGHT);
+
 	UI_view2d_region_reinit(&ar->v2d, V2D_COMMONVIEW_CUSTOM, ar->winx, ar->winy);
 
 	/* always keep the bottom part of the view aligned, less annoying */
@@ -316,8 +319,10 @@ static void console_keymap(struct wmKeyConfig *keyconf)
 	WM_keymap_add_item(keymap, "CONSOLE_OT_clear_line", RETKEY, KM_PRESS, KM_SHIFT, 0);
 
 #ifdef WITH_PYTHON
-	WM_keymap_add_item(keymap, "CONSOLE_OT_execute", RETKEY, KM_PRESS, 0, 0); /* python operator - space_text.py */
-	WM_keymap_add_item(keymap, "CONSOLE_OT_execute", PADENTER, KM_PRESS, 0, 0);
+	kmi = WM_keymap_add_item(keymap, "CONSOLE_OT_execute", RETKEY, KM_PRESS, 0, 0);
+	RNA_boolean_set(kmi->ptr, "interactive", true);
+	kmi = WM_keymap_add_item(keymap, "CONSOLE_OT_execute", PADENTER, KM_PRESS, 0, 0);
+	RNA_boolean_set(kmi->ptr, "interactive", true);
 	
 	//WM_keymap_add_item(keymap, "CONSOLE_OT_autocomplete", TABKEY, KM_PRESS, 0, 0); /* python operator - space_text.py */
 	WM_keymap_add_item(keymap, "CONSOLE_OT_autocomplete", SPACEKEY, KM_PRESS, KM_CTRL, 0); /* python operator - space_text.py */
@@ -354,7 +359,7 @@ static void console_header_area_draw(const bContext *C, ARegion *ar)
 	ED_region_header(C, ar);
 }
 
-static void console_main_area_listener(ARegion *ar, wmNotifier *wmn)
+static void console_main_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
 {
 	// SpaceInfo *sinfo = sa->spacedata.first;
 

@@ -22,6 +22,10 @@ __all__ = (
     "add_object_align_init",
     "object_data_add",
     "AddObjectHelper",
+    "object_add_grid_scale",
+    "object_add_grid_scale_apply_operator",
+    "object_image_guess",
+    "world_to_camera_view",
     )
 
 
@@ -68,7 +72,14 @@ def add_object_align_init(context, operator):
         if properties.is_property_set("view_align"):
             view_align = view_align_force = operator.view_align
         else:
-            properties.view_align = view_align
+            if properties.is_property_set("rotation"):
+                # ugh, 'view_align' callback resets
+                value = properties.rotation[:]
+                properties.view_align = view_align
+                properties.rotation = value
+                del value
+            else:
+                properties.view_align = view_align
 
     if operator and (properties.is_property_set("rotation") and
                      not view_align_force):
@@ -191,7 +202,8 @@ class AddObjectHelper:
 
 def object_add_grid_scale(context):
     """
-    Return scale which should be applied on object data to align it to grid scale
+    Return scale which should be applied on object
+    data to align it to grid scale
     """
 
     space_data = context.space_data
@@ -200,3 +212,100 @@ def object_add_grid_scale(context):
         return space_data.grid_scale_unit
 
     return 1.0
+
+
+def object_add_grid_scale_apply_operator(operator, context):
+    """
+    Scale an operators distance values by the grid size.
+    """
+    grid_scale = object_add_grid_scale(context)
+
+    properties = operator.properties
+    properties_def = properties.bl_rna.properties
+    for prop_id in properties_def.keys():
+        if not properties.is_property_set(prop_id):
+            prop_def = properties_def[prop_id]
+            if prop_def.unit == 'LENGTH' and prop_def.subtype == 'DISTANCE':
+                setattr(operator, prop_id, getattr(operator, prop_id) * grid_scale)
+
+
+def object_image_guess(obj, bm=None):
+    """
+    Return a single image used by the object,
+    first checking the texture-faces, then the material.
+    """
+    # TODO, cycles/nodes materials
+    me = obj.data
+    if bm is None:
+        if obj.mode == 'EDIT':
+            bm = bmesh.from_edit_mesh(me)
+
+    if bm is not None:
+        tex_layer = bm.faces.layers.tex.active
+        if tex_layer is not None:
+            for f in bm.faces:
+                image = f[tex_layer].image
+                if image is not None:
+                    return image
+    else:
+        tex_layer = me.uv_textures.active
+        if tex_layer is not None:
+            for tf in tex_layer.data:
+                image = tf.image
+                if image is not None:
+                    return image
+
+    for m in obj.data.materials:
+        if m is not None:
+            # backwards so topmost are highest priority
+            for mtex in reversed(m.texture_slots):
+                if mtex and mtex.use_map_color_diffuse:
+                    texture = mtex.texture
+                    if texture and texture.type == 'IMAGE':
+                        image = texture.image
+                        if image is not None:
+                            return image
+    return None
+
+
+def world_to_camera_view(scene, obj, coord):
+    """
+    Returns the camera space coords for a 3d point.
+    (also known as: normalized device coordinates - NDC).
+
+    Where (0, 0) is the bottom left and (1, 1) is the top right of the camera frame.
+    values outside 0-1 are also supported.
+    A negative 'z' value means the point is behind the camera.
+
+    Takes shift-x/y, lens angle and sensor size into account
+    as well as perspective/ortho projections.
+
+    :arg scene: Scene to use for frame size.
+    :type scene: :class:`bpy.types.Scene`
+    :arg obj: Camera object.
+    :type obj: :class:`bpy.types.Object`
+    :arg coord: World space location.
+    :type coord: :class:`mathutils.Vector`
+    :return: a vector where X and Y map to the view plane and Z is the depth on the view axis.
+    :rtype: :class:`mathutils.Vector`
+    """
+    from mathutils import Vector
+
+    co_local = obj.matrix_world.normalized().inverted() * coord
+    z = -co_local.z
+
+    camera = obj.data
+    frame = [-v for v in camera.view_frame(scene=scene)[:3]]
+    if camera.type != 'ORTHO':
+        if z == 0.0:
+            return Vector((0.5, 0.5, 0.0))
+        else:
+            frame = [(v / (v.z / z)) for v in frame]
+
+    min_x, max_x = frame[1].x, frame[2].x
+    min_y, max_y = frame[0].y, frame[1].y
+
+    x = (co_local.x - min_x) / (max_x - min_x)
+    y = (co_local.y - min_y) / (max_y - min_y)
+
+    return Vector((x, y, z))

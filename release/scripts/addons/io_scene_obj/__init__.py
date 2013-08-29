@@ -46,8 +46,8 @@ from bpy.props import (BoolProperty,
                        StringProperty,
                        EnumProperty,
                        )
-from bpy_extras.io_utils import (ExportHelper,
-                                 ImportHelper,
+from bpy_extras.io_utils import (ImportHelper,
+                                 ExportHelper,
                                  path_reference_mode,
                                  axis_conversion,
                                  )
@@ -164,6 +164,10 @@ class ImportOBJ(bpy.types.Operator, ImportHelper):
                                         ).to_4x4()
         keywords["global_matrix"] = global_matrix
 
+        if bpy.data.is_saved and context.user_preferences.filepaths.use_relative_paths:
+            import os
+            keywords["relpath"] = os.path.dirname((bpy.data.path_resolve("filepath", False).as_bytes()))
+
         return import_obj.load(self, context, **keywords)
 
     def draw(self, context):
@@ -233,6 +237,11 @@ class ExportOBJ(bpy.types.Operator, ExportHelper):
             description="",
             default=True,
             )
+    use_smooth_groups = BoolProperty(
+            name="Smooth Groups",
+            description="Write sharp edges as smooth groups",
+            default=False,
+            )
     use_normals = BoolProperty(
             name="Include Normals",
             description="",
@@ -287,15 +296,6 @@ class ExportOBJ(bpy.types.Operator, ExportHelper):
             default=False,
             )
 
-    global_scale = FloatProperty(
-            name="Scale",
-            description="Scale all data",
-            min=0.01, max=1000.0,
-            soft_min=0.01,
-            soft_max=1000.0,
-            default=1.0,
-            )
-
     axis_forward = EnumProperty(
             name="Forward",
             items=(('X', "X Forward", ""),
@@ -307,7 +307,6 @@ class ExportOBJ(bpy.types.Operator, ExportHelper):
                    ),
             default='-Z',
             )
-
     axis_up = EnumProperty(
             name="Up",
             items=(('X', "X Up", ""),
@@ -318,6 +317,11 @@ class ExportOBJ(bpy.types.Operator, ExportHelper):
                    ('-Z', "-Z Up", ""),
                    ),
             default='Y',
+            )
+    global_scale = FloatProperty(
+            name="Scale",
+            min=0.01, max=1000.0,
+            default=1.0,
             )
 
     path_mode = path_reference_mode
@@ -335,13 +339,7 @@ class ExportOBJ(bpy.types.Operator, ExportHelper):
                                             "filter_glob",
                                             ))
 
-        global_matrix = Matrix()
-
-        global_matrix[0][0] = \
-        global_matrix[1][1] = \
-        global_matrix[2][2] = self.global_scale
-
-        global_matrix = (global_matrix *
+        global_matrix = (Matrix.Scale(self.global_scale, 4) *
                          axis_conversion(to_forward=self.axis_forward,
                                          to_up=self.axis_up,
                                          ).to_4x4())

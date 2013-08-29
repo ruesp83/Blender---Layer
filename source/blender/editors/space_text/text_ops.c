@@ -69,6 +69,8 @@
 #include "text_intern.h"
 #include "text_format.h"
 
+static void txt_screen_clamp(SpaceText *st, ARegion *ar);
+
 /************************ poll ***************************/
 
 
@@ -236,7 +238,7 @@ static int text_open_exec(bContext *C, wmOperator *op)
 
 	RNA_string_get(op->ptr, "filepath", str);
 
-	text = BKE_text_load(bmain, str, G.main->name);
+	text = BKE_text_load_ex(bmain, str, G.main->name, internal);
 
 	if (!text) {
 		if (op->customdata) MEM_freeN(op->customdata);
@@ -261,13 +263,6 @@ static int text_open_exec(bContext *C, wmOperator *op)
 	else if (st) {
 		st->text = text;
 		st->top = 0;
-	}
-	
-	if (internal) {
-		if (text->name)
-			MEM_freeN(text->name);
-		
-		text->name = NULL;
 	}
 
 	text_drawcache_tag_update(st, 1);
@@ -319,7 +314,14 @@ void TEXT_OT_open(wmOperatorType *ot)
 
 static int text_reload_exec(bContext *C, wmOperator *op)
 {
+	SpaceText *st = CTX_wm_space_text(C);
 	Text *text = CTX_data_edit_text(C);
+	ARegion *ar = CTX_wm_region(C);
+
+	/* store view & cursor state */
+	const int orig_top = st->top;
+	const int orig_curl = BLI_findindex(&text->lines, text->curl);
+	const int orig_curc = text->curc;
 
 	if (!BKE_text_reload(text)) {
 		BKE_report(op->reports, RPT_ERROR, "Could not reopen file");
@@ -335,6 +337,12 @@ static int text_reload_exec(bContext *C, wmOperator *op)
 	text_update_cursor_moved(C);
 	text_drawcache_tag_update(CTX_wm_space_text(C), 1);
 	WM_event_add_notifier(C, NC_TEXT | NA_EDITED, text);
+
+	/* return to scroll position */
+	st->top = orig_top;
+	txt_screen_clamp(st, ar);
+	/* return cursor */
+	txt_move_to(text, orig_curl, orig_curc, false);
 
 	return OPERATOR_FINISHED;
 }
@@ -478,7 +486,7 @@ static void txt_write_file(Text *text, ReportList *reports)
 	
 	fclose(fp);
 
-	if (stat(filepath, &st) == 0) {
+	if (BLI_stat(filepath, &st) == 0) {
 		text->mtime = st.st_mtime;
 	}
 	else {
@@ -487,8 +495,7 @@ static void txt_write_file(Text *text, ReportList *reports)
 		            filepath, errno ? strerror(errno) : TIP_("unknown error stating file"));
 	}
 	
-	if (text->flags & TXT_ISDIRTY)
-		text->flags ^= TXT_ISDIRTY;
+	text->flags &= ~TXT_ISDIRTY;
 }
 
 static int text_save_exec(bContext *C, wmOperator *op)
@@ -1840,10 +1847,16 @@ static int text_move_cursor(bContext *C, int type, int select)
 			break;
 
 		case PREV_WORD:
+			if (txt_cursor_is_line_start(text)) {
+				txt_move_left(text, select);
+			}
 			txt_jump_left(text, select, true);
 			break;
 
 		case NEXT_WORD:
+			if (txt_cursor_is_line_end(text)) {
+				txt_move_right(text, select);
+			}
 			txt_jump_right(text, select, true);
 			break;
 
@@ -1985,19 +1998,37 @@ static EnumPropertyItem delete_type_items[] = {
 
 static int text_delete_exec(bContext *C, wmOperator *op)
 {
+	SpaceText *st = CTX_wm_space_text(C);
 	Text *text = CTX_data_edit_text(C);
 	int type = RNA_enum_get(op->ptr, "type");
 
-	text_drawcache_tag_update(CTX_wm_space_text(C), 0);
+	text_drawcache_tag_update(st, 0);
 
-	if (type == DEL_PREV_WORD)
+	/* behavior could be changed here,
+	 * but for now just don't jump words when we have a selection */
+	if (txt_has_sel(text)) {
+		if      (type == DEL_PREV_WORD) type = DEL_PREV_CHAR;
+		else if (type == DEL_NEXT_WORD) type = DEL_NEXT_CHAR;
+	}
+
+	if (type == DEL_PREV_WORD) {
+		if (txt_cursor_is_line_start(text)) {
+			txt_backspace_char(text);
+		}
 		txt_backspace_word(text);
-	else if (type == DEL_PREV_CHAR)
+	}
+	else if (type == DEL_PREV_CHAR) {
 		txt_backspace_char(text);
-	else if (type == DEL_NEXT_WORD)
+	}
+	else if (type == DEL_NEXT_WORD) {
+		if (txt_cursor_is_line_end(text)) {
+			txt_delete_char(text);
+		}
 		txt_delete_word(text);
-	else if (type == DEL_NEXT_CHAR)
+	}
+	else if (type == DEL_NEXT_CHAR) {
 		txt_delete_char(text);
+	}
 
 	text_update_line_edited(text->curl);
 
@@ -2005,7 +2036,7 @@ static int text_delete_exec(bContext *C, wmOperator *op)
 	WM_event_add_notifier(C, NC_TEXT | NA_EDITED, text);
 
 	/* run the script while editing, evil but useful */
-	if (CTX_wm_space_text(C)->live_edit)
+	if (st->live_edit)
 		text_run_script(C, NULL);
 	
 	return OPERATOR_FINISHED;
@@ -2053,18 +2084,26 @@ void TEXT_OT_overwrite_toggle(wmOperatorType *ot)
 
 /******************* scroll operator **********************/
 
+static void txt_screen_clamp(SpaceText *st, ARegion *ar)
+{
+	if (st->top <= 0) {
+		st->top = 0;
+	}
+	else {
+		int last;
+		last = text_get_total_lines(st, ar);
+		last = last - (st->viewlines / 2);
+		if (last > 0 && st->top > last) {
+			st->top = last;
+		}
+	}
+}
+
 /* Moves the view vertically by the specified number of lines */
 static void txt_screen_skip(SpaceText *st, ARegion *ar, int lines)
 {
-	int last;
-
 	st->top += lines;
-
-	last = text_get_total_lines(st, ar);
-	last = last - (st->viewlines / 2);
-	
-	if (st->top > last) st->top = last;
-	if (st->top < 0) st->top = 0;
+	txt_screen_clamp(st, ar);
 }
 
 /* quick enum for tsc->zone (scroller handles) */
@@ -2179,14 +2218,7 @@ static int text_scroll_modal(bContext *C, wmOperator *op, const wmEvent *event)
 		case RIGHTMOUSE:
 		case MIDDLEMOUSE:
 			if (ELEM(tsc->zone, SCROLLHANDLE_MIN_OUTSIDE, SCROLLHANDLE_MAX_OUTSIDE)) {
-				int last;
-
-				st->top += st->viewlines * (tsc->zone == SCROLLHANDLE_MIN_OUTSIDE ? 1 : -1);
-
-				last = text_get_total_lines(st, ar);
-				last = last - (st->viewlines / 2);
-
-				CLAMP(st->top, 0, last);
+				txt_screen_skip(st, ar, st->viewlines * (tsc->zone == SCROLLHANDLE_MIN_OUTSIDE ? 1 : -1));
 
 				ED_area_tag_redraw(CTX_wm_area(C));
 			}
@@ -2907,7 +2939,7 @@ static int text_find_and_replace(bContext *C, wmOperator *op, short mode)
 	int found = 0;
 	char *tmp;
 
-	if (!st->findstr[0] || (mode == TEXT_REPLACE && !st->replacestr[0]))
+	if (!st->findstr[0])
 		return OPERATOR_CANCELLED;
 
 	flags = st->flags;
@@ -3082,7 +3114,7 @@ int text_file_modified(Text *text)
 	if (!BLI_exists(file))
 		return 2;
 
-	result = stat(file, &st);
+	result = BLI_stat(file, &st);
 	
 	if (result == -1)
 		return -1;
@@ -3109,7 +3141,7 @@ static void text_ignore_modified(Text *text)
 
 	if (!BLI_exists(file)) return;
 
-	result = stat(file, &st);
+	result = BLI_stat(file, &st);
 	
 	if (result == -1 || (st.st_mode & S_IFMT) != S_IFREG)
 		return;

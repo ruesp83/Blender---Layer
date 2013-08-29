@@ -36,6 +36,7 @@
 struct ID;
 struct BoundBox;
 struct DispList;
+struct EdgeHash;
 struct ListBase;
 struct BMEditMesh;
 struct BMesh;
@@ -101,6 +102,14 @@ void BKE_mesh_calc_poly_center(struct MPoly *mpoly, struct MLoop *loopstart,
 float BKE_mesh_calc_poly_area(struct MPoly *mpoly, struct MLoop *loopstart,
                               struct MVert *mvarray, const float polynormal[3]);
 
+void BKE_mesh_calc_poly_angles(struct MPoly *mpoly, struct MLoop *loopstart,
+                               struct MVert *mvarray, float angles[]);
+
+int *BKE_mesh_calc_smoothgroups(const struct MEdge *medge, const int totedge,
+                                const struct MPoly *mpoly, const int totpoly,
+                                const struct MLoop *mloop, const int totloop,
+                                int *r_totgroup);
+
 void BKE_mesh_calc_relative_deform(
         const struct MPoly *mpoly, const int totpoly,
         const struct MLoop *mloop, const int totvert,
@@ -129,18 +138,26 @@ int BKE_mesh_edge_other_vert(const struct MEdge *e, int v);
 
 /* update the hide flag for edges and polys from the corresponding
  * flag in verts */
-void BKE_mesh_flush_hidden_from_verts(const struct MVert *mvert,
-                                      const struct MLoop *mloop,
-                                      struct MEdge *medge, int totedge,
-                                      struct MPoly *mpoly, int totpoly);
+void BKE_mesh_flush_hidden_from_verts_ex(const struct MVert *mvert,
+                                         const struct MLoop *mloop,
+                                         struct MEdge *medge, const int totedge,
+                                         struct MPoly *mpoly, const int totpoly);
+void BKE_mesh_flush_hidden_from_verts(struct Mesh *me);
+
+void BKE_mesh_flush_hidden_from_polys_ex(struct MVert *mvert,
+                                         const struct MLoop *mloop,
+                                         struct MEdge *medge, const int totedge,
+                                         const struct MPoly *mpoly, const int totpoly);
+void BKE_mesh_flush_hidden_from_polys(struct Mesh *me);
+
 
 void BKE_mesh_flush_select_from_polys_ex(struct MVert *mvert,       const int totvert,
-                                         struct MLoop *mloop,
+                                         const struct MLoop *mloop,
                                          struct MEdge *medge,       const int totedge,
                                          const struct MPoly *mpoly, const int totpoly);
 void BKE_mesh_flush_select_from_polys(struct Mesh *me);
 void BKE_mesh_flush_select_from_verts_ex(const struct MVert *mvert, const int totvert,
-                                         struct MLoop *mloop,
+                                         const struct MLoop *mloop,
                                          struct MEdge *medge,       const int totedge,
                                          struct MPoly *mpoly,       const int totpoly);
 void BKE_mesh_flush_select_from_verts(struct Mesh *me);
@@ -171,7 +188,8 @@ void BKE_mesh_from_nurbs_displist(struct Object *ob, struct ListBase *dispbase, 
 void BKE_mesh_from_nurbs(struct Object *ob);
 void BKE_mesh_to_curve_nurblist(struct DerivedMesh *dm, struct ListBase *nurblist, const int edge_users_test);
 void BKE_mesh_to_curve(struct Scene *scene, struct Object *ob);
-void BKE_mesh_delete_material_index(struct Mesh *me, short index);
+void BKE_mesh_material_index_remove(struct Mesh *me, short index);
+void BKE_mesh_material_index_clear(struct Mesh *me);
 void BKE_mesh_smooth_flag_set(struct Object *meshOb, int enableSmooth);
 void BKE_mesh_convert_mfaces_to_mpolys(struct Mesh *mesh);
 void BKE_mesh_do_versions_convert_mfaces_to_mpolys(struct Mesh *mesh);
@@ -192,9 +210,10 @@ const char *BKE_mesh_cmp(struct Mesh *me1, struct Mesh *me2, float thresh);
 
 struct BoundBox *BKE_mesh_boundbox_get(struct Object *ob);
 void BKE_mesh_texspace_get(struct Mesh *me, float r_loc[3], float r_rot[3], float r_size[3]);
+void BKE_mesh_texspace_copy_from_object(struct Mesh *me, struct Object *ob);
 
 /* if old, it converts mface->edcode to edge drawflags */
-void BKE_mesh_make_edges(struct Mesh *me, int old);
+void BKE_mesh_make_edges(struct Mesh *me, const bool use_old);
 
 void BKE_mesh_strip_loose_faces(struct Mesh *me); /* Needed for compatibility (some old read code). */
 void BKE_mesh_strip_loose_polysloops(struct Mesh *me);
@@ -207,17 +226,20 @@ void BKE_mesh_calc_normals_mapping(
         struct MVert *mverts, int numVerts,
         struct MLoop *mloop, struct MPoly *mpolys, int numLoops, int numPolys, float (*polyNors_r)[3],
         struct MFace *mfaces, int numFaces, int *origIndexFace, float (*faceNors_r)[3]);
-/* extended version of 'BKE_mesh_calc_normals' with option not to calc vertex normals */
+/* extended version of 'BKE_mesh_calc_normals_poly' with option not to calc vertex normals */
 void BKE_mesh_calc_normals_mapping_ex(
         struct MVert *mverts, int numVerts,
         struct MLoop *mloop, struct MPoly *mpolys, int numLoops, int numPolys, float (*polyNors_r)[3],
         struct MFace *mfaces, int numFaces, int *origIndexFace, float (*faceNors_r)[3],
         const bool only_face_normals);
 
-void BKE_mesh_calc_normals(
+void BKE_mesh_calc_normals_poly(
         struct MVert *mverts, int numVerts,
         struct MLoop *mloop, struct MPoly *mpolys,
-        int numLoops, int numPolys, float (*polyNors_r)[3]);
+        int numLoops, int numPolys, float (*polyNors_r)[3],
+        const bool only_face_normals);
+
+void BKE_mesh_calc_normals(struct Mesh *me);
 
 /* Return a newly MEM_malloc'd array of all the mesh vertex locations
  * (_numVerts_r_ may be NULL) */
@@ -296,19 +318,24 @@ typedef struct IndexNode {
 	int index;
 } IndexNode;
 
-void BKE_mesh_vert_poly_map_create(MeshElemMap **map, int **mem,
+void BKE_mesh_vert_poly_map_create(MeshElemMap **r_map, int **r_mem,
                                    const struct MPoly *mface, const struct MLoop *mloop,
                                    int totvert, int totface, int totloop);
 
-void BKE_mesh_vert_edge_map_create(MeshElemMap **map, int **mem,
+void BKE_mesh_vert_edge_map_create(MeshElemMap **r_map, int **r_mem,
                                    const struct MEdge *medge, int totvert, int totedge);
+
+void BKE_mesh_edge_poly_map_create(MeshElemMap **r_map, int **r_mem,
+                                   const struct MEdge *medge, const int totedge,
+                                   const struct MPoly *mpoly, const int totpoly,
+                                   const struct MLoop *mloop, const int totloop);
 
 /* vertex level transformations & checks (no derived mesh) */
 
-int BKE_mesh_minmax(struct Mesh *me, float r_min[3], float r_max[3]);
-int BKE_mesh_center_median(struct Mesh *me, float cent[3]);
-int BKE_mesh_center_bounds(struct Mesh *me, float cent[3]);
-int BKE_mesh_center_centroid(struct Mesh *me, float cent[3]);
+bool BKE_mesh_minmax(struct Mesh *me, float r_min[3], float r_max[3]);
+bool BKE_mesh_center_median(struct Mesh *me, float cent[3]);
+bool BKE_mesh_center_bounds(struct Mesh *me, float cent[3]);
+bool BKE_mesh_center_centroid(struct Mesh *me, float cent[3]);
 void BKE_mesh_translate(struct Mesh *me, const float offset[3], const bool do_keys);
 
 /* mesh_validate.c */
@@ -340,10 +367,17 @@ void BKE_mesh_loops_to_mface_corners(struct CustomData *fdata, struct CustomData
                                      const int polyindex, const int mf_len,
                                      const int numTex, const int numCol, const int hasPCol, const int hasOrigSpace);
 
-void BKE_mesh_poly_calc_angles(struct MVert *mvert, struct MLoop *mloop,
-                               struct MPoly *mp, float angles[]);
+void BKE_mesh_poly_edgehash_insert(struct EdgeHash *ehash, const struct MPoly *mp, const struct MLoop *mloop);
+void BKE_mesh_poly_edgebitmap_insert(unsigned int *edge_bitmap, const struct MPoly *mp, const struct MLoop *mloop);
 
 void BKE_mesh_do_versions_cd_flag_init(struct Mesh *mesh);
+
+
+void BKE_mesh_mselect_clear(struct Mesh *me);
+void BKE_mesh_mselect_validate(struct Mesh *me);
+int  BKE_mesh_mselect_find(struct Mesh *me, int index, int type);
+int  BKE_mesh_mselect_active_get(struct Mesh *me, int type);
+void BKE_mesh_mselect_active_set(struct Mesh *me, int index, int type);
 
 #ifdef __cplusplus
 }

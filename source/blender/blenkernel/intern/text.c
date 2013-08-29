@@ -362,7 +362,7 @@ int BKE_text_reload(Text *text)
 	return 1;
 }
 
-Text *BKE_text_load(Main *bmain, const char *file, const char *relpath)
+Text *BKE_text_load_ex(Main *bmain, const char *file, const char *relpath, const bool is_internal)
 {
 	FILE *fp;
 	int i, llen, len;
@@ -392,8 +392,13 @@ Text *BKE_text_load(Main *bmain, const char *file, const char *relpath)
 	len = ftell(fp);
 	fseek(fp, 0L, SEEK_SET);
 
-	ta->name = MEM_mallocN(strlen(file) + 1, "text_name");
-	strcpy(ta->name, file);
+	if (is_internal == false) {
+		ta->name = MEM_mallocN(strlen(file) + 1, "text_name");
+		strcpy(ta->name, file);
+	}
+	else {
+		ta->flags |= TXT_ISMEM | TXT_ISDIRTY;
+	}
 
 	init_undo_text(ta);
 	
@@ -460,6 +465,11 @@ Text *BKE_text_load(Main *bmain, const char *file, const char *relpath)
 	return ta;
 }
 
+Text *BKE_text_load(Main *bmain, const char *file, const char *relpath)
+{
+	return BKE_text_load_ex(bmain, file, relpath, false);
+}
+
 Text *BKE_text_copy(Text *ta)
 {
 	Text *tan;
@@ -519,6 +529,9 @@ void BKE_text_unlink(Main *bmain, Text *text)
 	bNodeTree *ntree;
 	bNode *node;
 	Material *mat;
+	Scene *sce;
+	SceneRenderLayer *srl;
+	FreestyleModuleConfig *module;
 	short update;
 
 	for (ob = bmain->object.first; ob; ob = ob->id.next) {
@@ -604,6 +617,16 @@ void BKE_text_unlink(Main *bmain, Text *text)
 						st->top = 0;
 					}
 				}
+			}
+		}
+	}
+
+	/* Freestyle */
+	for (sce = bmain->scene.first; sce; sce = sce->id.next) {
+		for (srl = sce->r.layers.first; srl; srl = srl->next) {
+			for (module = srl->freestyleConfig.modules.first; module; module = module->next) {
+				if (module->script == text)
+					module->script = NULL;
 			}
 		}
 	}
@@ -767,6 +790,16 @@ static void txt_curs_sel(Text *text, TextLine ***linep, int **charp)
 	*linep = &text->sell; *charp = &text->selc;
 }
 
+bool txt_cursor_is_line_start(Text *text)
+{
+	return (text->selc == 0);
+}
+
+bool txt_cursor_is_line_end(Text *text)
+{
+	return (text->selc == text->sell->len);
+}
+
 /*****************************/
 /* Cursor movement functions */
 /*****************************/
@@ -812,19 +845,6 @@ int txt_utf8_column_to_offset(const char *str, int column)
 		pos += col;
 	}
 	return offset;
-}
-
-/* returns the real number of characters in string */
-/* not the same as BLI_strlen_utf8, which returns length for wide characters */
-static int txt_utf8_len(const char *src)
-{
-	int len;
-
-	for (len = 0; *src; len++) {
-		src += BLI_str_utf8_size(src);
-	}
-
-	return len;
 }
 
 void txt_move_up(Text *text, short sel)
@@ -1124,9 +1144,6 @@ static void txt_pop_last(Text *text)
 	
 	txt_pop_sel(text);
 }
-
-/* never used: CVS 1.19 */
-/*  static void txt_pop_selr (Text *text) */
 
 void txt_pop_sel(Text *text)
 {
@@ -1479,6 +1496,7 @@ static int max_undo_test(Text *text, int x)
 	return 1;
 }
 
+#if 0  /* UNUSED */
 static void dump_buffer(Text *text) 
 {
 	int i = 0;
@@ -1590,6 +1608,7 @@ void txt_print_undo(Text *text)
 					c_len = BLI_str_utf8_from_unicode(uc, c);
 					c[c_len] = '\0';
 					puts(c);
+					break;
 				}
 			}
 		}
@@ -1642,6 +1661,7 @@ void txt_print_undo(Text *text)
 		i++;
 	}
 }
+#endif
 
 static void txt_undo_store_uint16(char *undo_buf, int *undo_pos, unsigned short value) 
 {
@@ -1833,6 +1853,7 @@ static unsigned int txt_undo_read_unicode(const char *undo_buf, int *undo_pos, s
 			/* should never happen */
 			BLI_assert(0);
 			unicode = 0;
+			break;
 	}
 	
 	return unicode;
@@ -1908,6 +1929,7 @@ static unsigned int txt_redo_read_unicode(const char *undo_buf, int *undo_pos, s
 			/* should never happen */
 			BLI_assert(0);
 			unicode = 0;
+			break;
 	}
 	
 	return unicode;
@@ -1996,10 +2018,7 @@ void txt_do_undo(Text *text)
 			buf[i] = 0;
 
 			/* skip over the length that was stored again */
-			text->undo_pos--;
-			text->undo_pos--;
-			text->undo_pos--; 
-			text->undo_pos--;
+			text->undo_pos -= 4;
 
 			/* Get the cursor positions */
 			txt_undo_read_cursors(text->undo_buf, &text->undo_pos, &curln, &curc, &selln, &selc);
@@ -2029,14 +2048,11 @@ void txt_do_undo(Text *text)
 				text->undo_pos--;
 			}
 			buf[i] = 0;
-			linep = txt_utf8_len(buf);
+			linep = BLI_strlen_utf8(buf);
 			MEM_freeN(buf);
 			
 			/* skip over the length that was stored again */
-			text->undo_pos--;
-			text->undo_pos--;
-			text->undo_pos--;
-			text->undo_pos--;
+			text->undo_pos -= 4;
 
 			/* get and restore the cursors */
 			txt_undo_read_cursors(text->undo_buf, &text->undo_pos, &curln, &curc, &selln, &selc);
@@ -2187,10 +2203,7 @@ void txt_do_redo(Text *text)
 			text->undo_pos += linep;
 
 			/* skip over the length that was stored again */
-			text->undo_pos++;
-			text->undo_pos++;
-			text->undo_pos++; 
-			text->undo_pos++;
+			text->undo_pos += 4;
 			
 			txt_delete_sel(text);
 
@@ -2216,10 +2229,7 @@ void txt_do_redo(Text *text)
 			MEM_freeN(buf);
 
 			/* skip over the length that was stored again */
-			text->undo_pos++;
-			text->undo_pos++;
-			text->undo_pos++; 
-			text->undo_pos++;
+			text->undo_pos += 4;
 
 			break;
 			
@@ -2349,7 +2359,7 @@ static void txt_delete_line(Text *text, TextLine *line)
 
 static void txt_combine_lines(Text *text, TextLine *linea, TextLine *lineb)
 {
-	char *tmp;
+	char *tmp, *s;
 
 	if (!text) return;
 	
@@ -2358,8 +2368,10 @@ static void txt_combine_lines(Text *text, TextLine *linea, TextLine *lineb)
 
 	tmp = MEM_mallocN(linea->len + lineb->len + 1, "textline_string");
 	
-	strcpy(tmp, linea->line);
-	strcat(tmp, lineb->line);
+	s = tmp;
+	s += BLI_strcpy_rlen(s, linea->line);
+	s += BLI_strcpy_rlen(s, lineb->line);
+	(void)s;
 
 	make_new_line(linea, tmp);
 	
@@ -2612,10 +2624,6 @@ void txt_indent(Text *text)
 		return;
 	}
 
-	if (!text) return;
-	if (!text->curl) return;
-	if (!text->sell) return;
-
 	/* insert spaces rather than tabs */
 	if (text->flags & TXT_TABSTOSPACES) {
 		add = tab_to_spaces;
@@ -2675,9 +2683,9 @@ void txt_unindent(Text *text)
 	/* hardcoded: TXT_TABSIZE = 4 spaces: */
 	int spaceslen = TXT_TABSIZE;
 
-	if (!text) return;
-	if (!text->curl) return;
-	if (!text->sell) return;
+	if (ELEM3(NULL, text, text->curl, text->sell)) {
+		return;
+	}
 
 	/* insert spaces rather than tabs */
 	if (text->flags & TXT_TABSTOSPACES) {
@@ -2731,7 +2739,7 @@ void txt_comment(Text *text)
 	
 	if (!text) return;
 	if (!text->curl) return;
-	if (!text->sell) return;  // Need to change this need to check if only one line is selected to more then one
+	if (!text->sell) return;  // Need to change this need to check if only one line is selected to more than one
 
 	num = 0;
 	while (TRUE) {

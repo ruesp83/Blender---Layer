@@ -232,6 +232,12 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 }
 #endif /* WITH_OCEANSIM */
 
+static bool dependsOnNormals(ModifierData *md)
+{
+	OceanModifierData *omd = (OceanModifierData *)md;
+	return (omd->geometry_mode != MOD_OCEAN_GEOM_GENERATE);
+}
+
 #if 0
 static void dm_get_bounds(DerivedMesh *dm, float *sx, float *sy, float *ox, float *oy)
 {
@@ -266,8 +272,10 @@ static void dm_get_bounds(DerivedMesh *dm, float *sx, float *sy, float *ox, floa
 
 #ifdef WITH_OCEANSIM
 
-
+#ifdef _OPENMP
 #define OMP_MIN_RES 18
+#endif
+
 static DerivedMesh *generate_ocean_geometry(OceanModifierData *omd)
 {
 	DerivedMesh *result;
@@ -310,8 +318,8 @@ static DerivedMesh *generate_ocean_geometry(OceanModifierData *omd)
 
 	/* create vertices */
 	#pragma omp parallel for private(x, y) if (rx > OMP_MIN_RES)
-	for (y = 0; y < res_y + 1; y++) {
-		for (x = 0; x < res_x + 1; x++) {
+	for (y = 0; y <= res_y; y++) {
+		for (x = 0; x <= res_x; x++) {
 			const int i = y * (res_x + 1) + x;
 			float *co = mverts[i].co;
 			co[0] = ox + (x * sx);
@@ -386,6 +394,8 @@ static DerivedMesh *generate_ocean_geometry(OceanModifierData *omd)
 		}
 	}
 
+	result->dirty |= DM_DIRTY_NORMALS;
+
 	return result;
 }
 
@@ -416,6 +426,11 @@ static DerivedMesh *doOcean(ModifierData *md, Object *ob,
 
 	const float size_co_inv = 1.0f / (omd->size * omd->spatial_size);
 
+	/* can happen in when size is small, avoid bad array lookups later and quit now */
+	if (!finite(size_co_inv)) {
+		return derivedData;
+	}
+
 	/* update modifier */
 	if (omd->refresh & MOD_OCEAN_REFRESH_ADD)
 		omd->ocean = BKE_add_ocean();
@@ -435,8 +450,10 @@ static DerivedMesh *doOcean(ModifierData *md, Object *ob,
 		simulate_ocean_modifier(omd);
 	}
 
-	if (omd->geometry_mode == MOD_OCEAN_GEOM_GENERATE)
+	if (omd->geometry_mode == MOD_OCEAN_GEOM_GENERATE) {
 		dm = generate_ocean_geometry(omd);
+		DM_ensure_normals(dm);
+	}
 	else if (omd->geometry_mode == MOD_OCEAN_GEOM_DISPLACE) {
 		dm = CDDM_copy(derivedData);
 	}
@@ -519,7 +536,7 @@ static DerivedMesh *doOcean(ModifierData *md, Object *ob,
 		}
 	}
 
-	#undef OCEAN_CO
+#undef OCEAN_CO
 
 	return dm;
 }
@@ -543,18 +560,10 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 	result = doOcean(md, ob, derivedData, 0);
 
 	if (result != derivedData)
-		CDDM_calc_normals(result);
+		result->dirty |= DM_DIRTY_NORMALS;
 
 	return result;
 }
-
-static DerivedMesh *applyModifierEM(ModifierData *md, Object *ob,
-                                    struct BMEditMesh *UNUSED(editData),
-                                    DerivedMesh *derivedData)
-{
-	return applyModifier(md, ob, derivedData, MOD_APPLY_USECACHE);
-}
-
 
 
 ModifierTypeInfo modifierType_Ocean = {
@@ -572,14 +581,14 @@ ModifierTypeInfo modifierType_Ocean = {
 	/* deformVertsEM */     NULL,
 	/* deformMatricesEM */  NULL,
 	/* applyModifier */     applyModifier,
-	/* applyModifierEM */   applyModifierEM,
+	/* applyModifierEM */   NULL,
 	/* initData */          initData,
 	/* requiredDataMask */  requiredDataMask,
 	/* freeData */          freeData,
 	/* isDisabled */        NULL,
 	/* updateDepgraph */    NULL,
 	/* dependsOnTime */     NULL,
-	/* dependsOnNormals */	NULL,
+	/* dependsOnNormals */	dependsOnNormals,
 	/* foreachObjectLink */ NULL,
 	/* foreachIDLink */     NULL,
 };

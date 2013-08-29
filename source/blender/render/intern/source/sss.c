@@ -880,14 +880,14 @@ static void sss_create_tree_mat(Render *re, Material *mat)
 	re->sss_mat= mat;
 	re->i.partsdone = FALSE;
 
-	if (!(re->r.scemode & R_PREVIEWBUTS))
+	if (!(re->r.scemode & (R_BUTS_PREVIEW|R_VIEWPORT_PREVIEW)))
 		re->result= NULL;
 	BLI_rw_mutex_unlock(&re->resultmutex);
 
 	RE_TileProcessor(re);
 	
 	BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
-	if (!(re->r.scemode & R_PREVIEWBUTS)) {
+	if (!(re->r.scemode & (R_BUTS_PREVIEW|R_VIEWPORT_PREVIEW))) {
 		RE_FreeRenderResult(re->result);
 		re->result= rr;
 	}
@@ -937,7 +937,7 @@ static void sss_create_tree_mat(Render *re, Material *mat)
 		float error = mat->sss_error;
 
 		error= get_render_aosss_error(&re->r, error);
-		if ((re->r.scemode & R_PREVIEWBUTS) && error < 0.5f)
+		if ((re->r.scemode & (R_BUTS_PREVIEW|R_VIEWPORT_PREVIEW)) && error < 0.5f)
 			error= 0.5f;
 		
 		sss->ss[0]= scatter_settings_new(mat->sss_col[0], radius[0], ior, cfac, fw, bw);
@@ -993,24 +993,45 @@ static void sss_free_tree(SSSData *sss)
 void make_sss_tree(Render *re)
 {
 	Material *mat;
+	bool infostr_set = false;
+	const char *prevstr = NULL;
+
+	free_sss(re);
 	
 	re->sss_hash= BLI_ghash_ptr_new("make_sss_tree gh");
 
-	re->i.infostr = IFACE_("SSS preprocessing");
 	re->stats_draw(re->sdh, &re->i);
 	
-	for (mat= re->main->mat.first; mat; mat= mat->id.next)
-		if (mat->id.us && (mat->flag & MA_IS_USED) && (mat->sss_flag & MA_DIFF_SSS))
+	for (mat= re->main->mat.first; mat; mat= mat->id.next) {
+		if (mat->id.us && (mat->flag & MA_IS_USED) && (mat->sss_flag & MA_DIFF_SSS)) {
+			if (!infostr_set) {
+				prevstr = re->i.infostr;
+				re->i.infostr = IFACE_("SSS preprocessing");
+				infostr_set = true;
+			}
+
 			sss_create_tree_mat(re, mat);
+		}
+	}
 	
 	/* XXX preview exception */
 	/* localizing preview render data is not fun for node trees :( */
 	if (re->main!=G.main) {
-		for (mat= G.main->mat.first; mat; mat= mat->id.next)
-			if (mat->id.us && (mat->flag & MA_IS_USED) && (mat->sss_flag & MA_DIFF_SSS))
+		for (mat= G.main->mat.first; mat; mat= mat->id.next) {
+			if (mat->id.us && (mat->flag & MA_IS_USED) && (mat->sss_flag & MA_DIFF_SSS)) {
+				if (!infostr_set) {
+					prevstr = re->i.infostr;
+					re->i.infostr = IFACE_("SSS preprocessing");
+					infostr_set = true;
+				}
+
 				sss_create_tree_mat(re, mat);
+			}
+		}
 	}
 	
+	if (infostr_set)
+		re->i.infostr = prevstr;
 }
 
 void free_sss(Render *re)
@@ -1018,7 +1039,7 @@ void free_sss(Render *re)
 	if (re->sss_hash) {
 		GHashIterator *it= BLI_ghashIterator_new(re->sss_hash);
 
-		while (BLI_ghashIterator_notDone(it)) {
+		while (!BLI_ghashIterator_done(it)) {
 			sss_free_tree(BLI_ghashIterator_getValue(it));
 			BLI_ghashIterator_step(it);
 		}

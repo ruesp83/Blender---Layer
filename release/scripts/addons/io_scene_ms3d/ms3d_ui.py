@@ -46,7 +46,6 @@ from io_scene_ms3d.ms3d_spec import (
 from io_scene_ms3d.ms3d_utils import (
         enable_edit_mode,
         get_edge_split_modifier_add_if,
-        set_sence_to_metric,
         )
 
 
@@ -147,7 +146,8 @@ class Ms3dUi:
             return Ms3dUi.MODE_TRANSPARENCY_DEPTH_BUFFERED_WITH_ALPHA_REF
         elif(ms3d_value == Ms3dSpec.MODE_TRANSPARENCY_DEPTH_SORTED_TRIANGLES):
             return Ms3dUi.MODE_TRANSPARENCY_DEPTH_SORTED_TRIANGLES
-        return None
+
+        return Ms3dUi.MODE_TRANSPARENCY_SIMPLE
 
     @staticmethod
     def transparency_mode_to_ms3d(ui_value):
@@ -157,7 +157,8 @@ class Ms3dUi:
             return Ms3dSpec.MODE_TRANSPARENCY_DEPTH_BUFFERED_WITH_ALPHA_REF
         elif(ui_value == Ms3dUi.MODE_TRANSPARENCY_DEPTH_SORTED_TRIANGLES):
             return Ms3dSpec.MODE_TRANSPARENCY_DEPTH_SORTED_TRIANGLES
-        return None
+
+        return Ms3dSpec.MODE_TRANSPARENCY_SIMPLE
 
 
     FLAG_NONE = 'NONE'
@@ -262,7 +263,7 @@ class Ms3dImportOperator(Operator, ImportHelper):
     bl_idname = 'import_scene.ms3d'
     bl_label = ms3d_str['BL_LABEL_IMPORTER']
     bl_description = ms3d_str['BL_DESCRIPTION_IMPORTER']
-    bl_options = {'PRESET', }
+    bl_options = {'UNDO', 'PRESET', }
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
 
@@ -392,7 +393,7 @@ class Ms3dImportOperator(Operator, ImportHelper):
     def execute(self, blender_context):
         """ start executing """
         from io_scene_ms3d.ms3d_import import (Ms3dImporter, )
-        Ms3dImporter(
+        finished = Ms3dImporter(
                 report=self.report,
                 verbose=self.verbose,
                 use_extended_normal_handling=self.use_extended_normal_handling,
@@ -405,9 +406,10 @@ class Ms3dImportOperator(Operator, ImportHelper):
                         blender_context,
                         self.filepath
                         )
-
-        blender_context.scene.update()
-        return {"FINISHED"}
+        if finished:
+            blender_context.scene.update()
+            return {"FINISHED"}
+        return {"CANCELLED"}
 
     def invoke(self, blender_context, event):
         blender_context.window_manager.fileselect_add(self)
@@ -426,7 +428,7 @@ class Ms3dExportOperator(Operator, ExportHelper):
     bl_idname = 'export_scene.ms3d'
     bl_label = ms3d_str['BL_LABEL_EXPORTER']
     bl_description = ms3d_str['BL_DESCRIPTION_EXPORTER']
-    bl_options = {'PRESET', }
+    bl_options = {'UNDO', 'PRESET', }
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
 
@@ -595,7 +597,7 @@ class Ms3dExportOperator(Operator, ExportHelper):
     def execute(self, blender_context):
         """start executing"""
         from io_scene_ms3d.ms3d_export import (Ms3dExporter, )
-        Ms3dExporter(
+        finished = Ms3dExporter(
                 self.report,
                 verbose=self.verbose,
                 use_blender_names=self.use_blender_names,
@@ -611,9 +613,10 @@ class Ms3dExportOperator(Operator, ExportHelper):
                         blender_context,
                         self.filepath
                         )
-
-        blender_context.scene.update()
-        return {"FINISHED"}
+        if finished:
+            blender_context.scene.update()
+            return {"FINISHED"}
+        return {"CANCELLED"}
 
     #
     def invoke(self, blender_context, event):
@@ -637,7 +640,7 @@ class Ms3dExportOperator(Operator, ExportHelper):
 class Ms3dSetSmoothingGroupOperator(Operator):
     bl_idname = Ms3dUi.OPT_SMOOTHING_GROUP_APPLY
     bl_label = ms3d_str['BL_LABEL_SMOOTHING_GROUP_OPERATOR']
-    bl_options = {'INTERNAL', }
+    bl_options = {'UNDO', 'INTERNAL', }
 
     smoothing_group_index = IntProperty(
             name=ms3d_str['PROP_SMOOTHING_GROUP_INDEX'],
@@ -713,7 +716,7 @@ class Ms3dSetSmoothingGroupOperator(Operator):
 class Ms3dGroupOperator(Operator):
     bl_idname = Ms3dUi.OPT_GROUP_APPLY
     bl_label = ms3d_str['BL_LABEL_GROUP_OPERATOR']
-    bl_options = {'INTERNAL', }
+    bl_options = {'UNDO', 'INTERNAL', }
 
     mode = EnumProperty(
             items=( ('', "", ""),
@@ -804,7 +807,7 @@ class Ms3dGroupOperator(Operator):
 class Ms3dMaterialOperator(Operator):
     bl_idname = Ms3dUi.OPT_MATERIAL_APPLY
     bl_label = ms3d_str['BL_LABEL_MATERIAL_OPERATOR']
-    bl_options = {'INTERNAL', }
+    bl_options = {'UNDO', 'INTERNAL', }
 
     mode = EnumProperty(
             items=( ('', "", ""),
@@ -1702,36 +1705,7 @@ class Ms3dSmoothingGroupPanel(Panel):
 
 
 ###############################################################################
-class Ms3dSetSceneToMetricOperator(Operator):
-    """ . """
-    bl_idname = 'io_scene_ms3d.set_sence_to_metric'
-    bl_label = ms3d_str['BL_LABEL_SET_SCENE_TO_METRIC']
-    bl_description = ms3d_str['BL_DESC_SET_SCENE_TO_METRIC']
-
-
-    #
-    @classmethod
-    def poll(cls, blender_context):
-        return True
-
-    # entrypoint for option
-    def execute(self, blender_context):
-        return self.set_sence_to_metric(blender_context)
-
-    # entrypoint for option via UI
-    def invoke(self, blender_context, event):
-        return blender_context.window_manager.invoke_props_dialog(self)
-
-
-    ###########################################################################
-    def set_sence_to_metric(self, blender_context):
-        set_sence_to_metric(blender_context)
-        return {"FINISHED"}
-
-
-###############################################################################
 def register():
-    register_class(Ms3dSetSceneToMetricOperator)
     register_class(Ms3dGroupProperties)
     register_class(Ms3dModelProperties)
     register_class(Ms3dArmatureProperties)
@@ -1750,7 +1724,6 @@ def unregister():
     unregister_class(Ms3dArmatureProperties)
     unregister_class(Ms3dModelProperties)
     unregister_class(Ms3dGroupProperties)
-    unregister_class(Ms3dSetSceneToMetricOperator)
 
 def inject_properties():
     Mesh.ms3d = PointerProperty(type=Ms3dModelProperties)

@@ -80,6 +80,7 @@ enum {
 
 	TH_GRID,
 	TH_WIRE,
+	TH_WIRE_EDIT,
 	TH_SELECT,
 	TH_ACTIVE,
 	TH_GROUP,
@@ -209,6 +210,9 @@ enum {
 	TH_STITCH_PREVIEW_UNSTITCHABLE,
 	TH_STITCH_PREVIEW_ACTIVE,
 
+	TH_FREESTYLE_EDGE_MARK,
+	TH_FREESTYLE_FACE_MARK,
+
 	TH_SHOW_BOUNDARY_LAYER,
 	TH_COL1_BOUNDARY_LAYER,
 	TH_COL2_BOUNDARY_LAYER,
@@ -312,4 +316,4 @@ const unsigned char *UI_ThemeGetColorPtr(struct bTheme *btheme, int spacetype, i
 
 void UI_make_axis_color(const unsigned char *src_col, unsigned char *dst_col, const char axis);
 
-#endif /*  UI_RESOURCES_H */
+#endif  /* __UI_RESOURCES_H__ */

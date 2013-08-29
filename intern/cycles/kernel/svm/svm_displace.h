@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 CCL_NAMESPACE_BEGIN
@@ -24,15 +22,18 @@ __device void svm_node_set_bump(KernelGlobals *kg, ShaderData *sd, float *stack,
 {
 #ifdef __RAY_DIFFERENTIALS__
 	/* get normal input */
-	float3 normal_in = stack_valid(node.y)? stack_load_float3(stack, node.y): sd->N;
+	uint normal_offset, distance_offset, invert;
+	decode_node_uchar4(node.y, &normal_offset, &distance_offset, &invert, NULL);
+
+	float3 normal_in = stack_valid(normal_offset)? stack_load_float3(stack, normal_offset): sd->N;
 
 	/* get surface tangents from normal */
 	float3 Rx = cross(sd->dP.dy, normal_in);
 	float3 Ry = cross(normal_in, sd->dP.dx);
 
 	/* get bump values */
-	uint c_offset, x_offset, y_offset, intensity_offset;
-	decode_node_uchar4(node.z, &c_offset, &x_offset, &y_offset, &intensity_offset);
+	uint c_offset, x_offset, y_offset, strength_offset;
+	decode_node_uchar4(node.z, &c_offset, &x_offset, &y_offset, &strength_offset);
 
 	float h_c = stack_load_float(stack, c_offset);
 	float h_x = stack_load_float(stack, x_offset);
@@ -41,14 +42,21 @@ __device void svm_node_set_bump(KernelGlobals *kg, ShaderData *sd, float *stack,
 	/* compute surface gradient and determinant */
 	float det = dot(sd->dP.dx, Rx);
 	float3 surfgrad = (h_x - h_c)*Rx + (h_y - h_c)*Ry;
-	float intensity = stack_load_float(stack, intensity_offset);
 
-	surfgrad *= intensity;
 	float absdet = fabsf(det);
 
+	float strength = stack_load_float(stack, strength_offset);
+	float distance = stack_load_float(stack, distance_offset);
+
+	if(invert)
+		distance *= -1.0f;
+
+	strength = max(strength, 0.0f);
+
 	/* compute and output perturbed normal */
-	float3 outN = normalize(absdet*normal_in - signf(det)*surfgrad);
-	stack_store_float3(stack, node.w, outN);
+	float3 normal_out = normalize(absdet*normal_in - distance*signf(det)*surfgrad);
+	normal_out = normalize(strength*normal_out + (1.0f - strength)*normal_in);
+	stack_store_float3(stack, node.w, normal_out);
 #endif
 }
 

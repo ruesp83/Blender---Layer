@@ -44,6 +44,8 @@ set(INC
 	../../../intern/opennl/extern
 	../../../intern/raskter
 	../../../intern/smoke/extern
+	../../../extern/libmv
+	../../../intern/atomic
 
 	# XXX - BAD LEVEL CALL WM_api.h
 	../windowmanager
@@ -62,6 +64,7 @@ set(SRC
 	intern/anim.c
 	intern/anim_sys.c
 	intern/armature.c
+	intern/autoexec.c
 	intern/blender.c
 	intern/bmfont.c
 	intern/boids.c
@@ -84,11 +87,14 @@ set(SRC
 	intern/displist.c
 	intern/dynamicpaint.c
 	intern/editderivedmesh.c
+	intern/editmesh.c
+	intern/editmesh_bvh.c
 	intern/effect.c
 	intern/fcurve.c
 	intern/fluidsim.c
 	intern/fmodifier.c
 	intern/font.c
+	intern/freestyle.c
 	intern/gpencil.c
 	intern/group.c
 	intern/icons.c
@@ -103,6 +109,7 @@ set(SRC
 	intern/lattice.c
 	intern/layer.c
 	intern/library.c
+	intern/linestyle.c
 	intern/mask.c
 	intern/mask_evaluate.c
 	intern/mask_rasterize.c
@@ -132,7 +139,6 @@ set(SRC
 	intern/sca.c
 	intern/scene.c
 	intern/screen.c
-	intern/script.c
 	intern/seqcache.c
 	intern/seqeffects.c
 	intern/seqmodifier.c
@@ -148,6 +154,7 @@ set(SRC
 	intern/text.c
 	intern/texture.c
 	intern/tracking.c
+	intern/treehash.c
 	intern/unit.c
 	intern/world.c
 	intern/writeavi.c
@@ -159,8 +166,8 @@ set(SRC
 	BKE_anim.h
 	BKE_animsys.h
 	BKE_armature.h
+	BKE_autoexec.h
 	BKE_blender.h
-	BKE_bmesh.h
 	BKE_bmfont.h
 	BKE_bmfont_types.h
 	BKE_boids.h
@@ -187,6 +194,7 @@ set(SRC
 	BKE_fcurve.h
 	BKE_fluidsim.h
 	BKE_font.h
+	BKE_freestyle.h
 	BKE_global.h
 	BKE_gpencil.h
 	BKE_group.h
@@ -200,6 +208,7 @@ set(SRC
 	BKE_lattice.h
 	BKE_layer.h
 	BKE_library.h
+	BKE_linestyle.h
 	BKE_main.h
 	BKE_mask.h
 	BKE_material.h
@@ -224,7 +233,6 @@ set(SRC
 	BKE_sca.h
 	BKE_scene.h
 	BKE_screen.h
-	BKE_script.h
 	BKE_sequencer.h
 	BKE_shrinkwrap.h
 	BKE_sketch.h
@@ -234,10 +242,12 @@ set(SRC
 	BKE_speaker.h
 	BKE_subsurf.h
 	BKE_suggestions.h
-	BKE_tessmesh.h
+	BKE_editmesh.h
+	BKE_editmesh_bvh.h
 	BKE_text.h
 	BKE_texture.h
 	BKE_tracking.h
+	BKE_treehash.h
 	BKE_unit.h
 	BKE_utildefines.h
 	BKE_world.h
@@ -351,10 +361,6 @@ if(WITH_PYTHON)
 	endif()
 endif()
 
-if(WITH_OPENMP)
-	add_definitions(-DPARALLEL=1)
-endif()
-
 if(WITH_MOD_FLUID)
 	list(APPEND INC
 		../../../intern/elbeem/extern
@@ -407,9 +413,6 @@ if(WITH_GAMEENGINE)
 endif()
 
 if(WITH_LIBMV)
-	list(APPEND INC
-		../../../extern/libmv
-	)
 	add_definitions(-DWITH_LIBMV)
 endif()
 
@@ -422,6 +425,10 @@ endif()
 
 if(WITH_INTERNATIONAL)
 	add_definitions(-DWITH_INTERNATIONAL)
+endif()
+
+if(WITH_FREESTYLE)
+	add_definitions(-DWITH_FREESTYLE)
 endif()
 
 ## Warnings as errors, this is too strict!

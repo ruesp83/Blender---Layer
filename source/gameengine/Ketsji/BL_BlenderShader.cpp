@@ -1,3 +1,23 @@
+/*
+ * ***** BEGIN GPL LICENSE BLOCK *****
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ * ***** END GPL LICENSE BLOCK *****
+ */
+
 /** \file gameengine/Ketsji/BL_BlenderShader.cpp
  *  \ingroup ketsji
  */
@@ -24,7 +44,6 @@
  
 BL_BlenderShader::BL_BlenderShader(KX_Scene *scene, struct Material *ma, int lightlayer)
 :
-	mScene(scene),
 	mMat(ma),
 	mLightLayer(lightlayer),
 	mGPUMat(NULL)
@@ -46,11 +65,20 @@ void BL_BlenderShader::ReloadMaterial()
 	mGPUMat = (mMat) ? GPU_material_from_blender(mBlenderScene, mMat) : NULL;
 }
 
-void BL_BlenderShader::SetProg(bool enable, double time)
+void BL_BlenderShader::SetProg(bool enable, double time, RAS_IRasterizer* rasty)
 {
 	if (VerifyShader()) {
-		if (enable)
-			GPU_material_bind(mGPUMat, mLightLayer, mBlenderScene->lay, time, 1);
+		if (enable) {
+			assert(rasty != NULL); // XXX Kinda hacky, but SetProg() should always have the rasterizer if enable is true
+
+			float viewmat[4][4], viewinvmat[4][4];
+			const MT_Matrix4x4& view = rasty->GetViewMatrix();
+			const MT_Matrix4x4& viewinv = rasty->GetViewInvMatrix();
+			view.getValue((float*)viewmat);
+			viewinv.getValue((float*)viewinvmat);
+
+			GPU_material_bind(mGPUMat, mLightLayer, mBlenderScene->lay, time, 1, viewmat, viewinvmat);
+		}
 		else
 			GPU_material_unbind(mGPUMat);
 	}
@@ -88,8 +116,8 @@ void BL_BlenderShader::SetAttribs(RAS_IRasterizer* ras, const BL_Material *mat)
 		return;
 	
 	gpumat = mGPUMat;
-
-	if (ras->GetDrawingMode() == RAS_IRasterizer::KX_TEXTURED) {
+	if (ras->GetDrawingMode() == RAS_IRasterizer::KX_TEXTURED || (ras->GetDrawingMode() == RAS_IRasterizer::KX_SHADOW &&
+			mat->alphablend != GEMAT_SOLID && !ras->GetUsingOverrideShader())) {
 		GPU_material_vertex_attributes(gpumat, &attribs);
 		attrib_num = GetAttribNum();
 
@@ -120,7 +148,7 @@ void BL_BlenderShader::SetAttribs(RAS_IRasterizer* ras, const BL_Material *mat)
 
 void BL_BlenderShader::Update(const RAS_MeshSlot & ms, RAS_IRasterizer* rasty )
 {
-	float obmat[4][4], viewmat[4][4], viewinvmat[4][4], obcol[4];
+	float obmat[4][4], obcol[4];
 	GPUMaterial *gpumat;
 
 	gpumat = mGPUMat;
@@ -130,13 +158,9 @@ void BL_BlenderShader::Update(const RAS_MeshSlot & ms, RAS_IRasterizer* rasty )
 
 	MT_Matrix4x4 model;
 	model.setValue(ms.m_OpenGLMatrix);
-	const MT_Matrix4x4& view = rasty->GetViewMatrix();
-	const MT_Matrix4x4& viewinv = rasty->GetViewInvMatrix();
 
 	// note: getValue gives back column major as needed by OpenGL
 	model.getValue((float*)obmat);
-	view.getValue((float*)viewmat);
-	viewinv.getValue((float*)viewinvmat);
 
 	if (ms.m_bObjectColor)
 		ms.m_RGBAcolor.getValue((float *)obcol);
@@ -144,7 +168,7 @@ void BL_BlenderShader::Update(const RAS_MeshSlot & ms, RAS_IRasterizer* rasty )
 		obcol[0] = obcol[1] = obcol[2] = obcol[3] = 1.0f;
 
 	float auto_bump_scale = ms.m_pDerivedMesh!=0 ? ms.m_pDerivedMesh->auto_bump_scale : 1.0f;
-	GPU_material_bind_uniforms(gpumat, obmat, viewmat, viewinvmat, obcol, auto_bump_scale);
+	GPU_material_bind_uniforms(gpumat, obmat, obcol, auto_bump_scale);
 
 	mAlphaBlend = GPU_material_alpha_blend(gpumat, obcol);
 }

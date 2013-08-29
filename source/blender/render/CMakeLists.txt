@@ -30,7 +30,6 @@ set(INC
 	../blenfont
 	../blenkernel
 	../blenlib
-	../blenloader
 	../imbuf
 	../makesdna
 	../makesrna
@@ -130,10 +129,6 @@ if(WITH_PYTHON)
 	list(APPEND INC
 		../python
 	)
-
-	list(APPEND INC_SYS
-		${PYTHON_INCLUDE_DIRS}
-	)
 endif()
 
 if(WITH_IMAGE_OPENEXR)
@@ -142,6 +137,13 @@ endif()
 
 if(WITH_MOD_SMOKE)
 	add_definitions(-DWITH_SMOKE)
+endif()
+
+if(WITH_FREESTYLE)
+	list(APPEND INC
+		../freestyle
+	)
+	add_definitions(-DWITH_FREESTYLE)
 endif()
 
 if(WITH_CODEC_QUICKTIME)

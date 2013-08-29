@@ -80,7 +80,13 @@ void IMAGE_OT_pack(struct wmOperatorType *ot);
 void IMAGE_OT_unpack(struct wmOperatorType *ot);
 
 void IMAGE_OT_bright_contrast(struct wmOperatorType *ot);
+void IMAGE_OT_desaturate(wmOperatorType *ot);
+void IMAGE_OT_posterize(wmOperatorType *ot);
+void IMAGE_OT_threshold(wmOperatorType *ot);
+void IMAGE_OT_exposure(wmOperatorType *ot);
+void IMAGE_OT_colorize(wmOperatorType *ot);
 void IMAGE_OT_invert(struct wmOperatorType *ot);
+void IMAGE_OT_invert_value(struct wmOperatorType *ot);
 
 void IMAGE_OT_duplicate(struct wmOperatorType *ot);
 void IMAGE_OT_flip(struct wmOperatorType *ot);

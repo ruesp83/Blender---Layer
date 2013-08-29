@@ -35,7 +35,7 @@
 
 /* **************** VALTORGB ******************** */
 static bNodeSocketTemplate cmp_node_valtorgb_in[] = {
-	{	SOCK_FLOAT, 1, N_("Fac"),			0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, PROP_FACTOR},
+	{	SOCK_FLOAT, 1, N_("Fac"),			0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, PROP_NONE},
 	{	-1, 0, ""	}
 };
 static bNodeSocketTemplate cmp_node_valtorgb_out[] = {
@@ -46,14 +46,14 @@ static bNodeSocketTemplate cmp_node_valtorgb_out[] = {
 
 static void node_composit_init_valtorgb(bNodeTree *UNUSED(ntree), bNode *node)
 {
-	node->storage= add_colorband(true);
+	node->storage = add_colorband(true);
 }
 
 void register_node_type_cmp_valtorgb(void)
 {
 	static bNodeType ntype;
 
-	cmp_node_type_base(&ntype, CMP_NODE_VALTORGB, "ColorRamp", NODE_CLASS_CONVERTOR, NODE_OPTIONS);
+	cmp_node_type_base(&ntype, CMP_NODE_VALTORGB, "ColorRamp", NODE_CLASS_CONVERTOR, 0);
 	node_type_socket_templates(&ntype, cmp_node_valtorgb_in, cmp_node_valtorgb_out);
 	node_type_size(&ntype, 240, 200, 320);
 	node_type_init(&ntype, node_composit_init_valtorgb);

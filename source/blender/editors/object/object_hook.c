@@ -56,7 +56,7 @@
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_deform.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
 
 #include "RNA_define.h"
 #include "RNA_access.h"
@@ -102,11 +102,13 @@ static int return_editmesh_indexar(BMEditMesh *em, int *tot, int **indexar, floa
 	return totvert;
 }
 
-static int return_editmesh_vgroup(Object *obedit, BMEditMesh *em, char *name, float *cent)
+static bool return_editmesh_vgroup(Object *obedit, BMEditMesh *em, char *name, float *cent)
 {
+	const int cd_dvert_offset = obedit->actdef ? CustomData_get_offset(&em->bm->vdata, CD_MDEFORMVERT) : -1;
+
 	zero_v3(cent);
 
-	if (obedit->actdef) {
+	if (cd_dvert_offset != -1) {
 		const int defgrp_index = obedit->actdef - 1;
 		int totvert = 0;
 
@@ -116,24 +118,22 @@ static int return_editmesh_vgroup(Object *obedit, BMEditMesh *em, char *name, fl
 
 		/* find the vertices */
 		BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
-			dvert = CustomData_bmesh_get(&em->bm->vdata, eve->head.data, CD_MDEFORMVERT);
+			dvert = BM_ELEM_CD_GET_VOID_P(eve, cd_dvert_offset);
 
-			if (dvert) {
-				if (defvert_find_weight(dvert, defgrp_index) > 0.0f) {
-					add_v3_v3(cent, eve->co);
-					totvert++;
-				}
+			if (defvert_find_weight(dvert, defgrp_index) > 0.0f) {
+				add_v3_v3(cent, eve->co);
+				totvert++;
 			}
 		}
 		if (totvert) {
 			bDeformGroup *dg = BLI_findlink(&obedit->defbase, defgrp_index);
 			BLI_strncpy(name, dg->name, sizeof(dg->name));
 			mul_v3_fl(cent, 1.0f / (float)totvert);
-			return 1;
+			return true;
 		}
 	}
 	
-	return 0;
+	return false;
 }	
 
 static void select_editbmesh_hook(Object *ob, HookModifierData *hmd)
@@ -296,7 +296,7 @@ static int return_editcurve_indexar(Object *obedit, int *tot, int **indexar, flo
 	return totvert;
 }
 
-static int object_hook_index_array(Scene *scene, Object *obedit, int *tot, int **indexar, char *name, float *cent_r)
+static bool object_hook_index_array(Scene *scene, Object *obedit, int *tot, int **indexar, char *name, float *cent_r)
 {
 	*indexar = NULL;
 	*tot = 0;
@@ -310,21 +310,18 @@ static int object_hook_index_array(Scene *scene, Object *obedit, int *tot, int *
 			BMEditMesh *em;
 
 			EDBM_mesh_load(obedit);
-			EDBM_mesh_make(scene->toolsettings, scene, obedit);
+			EDBM_mesh_make(scene->toolsettings, obedit);
 
 			em = me->edit_btmesh;
 
 			EDBM_mesh_normals_update(em);
-			BMEdit_RecalcTessellation(em);
+			BKE_editmesh_tessface_calc(em);
 
 			/* check selected vertices first */
-			if (return_editmesh_indexar(em, tot, indexar, cent_r)) {
-				return 1;
+			if (return_editmesh_indexar(em, tot, indexar, cent_r) == 0) {
+				return return_editmesh_vgroup(obedit, em, name, cent_r);
 			}
-			else {
-				int ret = return_editmesh_vgroup(obedit, em, name, cent_r);
-				return ret;
-			}
+			return true;
 		}
 		case OB_CURVE:
 		case OB_SURF:
@@ -335,7 +332,7 @@ static int object_hook_index_array(Scene *scene, Object *obedit, int *tot, int *
 			return return_editlattice_indexar(lt->editlatt->latt, tot, indexar, cent_r);
 		}
 		default:
-			return 0;
+			return false;
 	}
 }
 
@@ -438,12 +435,12 @@ static int hook_op_edit_poll(bContext *C)
 	return 0;
 }
 
-static Object *add_hook_object_new(Scene *scene, Object *obedit)
+static Object *add_hook_object_new(Main *bmain, Scene *scene, Object *obedit)
 {
 	Base *base, *basedit;
 	Object *ob;
 
-	ob = BKE_object_add(scene, OB_EMPTY);
+	ob = BKE_object_add(bmain, scene, OB_EMPTY);
 	
 	basedit = BKE_scene_base_find(scene, obedit);
 	base = BKE_scene_base_find(scene, ob);
@@ -461,6 +458,7 @@ static int add_hook_object(Main *bmain, Scene *scene, Object *obedit, Object *ob
 	ModifierData *md = NULL;
 	HookModifierData *hmd = NULL;
 	float cent[3];
+	float pose_mat[4][4];
 	int tot, ok, *indexar;
 	char name[MAX_NAME];
 	
@@ -473,7 +471,7 @@ static int add_hook_object(Main *bmain, Scene *scene, Object *obedit, Object *ob
 
 	if (mode == OBJECT_ADDHOOK_NEWOB && !ob) {
 		
-		ob = add_hook_object_new(scene, obedit);
+		ob = add_hook_object_new(bmain, scene, obedit);
 		
 		/* transform cent to global coords for loc */
 		mul_v3_m4v3(ob->loc, obedit->obmat, cent);
@@ -495,11 +493,20 @@ static int add_hook_object(Main *bmain, Scene *scene, Object *obedit, Object *ob
 	hmd->totindex = tot;
 	BLI_strncpy(hmd->name, name, sizeof(hmd->name));
 	
+	unit_m4(pose_mat);
+
 	if (mode == OBJECT_ADDHOOK_SELOB_BONE) {
 		bArmature *arm = ob->data;
 		BLI_assert(ob->type == OB_ARMATURE);
 		if (arm->act_bone) {
+			bPoseChannel *pchan_act;
+
 			BLI_strncpy(hmd->subtarget, arm->act_bone->name, sizeof(hmd->subtarget));
+
+			pchan_act = BKE_pose_channel_active(ob);
+			if (LIKELY(pchan_act)) {
+				invert_m4_m4(pose_mat, pchan_act->pose_mat);
+			}
 		}
 		else {
 			BKE_report(reports, RPT_WARNING, "Armature has no active object bone");
@@ -513,7 +520,7 @@ static int add_hook_object(Main *bmain, Scene *scene, Object *obedit, Object *ob
 	
 	invert_m4_m4(ob->imat, ob->obmat);
 	/* apparently this call goes from right to left... */
-	mul_serie_m4(hmd->parentinv, ob->imat, obedit->obmat, NULL,
+	mul_serie_m4(hmd->parentinv, pose_mat, ob->imat, obedit->obmat,
 	             NULL, NULL, NULL, NULL, NULL);
 	
 	DAG_relations_tag_update(bmain);
@@ -703,14 +710,14 @@ static int object_hook_reset_exec(bContext *C, wmOperator *op)
 			float imat[4][4], mat[4][4];
 			
 			/* calculate the world-space matrix for the pose-channel target first, then carry on as usual */
-			mult_m4_m4m4(mat, hmd->object->obmat, pchan->pose_mat);
+			mul_m4_m4m4(mat, hmd->object->obmat, pchan->pose_mat);
 			
 			invert_m4_m4(imat, mat);
-			mul_serie_m4(hmd->parentinv, imat, ob->obmat, NULL, NULL, NULL, NULL, NULL, NULL);
+			mul_m4_m4m4(hmd->parentinv, imat, ob->obmat);
 		}
 		else {
 			invert_m4_m4(hmd->object->imat, hmd->object->obmat);
-			mul_serie_m4(hmd->parentinv, hmd->object->imat, ob->obmat, NULL, NULL, NULL, NULL, NULL, NULL);
+			mul_m4_m4m4(hmd->parentinv, hmd->object->imat, ob->obmat);
 		}
 	}
 	

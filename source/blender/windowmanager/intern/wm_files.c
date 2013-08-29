@@ -70,6 +70,7 @@
 #include "DNA_screen_types.h"
 #include "DNA_windowmanager_types.h"
 
+#include "BKE_autoexec.h"
 #include "BKE_blender.h"
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
@@ -327,7 +328,7 @@ static int wm_read_exotic(Scene *UNUSED(scene), const char *name)
 	/* make sure we're not trying to read a directory.... */
 
 	len = strlen(name);
-	if (ELEM(name[len - 1], '/', '\\')) {
+	if (len > 0 && ELEM(name[len - 1], '/', '\\')) {
 		retval = BKE_READ_EXOTIC_FAIL_PATH;
 	}
 	else {
@@ -364,6 +365,21 @@ static int wm_read_exotic(Scene *UNUSED(scene), const char *name)
 	return retval;
 }
 
+void WM_file_autoexec_init(const char *filepath)
+{
+	if (G.f & G_SCRIPT_OVERRIDE_PREF) {
+		return;
+	}
+
+	if (G.f & G_SCRIPT_AUTOEXEC) {
+		char path[FILE_MAX];
+		BLI_split_dir_part(filepath, path, sizeof(path));
+		if (BKE_autoexec_match(path)) {
+			G.f &= ~G_SCRIPT_AUTOEXEC;
+		}
+	}
+}
+
 void WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 {
 	int retval;
@@ -395,7 +411,14 @@ void WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 		/* confusing this global... */
 		G.relbase_valid = 1;
 		retval = BKE_read_file(C, filepath, reports);
-		G.save_over = 1;
+		/* when loading startup.blend's, we can be left with a blank path */
+		if (G.main->name[0]) {
+			G.save_over = 1;
+		}
+		else {
+			G.save_over = 0;
+			G.relbase_valid = 0;
+		}
 
 		/* this flag is initialized by the operator but overwritten on read.
 		 * need to re-enable it here else drivers + registered scripts wont work. */
@@ -430,9 +453,7 @@ void WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 
 #ifdef WITH_PYTHON
 		/* run any texts that were loaded in and flagged as modules */
-		BPY_driver_reset();
-		BPY_app_handlers_reset(FALSE);
-		BPY_modules_load_user(C);
+		BPY_python_reset(C);
 #endif
 
 		/* important to do before NULL'ing the context */
@@ -535,8 +556,9 @@ int wm_homefile_read(bContext *C, ReportList *UNUSED(reports), short from_memory
 	if (success == 0) {
 		success = BKE_read_file_from_memory(C, datatoc_startup_blend, datatoc_startup_blend_size, NULL);
 		if (wmbase.first == NULL) wm_clear_default_size(C);
+		BLI_init_temporary_dir(U.tempdir);
 
-#ifdef WITH_PYTHON_SECURITY /* not default */
+#ifdef WITH_PYTHON_SECURITY
 		/* use alternative setting for security nuts
 		 * otherwise we'd need to patch the binary blob - startup.blend.c */
 		U.flag |= USER_SCRIPT_AUTOEXEC_DISABLE;
@@ -583,9 +605,7 @@ int wm_homefile_read(bContext *C, ReportList *UNUSED(reports), short from_memory
 		/* sync addons, these may have changed from the defaults */
 		BPY_string_exec(C, "__import__('addon_utils').reset_all()");
 
-		BPY_driver_reset();
-		BPY_app_handlers_reset(FALSE);
-		BPY_modules_load_user(C);
+		BPY_python_reset(C);
 	}
 #endif
 
@@ -790,15 +810,14 @@ int write_crash_blend(void)
 	}
 }
 
-int wm_file_write(bContext *C, const char *target, int fileflags, ReportList *reports)
+int wm_file_write(bContext *C, const char *filepath, int fileflags, ReportList *reports)
 {
 	Library *li;
 	int len;
-	char filepath[FILE_MAX];
 	int *thumb = NULL;
 	ImBuf *ibuf_thumb = NULL;
 
-	len = strlen(target);
+	len = strlen(filepath);
 	
 	if (len == 0) {
 		BKE_report(reports, RPT_ERROR, "Path is empty, cannot save");
@@ -810,9 +829,9 @@ int wm_file_write(bContext *C, const char *target, int fileflags, ReportList *re
 		return -1;
 	}
  
-	BLI_strncpy(filepath, target, FILE_MAX);
-	BLI_replace_extension(filepath, FILE_MAX, ".blend");
-	/* don't use 'target' anymore */
+	/* note: used to replace the file extension (to ensure '.blend'),
+	 * no need to now because the operator ensures,
+	 * its handy for scripts to save to a predefined name without blender editing it */
 	
 	/* send the OnSave event */
 	for (li = G.main->library.first; li; li = li->id.next) {

@@ -44,6 +44,7 @@
 #include "DNA_material_types.h"
 #include "DNA_meta_types.h"
 #include "DNA_particle_types.h"
+#include "DNA_rigidbody_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_speaker_types.h"
 #include "DNA_world_types.h"
@@ -85,7 +86,7 @@
 #include "BKE_scene.h"
 #include "BKE_speaker.h"
 #include "BKE_texture.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -135,16 +136,16 @@ static int vertex_parent_set_exec(bContext *C, wmOperator *op)
 		BMEditMesh *em;
 
 		EDBM_mesh_load(obedit);
-		EDBM_mesh_make(scene->toolsettings, scene, obedit);
+		EDBM_mesh_make(scene->toolsettings, obedit);
 
 		em = me->edit_btmesh;
 
 		EDBM_mesh_normals_update(em);
-		BMEdit_RecalcTessellation(em);
+		BKE_editmesh_tessface_calc(em);
 
 		/* derivedMesh might be needed for solving parenting,
 		 * so re-create it here */
-		makeDerivedMesh(scene, obedit, em, CD_MASK_BAREMESH, 0);
+		makeDerivedMesh(scene, obedit, em, CD_MASK_BAREMESH | CD_MASK_ORIGINDEX, 0);
 
 		BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
 			if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
@@ -344,7 +345,7 @@ static int make_proxy_exec(bContext *C, wmOperator *op)
 		char name[MAX_ID_NAME + 4];
 		
 		/* Add new object for the proxy */
-		newob = BKE_object_add(scene, OB_EMPTY);
+		newob = BKE_object_add(bmain, scene, OB_EMPTY);
 
 		BLI_snprintf(name, sizeof(name), "%s_proxy", ((ID *)(gob ? gob : ob))->name + 2);
 
@@ -493,23 +494,21 @@ void ED_object_parent_clear(Object *ob, int type)
 			
 			/* clear parenting relationship completely */
 			ob->parent = NULL;
+			break;
 		}
-		break;
-		
 		case CLEAR_PARENT_KEEP_TRANSFORM:
 		{
 			/* remove parent, and apply the parented transform result as object's local transforms */
 			ob->parent = NULL;
 			BKE_object_apply_mat4(ob, ob->obmat, TRUE, FALSE);
+			break;
 		}
-		break;
-		
 		case CLEAR_PARENT_INVERSE:
 		{
 			/* object stays parented, but the parent inverse (i.e. offset from parent to retain binding state) is cleared */
 			unit_m4(ob->parentinv);
+			break;
 		}
-		break;
 	}
 	
 	DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
@@ -549,7 +548,7 @@ void OBJECT_OT_parent_clear(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
-	ot->prop = RNA_def_enum(ot->srna, "type", prop_clear_parent_types, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", prop_clear_parent_types, CLEAR_PARENT_ALL, "Type", "");
 }
 
 /* ******************** Make Parent Operator *********************** */
@@ -736,9 +735,7 @@ int ED_object_parent_set(ReportList *reports, Main *bmain, Scene *scene, Object 
 				BKE_get_constraint_target_matrix(scene, con, 0, CONSTRAINT_OBTYPE_OBJECT, NULL, cmat, scene->r.cfra);
 				sub_v3_v3v3(vec, ob->obmat[3], cmat[3]);
 				
-				ob->loc[0] = vec[0];
-				ob->loc[1] = vec[1];
-				ob->loc[2] = vec[2];
+				copy_v3_v3(ob->loc, vec);
 			}
 			else if (pararm && ob->type == OB_MESH && par->type == OB_ARMATURE) {
 				if (partype == PAR_ARMATURE_NAME)
@@ -1431,12 +1428,13 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
 	Scene *scene = CTX_data_scene(C);
 	const int type = RNA_enum_get(op->ptr, "type");
 	Object *ob_src;
-	ID *id;
+	ID *obdata_id;
 	int a;
 
 	/* group */
 	LinkNode *ob_groups = NULL;
-	int is_cycle = FALSE;
+	bool is_cycle = false;
+	bool is_lib = false;
 
 	ob_src = ED_object_active_context(C);
 
@@ -1451,17 +1449,18 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
 
 		if (ob_src != ob_dst) {
 			if (allow_make_links_data(type, ob_src, ob_dst)) {
+				obdata_id = ob_dst->data;
+
 				switch (type) {
 					case MAKE_LINKS_OBDATA: /* obdata */
-						id = ob_dst->data;
-						id->us--;
+						obdata_id->us--;
 
-						id = ob_src->data;
-						id_us_plus(id);
-						ob_dst->data = id;
+						obdata_id = ob_src->data;
+						id_us_plus(obdata_id);
+						ob_dst->data = obdata_id;
 
 						/* if amount of material indices changed: */
-						test_object_materials(ob_dst->data);
+						test_object_materials(bmain, ob_dst->data);
 
 						DAG_id_tag_update(&ob_dst->id, OB_RECALC_DATA);
 						break;
@@ -1471,10 +1470,18 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
 							Material *ma = give_current_material(ob_src, a + 1);
 							assign_material(ob_dst, ma, a + 1, BKE_MAT_ASSIGN_USERPREF); /* also works with ma==NULL */
 						}
+						DAG_id_tag_update(&ob_dst->id, 0);
 						break;
 					case MAKE_LINKS_ANIMDATA:
 						BKE_copy_animdata_id((ID *)ob_dst, (ID *)ob_src, FALSE);
-						BKE_copy_animdata_id((ID *)ob_dst->data, (ID *)ob_src->data, FALSE);
+						if (ob_dst->data && ob_src->data) {
+							if (obdata_id->lib) {
+								is_lib = true;
+								break;
+							}
+							BKE_copy_animdata_id((ID *)ob_dst->data, (ID *)ob_src->data, FALSE);
+						}
+						DAG_id_tag_update(&ob_dst->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 						break;
 					case MAKE_LINKS_GROUP:
 					{
@@ -1492,6 +1499,7 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
 								is_cycle = TRUE;
 							}
 						}
+						break;
 					}
 					case MAKE_LINKS_DUPLIGROUP:
 						ob_dst->dup_group = ob_src->dup_group;
@@ -1508,6 +1516,11 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
 					{
 						Curve *cu_src = ob_src->data;
 						Curve *cu_dst = ob_dst->data;
+
+						if (obdata_id->lib) {
+							is_lib = true;
+							break;
+						}
 
 						if (cu_dst->vfont) cu_dst->vfont->id.us--;
 						cu_dst->vfont = cu_src->vfont;
@@ -1539,6 +1552,10 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
 		if (is_cycle) {
 			BKE_report(op->reports, RPT_WARNING, "Skipped some groups because of cycle detected");
 		}
+	}
+
+	if (is_lib) {
+		BKE_report(op->reports, RPT_WARNING, "Skipped editing library object data");
 	}
 
 	DAG_relations_tag_update(bmain);
@@ -1603,21 +1620,23 @@ void OBJECT_OT_make_links_data(wmOperatorType *ot)
 
 /**************************** Make Single User ********************************/
 
-static void single_object_users(Scene *scene, View3D *v3d, int flag)	
+static void single_object_users(Main *bmain, Scene *scene, View3D *v3d, int flag, bool copy_groups)
 {
 	Base *base;
 	Object *ob, *obn;
+	Group *group, *groupn;
+	GroupObject *go;
 	
 	clear_sca_new_poins();  /* sensor/contr/act */
+
+	/* newid may still have some trash from Outliner tree building,
+	 * so clear that first to avoid errors [#26002] */
+	for (ob = bmain->object.first; ob; ob = ob->id.next)
+		ob->id.newid = NULL;
 
 	/* duplicate (must set newid) */
 	for (base = FIRSTBASE; base; base = base->next) {
 		ob = base->object;
-		
-		/* newid may still have some trash from Outliner tree building,
-		 * so clear that first to avoid errors [#26002]
-		 */
-		ob->id.newid = NULL;
 		
 		if ((base->flag & flag) == flag) {
 			if (ob->id.lib == NULL && ob->id.us > 1) {
@@ -1628,11 +1647,37 @@ static void single_object_users(Scene *scene, View3D *v3d, int flag)
 			}
 		}
 	}
+
+	/* duplicate groups that consist entirely of duplicated objects */
+	for (group = bmain->group.first; group; group = group->id.next) {
+		group->id.newid = NULL;
+
+		if (copy_groups && group->gobject.first) {
+			bool all_duplicated = true;
+
+			for (go = group->gobject.first; go; go = go->next) {
+				if (!(go->ob && (go->ob->id.newid))) {
+					all_duplicated = false;
+					break;
+				}
+			}
+
+			if (all_duplicated) {
+				groupn = BKE_group_copy(group);
+
+				for (go = groupn->gobject.first; go; go = go->next)
+					go->ob = (Object *)go->ob->id.newid;
+			}
+		}
+	}
+
+	/* group pointers in scene */
+	BKE_scene_groups_relink(scene);
 	
 	ID_NEW(scene->camera);
 	if (v3d) ID_NEW(v3d->camera);
 	
-	/* object pointers */
+	/* object and group pointers */
 	for (base = FIRSTBASE; base; base = base->next) {
 		BKE_object_relink(base->object);
 	}
@@ -1642,16 +1687,17 @@ static void single_object_users(Scene *scene, View3D *v3d, int flag)
 
 /* not an especially efficient function, only added so the single user
  * button can be functional.*/
-void ED_object_single_user(Scene *scene, Object *ob)
+void ED_object_single_user(Main *bmain, Scene *scene, Object *ob)
 {
 	Base *base;
+	bool copy_groups = false;
 
 	for (base = FIRSTBASE; base; base = base->next) {
 		if (base->object == ob) base->flag |=  OB_DONE;
 		else base->flag &= ~OB_DONE;
 	}
 
-	single_object_users(scene, NULL, OB_DONE);
+	single_object_users(bmain, scene, NULL, OB_DONE, copy_groups);
 }
 
 static void new_id_matar(Material **matar, int totcol)
@@ -1684,6 +1730,7 @@ static void single_obdata_users(Main *bmain, Scene *scene, int flag)
 	//Camera *cam;
 	Base *base;
 	Mesh *me;
+	Lattice *lat;
 	ID *id;
 	int a;
 
@@ -1694,9 +1741,7 @@ static void single_obdata_users(Main *bmain, Scene *scene, int flag)
 			
 			if (id && id->us > 1 && id->lib == NULL) {
 				DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
-				
-				BKE_copy_animdata_id_action(id);
-				
+
 				switch (ob->type) {
 					case OB_LAMP:
 						ob->data = la = BKE_lamp_copy(ob->data);
@@ -1710,10 +1755,9 @@ static void single_obdata_users(Main *bmain, Scene *scene, int flag)
 						ob->data = BKE_camera_copy(ob->data);
 						break;
 					case OB_MESH:
-						ob->data = BKE_mesh_copy(ob->data);
-						//me = ob->data;
-						//if (me && me->key)
-						//	ipo_idnew(me->key->ipo);	/* drivers */
+						ob->data = me = BKE_mesh_copy(ob->data);
+						if (me->key)
+							BKE_copy_animdata_id_action((ID *)me->key);
 						break;
 					case OB_MBALL:
 						ob->data = BKE_mball_copy(ob->data);
@@ -1724,9 +1768,13 @@ static void single_obdata_users(Main *bmain, Scene *scene, int flag)
 						ob->data = cu = BKE_curve_copy(ob->data);
 						ID_NEW(cu->bevobj);
 						ID_NEW(cu->taperobj);
+						if (cu->key)
+							BKE_copy_animdata_id_action((ID *)cu->key);
 						break;
 					case OB_LATTICE:
-						ob->data = BKE_lattice_copy(ob->data);
+						ob->data = lat = BKE_lattice_copy(ob->data);
+						if (lat->key)
+							BKE_copy_animdata_id_action((ID *)lat->key);
 						break;
 					case OB_ARMATURE:
 						DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
@@ -1741,7 +1789,14 @@ static void single_obdata_users(Main *bmain, Scene *scene, int flag)
 							printf("ERROR %s: can't copy %s\n", __func__, id->name);
 						return;
 				}
-				
+
+				/* Copy animation data after object data became local,
+				 * otherwise old and new object data will share the same
+				 * AnimData structure, which is not what we want.
+				 *                                             (sergey)
+				 */
+				BKE_copy_animdata_id_action((ID *)ob->data);
+
 				id->us--;
 				id->newid = ob->data;
 				
@@ -1909,9 +1964,9 @@ static void single_mat_users_expand(Main *bmain)
 }
 
 /* used for copying scenes */
-void ED_object_single_users(Main *bmain, Scene *scene, int full)
+void ED_object_single_users(Main *bmain, Scene *scene, bool full, bool copy_groups)
 {
-	single_object_users(scene, NULL, 0);
+	single_object_users(bmain, scene, NULL, 0, copy_groups);
 
 	if (full) {
 		single_obdata_users(bmain, scene, 0);
@@ -1994,7 +2049,7 @@ static int make_local_exec(bContext *C, wmOperator *op)
 			if (adt) BKE_animdata_make_local(adt);
 			
 			/* tag indirect data direct */
-			matarar = (Material ***)give_matarar(ob);
+			matarar = give_matarar(ob);
 			if (matarar) {
 				for (a = 0; a < ob->totcol; a++) {
 					ma = (*matarar)[a];
@@ -2080,9 +2135,10 @@ static int make_single_user_exec(bContext *C, wmOperator *op)
 	Scene *scene = CTX_data_scene(C);
 	View3D *v3d = CTX_wm_view3d(C); /* ok if this is NULL */
 	int flag = RNA_enum_get(op->ptr, "type"); /* 0==ALL, SELECTED==selected objecs */
+	bool copy_groups = false;
 
 	if (RNA_boolean_get(op->ptr, "object"))
-		single_object_users(scene, v3d, flag);
+		single_object_users(bmain, scene, v3d, flag, copy_groups);
 
 	if (RNA_boolean_get(op->ptr, "obdata"))
 		single_obdata_users(bmain, scene, flag);

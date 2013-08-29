@@ -37,6 +37,7 @@
 #include "BKE_object.h"
 #include "DNA_armature_types.h"
 #include "DNA_modifier_types.h"
+#include "DNA_scene_types.h"
 #include "ED_mesh.h"
 #include "ED_object.h"
 #include "BKE_action.h"
@@ -225,8 +226,6 @@ void SkinInfo::link_armature(bContext *C, Object *ob, std::map<COLLADAFW::Unique
 	ArmatureModifierData *amd = (ArmatureModifierData *)md;
 	amd->object = ob_arm;
 
-	copy_m4_m4(ob->obmat, bind_shape_matrix);
-	BKE_object_apply_mat4(ob, ob->obmat, 0, 0);
 #if 1
 	bc_set_parent(ob, ob_arm, C);
 #else
@@ -242,6 +241,8 @@ void SkinInfo::link_armature(bContext *C, Object *ob, std::map<COLLADAFW::Unique
 	DAG_relations_tag_update(bmain);
 	WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, NULL);
 #endif
+	copy_m4_m4(ob->obmat, bind_shape_matrix);
+	BKE_object_apply_mat4(ob, ob->obmat, 0, 0);
 
 	amd->deformflag = ARM_DEF_VGROUP;
 
@@ -316,12 +317,15 @@ void SkinInfo::find_root_joints(const std::vector<COLLADAFW::Node *> &root_joint
 		std::vector<JointData>::iterator ji;
 		//for each joint_data in this skin
 		for (ji = joint_data.begin(); ji != joint_data.end(); ji++) {
-			//get joint node from joint map
-			COLLADAFW::Node *joint = joint_by_uid[(*ji).joint_uid];
-			//find if joint node is in the tree belonging to the root_joint
-			if (find_node_in_tree(joint, root)) {
-				if (std::find(result.begin(), result.end(), root) == result.end())
-					result.push_back(root);
+			if (joint_by_uid.find((*ji).joint_uid) != joint_by_uid.end()) {
+				//get joint node from joint map
+				COLLADAFW::Node *joint = joint_by_uid[(*ji).joint_uid];
+
+				//find if joint node is in the tree belonging to the root_joint
+				if (find_node_in_tree(joint, root)) {
+					if (std::find(result.begin(), result.end(), root) == result.end())
+						result.push_back(root);
+				}
 			}
 		}
 	}

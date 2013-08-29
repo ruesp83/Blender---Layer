@@ -169,17 +169,19 @@ typedef enum IMB_BlendMode {
 	IMB_BLEND_COPY_ALPHA = 1002
 } IMB_BlendMode;
 
-unsigned int IMB_blend_color(unsigned int src1, unsigned int src2, int fac,
-	IMB_BlendMode mode);
-void IMB_blend_color_float(float *dst, float *src1, float *src2, float fac,
+void IMB_blend_color_byte(unsigned char dst[4], unsigned char src1[4],
+	unsigned char src2[4], IMB_BlendMode mode);
+void IMB_blend_color_float(float dst[4], float src1[4], float src2[4],
 	IMB_BlendMode mode);
 
 void IMB_rectclip(struct ImBuf *dbuf, struct ImBuf *sbuf, int *destx, 
 	int *desty, int *srcx, int *srcy, int *width, int *height);
 void IMB_rectcpy(struct ImBuf *drect, struct ImBuf *srect, int destx,
 	int desty, int srcx, int srcy, int width, int height);
-void IMB_rectblend(struct ImBuf *dbuf, struct ImBuf *sbuf, int destx, 
-	int desty, int srcx, int srcy, int width, int height, IMB_BlendMode mode);
+void IMB_rectblend(struct ImBuf *dbuf, struct ImBuf *obuf, struct ImBuf *sbuf,
+	unsigned short *dmask, unsigned short *smask, unsigned short mask_max,
+	int destx,  int desty, int origx, int origy, int srcx, int srcy,
+	int width, int height, IMB_BlendMode mode, short lock_alpha);
 
 /**
  *
@@ -425,7 +427,12 @@ void IMB_alpha_under_color_byte(unsigned char *rect, int x, int y, float backcol
 
 void IMB_invert_channels(struct ImBuf *in, const short r, const short g, const short b, const short a);
 void IMB_bright_contrast(struct ImBuf *in, float bright, float contrast);
-
+void IMB_desaturate(struct ImBuf *in, int type);
+void IMB_posterize(struct ImBuf *in, int levels);
+void IMB_threshold(struct ImBuf *in, int low, int high);
+void IMB_exposure(struct ImBuf *in, float exposure, float offset, float gamma);
+void IMB_colorize(struct ImBuf *in, int hue, int saturation, int lightness);
+void IMB_invert_value(struct ImBuf *in);
 /**
  *
  * \attention defined in readimage.c

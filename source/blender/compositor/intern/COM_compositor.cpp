@@ -67,11 +67,11 @@ void COM_execute(RenderData *rd, bNodeTree *editingtree, int rendering,
 	 * Don't create previews in advance, this is done when adding preview operations.
 	 * Reserved preview size is determined by render output for now.
 	 */
-	float aspect = rd->xsch > 0 ? (float)rd->ysch / (float)rd->xsch : 1.0;
+	float aspect = rd->xsch > 0 ? (float)rd->ysch / (float)rd->xsch : 1.0f;
 	BKE_node_preview_init_tree(editingtree, COM_PREVIEW_SIZE, (int)(COM_PREVIEW_SIZE * aspect), FALSE);
 
 	/* initialize workscheduler, will check if already done. TODO deinitialize somewhere */
-	bool use_opencl = (editingtree->flag & NTREE_COM_OPENCL);
+	bool use_opencl = (editingtree->flag & NTREE_COM_OPENCL) != 0;
 	WorkScheduler::initialize(use_opencl);
 
 	/* set progress bar to 0% and status to init compositing */
@@ -92,7 +92,8 @@ void COM_execute(RenderData *rd, bNodeTree *editingtree, int rendering,
 		}
 	}
 
-	ExecutionSystem *system = new ExecutionSystem(rd, editingtree, rendering, false, viewSettings, displaySettings);
+	ExecutionSystem *system = new ExecutionSystem(rd, editingtree, rendering, false,
+	                                              viewSettings, displaySettings);
 	system->execute();
 	delete system;
 

@@ -16,11 +16,11 @@ set(INC_SYS
 set(SRC
 	attribute.cpp
 	background.cpp
+	blackbody.cpp
 	buffers.cpp
 	bssrdf.cpp
 	camera.cpp
 	film.cpp
-	# film_response.cpp (code unused)
 	graph.cpp
 	image.cpp
 	integrator.cpp
@@ -35,6 +35,7 @@ set(SRC
 	scene.cpp
 	session.cpp
 	shader.cpp
+	sky_model.cpp
 	sobol.cpp
 	svm.cpp
 	tables.cpp
@@ -44,11 +45,11 @@ set(SRC
 set(SRC_HEADERS
 	attribute.h
 	background.h
+	blackbody.h
 	buffers.h
 	bssrdf.h
 	camera.h
 	film.h
-	# film_response.h (code unused)
 	graph.h
 	image.h
 	integrator.h
@@ -62,6 +63,8 @@ set(SRC_HEADERS
 	scene.h
 	session.h
 	shader.h
+	sky_model.h
+	sky_model_data.h
 	sobol.h
 	svm.h
 	tables.h

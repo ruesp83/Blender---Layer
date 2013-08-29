@@ -1009,8 +1009,6 @@ static void draw_sensor_armature(uiLayout *layout, PointerRNA *ptr)
 	bSensor *sens = (bSensor *)ptr->data;
 	bArmatureSensor *as = (bArmatureSensor *) sens->data;
 	Object *ob = (Object *)ptr->id.data;
-	PointerRNA pose_ptr, pchan_ptr;
-	PropertyRNA *bones_prop= NULL;
 	uiLayout *row;
 
 	if (ob->type != OB_ARMATURE) {
@@ -1019,11 +1017,12 @@ static void draw_sensor_armature(uiLayout *layout, PointerRNA *ptr)
 	}
 
 	if (ob->pose) {
+		PointerRNA pose_ptr, pchan_ptr;
+		PropertyRNA *bones_prop;
+
 		RNA_pointer_create((ID *)ob, &RNA_Pose, ob->pose, &pose_ptr);
 		bones_prop = RNA_struct_find_property(&pose_ptr, "bones");
-	}
 
-	if (&pose_ptr.data) {
 		uiItemPointerR(layout, ptr, "bone", &pose_ptr, "bones", NULL, ICON_BONE_DATA);
 
 		if (RNA_property_collection_lookup_string(&pose_ptr, bones_prop, as->posechannel, &pchan_ptr))
@@ -1466,6 +1465,7 @@ static void draw_actuator_action(uiLayout *layout, PointerRNA *ptr)
 	row = uiLayoutRow(layout, FALSE);
 	uiItemR(row, ptr, "layer", 0, NULL, ICON_NONE);
 	uiItemR(row, ptr, "layer_weight", 0, NULL, ICON_NONE);
+	uiItemR(row, ptr, "blend_mode", 0, "", ICON_NONE);
 
 	uiItemPointerR(layout, ptr, "frame_property", &settings_ptr, "properties", NULL, ICON_NONE);
 
@@ -2329,7 +2329,7 @@ void logic_buttons(bContext *C, ARegion *ar)
 
 		RNA_pointer_create((ID *)ob, &RNA_Object, ob, &object_ptr);
 		uiLayoutSetContextPointer(row, "object", &object_ptr);
-		uiItemMenuEnumO(row, "LOGIC_OT_controller_add", "type", IFACE_("Add Controller"), ICON_NONE);
+		uiItemMenuEnumO(row, C, "LOGIC_OT_controller_add", "type", IFACE_("Add Controller"), ICON_NONE);
 
 		if (RNA_boolean_get(&settings_ptr, "show_state_panel")) {
 
@@ -2426,7 +2426,7 @@ void logic_buttons(bContext *C, ARegion *ar)
 
 		RNA_pointer_create((ID *)ob, &RNA_Object, ob, &object_ptr);
 		uiLayoutSetContextPointer(row, "object", &object_ptr);
-		uiItemMenuEnumO(row, "LOGIC_OT_sensor_add", "type", IFACE_("Add Sensor"), ICON_NONE);
+		uiItemMenuEnumO(row, C, "LOGIC_OT_sensor_add", "type", IFACE_("Add Sensor"), ICON_NONE);
 		
 		if ((ob->scaflag & OB_SHOWSENS) == 0) continue;
 		
@@ -2497,7 +2497,7 @@ void logic_buttons(bContext *C, ARegion *ar)
 
 		RNA_pointer_create((ID *)ob, &RNA_Object, ob, &object_ptr);
 		uiLayoutSetContextPointer(row, "object", &object_ptr);
-		uiItemMenuEnumO(row, "LOGIC_OT_actuator_add", "type", IFACE_("Add Actuator"), ICON_NONE);
+		uiItemMenuEnumO(row, C, "LOGIC_OT_actuator_add", "type", IFACE_("Add Actuator"), ICON_NONE);
 
 		if ((ob->scaflag & OB_SHOWACT) == 0) continue;
 		

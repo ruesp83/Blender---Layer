@@ -89,7 +89,8 @@ static void draw_render_info(Scene *scene, Image *ima, ARegion *ar, float zoomx,
 	rr = BKE_image_acquire_renderresult(scene, ima);
 
 	if (rr && rr->text) {
-		ED_region_info_draw(ar, rr->text, 1, 0.25);
+		float fill_color[4] = {0.0f, 0.0f, 0.0f, 0.25f};
+		ED_region_info_draw(ar, rr->text, 1, fill_color);
 	}
 
 	BKE_image_release_renderresult(scene, ima);
@@ -760,7 +761,7 @@ static void draw_image_view_tool(Scene *scene)
 
 static unsigned char *get_alpha_clone_image(const bContext *C, Scene *scene, int *width, int *height)
 {
-	Brush *brush = paint_brush(&scene->toolsettings->imapaint.paint);
+	Brush *brush = BKE_paint_brush(&scene->toolsettings->imapaint.paint);
 	ImBuf *ibuf;
 	unsigned int size, alpha;
 	unsigned char *display_buffer;
@@ -816,7 +817,7 @@ static void draw_image_paint_helpers(const bContext *C, ARegion *ar, Scene *scen
 	int x, y, w, h;
 	unsigned char *clonerect;
 
-	brush = paint_brush(&scene->toolsettings->imapaint.paint);
+	brush = BKE_paint_brush(&scene->toolsettings->imapaint.paint);
 
 	if (brush && (brush->imagepaint_tool == PAINT_TOOL_CLONE)) {
 		/* this is not very efficient, but glDrawPixels doesn't allow
@@ -872,7 +873,7 @@ void draw_image_main(const bContext *C, ARegion *ar)
 	ImBuf *ibuf, *ibuf_l = NULL;
 	ImBuf *next_ibuf = NULL, *result_ibuf;
 	float zoomx, zoomy, sp_x, sp_y;
-	int show_viewer, show_render;
+	bool show_viewer, show_render, show_paint;
 	int first = 0;
 	int x, y, b_x, b_y; // bg_x, bg_y;
 	void *lock;
@@ -902,8 +903,9 @@ void draw_image_main(const bContext *C, ARegion *ar)
 	ima = ED_space_image(sima);
 	ED_space_image_get_zoom(sima, ar, &zoomx, &zoomy);
 
-	show_viewer = (ima && ima->source == IMA_SRC_VIEWER);
-	show_render = (show_viewer && ima->type == IMA_TYPE_R_RESULT);
+	show_viewer = (ima && ima->source == IMA_SRC_VIEWER) != 0;
+	show_render = (show_viewer && ima->type == IMA_TYPE_R_RESULT) != 0;
+	show_paint = (ima && (sima->mode == SI_MODE_PAINT) && (show_viewer == false) && (show_render == false));
 	//show_composite = (show_render && ima->type == IMA_TYPE_COMPOSITE);
 	
 
@@ -1030,7 +1032,7 @@ void draw_image_main(const bContext *C, ARegion *ar)
 	}
 
 	/* paint helpers */
-	if (sima->mode == SI_MODE_PAINT)
+	if (show_paint)
 		draw_image_paint_helpers(C, ar, scene, zoomx, zoomy);
 
 	/* XXX integrate this code */

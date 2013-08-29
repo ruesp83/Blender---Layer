@@ -51,7 +51,7 @@ static const float persistence = 0.56123f;
 //////////////////////////////////////////////////////////////////////
 // constructor
 //////////////////////////////////////////////////////////////////////
-WTURBULENCE::WTURBULENCE(int xResSm, int yResSm, int zResSm, int amplify, int noisetype, int init_fire, int init_colors)
+WTURBULENCE::WTURBULENCE(int xResSm, int yResSm, int zResSm, int amplify, int noisetype, const char *noisefile_path, int init_fire, int init_colors)
 {
 	// if noise magnitude is below this threshold, its contribution
 	// is negilgible, so stop evaluating new octaves
@@ -64,14 +64,14 @@ WTURBULENCE::WTURBULENCE(int xResSm, int yResSm, int zResSm, int amplify, int no
 	// DG - RNA-fied _strength = 2.;
 	
 	// add the corresponding octaves of noise
-	_octaves = (int)(log((float)_amplify) / log(2.0f) + 0.5); // XXX DEBUG/ TODO: int casting correct? - dg
+	_octaves = (int)(log((float)_amplify) / log(2.0f) + 0.5f); // XXX DEBUG/ TODO: int casting correct? - dg
 	
 	// noise resolution
 	_xResBig = _amplify * xResSm;
 	_yResBig = _amplify * yResSm;
 	_zResBig = _amplify * zResSm;
 	_resBig = Vec3Int(_xResBig, _yResBig, _zResBig);
-	_invResBig = Vec3(1./(float)_resBig[0], 1./(float)_resBig[1], 1./(float)_resBig[2]);
+	_invResBig = Vec3(1.0f/(float)_resBig[0], 1.0f/(float)_resBig[1], 1.0f/(float)_resBig[2]);
 	_slabSizeBig = _xResBig*_yResBig;
 	_totalCellsBig = _slabSizeBig * _zResBig;
 	
@@ -80,7 +80,7 @@ WTURBULENCE::WTURBULENCE(int xResSm, int yResSm, int zResSm, int amplify, int no
 	_yResSm = yResSm;
 	_zResSm = zResSm;
 	_resSm = Vec3Int(xResSm, yResSm, zResSm);
-	_invResSm = Vec3(1./(float)_resSm[0], 1./(float)_resSm[1], 1./(float)_resSm[2] );
+	_invResSm = Vec3(1.0f/(float)_resSm[0], 1.0f/(float)_resSm[1], 1.0f/(float)_resSm[2] );
 	_slabSizeSm = _xResSm*_yResSm;
 	_totalCellsSm = _slabSizeSm * _zResSm;
 	
@@ -115,9 +115,9 @@ WTURBULENCE::WTURBULENCE(int xResSm, int yResSm, int zResSm, int amplify, int no
 	_tcTemp = new float[_totalCellsSm];
 	
 	// map all 
-	const float dx = 1./(float)(_resSm[0]);
-	const float dy = 1./(float)(_resSm[1]);
-	const float dz = 1./(float)(_resSm[2]);
+	const float dx = 1.0f/(float)(_resSm[0]);
+	const float dy = 1.0f/(float)(_resSm[1]);
+	const float dz = 1.0f/(float)(_resSm[2]);
 	int index = 0;
 	for (int z = 0; z < _zResSm; z++) 
 	for (int y = 0; y < _yResSm; y++) 
@@ -131,15 +131,7 @@ WTURBULENCE::WTURBULENCE(int xResSm, int yResSm, int zResSm, int amplify, int no
 	
 	// noise tiles
 	_noiseTile = new float[noiseTileSize * noiseTileSize * noiseTileSize];
-	/*
-	std::string noiseTileFilename = std::string("noise.wavelets");
-	generateTile_WAVELET(_noiseTile, noiseTileFilename);
-	*/
-	setNoise(noisetype);
-	/*
-	std::string noiseTileFilename = std::string("noise.fft");
-	generatTile_FFT(_noiseTile, noiseTileFilename);
-	*/
+	setNoise(noisetype, noisefile_path);
 }
 
 void WTURBULENCE::initFire()
@@ -216,13 +208,13 @@ WTURBULENCE::~WTURBULENCE() {
 // type (1<<1) = FFT / 4
 // type (1<<2) = curl / 8
 //////////////////////////////////////////////////////////////////////
-void WTURBULENCE::setNoise(int type)
+void WTURBULENCE::setNoise(int type, const char *noisefile_path)
 {
 	if(type == (1<<1)) // FFT
 	{
 #ifdef WITH_FFTW3
 		// needs fft
-		std::string noiseTileFilename = std::string("noise.fft");
+		std::string noiseTileFilename = std::string(noisefile_path) + std::string("noise.fft");
 		generatTile_FFT(_noiseTile, noiseTileFilename);
 		return;
 #else
@@ -237,7 +229,7 @@ void WTURBULENCE::setNoise(int type)
 	}
 #endif
 
-	std::string noiseTileFilename = std::string("noise.wavelets");
+	std::string noiseTileFilename = std::string(noisefile_path) + std::string("noise.wavelets");
 	generateTile_WAVELET(_noiseTile, noiseTileFilename);
 }
 
@@ -438,13 +430,13 @@ void WTURBULENCE::resetTextureCoordinates(float *_eigMin, float *_eigMax)
 {
   // allowed deformation of the textures
   const float limit = 2.f;
-  const float limitInv = 1./limit;
+  const float limitInv = 1.0f/limit;
 
   // standard reset
   int resets = 0;
-  const float dx = 1./(float)(_resSm[0]);
-  const float dy = 1./(float)(_resSm[1]);
-  const float dz = 1./(float)(_resSm[2]);
+  const float dx = 1.0f/(float)(_resSm[0]);
+  const float dy = 1.0f/(float)(_resSm[1]);
+  const float dz = 1.0f/(float)(_resSm[2]);
 
   for (int z = 1; z < _zResSm-1; z++)
     for (int y = 1; y < _yResSm-1; y++)
@@ -988,13 +980,13 @@ void WTURBULENCE::stepTurbulenceFull(float dtOrg, float* xvel, float* yvel, floa
 
       // base amplitude for octave 0
       float coefficient = sqrtf(2.0f * fabs(energy));
-      const float amplitude = *_strength * fabs(0.5 * coefficient) * persistence;
+      const float amplitude = *_strength * fabs(0.5f * coefficient) * persistence;
 
       // add noise to velocity, but only if the turbulence is
       // sufficiently undeformed, and the energy is large enough
       // to make a difference
-      const bool addNoise = eigMax[indexSmall] < 2. && 
-                            eigMin[indexSmall] > 0.5;
+      const bool addNoise = eigMax[indexSmall] < 2.0f &&
+                            eigMin[indexSmall] > 0.5f;
       if (addNoise && amplitude > _cullingThreshold) {
         // base amplitude for octave 0
         float amplitudeScaled = amplitude;
@@ -1029,7 +1021,7 @@ void WTURBULENCE::stepTurbulenceFull(float dtOrg, float* xvel, float* yvel, floa
       // zero out velocity inside obstacles
       float obsCheck = INTERPOLATE::lerp3dToFloat(
           obstacles, posSm[0], posSm[1], posSm[2], _xResSm, _yResSm, _zResSm); 
-      if (obsCheck > 0.95) 
+      if (obsCheck > 0.95f)
         bigUx[index] = bigUy[index] = bigUz[index] = 0.;
     } // xyz*/
 

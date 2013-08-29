@@ -178,12 +178,13 @@ help:
 	@echo "  * check_splint         - run blenders source through splint (C only)"
 	@echo "  * check_sparse         - run blenders source through sparse (C only)"
 	@echo "  * check_smatch         - run blenders source through smatch (C only)"
-	@echo "  * check_spelling_c     - check for spelling errors (OSL only)"
+	@echo "  * check_spelling_c     - check for spelling errors (C/C++ only)"
 	@echo "  * check_spelling_c_qtc - same as check_spelling_c but outputs QtCreator tasks format"
-	@echo "  * check_spelling_osl   - check for spelling errors (C/C++ only)"
+	@echo "  * check_spelling_osl   - check for spelling errors (OSL only)"
 	@echo "  * check_spelling_py    - check for spelling errors (Python only)"
 	@echo ""
 	@echo "Utilities (not associated with building blender)"
+	@echo "  * icons    - updates PNG icons from SVG files."
 	@echo "  * tbz      - create a compressed svn export 'blender_archive.tar.bz2'"
 	@echo ""
 	@echo "Documentation Targets (not associated with building blender)"
@@ -321,6 +322,10 @@ tbz:
 	tar cjf blender_archive.tar.bz2 blender_archive/
 	rm -rf blender_archive/
 	@echo "blender_archive.tar.bz2 written"
+
+icons:
+	$(BLENDER_DIR)/release/datafiles/blender_icons.sh
+	$(BLENDER_DIR)/release/datafiles/prvicons.sh
 
 
 # -----------------------------------------------------------------------------

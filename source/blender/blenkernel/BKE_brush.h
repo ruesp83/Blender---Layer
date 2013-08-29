@@ -15,15 +15,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- * The Original Code is: all of this file.
- *
- * Contributor(s): none yet.
- *
  * ***** END GPL LICENSE BLOCK *****
- * General operations for brushes.
  */
 
 #ifndef __BKE_BRUSH_H__
@@ -31,6 +23,8 @@
 
 /** \file BKE_brush.h
  *  \ingroup bke
+ *
+ * General operations for brushes.
  */
 
 struct ID;
@@ -38,6 +32,7 @@ struct Brush;
 struct ImBuf;
 struct ImagePool;
 struct Main;
+struct rctf;
 struct Scene;
 struct wmOperator;
 // enum CurveMappingPreset;
@@ -67,7 +62,7 @@ int BKE_brush_clone_image_delete(struct Brush *brush);
 /* jitter */
 void BKE_brush_jitter_pos(const struct Scene *scene, struct Brush *brush,
                           const float pos[2], float jitterpos[2]);
-void BKE_brush_randomize_texture_coordinates(struct UnifiedPaintSettings *ups);
+void BKE_brush_randomize_texture_coordinates(struct UnifiedPaintSettings *ups, bool mask);
 
 /* brush curve */
 void BKE_brush_curve_preset(struct Brush *b, int preset);
@@ -77,12 +72,8 @@ float BKE_brush_curve_strength(struct Brush *br, float p, const float len); /* u
 /* sampling */
 float BKE_brush_sample_tex_3D(const Scene *scene, struct Brush *br, const float point[3],
                               float rgba[4], const int thread, struct ImagePool *pool);
-float BKE_brush_sample_tex_2D(const struct Scene *scene, struct Brush *brush, const float xy[2],
-                              float rgba[4]);
 float BKE_brush_sample_masktex(const Scene *scene, struct Brush *br, const float point[3],
                                const int thread, struct ImagePool *pool);
-void BKE_brush_imbuf_new(const struct Scene *scene, struct Brush *brush, short flt, short texfalloff, int size,
-                         struct ImBuf **imbuf, int use_color_correction);
 
 /* texture */
 unsigned int *BKE_brush_gen_texture_cache(struct Brush *br, int half_side);

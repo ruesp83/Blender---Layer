@@ -145,6 +145,7 @@ typedef struct RenderStats {
 	int cfra;
 	int totface, totvert, totstrand, tothalo, totlamp, totpart;
 	short curfield, curblur, curpart, partsdone, convertdone, curfsa;
+	bool localview;
 	double starttime, lastframetime;
 	const char *infostr, *statstr;
 	char scene_name[MAX_ID_NAME - 2];
@@ -155,11 +156,8 @@ typedef struct RenderStats {
 
 /* the name is used as identifier, so elsewhere in blender the result can retrieved */
 /* calling a new render with same name, frees automatic existing render */
-struct Render *RE_NewRender (const char *name);
+struct Render *RE_NewRender(const char *name);
 struct Render *RE_GetRender(const char *name);
-
-/* returns 1 while render is working (or renders called from within render) */
-int RE_RenderInProgress(struct Render *re);
 
 /* assign default dummy callbacks */
 void RE_InitRenderCB(struct Render *re);
@@ -182,7 +180,10 @@ void RE_AcquireResultImage(struct Render *re, struct RenderResult *rr);
 void RE_ReleaseResultImage(struct Render *re);
 void RE_SwapResult(struct Render *re, struct RenderResult **rr);
 struct RenderStats *RE_GetStats(struct Render *re);
+
 void RE_ResultGet32(struct Render *re, unsigned int *rect);
+void RE_AcquiredResultGet32(struct Render *re, struct RenderResult *result, unsigned int *rect);
+
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name);
 float *RE_RenderLayerGetPass(struct RenderLayer *rl, int passtype);
 
@@ -200,12 +201,19 @@ void RE_SetPixelSize(struct Render *re, float pixsize);
 /* option to set viewmatrix before making dbase */
 void RE_SetView(struct Render *re, float mat[4][4]);
 
+/* get current view and window transform */
+void RE_GetView(struct Render *re, float mat[4][4]);
+void RE_GetViewPlane(struct Render *re, rctf *viewplane, rcti *disprect);
+
 /* make or free the dbase */
 void RE_Database_FromScene(struct Render *re, struct Main *bmain, struct Scene *scene, unsigned int lay, int use_camera_view);
+void RE_Database_Preprocess(struct Render *re);
 void RE_Database_Free(struct Render *re);
 
 /* project dbase again, when viewplane/perspective changed */
 void RE_DataBase_ApplyWindow(struct Render *re);
+/* rotate scene again, for incremental render */
+void RE_DataBase_IncrementalView(struct Render *re, float viewmat[4][4], int restore);
 
 /* override the scene setting for amount threads, commandline */
 void RE_set_max_threads(int threads);
@@ -219,6 +227,9 @@ void RE_TileProcessor(struct Render *re);
 /* only RE_NewRender() needed, main Blender render calls */
 void RE_BlenderFrame(struct Render *re, struct Main *bmain, struct Scene *scene, struct SceneRenderLayer *srl, struct Object *camera_override, unsigned int lay, int frame, const short write_still);
 void RE_BlenderAnim(struct Render *re, struct Main *bmain, struct Scene *scene, struct Object *camera_override, unsigned int lay, int sfra, int efra, int tfra);
+#ifdef WITH_FREESTYLE
+void RE_RenderFreestyleStrokes(struct Render *re, struct Main *bmain, struct Scene *scene, int render);
+#endif
 
 /* error reporting */
 void RE_SetReports(struct Render *re, struct ReportList *reports);

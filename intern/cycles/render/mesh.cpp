@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 #include "bvh.h"
@@ -98,6 +96,18 @@ void Mesh::clear()
 	transform_normal = transform_identity();
 }
 
+void Mesh::set_triangle(int i, int v0, int v1, int v2, int shader_, bool smooth_)
+{
+	Triangle tri;
+	tri.v[0] = v0;
+	tri.v[1] = v1;
+	tri.v[2] = v2;
+
+	triangles[i] = tri;
+	shader[i] = shader_;
+	smooth[i] = smooth_;
+}
+
 void Mesh::add_triangle(int v0, int v1, int v2, int shader_, bool smooth_)
 {
 	Triangle tri;
@@ -135,15 +145,29 @@ void Mesh::compute_bounds()
 	size_t verts_size = verts.size();
 	size_t curve_keys_size = curve_keys.size();
 
-	for(size_t i = 0; i < verts_size; i++)
-		bnds.grow(verts[i]);
+	if(verts_size + curve_keys_size > 0) {
+		for(size_t i = 0; i < verts_size; i++)
+			bnds.grow(verts[i]);
 
-	for(size_t i = 0; i < curve_keys_size; i++)
-		bnds.grow(curve_keys[i].co, curve_keys[i].radius);
+		for(size_t i = 0; i < curve_keys_size; i++)
+			bnds.grow(curve_keys[i].co, curve_keys[i].radius);
 
-	/* happens mostly on empty meshes */
-	if(!bnds.valid())
+		if(!bnds.valid()) {
+			bnds = BoundBox::empty;
+
+			/* skip nan or inf coordinates */
+			for(size_t i = 0; i < verts_size; i++)
+				bnds.grow_safe(verts[i]);
+
+			for(size_t i = 0; i < curve_keys_size; i++)
+				bnds.grow_safe(curve_keys[i].co, curve_keys[i].radius);
+		}
+	}
+
+	if(!bnds.valid()) {
+		/* empty mesh */
 		bnds.grow(make_float3(0.0f, 0.0f, 0.0f));
+	}
 
 	bounds = bnds;
 }
@@ -875,7 +899,7 @@ void MeshManager::device_update(Device *device, DeviceScene *dscene, Scene *scen
 	bool displacement_done = false;
 
 	foreach(Mesh *mesh, scene->meshes)
-		if(mesh->need_update && displace(device, scene, mesh, progress))
+		if(mesh->need_update && displace(device, dscene, scene, mesh, progress))
 			displacement_done = true;
 
 	/* todo: properly handle cancel halfway displacement */

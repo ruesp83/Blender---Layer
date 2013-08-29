@@ -39,7 +39,7 @@ static bNodeSocketTemplate outputs[] = {
 	{ SOCK_VECTOR,  0, "Velocity" },
 	{ SOCK_VECTOR,  0, "Angular Velocity" },
 	{ -1, 0, "" }
-	};
+};
 
 /* node type definition */
 void register_node_type_sh_particle_info(void)
@@ -49,7 +49,6 @@ void register_node_type_sh_particle_info(void)
 	sh_node_type_base(&ntype, SH_NODE_PARTICLE_INFO, "Particle Info", NODE_CLASS_INPUT, 0);
 	node_type_compatibility(&ntype, NODE_NEW_SHADING);
 	node_type_socket_templates(&ntype, NULL, outputs);
-	node_type_size(&ntype, 150, 60, 200);
 
 	nodeRegisterType(&ntype);
 }

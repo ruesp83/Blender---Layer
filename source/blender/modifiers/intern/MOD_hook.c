@@ -94,7 +94,7 @@ static void freeData(ModifierData *md)
 	if (hmd->indexar) MEM_freeN(hmd->indexar);
 }
 
-static int isDisabled(ModifierData *md, int UNUSED(useRenderParams))
+static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
 {
 	HookModifierData *hmd = (HookModifierData *) md;
 
@@ -157,7 +157,7 @@ static void deformVerts_do(HookModifierData *hmd, Object *ob, DerivedMesh *dm,
 	/* get world-space matrix of target, corrected for the space the verts are in */
 	if (hmd->subtarget[0] && pchan) {
 		/* bone target if there's a matching pose-channel */
-		mult_m4_m4m4(dmat, hmd->object->obmat, pchan->pose_mat);
+		mul_m4_m4m4(dmat, hmd->object->obmat, pchan->pose_mat);
 	}
 	else {
 		/* just object target */
@@ -252,7 +252,7 @@ static void deformVerts(ModifierData *md, Object *ob, DerivedMesh *derivedData,
 	DerivedMesh *dm = derivedData;
 	/* We need a valid dm for meshes when a vgroup is set... */
 	if (!dm && ob->type == OB_MESH && hmd->name[0] != '\0')
-		dm = get_dm(ob, NULL, dm, NULL, 0);
+		dm = get_dm(ob, NULL, dm, NULL, false, false);
 
 	deformVerts_do(hmd, ob, dm, vertexCos, numVerts);
 
@@ -267,7 +267,7 @@ static void deformVertsEM(ModifierData *md, Object *ob, struct BMEditMesh *editD
 	DerivedMesh *dm = derivedData;
 	/* We need a valid dm for meshes when a vgroup is set... */
 	if (!dm && ob->type == OB_MESH && hmd->name[0] != '\0')
-		dm = get_dm(ob, editData, dm, NULL, 0);
+		dm = get_dm(ob, editData, dm, NULL, false, false);
 
 	deformVerts_do(hmd, ob, dm, vertexCos, numVerts);
 

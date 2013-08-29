@@ -168,7 +168,7 @@ struct ImageLayer *BKE_add_image_file_as_layer(struct Image *ima, const char *na
 struct ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, float color[4],struct ColorManagedColorspaceSettings *colorspace_settings);
 
 /* adds image, adds ibuf, generates color or pattern */
-struct Image *BKE_image_add_generated(struct Main *bmain, unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, float color[4]);
+struct Image *BKE_image_add_generated(struct Main *bmain, unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, const float color[4]);
 /* adds image from imbuf, owns imbuf */
 struct Image *BKE_image_add_from_imbuf(struct ImBuf *ibuf);
 
@@ -189,6 +189,7 @@ void BKE_image_user_frame_calc(struct ImageUser *iuser, int cfra, int fieldnr);
 void BKE_image_user_check_frame_calc(struct ImageUser *iuser, int cfra, int fieldnr);
 int  BKE_image_user_frame_get(const struct ImageUser *iuser, int cfra, int fieldnr, short *r_is_in_range);
 void BKE_image_user_file_path(struct ImageUser *iuser, struct Image *ima, char *path); 
+void BKE_image_update_frame(const struct Main *bmain, int cfra);
 
 /* sets index offset for multilayer files */
 struct RenderPass *BKE_render_multilayer_index(struct RenderResult *rr, struct ImageUser *iuser);

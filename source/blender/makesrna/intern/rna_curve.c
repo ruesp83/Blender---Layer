@@ -32,6 +32,7 @@
 #include "DNA_scene_types.h"
 
 #include "BLI_utildefines.h"
+#include "BLI_math.h"
 
 #include "BKE_font.h"
 
@@ -430,17 +431,17 @@ static void rna_Curve_offset_set(PointerRNA *ptr, float value)
 	cu->width = 1.0f + value;
 }
 
-/* name functions that ignore the first two ID characters */
+static int rna_Curve_body_length(PointerRNA *ptr);
 static void rna_Curve_body_get(PointerRNA *ptr, char *value)
 {
 	Curve *cu = (Curve *)ptr->id.data;
-	BLI_strncpy(value, cu->str, cu->len + 1);
+	BLI_strncpy(value, cu->str, rna_Curve_body_length(ptr) + 1);
 }
 
 static int rna_Curve_body_length(PointerRNA *ptr)
 {
 	Curve *cu = (Curve *)ptr->id.data;
-	return cu->len;
+	return cu->editfont ? strlen(cu->str) : cu->len;
 }
 
 /* TODO - check UTF & python play nice */
@@ -567,6 +568,10 @@ static Nurb *rna_Curve_spline_new(Curve *cu, int type)
 	nu->resolu = nu->resolv = 12;
 	nu->flag = CU_SMOOTH;
 
+	if ((cu->flag & CU_3D) == 0) {
+		nu->flag |= CU_2D;
+	}
+
 	BLI_addtail(BKE_curve_nurbs_get(cu), nu);
 
 	return nu;
@@ -682,12 +687,25 @@ static void rna_Curve_splines_begin(CollectionPropertyIterator *iter, PointerRNA
 	rna_iterator_listbase_begin(iter, BKE_curve_nurbs_get(cu), NULL);
 }
 
+static int rna_Curve_is_editmode_get(PointerRNA *ptr)
+{
+	Curve *cu = (Curve *)ptr->id.data;
+	const short type = BKE_curve_type_get(cu);
+	if (type == OB_FONT) {
+		return (cu->editfont != NULL);
+	}
+	else {
+		return (cu->editnurb != NULL);
+	}
+}
+
 #else
 
 static void rna_def_bpoint(BlenderRNA *brna)
 {
 	StructRNA *srna;
 	PropertyRNA *prop;
+	const float tilt_limit = DEG2RADF(21600.0f);
 
 	srna = RNA_def_struct(brna, "SplinePoint", NULL);
 	RNA_def_struct_sdna(srna, "BPoint");
@@ -720,7 +738,8 @@ static void rna_def_bpoint(BlenderRNA *brna)
 	/* Number values */
 	prop = RNA_def_property(srna, "tilt", PROP_FLOAT, PROP_ANGLE);
 	RNA_def_property_float_sdna(prop, NULL, "alfa");
-	/*RNA_def_property_range(prop, -FLT_MAX, FLT_MAX);*/
+	RNA_def_property_range(prop, -tilt_limit, tilt_limit);
+	RNA_def_property_ui_range(prop, -tilt_limit, tilt_limit, 0.1, 3);
 	RNA_def_property_ui_text(prop, "Tilt", "Tilt in 3D View");
 	RNA_def_property_update(prop, 0, "rna_Curve_update_data");
 
@@ -1303,7 +1322,7 @@ static void rna_def_curve(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "bevel_resolution", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "bevresol");
 	RNA_def_property_range(prop, 0, 32);
-	RNA_def_property_ui_range(prop, 0, 32, 1.0, 0);
+	RNA_def_property_ui_range(prop, 0, 32, 1.0, -1);
 	RNA_def_property_ui_text(prop, "Bevel Resolution",
 	                         "Bevel resolution when depth is non-zero and no specific bevel object has been defined");
 	RNA_def_property_update(prop, 0, "rna_Curve_update_data");
@@ -1330,29 +1349,29 @@ static void rna_def_curve(BlenderRNA *brna)
 	
 	prop = RNA_def_property(srna, "resolution_u", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "resolu");
-	RNA_def_property_range(prop, 1, SHRT_MAX);
-	RNA_def_property_ui_range(prop, 1, 64, 1, 0);
+	RNA_def_property_range(prop, 1, 1024);
+	RNA_def_property_ui_range(prop, 1, 64, 1, -1);
 	RNA_def_property_ui_text(prop, "Resolution U", "Surface resolution in U direction");
 	RNA_def_property_update(prop, 0, "rna_Curve_resolution_u_update_data");
 	
 	prop = RNA_def_property(srna, "resolution_v", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "resolv");
-	RNA_def_property_ui_range(prop, 1, 64, 1, 0);
-	RNA_def_property_range(prop, 1, SHRT_MAX);
+	RNA_def_property_ui_range(prop, 1, 64, 1, -1);
+	RNA_def_property_range(prop, 1, 1024);
 	RNA_def_property_ui_text(prop, "Resolution V", "Surface resolution in V direction");
 	RNA_def_property_update(prop, 0, "rna_Curve_resolution_v_update_data");
 	
 	prop = RNA_def_property(srna, "render_resolution_u", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "resolu_ren");
-	RNA_def_property_range(prop, 0, SHRT_MAX);
-	RNA_def_property_ui_range(prop, 0, 64, 1, 0);
+	RNA_def_property_range(prop, 0, 1024);
+	RNA_def_property_ui_range(prop, 0, 64, 1, -1);
 	RNA_def_property_ui_text(prop, "Render Resolution U",
 	                         "Surface resolution in U direction used while rendering (zero skips this property)");
 	
 	prop = RNA_def_property(srna, "render_resolution_v", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "resolv_ren");
-	RNA_def_property_ui_range(prop, 0, 64, 1, 0);
-	RNA_def_property_range(prop, 0, SHRT_MAX);
+	RNA_def_property_ui_range(prop, 0, 64, 1, -1);
+	RNA_def_property_range(prop, 0, 1024);
 	RNA_def_property_ui_text(prop, "Render Resolution V",
 	                         "Surface resolution in V direction used while rendering (zero skips this property)");
 	
@@ -1482,6 +1501,11 @@ static void rna_def_curve(BlenderRNA *brna)
 	RNA_def_property_range(prop, 0, 1.0);
 	RNA_def_property_ui_text(prop, "End Bevel Factor", "Factor that defines to where beveling of spline happens (0=to the very beginning, 1=to the very end)");
 	RNA_def_property_update(prop, 0, "rna_Curve_update_data");
+
+	prop = RNA_def_property(srna, "is_editmode", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_funcs(prop, "rna_Curve_is_editmode_get", NULL);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Is Editmode", "True when used in editmode");
 }
 
 static void rna_def_curve_nurb(BlenderRNA *brna)
@@ -1568,15 +1592,15 @@ static void rna_def_curve_nurb(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "resolution_u", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "resolu");
-	RNA_def_property_range(prop, 1, SHRT_MAX);
-	RNA_def_property_ui_range(prop, 1, 64, 1, 0);
+	RNA_def_property_range(prop, 1, 1024);
+	RNA_def_property_ui_range(prop, 1, 64, 1, -1);
 	RNA_def_property_ui_text(prop, "Resolution U", "Curve or Surface subdivisions per segment");
 	RNA_def_property_update(prop, 0, "rna_Curve_update_data");
 
 	prop = RNA_def_property(srna, "resolution_v", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "resolv");
-	RNA_def_property_range(prop, 1, SHRT_MAX);
-	RNA_def_property_ui_range(prop, 1, 64, 1, 0);
+	RNA_def_property_range(prop, 1, 1024);
+	RNA_def_property_ui_range(prop, 1, 64, 1, -1);
 	RNA_def_property_ui_text(prop, "Resolution V", "Surface subdivisions per segment");
 	RNA_def_property_update(prop, 0, "rna_Curve_update_data");
 

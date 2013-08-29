@@ -50,7 +50,7 @@ struct uiBlock;
 struct rcti;
 
 /* regions */
-void    ED_region_do_listen(struct ARegion *ar, struct wmNotifier *note);
+void    ED_region_do_listen(struct bScreen *sc, struct ScrArea *sa, struct ARegion *ar, struct wmNotifier *note);
 void    ED_region_do_draw(struct bContext *C, struct ARegion *ar);
 void    ED_region_exit(struct bContext *C, struct ARegion *ar);
 void    ED_region_pixelspace(struct ARegion *ar);
@@ -64,7 +64,7 @@ void    ED_region_panels(const struct bContext *C, struct ARegion *ar, int verti
 void    ED_region_header_init(struct ARegion *ar);
 void    ED_region_header(const struct bContext *C, struct ARegion *ar);
 void    ED_region_toggle_hidden(struct bContext *C, struct ARegion *ar);
-void    ED_region_info_draw(struct ARegion *ar, const char *text, int block, float alpha);
+void    ED_region_info_draw(struct ARegion *ar, const char *text, int block, float fill_color[4]);
 void    ED_region_grid_draw(struct ARegion *ar, float zoomx, float zoomy);
 float	ED_region_blend_factor(struct ARegion *ar);
 void	ED_region_visible_rect(struct ARegion *ar, struct rcti *rect);
@@ -74,15 +74,13 @@ void	ED_region_visible_rect(struct ARegion *ar, struct rcti *rect);
 void    ED_spacetypes_keymap(struct wmKeyConfig *keyconf);
 int     ED_area_header_switchbutton(const struct bContext *C, struct uiBlock *block, int yco);
 int     ED_area_header_standardbuttons(const struct bContext *C, struct uiBlock *block, int yco);
-void    ED_area_overdraw(struct bContext *C);
-void    ED_area_overdraw_flush(struct ScrArea *sa, struct ARegion *ar);
 
 
 /* areas */
 void    ED_area_initialize(struct wmWindowManager *wm, struct wmWindow *win, struct ScrArea *sa);
 void    ED_area_exit(struct bContext *C, struct ScrArea *sa);
 int     ED_screen_area_active(const struct bContext *C);
-void    ED_area_do_listen(ScrArea *sa, struct wmNotifier *note);
+void    ED_area_do_listen(struct bScreen *sc, ScrArea *sa, struct wmNotifier *note);
 void    ED_area_tag_redraw(ScrArea *sa);
 void    ED_area_tag_redraw_regiontype(ScrArea *sa, int type);
 void    ED_area_tag_refresh(ScrArea *sa);
@@ -144,6 +142,7 @@ int     ED_operator_file_active(struct bContext *C);
 int     ED_operator_action_active(struct bContext *C);
 int     ED_operator_buttons_active(struct bContext *C);
 int     ED_operator_node_active(struct bContext *C);
+int     ED_operator_node_editable(struct bContext *C);
 int     ED_operator_graphedit_active(struct bContext *C);
 int     ED_operator_sequencer_active(struct bContext *C);
 int     ED_operator_image_active(struct bContext *C);
@@ -170,6 +169,7 @@ int     ED_operator_editfont(struct bContext *C);
 int     ED_operator_editlattice(struct bContext *C);
 int     ED_operator_editmball(struct bContext *C);
 int     ED_operator_uvedit(struct bContext *C);
+int     ED_operator_uvedit_space_image(struct bContext *C);
 int     ED_operator_uvmap(struct bContext *C);
 int     ED_operator_posemode_exclusive(struct bContext *C);
 int     ED_operator_posemode_context(struct bContext *C);

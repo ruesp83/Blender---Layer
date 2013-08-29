@@ -56,6 +56,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_callbacks.h"
 #include "BLI_string.h"
+#include "BLI_threads.h"
 
 #include "BLF_translation.h"
 
@@ -65,9 +66,11 @@
 #include "BKE_colortools.h"
 #include "BKE_depsgraph.h"
 #include "BKE_fcurve.h"
+#include "BKE_freestyle.h"
 #include "BKE_global.h"
 #include "BKE_group.h"
 #include "BKE_idprop.h"
+#include "BKE_image.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_mask.h"
@@ -141,6 +144,7 @@ static void remove_sequencer_fcurves(Scene *sce)
 Scene *BKE_scene_copy(Scene *sce, int type)
 {
 	Scene *scen;
+	SceneRenderLayer *srl, *new_srl;
 	ToolSettings *ts;
 	Base *base, *obase;
 	
@@ -174,7 +178,9 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 		scen->obedit = NULL;
 		scen->stats = NULL;
 		scen->fps_info = NULL;
-		scen->rigidbody_world = NULL; /* RB_TODO figure out a way of copying the rigid body world */
+
+		if (sce->rigidbody_world)
+			scen->rigidbody_world = BKE_rigidbody_world_copy(sce->rigidbody_world);
 
 		BLI_duplicatelist(&(scen->markers), &(sce->markers));
 		BLI_duplicatelist(&(scen->transform_spaces), &(sce->transform_spaces));
@@ -208,6 +214,13 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 		/* remove animation used by sequencer */
 		if (type != SCE_COPY_FULL)
 			remove_sequencer_fcurves(scen);
+
+		/* copy Freestyle settings */
+		new_srl = scen->r.layers.first;
+		for (srl = sce->r.layers.first; srl; srl = srl->next) {
+			BKE_freestyle_config_copy(&new_srl->freestyleConfig, &srl->freestyleConfig);
+			new_srl = new_srl->next;
+		}
 	}
 
 	/* tool settings */
@@ -286,10 +299,17 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 	return scen;
 }
 
+void BKE_scene_groups_relink(Scene *sce)
+{
+	if (sce->rigidbody_world)
+		BKE_rigidbody_world_groups_relink(sce->rigidbody_world);
+}
+
 /* do not free scene itself */
 void BKE_scene_free(Scene *sce)
 {
 	Base *base;
+	SceneRenderLayer *srl;
 
 	/* check all sequences */
 	BKE_sequencer_clear_scene_in_allseqs(G.main, sce);
@@ -334,6 +354,10 @@ void BKE_scene_free(Scene *sce)
 		IDP_FreeProperty(sce->r.ffcodecdata.properties);
 		MEM_freeN(sce->r.ffcodecdata.properties);
 		sce->r.ffcodecdata.properties = NULL;
+	}
+	
+	for (srl = sce->r.layers.first; srl; srl = srl->next) {
+		BKE_freestyle_config_free(&srl->freestyleConfig);
 	}
 	
 	BLI_freelistN(&sce->markers);
@@ -506,6 +530,17 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	sce->toolsettings->skgen_subdivisions[1] = SKGEN_SUB_LENGTH;
 	sce->toolsettings->skgen_subdivisions[2] = SKGEN_SUB_ANGLE;
 
+	sce->toolsettings->statvis.overhang_axis = OB_NEGZ;
+	sce->toolsettings->statvis.overhang_min = 0;
+	sce->toolsettings->statvis.overhang_max = DEG2RADF(45.0f);
+	sce->toolsettings->statvis.thickness_max = 0.1f;
+	sce->toolsettings->statvis.thickness_samples = 1;
+	sce->toolsettings->statvis.distort_min = DEG2RADF(5.0f);
+	sce->toolsettings->statvis.distort_max = DEG2RADF(45.0f);
+
+	sce->toolsettings->statvis.sharp_min = DEG2RADF(90.0f);
+	sce->toolsettings->statvis.sharp_max = DEG2RADF(180.0f);
+
 	sce->toolsettings->proportional_size = 1.0f;
 
 	sce->physics_settings.gravity[0] = 0.0f;
@@ -649,12 +684,9 @@ void BKE_scene_set_background(Main *bmain, Scene *scene)
 		}
 	}
 
-	/* sort baselist */
-	DAG_scene_relations_rebuild(bmain, scene);
-	
-	/* ensure dags are built for sets */
+	/* sort baselist for scene and sets */
 	for (sce = scene; sce; sce = sce->set)
-		DAG_scene_relations_update(bmain, sce);
+		DAG_scene_relations_rebuild(bmain, sce);
 
 	/* copy layers and flags from bases to objects */
 	for (base = scene->base.first; base; base = base->next) {
@@ -711,17 +743,16 @@ void BKE_scene_unlink(Main *bmain, Scene *sce, Scene *newsce)
 /* used by metaballs
  * doesn't return the original duplicated object, only dupli's
  */
-int BKE_scene_base_iter_next(Scene **scene, int val, Base **base, Object **ob)
+int BKE_scene_base_iter_next(SceneBaseIter *iter, Scene **scene, int val, Base **base, Object **ob)
 {
-	static ListBase *duplilist = NULL;
-	static DupliObject *dupob;
-	static int fase = F_START, in_next_object = 0;
+	static int in_next_object = 0;
 	int run_again = 1;
 	
 	/* init */
 	if (val == 0) {
-		fase = F_START;
-		dupob = NULL;
+		iter->fase = F_START;
+		iter->dupob = NULL;
+		iter->duplilist = NULL;
 		
 		/* XXX particle systems with metas+dupligroups call this recursively */
 		/* see bug #18725 */
@@ -739,11 +770,11 @@ int BKE_scene_base_iter_next(Scene **scene, int val, Base **base, Object **ob)
 			run_again = 0;
 
 			/* the first base */
-			if (fase == F_START) {
+			if (iter->fase == F_START) {
 				*base = (*scene)->base.first;
 				if (*base) {
 					*ob = (*base)->object;
-					fase = F_SCENE;
+					iter->fase = F_SCENE;
 				}
 				else {
 					/* exception: empty scene */
@@ -752,20 +783,20 @@ int BKE_scene_base_iter_next(Scene **scene, int val, Base **base, Object **ob)
 						if ((*scene)->base.first) {
 							*base = (*scene)->base.first;
 							*ob = (*base)->object;
-							fase = F_SCENE;
+							iter->fase = F_SCENE;
 							break;
 						}
 					}
 				}
 			}
 			else {
-				if (*base && fase != F_DUPLI) {
+				if (*base && iter->fase != F_DUPLI) {
 					*base = (*base)->next;
 					if (*base) {
 						*ob = (*base)->object;
 					}
 					else {
-						if (fase == F_SCENE) {
+						if (iter->fase == F_SCENE) {
 							/* (*scene) is finished, now do the set */
 							while ((*scene)->set) {
 								(*scene) = (*scene)->set;
@@ -781,45 +812,45 @@ int BKE_scene_base_iter_next(Scene **scene, int val, Base **base, Object **ob)
 			}
 			
 			if (*base == NULL) {
-				fase = F_START;
+				iter->fase = F_START;
 			}
 			else {
-				if (fase != F_DUPLI) {
+				if (iter->fase != F_DUPLI) {
 					if ( (*base)->object->transflag & OB_DUPLI) {
 						/* groups cannot be duplicated for mballs yet, 
 						 * this enters eternal loop because of 
 						 * makeDispListMBall getting called inside of group_duplilist */
 						if ((*base)->object->dup_group == NULL) {
-							duplilist = object_duplilist((*scene), (*base)->object, FALSE);
+							iter->duplilist = object_duplilist((*scene), (*base)->object, FALSE);
 							
-							dupob = duplilist->first;
+							iter->dupob = iter->duplilist->first;
 
-							if (!dupob)
-								free_object_duplilist(duplilist);
+							if (!iter->dupob)
+								free_object_duplilist(iter->duplilist);
 						}
 					}
 				}
 				/* handle dupli's */
-				if (dupob) {
+				if (iter->dupob) {
 					
-					copy_m4_m4(dupob->ob->obmat, dupob->mat);
+					copy_m4_m4(iter->dupob->ob->obmat, iter->dupob->mat);
 					
 					(*base)->flag |= OB_FROMDUPLI;
-					*ob = dupob->ob;
-					fase = F_DUPLI;
+					*ob = iter->dupob->ob;
+					iter->fase = F_DUPLI;
 					
-					dupob = dupob->next;
+					iter->dupob = iter->dupob->next;
 				}
-				else if (fase == F_DUPLI) {
-					fase = F_SCENE;
+				else if (iter->fase == F_DUPLI) {
+					iter->fase = F_SCENE;
 					(*base)->flag &= ~OB_FROMDUPLI;
 					
-					for (dupob = duplilist->first; dupob; dupob = dupob->next) {
-						copy_m4_m4(dupob->ob->obmat, dupob->omat);
+					for (iter->dupob = iter->duplilist->first; iter->dupob; iter->dupob = iter->dupob->next) {
+						copy_m4_m4(iter->dupob->ob->obmat, iter->dupob->omat);
 					}
 					
-					free_object_duplilist(duplilist);
-					duplilist = NULL;
+					free_object_duplilist(iter->duplilist);
+					iter->duplilist = NULL;
 					run_again = 1;
 				}
 			}
@@ -835,7 +866,7 @@ int BKE_scene_base_iter_next(Scene **scene, int val, Base **base, Object **ob)
 	/* reset recursion test */
 	in_next_object = 0;
 	
-	return fase;
+	return iter->fase;
 }
 
 Object *BKE_scene_camera_find(Scene *sc)
@@ -906,7 +937,7 @@ char *BKE_scene_find_marker_name(Scene *scene, int frame)
 }
 
 /* return the current marker for this frame,
- * we can have more then 1 marker per frame, this just returns the first :/ */
+ * we can have more than 1 marker per frame, this just returns the first :/ */
 char *BKE_scene_find_last_marker_name(Scene *scene, int frame)
 {
 	TimeMarker *marker, *best_marker = NULL;
@@ -1010,6 +1041,21 @@ float BKE_scene_frame_get_from_ctime(Scene *scene, const float frame)
 	return ctime;
 }
 
+/**
+ * Sets the frame int/float components.
+ */
+void BKE_scene_frame_set(struct Scene *scene, double cfra)
+{
+	double intpart;
+	scene->r.subframe = modf(cfra, &intpart);
+	scene->r.cfra = (int)intpart;
+
+	if (cfra < 0.0) {
+		scene->r.cfra -= 1;
+		scene->r.subframe = 1.0f + scene->r.subframe;
+	}
+}
+
 /* drivers support/hacks 
  *  - this method is called from scene_update_tagged_recursive(), so gets included in viewport + render
  *	- these are always run since the depsgraph can't handle non-object data
@@ -1038,6 +1084,15 @@ static void scene_update_drivers(Main *UNUSED(bmain), Scene *scene)
 	/* nodes */
 	if (scene->nodetree) {
 		ID *nid = (ID *)scene->nodetree;
+		AnimData *adt = BKE_animdata_from_id(nid);
+		
+		if (adt && adt->drivers.first)
+			BKE_animsys_evaluate_animdata(scene, nid, adt, ctime, ADT_RECALC_DRIVERS);
+	}
+
+	/* world nodes */
+	if (scene->world && scene->world->nodetree) {
+		ID *nid = (ID *)scene->world->nodetree;
 		AnimData *adt = BKE_animdata_from_id(nid);
 		
 		if (adt && adt->drivers.first)
@@ -1137,7 +1192,7 @@ static void scene_update_tagged_recursive(Main *bmain, Scene *scene, Scene *scen
 	sound_update_scene(scene);
 
 	/* update masking curves */
-	BKE_mask_update_scene(bmain, scene, FALSE);
+	BKE_mask_update_scene(bmain, scene);
 	
 }
 
@@ -1193,16 +1248,20 @@ void BKE_scene_update_for_newframe(Main *bmain, Scene *sce, unsigned int lay)
 {
 	float ctime = BKE_scene_frame_get(sce);
 	Scene *sce_iter;
+
+	/* keep this first */
+	BLI_callback_exec(bmain, &sce->id, BLI_CB_EVT_FRAME_CHANGE_PRE);
+	BLI_callback_exec(bmain, &sce->id, BLI_CB_EVT_SCENE_UPDATE_PRE);
+
+	/* update animated image textures for particles, modifiers, gpu, etc,
+	 * call this at the start so modifiers with textures don't lag 1 frame */
+	BKE_image_update_frame(bmain, sce->r.cfra);
 	
 	/* rebuild rigid body worlds before doing the actual frame update
 	 * this needs to be done on start frame but animation playback usually starts one frame later
 	 * we need to do it here to avoid rebuilding the world on every simulation change, which can be very expensive
 	 */
 	scene_rebuild_rbw_recursive(sce, ctime);
-
-	/* keep this first */
-	BLI_callback_exec(bmain, &sce->id, BLI_CB_EVT_FRAME_CHANGE_PRE);
-	BLI_callback_exec(bmain, &sce->id, BLI_CB_EVT_SCENE_UPDATE_PRE);
 
 	sound_set_cfra(sce->r.cfra);
 	
@@ -1274,6 +1333,7 @@ SceneRenderLayer *BKE_scene_add_render_layer(Scene *sce, const char *name)
 	srl->lay = (1 << 20) - 1;
 	srl->layflag = 0x7FFF;   /* solid ztra halo edge strand */
 	srl->passflag = SCE_PASS_COMBINED | SCE_PASS_Z;
+	BKE_freestyle_config_init(&srl->freestyleConfig);
 
 	return srl;
 }
@@ -1419,6 +1479,16 @@ void BKE_scene_disable_color_management(Scene *scene)
 
 int BKE_scene_check_color_management_enabled(const Scene *scene)
 {
+	/* TODO(sergey): shouldn't be needed. but we're currently far to close to the release,
+	 *               so better be extra-safe than sorry.
+	 *
+	 *               Will remove the check after the release.
+	 */
+	if (!scene) {
+		BLI_assert(!"Shouldn't happen!");
+		return TRUE;
+	}
+
 	return strcmp(scene->display_settings.display_device, "None") != 0;
 }
 
@@ -1426,3 +1496,28 @@ int BKE_scene_check_rigidbody_active(const Scene *scene)
 {
 	return scene && scene->rigidbody_world && scene->rigidbody_world->group && !(scene->rigidbody_world->flag & RBW_FLAG_MUTED);
 }
+
+int BKE_render_num_threads(const RenderData *rd)
+{
+	int threads;
+
+	/* override set from command line? */
+	threads = BLI_system_num_threads_override_get();
+
+	if (threads > 0)
+		return threads;
+
+	/* fixed number of threads specified in scene? */
+	if (rd->mode & R_FIXED_THREADS)
+		threads = rd->threads;
+	else
+		threads = BLI_system_thread_count();
+	
+	return max_ii(threads, 1);
+}
+
+int BKE_scene_num_threads(const Scene *scene)
+{
+	return BKE_render_num_threads(&scene->r);
+}
+

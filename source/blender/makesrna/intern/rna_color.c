@@ -57,6 +57,7 @@
 #include "BKE_node.h"
 #include "BKE_sequencer.h"
 #include "BKE_texture.h"
+#include "BKE_linestyle.h"
 
 #include "ED_node.h"
 
@@ -185,6 +186,14 @@ static char *rna_ColorRamp_path(PointerRNA *ptr)
 				break;
 			}
 			
+			case ID_LS:
+			{
+				char *path = BKE_path_from_ID_to_color_ramp((FreestyleLineStyle *)id, (ColorBand *)ptr->data);
+				if (path)
+					return path;
+				break;
+			}
+			
 			default:
 				/* everything else just uses 'color_ramp' */
 				path = BLI_strdup("color_ramp");
@@ -243,9 +252,8 @@ static char *rna_ColorRampElement_path(PointerRNA *ptr)
 					RNA_pointer_create(id, &RNA_ColorRamp, ma->ramp_spec, &ramp_ptr);
 					COLRAMP_GETPATH;
 				}
+				break;
 			}
-			break;
-				
 			case ID_NT:
 			{
 				bNodeTree *ntree = (bNodeTree *)id;
@@ -257,9 +265,22 @@ static char *rna_ColorRampElement_path(PointerRNA *ptr)
 						COLRAMP_GETPATH;
 					}
 				}
+				break;
 			}
-			break;
-				
+			case ID_LS:
+			{
+				ListBase listbase;
+				LinkData *link;
+
+				BKE_list_modifier_color_ramps((FreestyleLineStyle *)id, &listbase);
+				for (link = (LinkData *)listbase.first; link; link = link->next) {
+					RNA_pointer_create(id, &RNA_ColorRamp, link->data, &ramp_ptr);
+					COLRAMP_GETPATH;
+				}
+				BLI_freelistN(&listbase);
+				break;
+			}
+
 			default: /* everything else should have a "color_ramp" property */
 			{
 				/* create pointer to the ID block, and try to resolve "color_ramp" pointer */
@@ -267,6 +288,7 @@ static char *rna_ColorRampElement_path(PointerRNA *ptr)
 				if (RNA_path_resolve(&ramp_ptr, "color_ramp", &ramp_ptr, &prop)) {
 					COLRAMP_GETPATH;
 				}
+				break;
 			}
 		}
 	}
@@ -289,8 +311,8 @@ static void rna_ColorRamp_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *
 				
 				DAG_id_tag_update(&ma->id, 0);
 				WM_main_add_notifier(NC_MATERIAL | ND_SHADING_DRAW, ma);
+				break;
 			}
-			break;
 			case ID_NT:
 			{
 				bNodeTree *ntree = (bNodeTree *)id;
@@ -301,16 +323,23 @@ static void rna_ColorRamp_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *
 						ED_node_tag_update_nodetree(bmain, ntree);
 					}
 				}
+				break;
 			}
-			break;
 			case ID_TE:
 			{
 				Tex *tex = ptr->id.data;
 
 				DAG_id_tag_update(&tex->id, 0);
 				WM_main_add_notifier(NC_TEXTURE, tex);
+				break;
 			}
-			break;
+			case ID_LS:
+			{
+				FreestyleLineStyle *linestyle = ptr->id.data;
+
+				WM_main_add_notifier(NC_LINESTYLE, linestyle);
+				break;
+			}
 			default:
 				break;
 		}

@@ -541,7 +541,8 @@ short copy_animedit_keys(bAnimContext *ac, ListBase *anim_data)
 		BLI_addtail(&animcopybuf, aci);
 		
 		/* add selected keyframes to buffer */
-		// TODO: currently, we resize array everytime we add a new vert - this works ok as long as it is assumed only a few keys are copied
+		/* TODO: currently, we resize array every time we add a new vert -
+		 * this works ok as long as it is assumed only a few keys are copied */
 		for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
 			if (BEZSELECTED(bezt)) {
 				/* add to buffer */
@@ -627,9 +628,8 @@ static tAnimCopybufItem *pastebuf_match_path_property(FCurve *fcu, const short f
 				PropertyRNA *prop;
 				
 				RNA_id_pointer_create(aci->id, &id_ptr);
-				RNA_path_resolve(&id_ptr, aci->rna_path, &rptr, &prop);
 				
-				if (prop) {
+				if (RNA_path_resolve_property(&id_ptr, aci->rna_path, &rptr, &prop)) {
 					const char *identifier = RNA_property_identifier(prop);
 					int len_id = strlen(identifier);
 					int len_path = strlen(fcu->rna_path);

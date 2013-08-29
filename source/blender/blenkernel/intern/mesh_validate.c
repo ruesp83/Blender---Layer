@@ -35,11 +35,12 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 
-#include "BLO_sys_types.h"
+#include "BLI_sys_types.h"
 
+#include "BLI_utildefines.h"
 #include "BLI_edgehash.h"
 #include "BLI_math_base.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector.h"
 
 #include "BKE_deform.h"
 #include "BKE_depsgraph.h"
@@ -215,7 +216,7 @@ int BKE_mesh_validate_arrays(Mesh *mesh,
 
 	bool do_edge_recalc = false;
 
-	EdgeHash *edge_hash = BLI_edgehash_new();
+	EdgeHash *edge_hash = BLI_edgehash_new_ex(__func__, totedge);
 
 	BLI_assert(!(do_fixes && mesh == NULL));
 
@@ -293,7 +294,7 @@ int BKE_mesh_validate_arrays(Mesh *mesh,
 #		define CHECK_FACE_EDGE(a, b) \
 					if (!BLI_edgehash_haskey(edge_hash, mf->a, mf->b)) { \
 						PRINT("    face %u: edge " STRINGIFY(a) "/" STRINGIFY(b) \
-						      " (%u,%u) is missing egde data\n", i, mf->a, mf->b); \
+						      " (%u,%u) is missing edge data\n", i, mf->a, mf->b); \
 						do_edge_recalc = TRUE; \
 					} (void)0
 
@@ -474,7 +475,7 @@ int BKE_mesh_validate_arrays(Mesh *mesh,
 					*v = ml->v;
 				}
 
-				/* is the same vertex used more then once */
+				/* is the same vertex used more than once */
 				if (!sp->invalid) {
 					v = sp->verts;
 					for (j = 0; j < mp->totloop; j++, v++) {
@@ -920,7 +921,8 @@ void BKE_mesh_calc_edges(Mesh *mesh, bool update, const bool select)
 	EdgeHashIterator *ehi;
 	MPoly *mp;
 	MEdge *med, *med_orig;
-	EdgeHash *eh = BLI_edgehash_new();
+	EdgeHash *eh;
+	unsigned int eh_reserve;
 	int i, totedge, totpoly = mesh->totpoly;
 	int med_index;
 	/* select for newly created meshes which are selected [#25595] */
@@ -928,6 +930,9 @@ void BKE_mesh_calc_edges(Mesh *mesh, bool update, const bool select)
 
 	if (mesh->totedge == 0)
 		update = false;
+
+	eh_reserve = max_ii(update ? mesh->totedge : 0, BLI_EDGEHASH_SIZE_GUESS_FROM_POLYS(totpoly));
+	eh = BLI_edgehash_new_ex(__func__, eh_reserve);
 
 	if (update) {
 		/* assume existing edges are valid

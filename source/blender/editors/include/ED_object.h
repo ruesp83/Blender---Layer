@@ -65,6 +65,9 @@ struct wmKeyConfig;
 struct wmKeyMap;
 struct wmOperator;
 struct wmOperatorType;
+struct PointerRNA;
+struct PropertyRNA;
+struct EnumPropertyItem;
 
 /* object_edit.c */
 struct Object *ED_object_context(struct bContext *C);               /* context.object */
@@ -120,6 +123,7 @@ struct Base *ED_object_add_duplicate(struct Main *bmain, struct Scene *scene, st
 
 void ED_object_parent(struct Object *ob, struct Object *parent, int type, const char *substr);
 
+bool ED_object_mode_compat_set(struct bContext *C, struct Object *ob, int mode, struct ReportList *reports);
 void ED_object_toggle_modes(struct bContext *C, int mode);
 
 /* bitflags for enter/exit editmode */
@@ -141,13 +145,13 @@ float ED_object_new_primitive_matrix(struct bContext *C, struct Object *editob,
 
 void ED_object_add_generic_props(struct wmOperatorType *ot, int do_editmode);
 int ED_object_add_generic_get_opts(struct bContext *C, struct wmOperator *op,  float loc[3], float rot[3],
-                                   int *enter_editmode, unsigned int *layer, int *is_view_aligned);
+                                   bool *enter_editmode, unsigned int *layer, bool *is_view_aligned);
 
 struct Object *ED_object_add_type(struct bContext *C, int type, const float loc[3], const float rot[3],
                                   int enter_editmode, unsigned int layer);
 
-void ED_object_single_users(struct Main *bmain, struct Scene *scene, int full);
-void ED_object_single_user(struct Scene *scene, struct Object *ob);
+void ED_object_single_users(struct Main *bmain, struct Scene *scene, bool full, bool copy_groups);
+void ED_object_single_user(struct Main *bmain, struct Scene *scene, struct Object *ob);
 
 /* object motion paths */
 void ED_objects_clear_paths(struct bContext *C);
@@ -199,6 +203,17 @@ int ED_object_multires_update_totlevels_cb(struct Object *ob, void *totlevel_v);
 
 /* object_select.c */
 void ED_object_select_linked_by_id(struct bContext *C, struct ID *id);
+
+
+bool *ED_vgroup_subset_from_select_type(struct Object *ob, enum eVGroupSelect subset_type,
+                                        int *r_vgroup_tot, int *r_subset_count);
+
+struct EnumPropertyItem *ED_object_vgroup_selection_itemf_helper(
+        const struct bContext *C,
+        struct PointerRNA *ptr,
+        struct PropertyRNA *prop,
+        int *free,
+        const unsigned int selection_mask);
 
 #ifdef __cplusplus
 }

@@ -77,12 +77,7 @@ static void copyData(ModifierData *md, ModifierData *target)
 	tpimd->random_position = pimd->random_position;
 }
 
-static int dependsOnTime(ModifierData *UNUSED(md))
-{
-	return 0;
-}
-
-static int isDisabled(ModifierData *md, int useRenderParams)
+static bool isDisabled(ModifierData *md, int useRenderParams)
 {
 	ParticleInstanceModifierData *pimd = (ParticleInstanceModifierData *)md;
 	ParticleSystem *psys;
@@ -266,7 +261,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 		maxloop += totloop;
 	}
 
-	psys->lattice = psys_get_lattice(&sim);
+	psys->lattice_deform_data = psys_create_lattice_deform_data(&sim);
 
 	if (psys->flag & (PSYS_HAIR_DONE | PSYS_KEYED) || psys->pointcache->flag & PTCACHE_BAKED) {
 		float min_r[3], max_r[3];
@@ -313,8 +308,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 			{
 				float ran = 0.0f;
 				if (pimd->random_position != 0.0f) {
-					BLI_srandom(psys->seed + p);
-					ran = pimd->random_position * BLI_frand();
+					ran = pimd->random_position * BLI_hash_frand(psys->seed + p);
 				}
 
 				if (pimd->flag & eParticleInstanceFlag_KeepShape) {
@@ -384,25 +378,18 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 
 	CDDM_calc_edges(result);
 
-	if (psys->lattice) {
-		end_latt_deform(psys->lattice);
-		psys->lattice = NULL;
+	if (psys->lattice_deform_data) {
+		end_latt_deform(psys->lattice_deform_data);
+		psys->lattice_deform_data = NULL;
 	}
 
 	if (size)
 		MEM_freeN(size);
 
-	CDDM_calc_normals(result);
+	result->dirty |= DM_DIRTY_NORMALS;
 
 	return result;
 }
-static DerivedMesh *applyModifierEM(ModifierData *md, Object *ob,
-                                    struct BMEditMesh *UNUSED(editData),
-                                    DerivedMesh *derivedData)
-{
-	return applyModifier(md, ob, derivedData, MOD_APPLY_USECACHE);
-}
-
 ModifierTypeInfo modifierType_ParticleInstance = {
 	/* name */              "ParticleInstance",
 	/* structName */        "ParticleInstanceModifierData",
@@ -419,13 +406,13 @@ ModifierTypeInfo modifierType_ParticleInstance = {
 	/* deformVertsEM */     NULL,
 	/* deformMatricesEM */  NULL,
 	/* applyModifier */     applyModifier,
-	/* applyModifierEM */   applyModifierEM,
+	/* applyModifierEM */   NULL,
 	/* initData */          initData,
 	/* requiredDataMask */  NULL,
 	/* freeData */          NULL,
 	/* isDisabled */        isDisabled,
 	/* updateDepgraph */    updateDepgraph,
-	/* dependsOnTime */     dependsOnTime,
+	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */  NULL,
 	/* foreachObjectLink */ foreachObjectLink,
 	/* foreachIDLink */     NULL,

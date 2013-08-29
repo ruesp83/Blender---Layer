@@ -47,6 +47,7 @@
 #include "BKE_global.h"
 #include "BKE_main.h"
 #include "BKE_report.h"
+#include "BKE_freestyle.h"
 
 #include "IMB_imbuf.h"
 #include "DNA_imbuf_types.h"
@@ -278,6 +279,24 @@ static const char *get_pass_name(int passtype, int channel)
 		if (channel == 1) return "TransCol.G";
 		return "TransCol.B";
 	}
+	if (passtype == SCE_PASS_SUBSURFACE_DIRECT) {
+		if (channel == -1) return "SubsurfaceDir";
+		if (channel == 0) return "SubsurfaceDir.R";
+		if (channel == 1) return "SubsurfaceDir.G";
+		return "SubsurfaceDir.B";
+	}
+	if (passtype == SCE_PASS_SUBSURFACE_INDIRECT) {
+		if (channel == -1) return "SubsurfaceInd";
+		if (channel == 0) return "SubsurfaceInd.R";
+		if (channel == 1) return "SubsurfaceInd.G";
+		return "SubsurfaceInd.B";
+	}
+	if (passtype == SCE_PASS_SUBSURFACE_COLOR) {
+		if (channel == -1) return "SubsurfaceCol";
+		if (channel == 0) return "SubsurfaceCol.R";
+		if (channel == 1) return "SubsurfaceCol.G";
+		return "SubsurfaceCol.B";
+	}
 	return "Unknown";
 }
 
@@ -367,6 +386,15 @@ static int passtype_from_name(const char *str)
 
 	if (strcmp(str, "TransCol") == 0)
 		return SCE_PASS_TRANSM_COLOR;
+		
+	if (strcmp(str, "SubsurfaceDir") == 0)
+		return SCE_PASS_SUBSURFACE_DIRECT;
+
+	if (strcmp(str, "SubsurfaceInd") == 0)
+		return SCE_PASS_SUBSURFACE_INDIRECT;
+
+	if (strcmp(str, "SubsurfaceCol") == 0)
+		return SCE_PASS_SUBSURFACE_COLOR;
 
 	return 0;
 }
@@ -537,7 +565,12 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 			render_layer_add_pass(rr, rl, 3, SCE_PASS_TRANSM_INDIRECT);
 		if (srl->passflag  & SCE_PASS_TRANSM_COLOR)
 			render_layer_add_pass(rr, rl, 3, SCE_PASS_TRANSM_COLOR);
-		
+		if (srl->passflag  & SCE_PASS_SUBSURFACE_DIRECT)
+			render_layer_add_pass(rr, rl, 3, SCE_PASS_SUBSURFACE_DIRECT);
+		if (srl->passflag  & SCE_PASS_SUBSURFACE_INDIRECT)
+			render_layer_add_pass(rr, rl, 3, SCE_PASS_SUBSURFACE_INDIRECT);
+		if (srl->passflag  & SCE_PASS_SUBSURFACE_COLOR)
+			render_layer_add_pass(rr, rl, 3, SCE_PASS_SUBSURFACE_COLOR);
 	}
 	/* sss, previewrender and envmap don't do layers, so we make a default one */
 	if (rr->layers.first == NULL && !(layername && layername[0])) {
@@ -569,6 +602,7 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 	}
 	
 	/* border render; calculate offset for use in compositor. compo is centralized coords */
+	/* XXX obsolete? I now use it for drawing border render offset (ton) */
 	rr->xof = re->disprect.xmin + BLI_rcti_cent_x(&re->disprect) - (re->winx / 2);
 	rr->yof = re->disprect.ymin + BLI_rcti_cent_y(&re->disprect) - (re->winy / 2);
 	

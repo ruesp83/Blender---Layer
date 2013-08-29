@@ -64,6 +64,18 @@ class INFO_HT_header(Header):
         layout.template_reports_banner()
 
         row = layout.row(align=True)
+
+        if bpy.app.autoexec_fail is True and bpy.app.autoexec_fail_quiet is False:
+            layout.operator_context = 'EXEC_DEFAULT'
+            row.label("Auto-run disabled: %s" % bpy.app.autoexec_fail_message, icon='ERROR')
+            if bpy.data.is_saved:
+                props = row.operator("wm.open_mainfile", icon='SCREEN_BACK', text="Reload Trusted")
+                props.filepath = bpy.data.filepath
+                props.use_scripts = True
+
+            row.operator("script.autoexec_warn_clear", text="Ignore")
+            return
+
         row.operator("wm.splash", text="", icon='BLENDER', emboss=False)
         row.label(text=scene.statistics(), translate=False)
 
@@ -304,7 +316,7 @@ class INFO_MT_add(Menu):
         layout.operator_menu_enum("object.effector_add", "type", text="Force Field", icon='OUTLINER_OB_EMPTY')
         layout.separator()
 
-        if(len(bpy.data.groups) > 10):
+        if len(bpy.data.groups) > 10:
             layout.operator_context = 'INVOKE_REGION_WIN'
             layout.operator("object.group_instance_add", text="Group Instance...", icon='OUTLINER_OB_EMPTY')
         else:
@@ -380,7 +392,7 @@ class INFO_MT_help(Menu):
         layout = self.layout
 
         layout.operator("wm.url_open", text="Manual", icon='HELP').url = "http://wiki.blender.org/index.php/Doc:2.6/Manual"
-        layout.operator("wm.url_open", text="Release Log", icon='URL').url = "http://www.blender.org/development/release-logs/blender-266"
+        layout.operator("wm.url_open", text="Release Log", icon='URL').url = "http://www.blender.org/development/release-logs/blender-268"
         layout.separator()
 
         layout.operator("wm.url_open", text="Blender Website", icon='URL').url = "http://www.blender.org"

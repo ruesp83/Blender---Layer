@@ -105,6 +105,17 @@ public:
 		void 
 	SwapBuffers(
 	)=0;
+	
+	virtual
+		void
+	SetSwapInterval(
+		int interval
+	)=0;
+
+	virtual
+		int
+	GetSwapInterval(
+	)=0;
  
 	virtual 
 		void 
@@ -231,6 +242,16 @@ public:
 		int width,
 		int height
 	)=0;
+
+	virtual
+		void
+	SetFullScreen(
+		bool enable
+	)=0;
+
+	virtual
+		bool
+	GetFullScreen()=0;
 
 		
 	

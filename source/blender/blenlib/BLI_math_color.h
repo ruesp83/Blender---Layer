@@ -51,10 +51,30 @@ extern "C" {
 #define BLI_YCC_ITU_BT709   1
 #define BLI_YCC_JFIF_0_255  2
 
+/******************* Map RGB to intensity *******************/
+
+/*
+ * The weights to compute true CIE luminance from linear red, green
+ * and blue, as defined by the ITU-R Recommendation BT.709, "Basic
+ * Parameter Values for the HDTV Standard for the Studio and for
+ * International Programme Exchange" (1990). Also suggested in the
+ * sRGB colorspace specification by the W3C.
+ */
+
+#define RGB_LUMINANCE_RED    (0.2126)
+#define RGB_LUMINANCE_GREEN  (0.7152)
+#define RGB_LUMINANCE_BLUE   (0.0722)
+
+#define RGB_LUMINANCE(r,g,b) ((r) * RGB_LUMINANCE_RED   + \
+                              (g) * RGB_LUMINANCE_GREEN + \
+                              (b) * RGB_LUMINANCE_BLUE)
+
 /******************* Conversion to RGB ********************/
 
 void hsv_to_rgb(float h, float s, float v, float *r, float *g, float *b);
 void hsv_to_rgb_v(const float hsv[3], float r_rgb[3]);
+void hsl_to_rgb(float h, float s, float l, float *r, float *g, float *b);
+void hsl_to_rgb_v(const float hsl[3], float r_rgb[3]);
 void hex_to_rgb(char *hexcol, float *r, float *g, float *b);
 void yuv_to_rgb(float y, float u, float v, float *lr, float *lg, float *lb);
 void ycc_to_rgb(float y, float cb, float cr, float *lr, float *lg, float *lb, int colorspace);
@@ -126,7 +146,7 @@ void xyz_to_lab(float x, float y, float z, float *l, float *a, float *b);
 
 MINLINE int compare_rgb_uchar(const unsigned char a[3], const unsigned char b[3], const int limit);
 
-/***************** lift/gamma/gain / ASC-CDL conversion *****************/
+/********* lift/gamma/gain / ASC-CDL conversion ***********/
 
 void lift_gamma_gain_to_asc_cdl(float *lift, float *gamma, float *gain, float *offset, float *slope, float *power);
 

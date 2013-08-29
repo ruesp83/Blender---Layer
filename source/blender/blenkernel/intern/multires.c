@@ -54,7 +54,7 @@
 #include "BKE_paint.h"
 #include "BKE_scene.h"
 #include "BKE_subsurf.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
 
 #include "BKE_object.h"
 
@@ -105,15 +105,15 @@ void multires_customdata_delete(Mesh *me)
 }
 
 /** Grid hiding **/
-static BLI_bitmap multires_mdisps_upsample_hidden(BLI_bitmap lo_hidden,
-                                                  int lo_level,
-                                                  int hi_level,
+static BLI_bitmap *multires_mdisps_upsample_hidden(BLI_bitmap *lo_hidden,
+                                                   int lo_level,
+                                                   int hi_level,
 
-                                                  /* assumed to be at hi_level (or
-                                                   *  null) */
-                                                  BLI_bitmap prev_hidden)
+                                                   /* assumed to be at hi_level (or
+                                                    *  null) */
+                                                   BLI_bitmap *prev_hidden)
 {
-	BLI_bitmap subd;
+	BLI_bitmap *subd;
 	int hi_gridsize = ccg_gridsize(hi_level);
 	int lo_gridsize = ccg_gridsize(lo_level);
 	int yh, xh, xl, yl, xo, yo, hi_ndx;
@@ -168,11 +168,11 @@ static BLI_bitmap multires_mdisps_upsample_hidden(BLI_bitmap lo_hidden,
 	return subd;
 }
 
-static BLI_bitmap multires_mdisps_downsample_hidden(BLI_bitmap old_hidden,
-                                                    int old_level,
-                                                    int new_level)
+static BLI_bitmap *multires_mdisps_downsample_hidden(BLI_bitmap *old_hidden,
+                                                     int old_level,
+                                                     int new_level)
 {
-	BLI_bitmap new_hidden;
+	BLI_bitmap *new_hidden;
 	int new_gridsize = ccg_gridsize(new_level);
 	int old_gridsize = ccg_gridsize(old_level);
 	int x, y, factor, old_value;
@@ -200,7 +200,7 @@ static void multires_output_hidden_to_ccgdm(CCGDerivedMesh *ccgdm,
                                             Mesh *me, int level)
 {
 	const MDisps *mdisps = CustomData_get_layer(&me->ldata, CD_MDISPS);
-	BLI_bitmap *grid_hidden = ccgdm->gridHidden;
+	BLI_bitmap **grid_hidden = ccgdm->gridHidden;
 	int *gridOffset;
 	int i, j;
 	
@@ -210,7 +210,7 @@ static void multires_output_hidden_to_ccgdm(CCGDerivedMesh *ccgdm,
 		for (j = 0; j < me->mpoly[i].totloop; j++) {
 			int g = gridOffset[i] + j;
 			const MDisps *md = &mdisps[g];
-			BLI_bitmap gh = md->hidden;
+			BLI_bitmap *gh = md->hidden;
 			
 			if (gh) {
 				grid_hidden[g] =
@@ -224,7 +224,7 @@ static void multires_output_hidden_to_ccgdm(CCGDerivedMesh *ccgdm,
  * the current level of md.hidden) */
 static void multires_mdisps_subdivide_hidden(MDisps *md, int new_level)
 {
-	BLI_bitmap subd;
+	BLI_bitmap *subd;
 	
 	BLI_assert(md->hidden);
 
@@ -245,7 +245,7 @@ static void multires_mdisps_subdivide_hidden(MDisps *md, int new_level)
 static MDisps *multires_mdisps_initialize_hidden(Mesh *me, int level)
 {
 	MDisps *mdisps = CustomData_add_layer(&me->ldata, CD_MDISPS,
-	                                      CD_CALLOC, 0, me->totloop);
+	                                      CD_CALLOC, NULL, me->totloop);
 	int gridsize = ccg_gridsize(level);
 	int gridarea = gridsize * gridsize;
 	int i, j, k;
@@ -373,11 +373,8 @@ void multires_mark_as_modified(Object *ob, MultiresModifiedFlags flags)
 void multires_force_update(Object *ob)
 {
 	if (ob) {
-		if (ob->derivedFinal) {
-			ob->derivedFinal->needsFree = 1;
-			ob->derivedFinal->release(ob->derivedFinal);
-			ob->derivedFinal = NULL;
-		}
+		BKE_object_free_derived_caches(ob);
+
 		if (ob->sculpt && ob->sculpt->pbvh) {
 			BKE_pbvh_free(ob->sculpt->pbvh);
 			ob->sculpt->pbvh = NULL;
@@ -650,7 +647,7 @@ static void multires_del_higher(MultiresModifierData *mmd, Object *ob, int lvl)
 
 					multires_copy_grid(ndisps, hdisps, nsize, hsize);
 					if (mdisp->hidden) {
-						BLI_bitmap gh =
+						BLI_bitmap *gh =
 						    multires_mdisps_downsample_hidden(mdisp->hidden,
 						                                      mdisp->level,
 						                                      lvl);
@@ -859,6 +856,12 @@ void multiresModifier_base_apply(MultiresModifierData *mmd, Object *ob)
 
 	MEM_freeN(origco);
 	cddm->release(cddm);
+
+	/* Vertices were moved around, need to update normals after all the vertices are updated
+	 * Probably this is possible to do in the loop above, but this is rather tricky because
+	 * we don't know all needed vertices' coordinates there yet.
+	 */
+	BKE_mesh_calc_normals(me);
 
 	/* subdivide the mesh to highest level without displacements */
 	cddm = CDDM_from_mesh(me, NULL);
@@ -1248,7 +1251,7 @@ void multires_modifier_update_mdisps(struct DerivedMesh *dm)
 void multires_modifier_update_hidden(DerivedMesh *dm)
 {
 	CCGDerivedMesh *ccgdm = (CCGDerivedMesh *)dm;
-	BLI_bitmap *grid_hidden = ccgdm->gridHidden;
+	BLI_bitmap **grid_hidden = ccgdm->gridHidden;
 	Mesh *me = ccgdm->multires.ob->data;
 	MDisps *mdisps = CustomData_get_layer(&me->ldata, CD_MDISPS);
 	int totlvl = ccgdm->multires.totlvl;
@@ -1259,7 +1262,7 @@ void multires_modifier_update_hidden(DerivedMesh *dm)
 		
 		for (i = 0; i < me->totloop; i++) {
 			MDisps *md = &mdisps[i];
-			BLI_bitmap gh = grid_hidden[i];
+			BLI_bitmap *gh = grid_hidden[i];
 
 			if (!gh && md->hidden) {
 				MEM_freeN(md->hidden);

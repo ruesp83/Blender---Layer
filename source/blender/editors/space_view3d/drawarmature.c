@@ -34,7 +34,6 @@
 #include <string.h>
 #include <math.h>
 
-
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
 #include "DNA_constraint_types.h"
@@ -186,8 +185,6 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 	
 			return true;
 		}
-		break;
-		
 		case PCHAN_COLOR_SOLID:
 		{
 			if (bcolor) {
@@ -198,8 +195,6 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 			
 			return true;
 		}
-		break;
-		
 		case PCHAN_COLOR_CONSTS:
 		{
 			if ((bcolor == NULL) || (bcolor->flag & TH_WIRECOLOR_CONSTCOLS)) {
@@ -210,11 +205,8 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 			
 				return true;
 			}
-			else
-				return 0;
+			return false;
 		}
-		break;
-
 		case PCHAN_COLOR_SPHEREBONE_BASE:
 		{
 			if (bcolor) {
@@ -240,7 +232,6 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 			
 			return true;
 		}
-		break;
 		case PCHAN_COLOR_SPHEREBONE_END:
 		{
 			if (bcolor) {
@@ -266,9 +257,8 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 				else if (boneflag & BONE_SELECTED) UI_ThemeColorShade(TH_BONE_POSE, -30);
 				else UI_ThemeColorShade(TH_BONE_SOLID, -30);
 			}
+			break;
 		}
-		break;
-		
 		case PCHAN_COLOR_LINEBONE:
 		{
 			/* inner part in background color or constraint */
@@ -290,7 +280,6 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 		
 			return true;
 		}
-		break;
 	}
 	
 	return false;
@@ -302,13 +291,13 @@ static void set_ebone_glColor(const unsigned int boneflag)
 		UI_ThemeColor(TH_EDGE_SELECT);
 	}
 	else if (boneflag & BONE_DRAW_ACTIVE) {
-		UI_ThemeColorBlend(TH_WIRE, TH_EDGE_SELECT, 0.15f); /* unselected active */
+		UI_ThemeColorBlend(TH_WIRE_EDIT, TH_EDGE_SELECT, 0.15f); /* unselected active */
 	}
 	else if (boneflag & BONE_SELECTED) {
 		UI_ThemeColorShade(TH_EDGE_SELECT, -20);
 	}
 	else {
-		UI_ThemeColor(TH_WIRE);
+		UI_ThemeColor(TH_WIRE_EDIT);
 	}
 }
 
@@ -817,7 +806,7 @@ static void draw_sphere_bone_wire(float smat[4][4], float imat[4][4],
 	/* base */
 	if (armflag & ARM_EDITMODE) {
 		if (boneflag & BONE_SELECTED) UI_ThemeColor(TH_SELECT);
-		else UI_ThemeColor(TH_WIRE);
+		else UI_ThemeColor(TH_WIRE_EDIT);
 	}
 	
 	sub_v3_v3v3(dirvec, tailvec, headvec);
@@ -1014,7 +1003,7 @@ static void draw_line_bone(int armflag, int boneflag, short constflag, unsigned 
 		if (armflag & ARM_POSEMODE)
 			set_pchan_glColor(PCHAN_COLOR_NORMAL, boneflag, constflag);
 		else if (armflag & ARM_EDITMODE) {
-			UI_ThemeColor(TH_WIRE);
+			UI_ThemeColor(TH_WIRE_EDIT);
 		}
 		
 		/*	Draw root point if we are not connected */
@@ -1109,12 +1098,14 @@ static void draw_b_bone_boxes(const short dt, bPoseChannel *pchan, float xwidth,
 	
 	if ((segments > 1) && (pchan)) {
 		float dlen = length / (float)segments;
-		Mat4 *bbone = b_bone_spline_setup(pchan, 0);
+		Mat4 bbone[MAX_BBONE_SUBDIV];
 		int a;
-		
-		for (a = 0; a < segments; a++, bbone++) {
+
+		b_bone_spline_setup(pchan, 0, bbone);
+
+		for (a = 0; a < segments; a++) {
 			glPushMatrix();
-			glMultMatrixf(bbone->mat);
+			glMultMatrixf(bbone[a].mat);
 			if (dt == OB_SOLID) drawsolidcube_size(xwidth, dlen, zwidth);
 			else drawcube_size(xwidth, dlen, zwidth);
 			glPopMatrix();
@@ -1245,6 +1236,7 @@ static void draw_wire_bone_segments(bPoseChannel *pchan, Mat4 *bbones, float len
 static void draw_wire_bone(const short dt, int armflag, int boneflag, short constflag, unsigned int id,
                            bPoseChannel *pchan, EditBone *ebone)
 {
+	Mat4 bbones_array[MAX_BBONE_SUBDIV];
 	Mat4 *bbones = NULL;
 	int segments = 0;
 	float length;
@@ -1253,8 +1245,10 @@ static void draw_wire_bone(const short dt, int armflag, int boneflag, short cons
 		segments = pchan->bone->segments;
 		length = pchan->bone->length;
 		
-		if (segments > 1)
-			bbones = b_bone_spline_setup(pchan, 0);
+		if (segments > 1) {
+			b_bone_spline_setup(pchan, 0, bbones_array);
+			bbones = bbones_array;
+		}
 	}
 	else 
 		length = ebone->length;
@@ -1426,8 +1420,8 @@ static void pchan_draw_IK_root_lines(bPoseChannel *pchan, short only_temp)
 				
 				glEnd();
 				setlinestyle(0);
+				break;
 			}
-			break;
 			case CONSTRAINT_TYPE_SPLINEIK: 
 			{
 				bSplineIKConstraint *data = (bSplineIKConstraint *)con->data;
@@ -1451,8 +1445,8 @@ static void pchan_draw_IK_root_lines(bPoseChannel *pchan, short only_temp)
 
 				glEnd();
 				setlinestyle(0);
+				break;
 			}
-			break;
 		}
 	}
 }
@@ -1495,7 +1489,7 @@ static void draw_dof_ellipse(float ax, float az)
 		z = staticSine[i];
 		
 		px = 0.0f;
-		for (j = 1; j < n - i + 1; j++) {
+		for (j = 1; j <= (n - i); j++) {
 			x = staticSine[j];
 			
 			if (j == n - i) {
@@ -1573,8 +1567,8 @@ static void draw_pose_dofs(Object *ob)
 									
 									for (i = 0; i < 3; i++) {
 										/* *0.5f here comes from M_PI/360.0f when rotations were still in degrees */
-										amin[i] = (float)sin(pchan->limitmin[i] * 0.5f);
-										amax[i] = (float)sin(pchan->limitmax[i] * 0.5f);
+										amin[i] = sinf(pchan->limitmin[i] * 0.5f);
+										amax[i] = sinf(pchan->limitmax[i] * 0.5f);
 									}
 									
 									glScalef(1.0f, -1.0f, 1.0f);
@@ -1605,8 +1599,8 @@ static void draw_pose_dofs(Object *ob)
 									phi = fac * (pchan->limitmax[2] - pchan->limitmin[2]);
 									
 									i = (a == -16) ? 0 : 1;
-									corner[i][0] = (float)sin(phi);
-									corner[i][1] = (float)cos(phi);
+									corner[i][0] = sinf(phi);
+									corner[i][1] = cosf(phi);
 									corner[i][2] = 0.0f;
 									glVertex3fv(corner[i]);
 								}
@@ -1629,8 +1623,8 @@ static void draw_pose_dofs(Object *ob)
 									
 									i = (a == -16) ? 2 : 3;
 									corner[i][0] = 0.0f;
-									corner[i][1] = (float)sin(phi);
-									corner[i][2] = (float)cos(phi);
+									corner[i][1] = sinf(phi);
+									corner[i][2] = cosf(phi);
 									glVertex3fv(corner[i]);
 								}
 								glEnd();
@@ -2070,20 +2064,10 @@ static void draw_pose_bones(Scene *scene, View3D *v3d, ARegion *ar, Base *base,
 }
 
 /* in editmode, we don't store the bone matrix... */
-static void get_matrix_editbone(EditBone *eBone, float bmat[4][4])
+static void get_matrix_editbone(EditBone *ebone, float bmat[4][4])
 {
-	float delta[3];
-	float mat[3][3];
-	
-	/* Compose the parent transforms (i.e. their translations) */
-	sub_v3_v3v3(delta, eBone->tail, eBone->head);
-	
-	eBone->length = (float)sqrt(delta[0] * delta[0] + delta[1] * delta[1] + delta[2] * delta[2]);
-	
-	vec_roll_to_mat3(delta, eBone->roll, mat);
-	copy_m4_m3(bmat, mat);
-
-	add_v3_v3(bmat[3], eBone->head);
+	ebone->length = len_v3v3(ebone->tail, ebone->head);
+	ED_armature_ebone_to_mat4(ebone, bmat);
 }
 
 static void draw_ebones(View3D *v3d, ARegion *ar, Object *ob, const short dt)
@@ -2097,7 +2081,9 @@ static void draw_ebones(View3D *v3d, ARegion *ar, Object *ob, const short dt)
 	
 	/* being set in code below */
 	arm->layer_used = 0;
-	
+
+	ED_view3d_check_mats_rv3d(rv3d);
+
 	/* envelope (deform distance) */
 	if (arm->drawtype == ARM_ENVELOPE) {
 		/* precalc inverse matrix for drawing screen aligned */
@@ -2210,7 +2196,7 @@ static void draw_ebones(View3D *v3d, ARegion *ar, Object *ob, const short dt)
 				
 				/* offset to parent */
 				if (eBone->parent) {
-					UI_ThemeColor(TH_WIRE);
+					UI_ThemeColor(TH_WIRE_EDIT);
 					glLoadName(-1);  /* -1 here is OK! */
 					setlinestyle(3);
 					

@@ -39,7 +39,6 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
-#include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_context.h"
@@ -190,7 +189,10 @@ static void graph_init(struct wmWindowManager *UNUSED(wm), ScrArea *sa)
 	}
 	
 	/* force immediate init of any invalid F-Curve colors */
-	sipo->flag |= SIPO_TEMP_NEEDCHANSYNC;
+	/* XXX: but, don't do SIPO_TEMP_NEEDCHANSYNC (i.e. channel select state sync)
+	 * as this is run on each region resize; setting this here will cause selection
+	 * state to be lost on area/region resizing. [#35744]
+	 */
 	ED_area_tag_refresh(sa);
 }
 
@@ -242,6 +244,8 @@ static void graph_main_area_draw(const bContext *C, ARegion *ar)
 	grid = UI_view2d_grid_calc(CTX_data_scene(C), v2d, unitx, V2D_GRID_NOCLAMP, unity, V2D_GRID_NOCLAMP, ar->winx, ar->winy);
 	UI_view2d_grid_draw(v2d, grid, V2D_GRIDLINES_ALL);
 	
+	ED_region_draw_cb_draw(C, ar, REGION_DRAW_PRE_VIEW);
+
 	/* draw data */
 	if (ANIM_animdata_get_context(C, &ac)) {
 		/* draw ghost curves */
@@ -293,8 +297,12 @@ static void graph_main_area_draw(const bContext *C, ARegion *ar)
 	
 	/* preview range */
 	UI_view2d_view_ortho(v2d);
-	ANIM_draw_previewrange(C, v2d);
+	ANIM_draw_previewrange(C, v2d, 0);
 	
+	/* callback */
+	UI_view2d_view_ortho(v2d);
+	ED_region_draw_cb_draw(C, ar, REGION_DRAW_POST_VIEW);
+
 	/* reset view matrix */
 	UI_view2d_view_restore(C);
 	
@@ -379,7 +387,7 @@ static void graph_buttons_area_draw(const bContext *C, ARegion *ar)
 	ED_region_panels(C, ar, 1, NULL, -1);
 }
 
-static void graph_region_listener(ARegion *ar, wmNotifier *wmn)
+static void graph_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -428,12 +436,13 @@ static void graph_region_listener(ARegion *ar, wmNotifier *wmn)
 		default:
 			if (wmn->data == ND_KEYS)
 				ED_region_tag_redraw(ar);
+			break;
 				
 	}
 }
 
 /* editor level listener */
-static void graph_listener(ScrArea *sa, wmNotifier *wmn)
+static void graph_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn)
 {
 	SpaceIpo *sipo = (SpaceIpo *)sa->spacedata.first;
 	
@@ -510,15 +519,13 @@ static void graph_refresh(const bContext *C, ScrArea *sa)
 	switch (sipo->mode) {
 		case SIPO_MODE_ANIMATION: /* all animation */
 		{
-			
+			break;
 		}
-		break;
 		
 		case SIPO_MODE_DRIVERS: /* drivers only  */
 		{
-		
+			break;
 		}
-		break;
 	}
 	
 	/* region updates? */
@@ -555,11 +562,12 @@ static void graph_refresh(const bContext *C, ScrArea *sa)
 			/* set color of curve here */
 			switch (fcu->color_mode) {
 				case FCURVE_COLOR_CUSTOM:
+				{
 					/* User has defined a custom color for this curve already (we assume it's not going to cause clashes with text colors),
 					 * which should be left alone... Nothing needs to be done here.
 					 */
 					break;
-					
+				}
 				case FCURVE_COLOR_AUTO_RGB:
 				{
 					/* F-Curve's array index is automatically mapped to RGB values. This works best of 3-value vectors. 
@@ -582,9 +590,8 @@ static void graph_refresh(const bContext *C, ScrArea *sa)
 							col[0] = 0.3f; col[1] = 0.8f; col[2] = 1.0f;
 							break;
 					}
+					break;
 				}
-				break;
-				
 				case FCURVE_COLOR_AUTO_RAINBOW:
 				default:
 				{
@@ -592,8 +599,8 @@ static void graph_refresh(const bContext *C, ScrArea *sa)
 					 * of current item index + total items to determine some RGB color
 					 */
 					getcolor_fcurve_rainbow(i, items, fcu->color);
+					break;
 				}
-				break;
 			}
 		}
 		

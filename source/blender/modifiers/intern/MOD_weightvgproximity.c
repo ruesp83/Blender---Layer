@@ -30,9 +30,11 @@
 
 #define DO_PROFILE 0
 
+#include "BLI_utildefines.h"
+#include "BLI_ghash.h"
 #include "BLI_math.h"
 #include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_rand.h"
 
 #if DO_PROFILE
 	#include "PIL_time.h"
@@ -45,6 +47,7 @@
 
 #include "BKE_cdderivedmesh.h"
 #include "BKE_deform.h"
+#include "BKE_library.h"
 #include "BKE_mesh.h"
 #include "BKE_modifier.h"
 #include "BKE_shrinkwrap.h"       /* For SpaceTransform stuff. */
@@ -185,7 +188,7 @@ static float get_ob2ob_distance(const Object *ob, const Object *obr)
 /**
  * Maps distances to weights, with an optional "smoothing" mapping.
  */
-static void do_map(float *weights, const int nidx, const float min_d, const float max_d, short mode)
+static void do_map(Object *ob, float *weights, const int nidx, const float min_d, const float max_d, short mode)
 {
 	const float range_inv = 1.0f / (max_d - min_d); /* invert since multiplication is faster */
 	unsigned int i = nidx;
@@ -210,7 +213,15 @@ static void do_map(float *weights, const int nidx, const float min_d, const floa
 	}
 
 	if (!ELEM(mode, MOD_WVG_MAPPING_NONE, MOD_WVG_MAPPING_CURVE)) {
-		weightvg_do_map(nidx, weights, mode, NULL);
+		RNG *rng = NULL;
+
+		if (mode == MOD_WVG_MAPPING_RANDOM)
+			rng = BLI_rng_new_srandom(BLI_ghashutil_strhash(ob->id.name + 2));
+
+		weightvg_do_map(nidx, weights, mode, NULL, rng);
+
+		if (rng)
+			BLI_rng_free(rng);
 	}
 }
 
@@ -230,6 +241,14 @@ static void initData(ModifierData *md)
 	wmd->mask_tex_use_channel = MOD_WVG_MASK_TEX_USE_INT; /* Use intensity by default. */
 	wmd->mask_tex_mapping     = MOD_DISP_MAP_LOCAL;
 	wmd->max_dist             = 1.0f; /* vert arbitrary distance, but don't use 0 */
+}
+
+static void freeData(ModifierData *md)
+{
+	WeightVGProximityModifierData *wmd = (WeightVGProximityModifierData *) md;
+	if (wmd->mask_texture) {
+		id_us_min(&wmd->mask_texture->id);
+	}
 }
 
 static void copyData(ModifierData *md, ModifierData *target)
@@ -253,6 +272,10 @@ static void copyData(ModifierData *md, ModifierData *target)
 	BLI_strncpy(twmd->mask_tex_uvlayer_name, wmd->mask_tex_uvlayer_name, sizeof(twmd->mask_tex_uvlayer_name));
 	twmd->min_dist               = wmd->min_dist;
 	twmd->max_dist               = wmd->max_dist;
+
+	if (twmd->mask_texture) {
+		id_us_plus(&twmd->mask_texture->id);
+	}
 }
 
 static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
@@ -272,7 +295,7 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 	return dataMask;
 }
 
-static int dependsOnTime(ModifierData *md)
+static bool dependsOnTime(ModifierData *md)
 {
 	WeightVGProximityModifierData *wmd = (WeightVGProximityModifierData *) md;
 
@@ -328,7 +351,7 @@ static void updateDepgraph(ModifierData *md, DagForest *forest, struct Scene *UN
 		                 "WeightVGProximity Modifier");
 }
 
-static int isDisabled(ModifierData *md, int UNUSED(useRenderParams))
+static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
 {
 	WeightVGProximityModifierData *wmd = (WeightVGProximityModifierData *) md;
 	/* If no vertex group, bypass. */
@@ -500,7 +523,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob, DerivedMesh *der
 	}
 
 	/* Map distances to weights. */
-	do_map(new_w, numIdx, wmd->min_dist, wmd->max_dist, wmd->falloff_type);
+	do_map(ob, new_w, numIdx, wmd->min_dist, wmd->max_dist, wmd->falloff_type);
 
 	/* Do masking. */
 	weightvg_do_mask(numIdx, indices, org_w, new_w, ob, dm, wmd->mask_constant,
@@ -533,13 +556,6 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob, DerivedMesh *der
 	return dm;
 }
 
-static DerivedMesh *applyModifierEM(ModifierData *md, Object *ob,
-                                    struct BMEditMesh *UNUSED(editData),
-                                    DerivedMesh *derivedData)
-{
-	return applyModifier(md, ob, derivedData, MOD_APPLY_USECACHE);
-}
-
 
 ModifierTypeInfo modifierType_WeightVGProximity = {
 	/* name */              "VertexWeightProximity",
@@ -557,10 +573,10 @@ ModifierTypeInfo modifierType_WeightVGProximity = {
 	/* deformVertsEM */     NULL,
 	/* deformMatricesEM */  NULL,
 	/* applyModifier */     applyModifier,
-	/* applyModifierEM */   applyModifierEM,
+	/* applyModifierEM */   NULL,
 	/* initData */          initData,
 	/* requiredDataMask */  requiredDataMask,
-	/* freeData */          NULL,
+	/* freeData */          freeData,
 	/* isDisabled */        isDisabled,
 	/* updateDepgraph */    updateDepgraph,
 	/* dependsOnTime */     dependsOnTime,

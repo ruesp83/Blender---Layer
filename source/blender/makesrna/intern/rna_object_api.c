@@ -115,9 +115,9 @@ static void rna_Scene_mat_convert_space(Object *ob, ReportList *reports, bPoseCh
 /* settings: 0 - preview, 1 - render */
 static Mesh *rna_Object_to_mesh(
         Object *ob, ReportList *reports, Scene *sce,
-        int apply_modifiers, int settings, int calc_tessface)
+        int apply_modifiers, int settings, int calc_tessface, int calc_undeformed)
 {
-	return rna_Main_meshes_new_from_object(G.main, reports, sce, ob, apply_modifiers, settings, calc_tessface);
+	return rna_Main_meshes_new_from_object(G.main, reports, sce, ob, apply_modifiers, settings, calc_tessface, calc_undeformed);
 }
 
 /* mostly a copy from convertblender.c */
@@ -259,6 +259,21 @@ static void rna_Mesh_assign_verts_to_group(Object *ob, bDeformGroup *group, int 
 }
 #endif
 
+/* don't call inside a loop */
+static int dm_tessface_to_poly_index(DerivedMesh *dm, int tessface_index)
+{
+	if (tessface_index != ORIGINDEX_NONE) {
+		/* double lookup */
+		const int *index_mf_to_mpoly;
+		if ((index_mf_to_mpoly = dm->getTessFaceDataArray(dm, CD_ORIGINDEX))) {
+			const int *index_mp_to_orig = dm->getPolyDataArray(dm, CD_ORIGINDEX);
+			return DM_origindex_mface_mpoly(index_mf_to_mpoly, index_mp_to_orig, tessface_index);
+		}
+	}
+
+	return ORIGINDEX_NONE;
+}
+
 /* BMESH_TODO, return polygon index, not tessface */
 static void rna_Object_ray_cast(Object *ob, ReportList *reports, float ray_start[3], float ray_end[3],
                                 float r_location[3], float r_normal[3], int *index)
@@ -291,7 +306,7 @@ static void rna_Object_ray_cast(Object *ob, ReportList *reports, float ray_start
 			if (hit.dist <= dist) {
 				copy_v3_v3(r_location, hit.co);
 				copy_v3_v3(r_normal, hit.no);
-				*index = hit.index;
+				*index = dm_tessface_to_poly_index(ob->derivedFinal, hit.index);
 				return;
 			}
 		}
@@ -330,7 +345,7 @@ static void rna_Object_closest_point_on_mesh(Object *ob, ReportList *reports, fl
 		if (BLI_bvhtree_find_nearest(treeData.tree, point_co, &nearest, treeData.nearest_callback, &treeData) != -1) {
 			copy_v3_v3(n_location, nearest.co);
 			copy_v3_v3(n_normal, nearest.no);
-			*index = nearest.index;
+			*index = dm_tessface_to_poly_index(ob->derivedFinal, nearest.index);
 			return;
 		}
 	}
@@ -456,6 +471,7 @@ void RNA_api_object(StructRNA *srna)
 	parm = RNA_def_enum(func, "settings", mesh_type_items, 0, "", "Modifier settings to apply");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 	RNA_def_boolean(func, "calc_tessface", true, "Calculate Tessellation", "Calculate tessellation faces");
+	RNA_def_boolean(func, "calc_undeformed", false, "Calculate Undeformed", "Calculate undeformed vertex coordinates");
 	parm = RNA_def_pointer(func, "mesh", "Mesh", "",
 	                       "Mesh created from object, remove it if it is only used for export");
 	RNA_def_function_return(func, parm);

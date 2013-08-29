@@ -499,7 +499,37 @@ static void shade_ray_set_derivative(ShadeInput *shi)
 	
 }
 
+/* four functions to facilitate envmap rotation for raytrace */
+static void ray_env_rotate_start(Isect *is, float imat[4][4])
+{
+	copy_v3_v3(is->origstart, is->start);
+	mul_m4_v3(imat, is->start);
+}
 
+static void ray_env_rotate_dir(Isect *is, float imat[4][4])
+{
+	float end[3];
+	
+	copy_v3_v3(is->origdir, is->dir);
+	add_v3_v3v3(end, is->origstart, is->dir);
+	
+	mul_m4_v3(imat, end);
+	sub_v3_v3v3(is->dir, end, is->start);
+}
+
+static void ray_env_rotate(Isect *is, float imat[4][4])
+{
+	ray_env_rotate_start(is, imat);
+	ray_env_rotate_dir(is, imat);
+}
+
+static void ray_env_rotate_restore(Isect *is)
+{
+	copy_v3_v3(is->start, is->origstart);
+	copy_v3_v3(is->dir, is->origdir);
+}
+
+/* main ray shader */
 void shade_ray(Isect *is, ShadeInput *shi, ShadeResult *shr)
 {
 	ObjectInstanceRen *obi = (ObjectInstanceRen *)is->hit.ob;
@@ -701,9 +731,18 @@ static void ray_fadeout(Isect *is, ShadeInput *shi, float col[3], const float bl
  * note: 'col' must be initialized */
 static void traceray(ShadeInput *origshi, ShadeResult *origshr, short depth, const float start[3], const float dir[3], float col[4], ObjectInstanceRen *obi, VlakRen *vlr, int traflag)
 {
-	ShadeInput shi= {0};
+	ShadeInput shi = {NULL};
 	Isect isec;
 	float dist_mir = origshi->mat->dist_mir;
+
+	/* with high depth the number of rays can explode due to the path splitting
+	 * in two each time, giving 2^depth rays. we need to be able to cancel such
+	 * a render to avoid hanging, a better solution would be random picking
+	 * between directions and russian roulette termination */
+	if(R.test_break(R.tbh)) {
+		zero_v4(col);
+		return;
+	}
 	
 	copy_v3_v3(isec.start, start);
 	copy_v3_v3(isec.dir, dir);
@@ -711,16 +750,23 @@ static void traceray(ShadeInput *origshi, ShadeResult *origshr, short depth, con
 	isec.mode= RE_RAY_MIRROR;
 	isec.check = RE_CHECK_VLR_RENDER;
 	isec.skip = RE_SKIP_VLR_NEIGHBOUR;
-	isec.hint = 0;
+	isec.hint = NULL;
 
 	isec.orig.ob   = obi;
 	isec.orig.face = vlr;
 	RE_RC_INIT(isec, shi);
+	
+	/* database is in original view, obi->imat transforms current position back to original */
+	if (origshi->obi->flag & R_ENV_TRANSFORMED)
+		ray_env_rotate(&isec, origshi->obi->imat);
 
 	if (RE_rayobject_raycast(R.raytree, &isec)) {
 		ShadeResult shr= {{0}};
 		float d= 1.0f;
 
+		if (origshi->obi->flag & R_ENV_TRANSFORMED)
+			ray_env_rotate_restore(&isec);
+		
 		/* for as long we don't have proper dx/dy transform for rays we copy over original */
 		copy_v3_v3(shi.dxco, origshi->dxco);
 		copy_v3_v3(shi.dyco, origshi->dyco);
@@ -935,15 +981,14 @@ void init_jitter_plane(LampRen *lar)
 	
 	/* if 1 sample, we leave table to be zero's */
 	if (tot>1) {
+		/* set per-lamp fixed seed */
+		RNG *rng = BLI_rng_new_srandom(tot);
 		int iter=12;
 
-		/* set per-lamp fixed seed */
-		BLI_srandom(tot);
-		
 		/* fill table with random locations, area_size large */
 		for (x=0; x<tot; x++, fp+=2) {
-			fp[0]= (BLI_frand()-0.5f)*lar->area_size;
-			fp[1]= (BLI_frand()-0.5f)*lar->area_sizey;
+			fp[0]= (BLI_rng_get_float(rng)-0.5f)*lar->area_size;
+			fp[1]= (BLI_rng_get_float(rng)-0.5f)*lar->area_sizey;
 		}
 		
 		while (iter--) {
@@ -952,6 +997,8 @@ void init_jitter_plane(LampRen *lar)
 				DP_energy(lar->jitter, fp, tot, lar->area_size, lar->area_sizey);
 			}
 		}
+
+		BLI_rng_free(rng);
 	}
 	/* create the dithered tables (could just check lamp type!) */
 	jitter_plane_offset(lar->jitter, lar->jitter+2*tot, tot, lar->area_size, lar->area_sizey, 0.5f, 0.0f);
@@ -1620,6 +1667,9 @@ static void ray_trace_shadow_tra(Isect *is, ShadeInput *origshi, int depth, int 
 		shi.lay= origshi->lay;
 		shi.nodes= origshi->nodes;
 		
+		if (origshi->obi->flag & R_ENV_TRANSFORMED)
+			ray_env_rotate_restore(is);
+
 		shade_ray(is, &shi, &shr);
 		if (shi.mat->material_type == MA_TYPE_SURFACE) {
 			const float d= (traflag & RAY_TRA) ?
@@ -1653,86 +1703,14 @@ static void ray_trace_shadow_tra(Isect *is, ShadeInput *origshi, int depth, int 
 	}
 }
 
-/* not used, test function for ambient occlusion (yaf: pathlight) */
-/* main problem; has to be called within shading loop, giving unwanted recursion */
-static int UNUSED_FUNCTION(ray_trace_shadow_rad)(ShadeInput *ship, ShadeResult *shr)
-{
-	static int counter=0, only_one= 0;
-	extern float hashvectf[];
-	Isect isec;
-	ShadeInput shi;
-	ShadeResult shr_t;
-	float vec[3], accum[3], div= 0.0f;
-	int a;
-	
-	assert(0);
-	
-	if (only_one) {
-		return 0;
-	}
-	only_one= 1;
-	
-	accum[0]= accum[1]= accum[2]= 0.0f;
-	isec.mode= RE_RAY_MIRROR;
-	isec.orig.ob   = ship->obi;
-	isec.orig.face = ship->vlr;
-	isec.hint = 0;
-
-	copy_v3_v3(isec.start, ship->co);
-	
-	RE_RC_INIT(isec, shi);
-	
-	for (a=0; a<8*8; a++) {
-		
-		counter+=3;
-		counter %= 768;
-		copy_v3_v3(vec, hashvectf+counter);
-		if (dot_v3v3(ship->vn, vec) > 0.0f) {
-			vec[0]-= vec[0];
-			vec[1]-= vec[1];
-			vec[2]-= vec[2];
-		}
-
-		copy_v3_v3(isec.dir, vec);
-		isec.dist = RE_RAYTRACE_MAXDIST;
-
-		if (RE_rayobject_raycast(R.raytree, &isec)) {
-			float fac;
-			
-			/* Warning, This is not that nice, and possibly a bit slow for every ray,
-			 * however some variables were not initialized properly in, unless using shade_input_initialize(...), we need to do a memset */
-			memset(&shi, 0, sizeof(ShadeInput)); 
-			/* end warning! - Campbell */
-			
-			shade_ray(&isec, &shi, &shr_t);
-			/* fac= isec.dist*isec.dist; */
-			fac= 1.0f;
-			accum[0]+= fac*(shr_t.diff[0]+shr_t.spec[0]);
-			accum[1]+= fac*(shr_t.diff[1]+shr_t.spec[1]);
-			accum[2]+= fac*(shr_t.diff[2]+shr_t.spec[2]);
-			div+= fac;
-		}
-		else div+= 1.0f;
-	}
-	
-	if (div!=0.0f) {
-		shr->diff[0]+= accum[0]/div;
-		shr->diff[1]+= accum[1]/div;
-		shr->diff[2]+= accum[2]/div;
-	}
-	shr->alpha= 1.0f;
-	
-	only_one= 0;
-	return 1;
-}
 
 /* aolight: function to create random unit sphere vectors for total random sampling */
-static void RandomSpherical(float v[3])
+static void RandomSpherical(RNG *rng, float v[3])
 {
 	float r;
-	v[2] = 2.f*BLI_frand()-1.f;
+	v[2] = 2.f*BLI_rng_get_float(rng)-1.f;
 	if ((r = 1.f - v[2]*v[2])>0.f) {
-		float a = 6.283185307f*BLI_frand();
+		float a = 6.283185307f*BLI_rng_get_float(rng);
 		r = sqrt(r);
 		v[0] = r * cosf(a);
 		v[1] = r * sinf(a);
@@ -1770,6 +1748,8 @@ static void DS_energy(float *sphere, int tot, float vec[3])
 /* and allocates threadsafe memory */
 void init_ao_sphere(World *wrld)
 {
+	/* fixed random */
+	RNG *rng;
 	float *fp;
 	int a, tot, iter= 16;
 
@@ -1777,14 +1757,12 @@ void init_ao_sphere(World *wrld)
 	tot= 2*wrld->aosamp*wrld->aosamp;
 	
 	wrld->aosphere= MEM_mallocN(3*tot*sizeof(float), "AO sphere");
-	
-	/* fixed random */
-	BLI_srandom(tot);
+	rng = BLI_rng_new_srandom(tot);
 	
 	/* init */
 	fp= wrld->aosphere;
 	for (a=0; a<tot; a++, fp+= 3) {
-		RandomSpherical(fp);
+		RandomSpherical(rng, fp);
 	}
 	
 	while (iter--) {
@@ -1795,6 +1773,8 @@ void init_ao_sphere(World *wrld)
 	
 	/* tables */
 	wrld->aotables= MEM_mallocN(BLENDER_MAX_THREADS*3*tot*sizeof(float), "AO tables");
+
+	BLI_rng_free(rng);
 }
 
 /* give per thread a table, we have to compare xs ys because of way OSA works... */
@@ -1823,17 +1803,20 @@ static float *sphere_sampler(int type, int resol, int thread, int xs, int ys, in
 	tot= 2*resol*resol;
 
 	if (type & WO_AORNDSMP) {
+		/* total random sampling. NOT THREADSAFE! (should be removed, is not useful) */
+		RNG *rng = BLI_rng_new(BLI_thread_rand(thread));
 		float *sphere;
 		int a;
 		
 		/* always returns table */
 		sphere= threadsafe_table_sphere(0, thread, xs, ys, tot);
 
-		/* total random sampling. NOT THREADSAFE! (should be removed, is not useful) */
 		vec= sphere;
 		for (a=0; a<tot; a++, vec+=3) {
-			RandomSpherical(vec);
+			RandomSpherical(rng, vec);
 		}
+
+		BLI_rng_free(rng);
 		
 		return sphere;
 	}
@@ -1892,10 +1875,10 @@ static void ray_ao_qmc(ShadeInput *shi, float ao[3], float env[3])
 	isec.orig.face = shi->vlr;
 	isec.check = RE_CHECK_VLR_NON_SOLID_MATERIAL;
 	isec.skip = RE_SKIP_VLR_NEIGHBOUR;
-	isec.hint = 0;
+	isec.hint = NULL;
 
-	isec.hit.ob   = 0;
-	isec.hit.face = 0;
+	isec.hit.ob   = NULL;
+	isec.hit.face = NULL;
 
 	isec.last_hit = NULL;
 	
@@ -1903,6 +1886,10 @@ static void ray_ao_qmc(ShadeInput *shi, float ao[3], float env[3])
 	isec.lay= -1;
 	
 	copy_v3_v3(isec.start, shi->co);
+	
+	if (shi->obi->flag & R_ENV_TRANSFORMED)
+		ray_env_rotate_start(&isec, shi->obi->imat);
+	
 	RE_rayobject_hint_bb(R.raytree, &point_hint, isec.start, isec.start);
 	isec.hint = &point_hint;
 
@@ -1955,11 +1942,14 @@ static void ray_ao_qmc(ShadeInput *shi, float ao[3], float env[3])
 		dir[2] = (samp3d[0]*up[2] + samp3d[1]*side[2] + samp3d[2]*nrm[2]);
 		
 		normalize_v3(dir);
-			
+		
 		isec.dir[0] = -dir[0];
 		isec.dir[1] = -dir[1];
 		isec.dir[2] = -dir[2];
 		isec.dist = maxdist;
+		
+		if (shi->obi->flag & R_ENV_TRANSFORMED)
+			ray_env_rotate_dir(&isec, shi->obi->imat);
 		
 		prev = fac;
 		
@@ -2032,10 +2022,10 @@ static void ray_ao_spheresamp(ShadeInput *shi, float ao[3], float env[3])
 	isec.orig.face = shi->vlr;
 	isec.check = RE_CHECK_VLR_RENDER;
 	isec.skip = RE_SKIP_VLR_NEIGHBOUR;
-	isec.hint = 0;
+	isec.hint = NULL;
 
-	isec.hit.ob   = 0;
-	isec.hit.face = 0;
+	isec.hit.ob   = NULL;
+	isec.hit.face = NULL;
 	
 	isec.last_hit = NULL;
 	
@@ -2043,6 +2033,9 @@ static void ray_ao_spheresamp(ShadeInput *shi, float ao[3], float env[3])
 	isec.lay= -1;
 
 	copy_v3_v3(isec.start, shi->co);
+	if (shi->obi->flag & R_ENV_TRANSFORMED)
+		ray_env_rotate_start(&isec, shi->obi->imat);
+
 	RE_rayobject_hint_bb(R.raytree, &point_hint, isec.start, isec.start);
 	isec.hint = &point_hint;
 
@@ -2100,6 +2093,9 @@ static void ray_ao_spheresamp(ShadeInput *shi, float ao[3], float env[3])
 			isec.dir[2] = -vec[2];
 			isec.dist = maxdist;
 			
+			if (shi->obi->flag & R_ENV_TRANSFORMED)
+				ray_env_rotate_dir(&isec, shi->obi->imat);
+
 			/* do the trace */
 			if (RE_rayobject_raycast(R.raytree, &isec)) {
 				if (R.wrld.aomode & WO_AODIST) sh+= expf(-isec.dist*R.wrld.aodistfac);
@@ -2208,7 +2204,7 @@ static void ray_shadow_qmc(ShadeInput *shi, LampRen *lar, const float lampco[3],
 	float colsq[4];
 	float adapt_thresh = lar->adapt_thresh;
 	int min_adapt_samples=4, max_samples = lar->ray_totsamp;
-	float *co;
+	float start[3];
 	int do_soft = TRUE, full_osa = FALSE, i;
 
 	float min[3], max[3];
@@ -2251,6 +2247,10 @@ static void ray_shadow_qmc(ShadeInput *shi, LampRen *lar, const float lampco[3],
 	for (i = 0; i < totjitco; i++) {
 		minmax_v3v3_v3(min, max, jitco[i]);
 	}
+	if (shi->obi->flag & R_ENV_TRANSFORMED) {
+		mul_m4_v3(shi->obi->imat, min);
+		mul_m4_v3(shi->obi->imat, max);
+	}
 	RE_rayobject_hint_bb(R.raytree, &bb_hint, min, max);
 	
 	isec->hint = &bb_hint;
@@ -2266,7 +2266,7 @@ static void ray_shadow_qmc(ShadeInput *shi, LampRen *lar, const float lampco[3],
 		/* manually jitter the start shading co-ord per sample
 		 * based on the pre-generated OSA texture sampling offsets, 
 		 * for anti-aliasing sharp shadow edges. */
-		co = jitco[samples % totjitco];
+		copy_v3_v3(start, jitco[samples % totjitco]);
 
 		if (do_soft) {
 			/* sphere shadow source */
@@ -2274,7 +2274,7 @@ static void ray_shadow_qmc(ShadeInput *shi, LampRen *lar, const float lampco[3],
 				float ru[3], rv[3], v[3], s[3];
 				
 				/* calc tangent plane vectors */
-				sub_v3_v3v3(v, co, lampco);
+				sub_v3_v3v3(v, start, lampco);
 				normalize_v3(v);
 				ortho_basis_v3v3_v3(ru, rv, v);
 				
@@ -2308,20 +2308,23 @@ static void ray_shadow_qmc(ShadeInput *shi, LampRen *lar, const float lampco[3],
 			float jitbias= 0.5f*(len_v3(shi->dxco) + len_v3(shi->dyco));
 			float v[3];
 
-			sub_v3_v3v3(v, co, end);
+			sub_v3_v3v3(v, start, end);
 			normalize_v3(v);
 
-			co[0] -= jitbias*v[0];
-			co[1] -= jitbias*v[1];
-			co[2] -= jitbias*v[2];
+			start[0] -= jitbias*v[0];
+			start[1] -= jitbias*v[1];
+			start[2] -= jitbias*v[2];
 		}
-
-		copy_v3_v3(isec->start, co);
+		
+		copy_v3_v3(isec->start, start);
 		isec->dir[0] = end[0]-isec->start[0];
 		isec->dir[1] = end[1]-isec->start[1];
 		isec->dir[2] = end[2]-isec->start[2];
 		isec->dist = normalize_v3(isec->dir);
 		
+		if (shi->obi->flag & R_ENV_TRANSFORMED)
+			ray_env_rotate(isec, shi->obi->imat);
+
 		/* trace the ray */
 		if (isec->mode==RE_RAY_SHADOW_TRA) {
 			float col[4] = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -2398,6 +2401,9 @@ static void ray_shadow_jitter(ShadeInput *shi, LampRen *lar, const float lampco[
 	else if (a==9) mask |= (mask>>9);
 	
 	copy_v3_v3(isec->start, shi->co);
+	if (shi->obi->flag & R_ENV_TRANSFORMED)
+		ray_env_rotate_start(isec, shi->obi->imat);
+	
 	isec->orig.ob   = shi->obi;
 	isec->orig.face = shi->vlr;
 	RE_rayobject_hint_bb(R.raytree, &point_hint, isec->start, isec->start);
@@ -2423,6 +2429,10 @@ static void ray_shadow_jitter(ShadeInput *shi, LampRen *lar, const float lampco[
 		isec->dir[0] = vec[0]+lampco[0]-isec->start[0];
 		isec->dir[1] = vec[1]+lampco[1]-isec->start[1];
 		isec->dir[2] = vec[2]+lampco[2]-isec->start[2];
+		
+		if (shi->obi->flag & R_ENV_TRANSFORMED)
+			ray_env_rotate_dir(isec, shi->obi->imat);
+		
 		isec->dist = 1.0f;
 		isec->check = RE_CHECK_VLR_RENDER;
 		isec->skip = RE_SKIP_VLR_NEIGHBOUR;
@@ -2467,7 +2477,7 @@ void ray_shadow(ShadeInput *shi, LampRen *lar, float shadfac[4])
 	RE_RC_INIT(isec, *shi);
 	if (shi->mat->mode & MA_SHADOW_TRA) isec.mode= RE_RAY_SHADOW_TRA;
 	else isec.mode= RE_RAY_SHADOW;
-	isec.hint = 0;
+	isec.hint = NULL;
 	
 	if (lar->mode & (LA_LAYER|LA_LAYER_SHADOW))
 		isec.lay= lar->lay;
@@ -2522,6 +2532,9 @@ void ray_shadow(ShadeInput *shi, LampRen *lar, float shadfac[4])
 			sub_v3_v3v3(isec.dir, lampco, isec.start);
 			isec.dist = normalize_v3(isec.dir);
 
+			if (shi->obi->flag & R_ENV_TRANSFORMED)
+				ray_env_rotate(&isec, shi->obi->imat);
+
 			if (isec.mode==RE_RAY_SHADOW_TRA) {
 				/* isec.col is like shadfac, so defines amount of light (0.0 is full shadow) */
 				float col[4] = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -2543,52 +2556,4 @@ void ray_shadow(ShadeInput *shi, LampRen *lar, float shadfac[4])
 	}
 
 }
-
-#if 0
-/* only when face points away from lamp, in direction of lamp, trace ray and find first exit point */
-static void ray_translucent(ShadeInput *shi, LampRen *lar, float *distfac, float co[3])
-{
-	Isect isec;
-	float lampco[3];
-	
-	assert(0);
-	
-	/* setup isec */
-	RE_RC_INIT(isec, *shi);
-	isec.mode= RE_RAY_SHADOW_TRA;
-	isec.hint = 0;
-	
-	if (lar->mode & LA_LAYER) isec.lay= lar->lay; else isec.lay= -1;
-	
-	if (lar->type==LA_SUN || lar->type==LA_HEMI) {
-		lampco[0]= shi->co[0] - RE_RAYTRACE_MAXDIST*lar->vec[0];
-		lampco[1]= shi->co[1] - RE_RAYTRACE_MAXDIST*lar->vec[1];
-		lampco[2]= shi->co[2] - RE_RAYTRACE_MAXDIST*lar->vec[2];
-	}
-	else {
-		copy_v3_v3(lampco, lar->co);
-	}
-	
-	isec.orig.ob   = shi->obi;
-	isec.orig.face = shi->vlr;
-	
-	/* set up isec.dir */
-	copy_v3_v3(isec.start, shi->co);
-	copy_v3_v3(isec.end, lampco);
-	
-	if (RE_rayobject_raycast(R.raytree, &isec)) {
-		/* we got a face */
-		
-		/* render co */
-		co[0]= isec.start[0]+isec.dist*(isec.dir[0]);
-		co[1]= isec.start[1]+isec.dist*(isec.dir[1]);
-		co[2]= isec.start[2]+isec.dist*(isec.dir[2]);
-		
-		*distfac= len_v3(isec.dir);
-	}
-	else
-		*distfac= 0.0f;
-}
-
-#endif
 

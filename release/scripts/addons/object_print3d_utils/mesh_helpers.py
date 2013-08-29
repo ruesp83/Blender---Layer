@@ -88,16 +88,6 @@ def bmesh_to_object(obj, bm):
         me.vertices[0].co[0] = me.vertices[0].co[0]
 
 
-def bmesh_calc_volume(bm):
-    """
-    Calculate the volume of a triangulated bmesh.
-    """
-    def tri_signed_volume(p1, p2, p3):
-        return p1.dot(p2.cross(p3)) / 6.0
-    return abs(sum((tri_signed_volume(*(v.co for v in f.verts))
-                    for f in bm.faces)))
-
-
 def bmesh_calc_area(bm):
     """
     Calculate the surface area.
@@ -144,8 +134,8 @@ def bmesh_check_self_intersect_object(obj):
 
     faces_error = set()
 
-    EPS_NORMAL = 0.0001
-    EPS_CENTER = 0.00001  # should always be bigger
+    EPS_NORMAL = 0.000001
+    EPS_CENTER = 0.01  # should always be bigger
 
     for ed in me_tmp.edges:
         v1i, v2i = ed.vertices
@@ -167,6 +157,8 @@ def bmesh_check_self_intersect_object(obj):
     scene.objects.unlink(obj_tmp)
     bpy.data.objects.remove(obj_tmp)
     bpy.data.meshes.remove(me_tmp)
+
+    scene.update()
 
     return array.array('i', faces_error)
 
@@ -253,6 +245,8 @@ def bmesh_check_thick_object(obj, thickness):
     bpy.data.objects.remove(obj_tmp)
     bpy.data.meshes.remove(me_tmp)
 
+    scene.update()
+
     return array.array('i', faces_error)
 
 
@@ -317,6 +311,8 @@ def object_merge(context, objects):
         #~ bpy.data.objects.remove(obj_new)
 
         bpy.data.meshes.remove(mesh_new)
+
+    scene.update()
 
     # return new object
     return base_base

@@ -110,6 +110,7 @@ set(SRC
 	internal/ceres/wall_time.cc
 
 	include/ceres/autodiff_cost_function.h
+	include/ceres/autodiff_local_parameterization.h
 	include/ceres/ceres.h
 	include/ceres/conditioned_cost_function.h
 	include/ceres/cost_function.h
@@ -141,6 +142,7 @@ set(SRC
 	include/ceres/solver.h
 	include/ceres/types.h
 	internal/ceres/array_utils.h
+	internal/ceres/blas.h
 	internal/ceres/block_evaluate_preparer.h
 	internal/ceres/block_jacobian_writer.h
 	internal/ceres/block_jacobi_preconditioner.h

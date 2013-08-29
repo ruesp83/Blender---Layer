@@ -45,8 +45,6 @@ struct CollisionTree;
 
 #define DO_INLINE MALWAYS_INLINE
 
-#define CLOTH_MAX_THREAD 2
-
 /* goal defines */
 #define SOFTGOALSNAP  0.999f
 
@@ -82,7 +80,7 @@ typedef struct Cloth {
 	struct MFace 		*mfaces;
 	struct Implicit_Data	*implicit; 		/* our implicit solver connects to this pointer */
 	struct Implicit_Data	*implicitEM; 		/* our implicit solver connects to this pointer */
-	struct EdgeHash 	*edgehash; 		/* used for selfcollisions */
+	struct EdgeHash 	*edgehash; 		/* used for selfcollisions (currently used as a 'set', value is ignored) */
 	int last_frame, pad4;
 } Cloth;
 

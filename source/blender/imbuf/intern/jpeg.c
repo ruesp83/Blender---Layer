@@ -59,7 +59,11 @@
 #define IS_maxjpg(x)    ((x->ftype & JPG_MSK) == JPG_MAX)
 
 /* the types are from the jpeg lib */
-static void jpeg_error(j_common_ptr cinfo);
+static void jpeg_error(j_common_ptr cinfo)
+#ifdef __GNUC__
+__attribute__((noreturn))
+#endif
+;
 static void init_source(j_decompress_ptr cinfo);
 static boolean fill_input_buffer(j_decompress_ptr cinfo);
 static void skip_input_data(j_decompress_ptr cinfo, long num_bytes);
@@ -362,6 +366,7 @@ static ImBuf *ibJpegImageFromCinfo(struct jpeg_decompress_struct *cinfo, int fla
 							rect[0] = r;
 							rect += 4;
 						}
+						break;
 				}
 			}
 
@@ -369,6 +374,12 @@ static ImBuf *ibJpegImageFromCinfo(struct jpeg_decompress_struct *cinfo, int fla
 			while (marker) {
 				if (marker->marker != JPEG_COM)
 					goto next_stamp_marker;
+
+				/*
+				 * JPEG marker strings are not null-terminated,
+				 * create a null-terminated copy before going further
+				 */
+				str = BLI_strdupn((char *)marker->data, marker->data_length);
 
 				/*
 				 * Because JPEG format don't support the
@@ -379,7 +390,7 @@ static ImBuf *ibJpegImageFromCinfo(struct jpeg_decompress_struct *cinfo, int fla
 				 * That is why we need split it to the
 				 * common key/value here.
 				 */
-				if (strncmp((char *) marker->data, "Blender", 7)) {
+				if (strncmp(str, "Blender", 7)) {
 					/*
 					 * Maybe the file have text that
 					 * we don't know "what it's", in that
@@ -389,12 +400,12 @@ static ImBuf *ibJpegImageFromCinfo(struct jpeg_decompress_struct *cinfo, int fla
 					 * the information when we write
 					 * it back to disk.
 					 */
-					IMB_metadata_add_field(ibuf, "None", (char *) marker->data);
+					IMB_metadata_add_field(ibuf, "None", str);
 					ibuf->flags |= IB_metadata;
+					MEM_freeN(str);
 					goto next_stamp_marker;
 				}
 
-				str = BLI_strdup((char *) marker->data);
 				key = strchr(str, ':');
 				/*
 				 * A little paranoid, but the file maybe
@@ -539,7 +550,8 @@ next_stamp_info:
 				break;
 			/* default was missing... intentional ? */
 			default:
-				; /* do nothing */
+				/* do nothing */
+				break;
 		}
 
 		jpeg_write_scanlines(cinfo, row_pointer, 1);
@@ -584,7 +596,8 @@ static int init_jpeg(FILE *outfile, struct jpeg_compress_struct *cinfo, struct I
 			break;
 		/* default was missing... intentional ? */
 		default:
-			; /* do nothing */
+			/* do nothing */
+			break;
 	}
 	jpeg_set_defaults(cinfo);
 	

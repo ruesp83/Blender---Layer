@@ -40,7 +40,9 @@ __device float3 bsdf_phong_ramp_get_color(const ShaderClosure *sc, const float3 
 	int MAXCOLORS = 8;
 	
 	float npos = pos * (float)(MAXCOLORS - 1);
-	int ipos = (int)npos;
+	int ipos = float_to_int(npos);
+	if (ipos < 0)
+		return colors[0];
 	if (ipos >= (MAXCOLORS - 1))
 		return colors[MAXCOLORS - 1];
 	float offset = npos - (float)ipos;
@@ -49,6 +51,8 @@ __device float3 bsdf_phong_ramp_get_color(const ShaderClosure *sc, const float3 
 
 __device int bsdf_phong_ramp_setup(ShaderClosure *sc)
 {
+	sc->data0 = max(sc->data0, 0.0f);
+	
 	sc->type = CLOSURE_BSDF_PHONG_RAMP_ID;
 	return SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSDF_GLOSSY;
 }
@@ -69,7 +73,7 @@ __device float3 bsdf_phong_ramp_eval_reflect(const ShaderClosure *sc, const floa
 		float cosRI = dot(R, omega_in);
 		if (cosRI > 0) {
 			float cosp = powf(cosRI, m_exponent);
-			float common = 0.5f * (float) M_1_PI_F * cosp;
+			float common = 0.5f * M_1_PI_F * cosp;
 			float out = cosNI * (m_exponent + 2) * common;
 			*pdf = (m_exponent + 1) * common;
 			return bsdf_phong_ramp_get_color(sc, colors, cosp) * out;
@@ -100,7 +104,7 @@ __device int bsdf_phong_ramp_sample(const ShaderClosure *sc, const float3 colors
 		
 		float3 T, B;
 		make_orthonormals (R, &T, &B);
-		float phi = 2 * M_PI_F * randu;
+		float phi = M_2PI_F * randu;
 		float cosTheta = powf(randv, 1 / (m_exponent + 1));
 		float sinTheta2 = 1 - cosTheta * cosTheta;
 		float sinTheta = sinTheta2 > 0 ? sqrtf(sinTheta2) : 0;

@@ -1,3 +1,22 @@
+/*
+ * ***** BEGIN GPL LICENSE BLOCK *****
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ * ***** END GPL LICENSE BLOCK *****
+ */
 
 /** \file blender/blenkernel/intern/CCGSubSurf.c
  *  \ingroup bke
@@ -7,18 +26,21 @@
 #include <string.h>
 #include <math.h>
 
+#include "MEM_guardedalloc.h"
+#include "BLI_sys_types.h" // for intptr_t support
+
+#include "BLI_utildefines.h" /* for BLI_assert */
+
 #include "BKE_ccg.h"
 #include "CCGSubSurf.h"
 #include "BKE_subsurf.h"
 
-#include "MEM_guardedalloc.h"
-#include "BLO_sys_types.h" // for intptr_t support
-
-#include "BLI_utildefines.h" /* for BLI_assert */
-
 /* used for normalize_v3 in BLI_math_vector
  * float.h's FLT_EPSILON causes trouble with subsurf normals - campbell */
 #define EPSILON (1.0e-35f)
+
+/* With this limit a single triangle becomes over 3 million faces */
+#define CCGSUBSURF_LEVEL_MAX 11
 
 /***/
 
@@ -229,7 +251,7 @@ static CCGAllocatorIFC *_getStandardAllocatorIFC(void)
 int ccg_gridsize(int level)
 {
 	BLI_assert(level > 0);
-	BLI_assert(level <= 31);
+	BLI_assert(level <= CCGSUBSURF_LEVEL_MAX + 1);
 
 	return (1 << (level - 1)) + 1;
 }
@@ -245,7 +267,7 @@ int ccg_factor(int low_level, int high_level)
 static int ccg_edgesize(int level)
 {
 	BLI_assert(level > 0);
-	BLI_assert(level <= 30);
+	BLI_assert(level <= CCGSUBSURF_LEVEL_MAX + 1);
 	
 	return 1 + (1 << level);
 }
@@ -254,7 +276,7 @@ static int ccg_spacing(int high_level, int low_level)
 {
 	BLI_assert(high_level > 0 && low_level > 0);
 	BLI_assert(high_level >= low_level);
-	BLI_assert((high_level - low_level) <= 30);
+	BLI_assert((high_level - low_level) <= CCGSUBSURF_LEVEL_MAX);
 
 	return 1 << (high_level - low_level);
 }
@@ -262,7 +284,7 @@ static int ccg_spacing(int high_level, int low_level)
 static int ccg_edgebase(int level)
 {
 	BLI_assert(level > 0);
-	BLI_assert(level <= 30);
+	BLI_assert(level <= CCGSUBSURF_LEVEL_MAX + 1);
 
 	return level + (1 << level) - 1;
 }

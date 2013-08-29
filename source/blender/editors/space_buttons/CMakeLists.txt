@@ -23,7 +23,6 @@ set(INC
 	../../blenfont
 	../../blenkernel
 	../../blenlib
-	../../blenloader
 	../../makesdna
 	../../makesrna
 	../../windowmanager
@@ -36,7 +35,6 @@ set(INC_SYS
 
 set(SRC
 	buttons_context.c
-	buttons_header.c
 	buttons_ops.c
 	buttons_texture.c
 	space_buttons.c
@@ -46,6 +44,10 @@ set(SRC
 
 if(WITH_INTERNATIONAL)
 	add_definitions(-DWITH_INTERNATIONAL)
+endif()
+
+if(WITH_FREESTYLE)
+	add_definitions(-DWITH_FREESTYLE)
 endif()
 
 blender_add_lib(bf_editor_space_buttons "${SRC}" "${INC}" "${INC_SYS}")

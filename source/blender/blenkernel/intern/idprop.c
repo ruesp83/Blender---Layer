@@ -138,14 +138,20 @@ void IDP_ResizeIDPArray(IDProperty *prop, int newlen)
 
 	/*first check if the array buffer size has room*/
 	/*if newlen is 200 chars less then totallen, reallocate anyway*/
-	if (newlen <= prop->totallen && prop->totallen - newlen < 200) {
-		int i;
+	if (newlen <= prop->totallen) {
+		if (newlen < prop->len && prop->totallen - newlen < 200) {
+			int i;
 
-		for (i = newlen; i < prop->len; i++)
-			IDP_FreeProperty(GETPROP(prop, i));
+			for (i = newlen; i < prop->len; i++)
+				IDP_FreeProperty(GETPROP(prop, i));
 
-		prop->len = newlen;
-		return;
+			prop->len = newlen;
+			return;
+		}
+		else if (newlen >= prop->len) {
+			prop->len = newlen;
+			return;
+		}
 	}
 
 	/* - Note: This code comes from python, here's the corresponding comment. - */
@@ -439,6 +445,7 @@ void IDP_SyncGroupValues(IDProperty *dest, IDProperty *src)
 
 					IDP_FreeProperty(tmp);
 					MEM_freeN(tmp);
+					break;
 				}
 			}
 		}
@@ -703,9 +710,7 @@ int IDP_EqualsProperties_ex(IDProperty *prop1, IDProperty *prop2, const int is_s
 			if (prop1->len == prop2->len && prop1->subtype == prop2->subtype) {
 				return memcmp(IDP_Array(prop1), IDP_Array(prop2), idp_size_table[(int)prop1->subtype] * prop1->len);
 			}
-			else {
-				return 0;
-			}
+			return 0;
 		case IDP_GROUP:
 		{
 			IDProperty *link1, *link2;
@@ -807,9 +812,7 @@ IDProperty *IDP_New(const int type, const IDPropertyTemplate *val, const char *n
 				prop->len = prop->totallen = val->array.len;
 				break;
 			}
-			else {
-				return NULL;
-			}
+			return NULL;
 		}
 		case IDP_STRING:
 		{
@@ -905,5 +908,6 @@ void IDP_UnlinkProperty(IDProperty *prop)
 	switch (prop->type) {
 		case IDP_ID:
 			IDP_UnlinkID(prop);
+			break;
 	}
 }

@@ -106,15 +106,14 @@ bGPdata **gpencil_data_get_pointers(const bContext *C, PointerRNA *ptr)
 				
 				/* TODO: we can include other data-types such as bones later if need be... */
 
-				/* just in case no active object */
-				if (ob) {
+				/* just in case no active/selected object */
+				if (ob && (ob->flag & SELECT)) {
 					/* for now, as long as there's an object, default to using that in 3D-View */
 					if (ptr) RNA_id_pointer_create(&ob->id, ptr);
 					return &ob->gpd;
 				}
+				break;
 			}
-			break;
-			
 			case SPACE_NODE: /* Nodes Editor */
 			{
 				SpaceNode *snode = (SpaceNode *)CTX_wm_space_data(C);
@@ -125,13 +124,10 @@ bGPdata **gpencil_data_get_pointers(const bContext *C, PointerRNA *ptr)
 					if (ptr) RNA_id_pointer_create(&snode->nodetree->id, ptr);
 					return &snode->nodetree->gpd;
 				}
-				else {
-					/* even when there is no node-tree, don't allow this to flow to scene */
-					return NULL;
-				}
+
+				/* even when there is no node-tree, don't allow this to flow to scene */
+				return NULL;
 			}
-			break;
-				
 			case SPACE_SEQ: /* Sequencer */
 			{
 				SpaceSeq *sseq = (SpaceSeq *)CTX_wm_space_data(C);
@@ -141,8 +137,6 @@ bGPdata **gpencil_data_get_pointers(const bContext *C, PointerRNA *ptr)
 				if (ptr) RNA_pointer_create(screen_id, &RNA_SpaceSequenceEditor, sseq, ptr);
 				return &sseq->gpd;
 			}
-			break;
-			
 			case SPACE_IMAGE: /* Image/UV Editor */
 			{
 				SpaceImage *sima = (SpaceImage *)CTX_wm_space_data(C);
@@ -152,8 +146,6 @@ bGPdata **gpencil_data_get_pointers(const bContext *C, PointerRNA *ptr)
 				if (ptr) RNA_pointer_create(screen_id, &RNA_SpaceImageEditor, sima, ptr);
 				return &sima->gpd;
 			}
-			break;
-				
 			case SPACE_CLIP: /* Nodes Editor */
 			{
 				SpaceClip *sc = (SpaceClip *)CTX_wm_space_data(C);
@@ -178,9 +170,8 @@ bGPdata **gpencil_data_get_pointers(const bContext *C, PointerRNA *ptr)
 						return &clip->gpd;
 					}
 				}
+				break;
 			}
-			break;
-				
 			default: /* unsupported space */
 				return NULL;
 		}
@@ -201,7 +192,14 @@ bGPdata *gpencil_data_get_active(const bContext *C)
 /* needed for offscreen rendering */
 bGPdata *gpencil_data_get_active_v3d(Scene *scene)
 {
-	bGPdata *gpd = scene->basact ? scene->basact->object->gpd : NULL;
+	Base *base = scene->basact;
+	bGPdata *gpd = NULL;
+	/* We have to make sure active object is actually visible and selected, else we must use default scene gpd,
+	 * to be consistent with gpencil_data_get_active's behavior.
+	 */
+	if (base && (scene->lay & base->lay) && (base->object->flag & SELECT)) {
+		gpd = base->object->gpd;
+	}
 	return gpd ? gpd : scene->gpd;
 }
 
@@ -562,7 +560,7 @@ static void gp_timing_data_add_point(tGpTimingData *gtd, double stroke_inittime,
 #define MIN_TIME_DELTA 0.02f
 
 /* Loop over next points to find the end of the stroke, and compute */
-static int gp_find_end_of_stroke_idx(tGpTimingData *gtd, int idx, int nbr_gaps, int *nbr_done_gaps,
+static int gp_find_end_of_stroke_idx(tGpTimingData *gtd, RNG *rng, int idx, int nbr_gaps, int *nbr_done_gaps,
                                      float tot_gaps_time, float delta_time, float *next_delta_time)
 {
 	int j;
@@ -598,7 +596,7 @@ static int gp_find_end_of_stroke_idx(tGpTimingData *gtd, int idx, int nbr_gaps, 
 						/* Clamp max between [0.0, gap_randomness], with lower delta giving higher max */
 						max = gtd->gap_randomness - delta;
 						CLAMP(max, 0.0f, gtd->gap_randomness);
-						*next_delta_time += gtd->gap_duration + (BLI_frand() * (max - min)) + min;
+						*next_delta_time += gtd->gap_duration + (BLI_rng_get_float(rng) * (max - min)) + min;
 					}
 				}
 				else {
@@ -613,7 +611,7 @@ static int gp_find_end_of_stroke_idx(tGpTimingData *gtd, int idx, int nbr_gaps, 
 	return j - 1;
 }
 
-static void gp_stroke_path_animation_preprocess_gaps(tGpTimingData *gtd, int *nbr_gaps, float *tot_gaps_time)
+static void gp_stroke_path_animation_preprocess_gaps(tGpTimingData *gtd, RNG *rng, int *nbr_gaps, float *tot_gaps_time)
 {
 	int i;
 	float delta_time = 0.0f;
@@ -637,12 +635,12 @@ static void gp_stroke_path_animation_preprocess_gaps(tGpTimingData *gtd, int *nb
 		printf("%f, %f, %f, %d\n", gtd->tot_time, delta_time, *tot_gaps_time, *nbr_gaps);
 	}
 	if (gtd->gap_randomness > 0.0f) {
-		BLI_srandom(gtd->seed);
+		BLI_rng_srandom(rng, gtd->seed);
 	}
 }
 
 static void gp_stroke_path_animation_add_keyframes(ReportList *reports, PointerRNA ptr, PropertyRNA *prop, FCurve *fcu,
-                                                   Curve *cu, tGpTimingData *gtd, float time_range,
+                                                   Curve *cu, tGpTimingData *gtd, RNG *rng, float time_range,
                                                    int nbr_gaps, float tot_gaps_time)
 {
 	/* Use actual recorded timing! */
@@ -669,7 +667,7 @@ static void gp_stroke_path_animation_add_keyframes(ReportList *reports, PointerR
 			start_stroke_idx = i;
 			delta_time = next_delta_time;
 			/* find end of that new stroke */
-			end_stroke_idx = gp_find_end_of_stroke_idx(gtd, i, nbr_gaps, &nbr_done_gaps,
+			end_stroke_idx = gp_find_end_of_stroke_idx(gtd, rng, i, nbr_gaps, &nbr_done_gaps,
 			                                           tot_gaps_time, delta_time, &next_delta_time);
 			/* This one should *never* be negative! */
 			end_stroke_time = time_start + ((gtd->times[end_stroke_idx] + delta_time) / gtd->tot_time * time_range);
@@ -777,6 +775,7 @@ static void gp_stroke_path_animation(bContext *C, ReportList *reports, Curve *cu
 	}
 	else {
 		/* Use actual recorded timing! */
+		RNG *rng = BLI_rng_new(0);
 		float time_range;
 		
 		/* CustomGaps specific */
@@ -784,7 +783,7 @@ static void gp_stroke_path_animation(bContext *C, ReportList *reports, Curve *cu
 		
 		/* Pre-process gaps, in case we don't want to keep their original timing */
 		if (gtd->mode == GP_STROKECONVERT_TIMING_CUSTOMGAP) {
-			gp_stroke_path_animation_preprocess_gaps(gtd, &nbr_gaps, &tot_gaps_time);
+			gp_stroke_path_animation_preprocess_gaps(gtd, rng, &nbr_gaps, &tot_gaps_time);
 		}
 		
 		if (gtd->realtime) {
@@ -798,8 +797,11 @@ static void gp_stroke_path_animation(bContext *C, ReportList *reports, Curve *cu
 			printf("GP Stroke Path Conversion: Starting keying!\n");
 		}
 		
-		gp_stroke_path_animation_add_keyframes(reports, ptr, prop, fcu, cu, gtd, time_range,
+		gp_stroke_path_animation_add_keyframes(reports, ptr, prop, fcu, cu, gtd,
+		                                       rng, time_range,
 		                                       nbr_gaps, tot_gaps_time);
+
+		BLI_rng_free(rng);
 	}
 	
 	/* As we used INSERTKEY_FAST mode, we need to recompute all curve's handles now */
@@ -1256,12 +1258,18 @@ static void gp_stroke_finalize_curve_endpoints(Curve *cu)
 	}
 }
 
-static void gp_stroke_norm_curve_weights(Curve *cu, float minmax_weights[2])
+static void gp_stroke_norm_curve_weights(Curve *cu, const float minmax_weights[2])
 {
 	Nurb *nu;
 	const float delta = minmax_weights[0];
-	const float fac = 1.0f / (minmax_weights[1] - delta);
+	float fac;
 	int i;
+	
+	/* when delta == minmax_weights[0] == minmax_weights[1], we get div by zero [#35686] */
+	if (IS_EQF(delta, minmax_weights[1]))
+		fac = 1.0f;
+	else
+		fac = 1.0f / (minmax_weights[1] - delta);
 	
 	for (nu = cu->nurb.first; nu; nu = nu->next) {
 		if (nu->bezt) {
@@ -1357,12 +1365,14 @@ static void gp_layer_to_curve(bContext *C, ReportList *reports, bGPdata *gpd, bG
 	}
 
 	/* If link_strokes, be sure first and last points have a zero weight/size! */
-	if (link_strokes)
+	if (link_strokes) {
 		gp_stroke_finalize_curve_endpoints(cu);
-
+	}
+	
 	/* Update curve's weights, if needed */
-	if (norm_weights && ((minmax_weights[0] > 0.0f) || (minmax_weights[1] < 1.0f)))
+	if (norm_weights && ((minmax_weights[0] > 0.0f) || (minmax_weights[1] < 1.0f))) {
 		gp_stroke_norm_curve_weights(cu, minmax_weights);
+	}
 
 	/* Create the path animation, if needed */
 	gp_stroke_path_animation(C, reports, cu, gtd);

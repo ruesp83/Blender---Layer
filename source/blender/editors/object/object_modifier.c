@@ -70,7 +70,7 @@
 #include "BKE_ocean.h"
 #include "BKE_particle.h"
 #include "BKE_softbody.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -304,9 +304,6 @@ static int object_modifier_remove(Main *bmain, Object *ob, ModifierData *md,
 
 		*sort_depsgraph = 1;
 	}
-	else if (md->type == eModifierType_Smoke) {
-		ob->dt = OB_TEXTURE;
-	}
 	else if (md->type == eModifierType_Multires) {
 		/* Delete MDisps layer if not used by another multires modifier */
 		if (object_modifier_safe_to_delete(bmain, ob, md, eModifierType_Multires))
@@ -464,7 +461,7 @@ int ED_object_modifier_convert(ReportList *UNUSED(reports), Main *bmain, Scene *
 	if (totvert == 0) return 0;
 
 	/* add new mesh */
-	obn = BKE_object_add(scene, OB_MESH);
+	obn = BKE_object_add(bmain, scene, OB_MESH);
 	me = obn->data;
 	
 	me->totvert = totvert;
@@ -619,7 +616,7 @@ static int modifier_apply_obdata(ReportList *reports, Scene *scene, Object *ob, 
 				return 0;
 			}
 
-			DM_to_mesh(dm, me, ob);
+			DM_to_mesh(dm, me, ob, CD_MASK_MESH);
 
 			dm->release(dm);
 
@@ -640,9 +637,9 @@ static int modifier_apply_obdata(ReportList *reports, Scene *scene, Object *ob, 
 		cu = ob->data;
 		BKE_report(reports, RPT_INFO, "Applied modifier only changed CV points, not tessellated/bevel vertices");
 
-		vertexCos = BKE_curve_vertexCos_get(cu, &cu->nurb, &numVerts);
+		vertexCos = BKE_curve_nurbs_vertexCos_get(&cu->nurb, &numVerts);
 		mti->deformVerts(md, ob, NULL, vertexCos, numVerts, 0);
-		BK_curve_vertexCos_apply(cu, &cu->nurb, vertexCos);
+		BK_curve_nurbs_vertexCos_apply(&cu->nurb, vertexCos);
 
 		MEM_freeN(vertexCos);
 
@@ -876,9 +873,9 @@ static int modifier_remove_exec(bContext *C, wmOperator *op)
 	Scene *scene = CTX_data_scene(C);
 	Object *ob = ED_object_active_context(C);
 	ModifierData *md = edit_modifier_property_get(op, ob, 0);
-	int mode_orig = ob ? ob->mode : 0;
+	int mode_orig = ob->mode;
 	
-	if (!ob || !md || !ED_object_modifier_remove(op->reports, bmain, ob, md))
+	if (!md || !ED_object_modifier_remove(op->reports, bmain, ob, md))
 		return OPERATOR_CANCELLED;
 
 	WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
@@ -922,7 +919,7 @@ static int modifier_move_up_exec(bContext *C, wmOperator *op)
 	Object *ob = ED_object_active_context(C);
 	ModifierData *md = edit_modifier_property_get(op, ob, 0);
 
-	if (!ob || !md || !ED_object_modifier_move_up(op->reports, ob, md))
+	if (!md || !ED_object_modifier_move_up(op->reports, ob, md))
 		return OPERATOR_CANCELLED;
 
 	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
@@ -961,7 +958,7 @@ static int modifier_move_down_exec(bContext *C, wmOperator *op)
 	Object *ob = ED_object_active_context(C);
 	ModifierData *md = edit_modifier_property_get(op, ob, 0);
 
-	if (!ob || !md || !ED_object_modifier_move_down(op->reports, ob, md))
+	if (!md || !ED_object_modifier_move_down(op->reports, ob, md))
 		return OPERATOR_CANCELLED;
 
 	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
@@ -1002,7 +999,7 @@ static int modifier_apply_exec(bContext *C, wmOperator *op)
 	ModifierData *md = edit_modifier_property_get(op, ob, 0);
 	int apply_as = RNA_enum_get(op->ptr, "apply_as");
 
-	if (!ob || !md || !ED_object_modifier_apply(op->reports, scene, ob, md, apply_as)) {
+	if (!md || !ED_object_modifier_apply(op->reports, scene, ob, md, apply_as)) {
 		return OPERATOR_CANCELLED;
 	}
 
@@ -1052,7 +1049,7 @@ static int modifier_convert_exec(bContext *C, wmOperator *op)
 	Object *ob = ED_object_active_context(C);
 	ModifierData *md = edit_modifier_property_get(op, ob, 0);
 	
-	if (!ob || !md || !ED_object_modifier_convert(op->reports, bmain, scene, ob, md))
+	if (!md || !ED_object_modifier_convert(op->reports, bmain, scene, ob, md))
 		return OPERATOR_CANCELLED;
 
 	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
@@ -1091,7 +1088,7 @@ static int modifier_copy_exec(bContext *C, wmOperator *op)
 	Object *ob = ED_object_active_context(C);
 	ModifierData *md = edit_modifier_property_get(op, ob, 0);
 
-	if (!ob || !md || !ED_object_modifier_copy(op->reports, ob, md))
+	if (!md || !ED_object_modifier_copy(op->reports, ob, md))
 		return OPERATOR_CANCELLED;
 
 	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
@@ -1518,7 +1515,7 @@ static void skin_root_clear(BMesh *bm, BMVert *bm_vert, GHash *visited)
 static int skin_root_mark_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Object *ob = CTX_data_edit_object(C);
-	BMEditMesh *em = BMEdit_FromObject(ob);
+	BMEditMesh *em = BKE_editmesh_from_object(ob);
 	BMesh *bm = em->bm;
 	BMVert *bm_vert;
 	BMIter bm_iter;
@@ -1530,7 +1527,7 @@ static int skin_root_mark_exec(bContext *C, wmOperator *UNUSED(op))
 
 	BM_ITER_MESH (bm_vert, &bm_iter, bm, BM_VERTS_OF_MESH) {
 		if (!BLI_ghash_lookup(visited, bm_vert) &&
-		    bm_vert->head.hflag & BM_ELEM_SELECT)
+		    BM_elem_flag_test(bm_vert, BM_ELEM_SELECT))
 		{
 			MVertSkin *vs = CustomData_bmesh_get(&bm->vdata,
 			                                     bm_vert->head.data,
@@ -1574,7 +1571,7 @@ typedef enum {
 static int skin_loose_mark_clear_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = CTX_data_edit_object(C);
-	BMEditMesh *em = BMEdit_FromObject(ob);
+	BMEditMesh *em = BKE_editmesh_from_object(ob);
 	BMesh *bm = em->bm;
 	BMVert *bm_vert;
 	BMIter bm_iter;
@@ -1585,7 +1582,7 @@ static int skin_loose_mark_clear_exec(bContext *C, wmOperator *op)
 	}
 
 	BM_ITER_MESH (bm_vert, &bm_iter, bm, BM_VERTS_OF_MESH) {
-		if (bm_vert->head.hflag & BM_ELEM_SELECT) {
+		if (BM_elem_flag_test(bm_vert, BM_ELEM_SELECT)) {
 			MVertSkin *vs = CustomData_bmesh_get(&bm->vdata,
 			                                     bm_vert->head.data,
 			                                     CD_MVERT_SKIN);
@@ -1632,7 +1629,7 @@ void OBJECT_OT_skin_loose_mark_clear(wmOperatorType *ot)
 static int skin_radii_equalize_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Object *ob = CTX_data_edit_object(C);
-	BMEditMesh *em = BMEdit_FromObject(ob);
+	BMEditMesh *em = BKE_editmesh_from_object(ob);
 	BMesh *bm = em->bm;
 	BMVert *bm_vert;
 	BMIter bm_iter;
@@ -1642,7 +1639,7 @@ static int skin_radii_equalize_exec(bContext *C, wmOperator *UNUSED(op))
 	}
 
 	BM_ITER_MESH (bm_vert, &bm_iter, bm, BM_VERTS_OF_MESH) {
-		if (bm_vert->head.hflag & BM_ELEM_SELECT) {
+		if (BM_elem_flag_test(bm_vert, BM_ELEM_SELECT)) {
 			MVertSkin *vs = CustomData_bmesh_get(&bm->vdata,
 			                                     bm_vert->head.data,
 			                                     CD_MVERT_SKIN);
@@ -1674,7 +1671,7 @@ void OBJECT_OT_skin_radii_equalize(wmOperatorType *ot)
 static void skin_armature_bone_create(Object *skin_ob,
                                       MVert *mvert, MEdge *medge,
                                       bArmature *arm,
-                                      BLI_bitmap edges_visited,
+                                      BLI_bitmap *edges_visited,
                                       const MeshElemMap *emap,
                                       EditBone *parent_bone,
                                       int parent_v)
@@ -1721,10 +1718,9 @@ static void skin_armature_bone_create(Object *skin_ob,
 	}
 }
 
-static Object *modifier_skin_armature_create(struct Scene *scene,
-                                             Object *skin_ob)
+static Object *modifier_skin_armature_create(Main *bmain, Scene *scene, Object *skin_ob)
 {
-	BLI_bitmap edges_visited;
+	BLI_bitmap *edges_visited;
 	DerivedMesh *deform_dm;
 	MVert *mvert;
 	Mesh *me = skin_ob->data;
@@ -1745,7 +1741,7 @@ static Object *modifier_skin_armature_create(struct Scene *scene,
 	                     NULL,
 	                     me->totvert);
 	
-	arm_ob = BKE_object_add(scene, OB_ARMATURE);
+	arm_ob = BKE_object_add(bmain, scene, OB_ARMATURE);
 	BKE_object_transform_copy(arm_ob, skin_ob);
 	arm = arm_ob->data;
 	arm->layer = 1;
@@ -1815,7 +1811,7 @@ static int skin_armature_create_exec(bContext *C, wmOperator *op)
 	}
 
 	/* create new armature */
-	arm_ob = modifier_skin_armature_create(scene, ob);
+	arm_ob = modifier_skin_armature_create(bmain, scene, ob);
 
 	/* add a modifier to connect the new armature to the mesh */
 	arm_md = (ArmatureModifierData *)modifier_new(eModifierType_Armature);

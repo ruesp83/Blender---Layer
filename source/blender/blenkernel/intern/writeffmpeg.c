@@ -90,6 +90,10 @@ static int video_buffersize = 0;
 static uint8_t *audio_input_buffer = 0;
 static uint8_t *audio_deinterleave_buffer = 0;
 static int audio_input_samples = 0;
+#ifndef FFMPEG_HAVE_ENCODE_AUDIO2
+static uint8_t *audio_output_buffer = 0;
+static int audio_outbuf_size = 0;
+#endif
 static double audio_time = 0.0f;
 static bool audio_deinterleave = false;
 static int audio_sample_size = 0;
@@ -123,7 +127,7 @@ static int write_audio_frame(void)
 {
 	AVCodecContext *c = NULL;
 	AVPacket pkt;
-	AVFrame *frame;
+	AVFrame *frame = NULL;
 	int got_output = 0;
 
 	c = audio_stream->codec;
@@ -132,15 +136,16 @@ static int write_audio_frame(void)
 	pkt.size = 0;
 	pkt.data = NULL;
 
+	AUD_readDevice(audio_mixdown_device, audio_input_buffer, audio_input_samples);
+	audio_time += (double) audio_input_samples / (double) c->sample_rate;
+
+#ifdef FFMPEG_HAVE_ENCODE_AUDIO2
 	frame = avcodec_alloc_frame();
 	frame->nb_samples = audio_input_samples;
 	frame->format = c->sample_fmt;
 #ifdef FFMPEG_HAVE_FRAME_CHANNEL_LAYOUT
 	frame->channel_layout = c->channel_layout;
 #endif
-
-	AUD_readDevice(audio_mixdown_device, audio_input_buffer, audio_input_samples);
-	audio_time += (double) audio_input_samples / (double) c->sample_rate;
 
 	if (audio_deinterleave) {
 		int channel, i;
@@ -159,12 +164,28 @@ static int write_audio_frame(void)
 	}
 
 	avcodec_fill_audio_frame(frame, c->channels, c->sample_fmt, audio_input_buffer,
-	                         audio_input_samples * c->channels * audio_sample_size, 0);
+	                         audio_input_samples * c->channels * audio_sample_size, 1);
 
 	if (avcodec_encode_audio2(c, &pkt, frame, &got_output) < 0) {
 		// XXX error("Error writing audio packet");
 		return -1;
 	}
+
+	if (!got_output) {
+		avcodec_free_frame(&frame);
+		return 0;
+	}
+#else
+	pkt.size = avcodec_encode_audio(c, audio_output_buffer, audio_outbuf_size, (short *) audio_input_buffer);
+
+	if (pkt.size < 0) {
+		// XXX error("Error writing audio packet");
+		return -1;
+	}
+
+	pkt.data = audio_output_buffer;
+	got_output = 1;
+#endif
 
 	if (got_output) {
 		if (c->coded_frame && c->coded_frame->pts != AV_NOPTS_VALUE) {
@@ -178,13 +199,16 @@ static int write_audio_frame(void)
 
 		if (av_interleaved_write_frame(outfile, &pkt) != 0) {
 			fprintf(stderr, "Error writing audio packet!\n");
+			if (frame)
+				avcodec_free_frame(&frame);
 			return -1;
 		}
 
 		av_free_packet(&pkt);
 	}
 
-	avcodec_free_frame(&frame);
+	if (frame)
+		avcodec_free_frame(&frame);
 
 	return 0;
 }
@@ -718,13 +742,21 @@ static AVStream *alloc_audio_stream(RenderData *rd, int codec_id, AVFormatContex
 	st->codec->time_base.num = 1;
 	st->codec->time_base.den = st->codec->sample_rate;
 
+#ifndef FFMPEG_HAVE_ENCODE_AUDIO2
+	audio_outbuf_size = FF_MIN_BUFFER_SIZE;
+#endif
+
 	if (c->frame_size == 0)
-		// used to be if((c->codec_id >= CODEC_ID_PCM_S16LE) && (c->codec_id <= CODEC_ID_PCM_DVD))
+		// used to be if ((c->codec_id >= CODEC_ID_PCM_S16LE) && (c->codec_id <= CODEC_ID_PCM_DVD))
 		// not sure if that is needed anymore, so let's try out if there are any
 		// complaints regarding some ffmpeg versions users might have
 		audio_input_samples = FF_MIN_BUFFER_SIZE * 8 / c->bits_per_coded_sample / c->channels;
 	else {
 		audio_input_samples = c->frame_size;
+#ifndef FFMPEG_HAVE_ENCODE_AUDIO2
+		if (c->frame_size * c->channels * sizeof(int16_t) * 4 > audio_outbuf_size)
+			audio_outbuf_size = c->frame_size * c->channels * sizeof(int16_t) * 4;
+#endif
 	}
 
 	audio_deinterleave = av_sample_fmt_is_planar(c->sample_fmt);
@@ -732,6 +764,9 @@ static AVStream *alloc_audio_stream(RenderData *rd, int codec_id, AVFormatContex
 	audio_sample_size = av_get_bytes_per_sample(c->sample_fmt);
 
 	audio_input_buffer = (uint8_t *) av_malloc(audio_input_samples * c->channels * audio_sample_size);
+#ifndef FFMPEG_HAVE_ENCODE_AUDIO2
+	audio_output_buffer = (uint8_t *) av_malloc(audio_outbuf_size);
+#endif
 
 	if (audio_deinterleave)
 		audio_deinterleave_buffer = (uint8_t *) av_malloc(audio_input_samples * c->channels * audio_sample_size);
@@ -842,6 +877,7 @@ static int start_ffmpeg_impl(struct RenderData *rd, int rectx, int recty, Report
 			break;
 		case FFMPEG_MP3:
 			fmt->audio_codec = CODEC_ID_MP3;
+			/* fall-through */
 		case FFMPEG_WAV:
 			fmt->video_codec = CODEC_ID_NONE;
 			break;
@@ -1037,23 +1073,23 @@ int BKE_ffmpeg_start(struct Scene *scene, RenderData *rd, int rectx, int recty, 
 		specs.channels = c->channels;
 
 		switch (av_get_packed_sample_fmt(c->sample_fmt)) {
-		case AV_SAMPLE_FMT_U8:
-			specs.format = AUD_FORMAT_U8;
-			break;
-		case AV_SAMPLE_FMT_S16:
-			specs.format = AUD_FORMAT_S16;
-			break;
-		case AV_SAMPLE_FMT_S32:
-			specs.format = AUD_FORMAT_S32;
-			break;
-		case AV_SAMPLE_FMT_FLT:
-			specs.format = AUD_FORMAT_FLOAT32;
-			break;
-		case AV_SAMPLE_FMT_DBL:
-			specs.format = AUD_FORMAT_FLOAT64;
-			break;
-		default:
-			return -31415;
+			case AV_SAMPLE_FMT_U8:
+				specs.format = AUD_FORMAT_U8;
+				break;
+			case AV_SAMPLE_FMT_S16:
+				specs.format = AUD_FORMAT_S16;
+				break;
+			case AV_SAMPLE_FMT_S32:
+				specs.format = AUD_FORMAT_S32;
+				break;
+			case AV_SAMPLE_FMT_FLT:
+				specs.format = AUD_FORMAT_FLOAT32;
+				break;
+			case AV_SAMPLE_FMT_DBL:
+				specs.format = AUD_FORMAT_FLOAT64;
+				break;
+			default:
+				return -31415;
 		}
 
 		specs.rate = rd->ffcodecdata.audio_mixrate;
@@ -1182,6 +1218,12 @@ static void end_ffmpeg_impl(int is_autosplit)
 		av_free(audio_input_buffer);
 		audio_input_buffer = 0;
 	}
+#ifndef FFMPEG_HAVE_ENCODE_AUDIO2
+	if (audio_output_buffer) {
+		av_free(audio_output_buffer);
+		audio_output_buffer = 0;
+	}
+#endif
 
 	if (audio_deinterleave_buffer) {
 		av_free(audio_deinterleave_buffer);

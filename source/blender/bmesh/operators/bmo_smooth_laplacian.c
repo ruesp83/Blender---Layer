@@ -220,7 +220,7 @@ static void init_laplacian_matrix(LaplacianSystem *sys)
 			v1 = vf[0]->co;
 			v2 = vf[1]->co;
 			v3 = vf[2]->co;
-			v4 = has_4_vert ? vf[3]->co : 0;
+			v4 = has_4_vert ? vf[3]->co : NULL;
 
 			if (has_4_vert) {
 				areaf = area_quad_v3(v1, v2, v3, v4);
@@ -464,7 +464,7 @@ static void validate_solution(LaplacianSystem *sys, int usex, int usey, int usez
 	}
 
 	if (preserve_volume) {
-		vini = BM_mesh_calc_volume(sys->bm);
+		vini = BM_mesh_calc_volume(sys->bm, false);
 	}
 	BMO_ITER (v, &siter, sys->op->slots_in, "verts", BM_VERT) {
 		m_vertex_id = BM_elem_index_get(v);
@@ -481,7 +481,7 @@ static void validate_solution(LaplacianSystem *sys, int usex, int usey, int usez
 		}
 	}
 	if (preserve_volume) {
-		vend = BM_mesh_calc_volume(sys->bm);
+		vend = BM_mesh_calc_volume(sys->bm, false);
 		volume_preservation(sys->op, vini, vend, usex, usey, usez);
 	}
 

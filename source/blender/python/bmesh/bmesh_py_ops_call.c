@@ -507,6 +507,7 @@ static int bpy_slot_from_py(BMesh *bm, BMOperator *bmop, BMOpSlot *slot, PyObjec
 					return -1;
 				}
 			}
+			/* fall-through */
 		}
 		default:
 			/* TODO --- many others */
@@ -700,8 +701,7 @@ PyObject *BPy_BMO_call(BPy_BMeshOpFunc *self, PyObject *args, PyObject *kw)
 	}
 	else {
 		PyErr_SetString(PyExc_TypeError,
-		                "calling a bmesh operator expects a single BMesh (non keyword) "
-		                "as the first argument");
+		                "bmesh operators expect a single BMesh positional argument, all other args must be keywords");
 		return NULL;
 	}
 

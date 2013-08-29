@@ -191,20 +191,23 @@ static void rna_Bone_select_update(Main *UNUSED(bmain), Scene *UNUSED(scene), Po
 
 static char *rna_Bone_path(PointerRNA *ptr)
 {
+	ID *id = ptr->id.data;
 	Bone *bone = (Bone *)ptr->data;
+	char name_esc[sizeof(bone->name) * 2];
 	
+	BLI_strescape(name_esc, bone->name, sizeof(name_esc));
+
 	/* special exception for trying to get the path where ID-block is Object
-	 *	- this will be assumed to be from a Pose Bone...
+	 * - this will be assumed to be from a Pose Bone...
 	 */
-	if (ptr->id.data) {
-		ID *id = (ID *)ptr->id.data;
-		
-		if (GS(id->name) == ID_OB)
-			return BLI_sprintfN("pose.bones[\"%s\"].bone", bone->name);
+	if (id) {
+		if (GS(id->name) == ID_OB) {
+			return BLI_sprintfN("pose.bones[\"%s\"].bone", name_esc);
+		}
 	}
 	
 	/* from armature... */
-	return BLI_sprintfN("bones[\"%s\"]", bone->name);
+	return BLI_sprintfN("bones[\"%s\"]", name_esc);
 }
 
 static IDProperty *rna_Bone_idprops(PointerRNA *ptr, bool create)
@@ -395,16 +398,7 @@ static void rna_EditBone_parent_set(PointerRNA *ptr, PointerRNA value)
 static void rna_EditBone_matrix_get(PointerRNA *ptr, float *values)
 {
 	EditBone *ebone = (EditBone *)(ptr->data);
-
-	float delta[3], tmat[3][3], mat[4][4];
-
-	/* Find the current bone matrix */
-	sub_v3_v3v3(delta, ebone->tail, ebone->head);
-	vec_roll_to_mat3(delta, ebone->roll, tmat);
-	copy_m4_m3(mat, tmat);
-	copy_v3_v3(mat[3], ebone->head);
-
-	memcpy(values, mat, 16 * sizeof(float));
+	ED_armature_ebone_to_mat4(ebone, (float(*)[4])values);
 }
 
 static void rna_Armature_editbone_transform_update(Main *bmain, Scene *scene, PointerRNA *ptr)
@@ -467,6 +461,12 @@ static void rna_Armature_bones_next(CollectionPropertyIterator *iter)
 	}
 
 	iter->valid = (internal->link != NULL);
+}
+
+static int rna_Armature_is_editmode_get(PointerRNA *ptr)
+{
+	bArmature *arm = (bArmature *)ptr->id.data;
+	return (arm->edbo != NULL);
 }
 
 #else
@@ -1068,6 +1068,12 @@ static void rna_def_armature(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_Armature_redraw_data");
 	RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
 /* XXX deprecated ....... old animviz for armatures only */
+
+
+	prop = RNA_def_property(srna, "is_editmode", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_funcs(prop, "rna_Armature_is_editmode_get", NULL);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Is Editmode", "True when used in editmode");
 }
 
 void RNA_def_armature(BlenderRNA *brna)

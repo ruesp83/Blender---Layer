@@ -41,6 +41,12 @@
 
 #include "BLI_string_utf8.h"  /* own include */
 
+#ifdef __GNUC__
+#  pragma GCC diagnostic error "-Wsign-conversion"
+#endif
+
+// #define DEBUG_STRSIZE
+
 /* from libswish3, originally called u8_isvalid(),
  * modified to return the index of the bad character (byte index not utf).
  * http://svn.swish-e.org/libswish3/trunk/src/libswish3/utf8.c r3044 - campbell */
@@ -143,7 +149,7 @@ int BLI_utf8_invalid_strip(char *str, int length)
 		}
 		else {
 			/* strip, keep looking */
-			memmove(str, str + 1, length);
+			memmove(str, str + 1, (size_t)length);
 			tot++;
 		}
 	}
@@ -191,6 +197,10 @@ char *BLI_strncpy_utf8(char *__restrict dst, const char *__restrict src, size_t 
 
 	BLI_assert(maxncpy != 0);
 
+#ifdef DEBUG_STRSIZE
+	memset(dst, 0xff, sizeof(*dst) * maxncpy);
+#endif
+
 	/* note: currently we don't attempt to deal with invalid utf8 chars */
 	BLI_STR_UTF8_CPY(dst, src, maxncpy);
 
@@ -204,6 +214,10 @@ char *BLI_strncat_utf8(char *__restrict dst, const char *__restrict src, size_t 
 		maxncpy--;
 	}
 
+#ifdef DEBUG_STRSIZE
+	memset(dst, 0xff, sizeof(*dst) * maxncpy);
+#endif
+
 	BLI_STR_UTF8_CPY(dst, src, maxncpy);
 
 	return dst;
@@ -216,12 +230,17 @@ char *BLI_strncat_utf8(char *__restrict dst, const char *__restrict src, size_t 
 
 size_t BLI_strncpy_wchar_as_utf8(char *__restrict dst, const wchar_t *__restrict src, const size_t maxncpy)
 {
+	const size_t maxlen = maxncpy - 1;
 	size_t len = 0;
 
 	BLI_assert(maxncpy != 0);
 
-	while (*src && len < maxncpy) { /* XXX can still run over the buffer because utf8 size isn't known :| */
-		len += BLI_str_utf8_from_unicode(*src++, dst + len);
+#ifdef DEBUG_STRSIZE
+	memset(dst, 0xff, sizeof(*dst) * maxncpy);
+#endif
+
+	while (*src && len < maxlen) { /* XXX can still run over the buffer because utf8 size isn't known :| */
+		len += BLI_str_utf8_from_unicode((unsigned int)*src++, dst + len);
 	}
 
 	dst[len] = '\0';
@@ -235,39 +254,45 @@ size_t BLI_wstrlen_utf8(const wchar_t *src)
 	size_t len = 0;
 
 	while (*src) {
-		len += BLI_str_utf8_from_unicode(*src++, NULL);
+		len += BLI_str_utf8_from_unicode((unsigned int)*src++, NULL);
 	}
 
 	return len;
 }
 
-/* this is very close to 'BLI_str_utf8_size' functionality, perhaps we should de-duplicate */
-/* size of UTF-8 character in bytes */
-static size_t strlen_utf8_char(const char *strc)
+size_t BLI_strlen_utf8_ex(const char *strc, size_t *r_len_bytes)
 {
-	if ((*strc & 0xe0) == 0xc0) {
-		if ((strc[1] & 0x80) && (strc[1] & 0x40) == 0x00)
-			return 2;
-	}
-	else if ((*strc & 0xf0) == 0xe0) {
-		if ((strc[1] & strc[2] & 0x80) && ((strc[1] | strc[2]) & 0x40) == 0x00)
-			return 3;
-	}
-	else if ((*strc & 0xf8) == 0xf0) {
-		if ((strc[1] & strc[2] & strc[3] & 0x80) && ((strc[1] | strc[2] | strc[3]) & 0x40) == 0x00)
-			return 4;
-	}
+	size_t len;
+	const char *strc_orig = strc;
 
-	return 1;
+	for (len = 0; *strc; len++)
+		strc += BLI_str_utf8_size_safe(strc);
+
+	*r_len_bytes = (size_t)(strc - strc_orig);
+	return len;
 }
 
 size_t BLI_strlen_utf8(const char *strc)
 {
-	int len;
+	size_t len;
 
 	for (len = 0; *strc; len++)
-		strc += strlen_utf8_char(strc);
+		strc += BLI_str_utf8_size_safe(strc);
 
+	return len;
+}
+
+size_t BLI_strnlen_utf8_ex(const char *strc, const size_t maxlen, size_t *r_len_bytes)
+{
+	size_t len;
+	const char *strc_orig = strc;
+	const char *strc_end = strc + maxlen;
+
+	for (len = 0; *strc && strc < strc_end; len++) {
+		strc += BLI_str_utf8_size_safe(strc);
+	}
+
+	*r_len_bytes = (size_t)(strc - strc_orig);
 	return len;
 }
 
@@ -276,15 +301,13 @@ size_t BLI_strlen_utf8(const char *strc)
  * \param maxlen the string length (in bytes)
  * \return the unicode length (not in bytes!)
  */
-size_t BLI_strnlen_utf8(const char *start, const size_t maxlen)
+size_t BLI_strnlen_utf8(const char *strc, const size_t maxlen)
 {
-	const char *strc = start;
-	const char *strc_end = start + maxlen;
-
 	size_t len;
+	const char *strc_end = strc + maxlen;
 
 	for (len = 0; *strc && strc < strc_end; len++) {
-		strc += strlen_utf8_char(strc);
+		strc += BLI_str_utf8_size_safe(strc);
 	}
 
 	return len;
@@ -292,13 +315,16 @@ size_t BLI_strnlen_utf8(const char *start, const size_t maxlen)
 
 size_t BLI_strncpy_wchar_from_utf8(wchar_t *__restrict dst_w, const char *__restrict src_c, const size_t maxncpy)
 {
-	int len = 0;
+	const size_t maxlen = maxncpy - 1;
+	size_t len = 0;
 
-	if (dst_w == NULL || src_c == NULL) {
-		return 0;
-	}
+	BLI_assert(maxncpy != 0);
 
-	while (*src_c && len < maxncpy) {
+#ifdef DEBUG_STRSIZE
+	memset(dst_w, 0xff, sizeof(*dst_w) * maxncpy);
+#endif
+
+	while (*src_c && len != maxlen) {
 		size_t step = 0;
 		unsigned int unicode = BLI_str_utf8_as_unicode_and_size(src_c, &step);
 		if (unicode != BLI_UTF8_ERR) {
@@ -312,6 +338,9 @@ size_t BLI_strncpy_wchar_from_utf8(wchar_t *__restrict dst_w, const char *__rest
 		dst_w++;
 		len++;
 	}
+
+	*dst_w = 0;
+
 	return len;
 }
 
@@ -443,7 +472,8 @@ int BLI_str_utf8_size_safe(const char *p)
  **/
 unsigned int BLI_str_utf8_as_unicode(const char *p)
 {
-	int i, mask = 0, len;
+	int i, len;
+	unsigned int mask = 0;
 	unsigned int result;
 	const unsigned char c = (unsigned char) *p;
 
@@ -458,7 +488,8 @@ unsigned int BLI_str_utf8_as_unicode(const char *p)
 /* variant that increments the length */
 unsigned int BLI_str_utf8_as_unicode_and_size(const char *__restrict p, size_t *__restrict index)
 {
-	int i, mask = 0, len;
+	int i, len;
+	unsigned mask = 0;
 	unsigned int result;
 	const unsigned char c = (unsigned char) *p;
 
@@ -466,13 +497,14 @@ unsigned int BLI_str_utf8_as_unicode_and_size(const char *__restrict p, size_t *
 	if (UNLIKELY(len == -1))
 		return BLI_UTF8_ERR;
 	UTF8_GET (result, p, i, mask, len, BLI_UTF8_ERR);
-	*index += len;
+	*index += (size_t)len;
 	return result;
 }
 
 unsigned int BLI_str_utf8_as_unicode_and_size_safe(const char *__restrict p, size_t *__restrict index)
 {
-	int i, mask = 0, len;
+	int i, len;
+	unsigned int mask = 0;
 	unsigned int result;
 	const unsigned char c = (unsigned char) *p;
 
@@ -482,7 +514,7 @@ unsigned int BLI_str_utf8_as_unicode_and_size_safe(const char *__restrict p, siz
 		return c;
 	}
 	UTF8_GET (result, p, i, mask, len, BLI_UTF8_ERR);
-	*index += len;
+	*index += (size_t)len;
 	return result;
 }
 
@@ -490,7 +522,8 @@ unsigned int BLI_str_utf8_as_unicode_and_size_safe(const char *__restrict p, siz
  * note, currently this also falls back to latin1 for text drawing. */
 unsigned int BLI_str_utf8_as_unicode_step(const char *__restrict p, size_t *__restrict index)
 {
-	int i, mask = 0, len;
+	int i, len;
+	unsigned int mask = 0;
 	unsigned int result;
 	unsigned char c;
 
@@ -527,7 +560,7 @@ unsigned int BLI_str_utf8_as_unicode_step(const char *__restrict p, size_t *__re
 	UTF8_GET (result, p, i, mask, len, '?');
 #endif
 
-	*index += len;
+	*index += (size_t)len;
 	return result;
 }
 
@@ -547,8 +580,8 @@ size_t BLI_str_utf8_from_unicode(unsigned int c, char *outbuf)
 {
 	/* If this gets modified, also update the copy in g_string_insert_unichar() */
 	unsigned int len = 0;
-	int first;
-	int i;
+	unsigned int first;
+	unsigned int i;
 
 	if (c < 0x80) {
 		first = 0;

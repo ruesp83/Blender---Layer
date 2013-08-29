@@ -97,7 +97,7 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 	return dataMask;
 }
 
-static int dependsOnTime(ModifierData *md)
+static bool dependsOnTime(ModifierData *md)
 {
 	WarpModifierData *wmd = (WarpModifierData *)md;
 
@@ -105,7 +105,7 @@ static int dependsOnTime(ModifierData *md)
 		return BKE_texture_dependsOnTime(wmd->texture);
 	}
 	else {
-		return 0;
+		return false;
 	}
 }
 
@@ -116,7 +116,7 @@ static void freeData(ModifierData *md)
 }
 
 
-static int isDisabled(ModifierData *md, int UNUSED(userRenderParams))
+static bool isDisabled(ModifierData *md, int UNUSED(userRenderParams))
 {
 	WarpModifierData *wmd = (WarpModifierData *) md;
 
@@ -201,11 +201,11 @@ static void warpModifier_do(WarpModifierData *wmd, Object *ob,
 
 	invert_m4_m4(obinv, ob->obmat);
 
-	mult_m4_m4m4(mat_from, obinv, wmd->object_from->obmat);
-	mult_m4_m4m4(mat_to, obinv, wmd->object_to->obmat);
+	mul_m4_m4m4(mat_from, obinv, wmd->object_from->obmat);
+	mul_m4_m4m4(mat_to, obinv, wmd->object_to->obmat);
 
 	invert_m4_m4(tmat, mat_from); // swap?
-	mult_m4_m4m4(mat_final, tmat, mat_to);
+	mul_m4_m4m4(mat_final, tmat, mat_to);
 
 	invert_m4_m4(mat_from_inv, mat_from);
 
@@ -282,7 +282,7 @@ static void warpModifier_do(WarpModifierData *wmd, Object *ob,
 			if (tex_co) {
 				TexResult texres;
 				texres.nor = NULL;
-				get_texture_value(wmd->texture, tex_co[i], &texres);
+				get_texture_value(wmd->modifier.scene, wmd->texture, tex_co[i], &texres, false);
 				fac *= texres.tin;
 			}
 
@@ -327,7 +327,7 @@ static void deformVerts(ModifierData *md, Object *ob, DerivedMesh *derivedData,
 	int use_dm = warp_needs_dm((WarpModifierData *)md);
 
 	if (use_dm) {
-		dm = get_cddm(ob, NULL, derivedData, vertexCos);
+		dm = get_cddm(ob, NULL, derivedData, vertexCos, false);
 	}
 
 	warpModifier_do((WarpModifierData *)md, ob, dm, vertexCos, numVerts);
@@ -368,8 +368,8 @@ ModifierTypeInfo modifierType_Warp = {
 	/* deformMatrices */    NULL,
 	/* deformVertsEM */     deformVertsEM,
 	/* deformMatricesEM */  NULL,
-	/* applyModifier */     0,
-	/* applyModifierEM */   0,
+	/* applyModifier */     NULL,
+	/* applyModifierEM */   NULL,
 	/* initData */          initData,
 	/* requiredDataMask */  requiredDataMask,
 	/* freeData */          freeData,

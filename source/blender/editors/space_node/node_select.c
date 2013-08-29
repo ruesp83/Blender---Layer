@@ -293,6 +293,7 @@ void node_select_single(bContext *C, bNode *node)
 	nodeSetSelected(node, TRUE);
 	
 	ED_node_set_active(bmain, snode->edittree, node);
+	ED_node_set_active_viewer_key(snode);
 	
 	ED_node_sort(snode->edittree);
 	
@@ -374,8 +375,10 @@ static int node_mouse_select(Main *bmain, SpaceNode *snode, ARegion *ar, const i
 	}
 	
 	/* update node order */
-	if (selected)
+	if (selected) {
+		ED_node_set_active_viewer_key(snode);
 		ED_node_sort(snode->edittree);
+	}
 	
 	return selected;
 }
@@ -426,6 +429,7 @@ void NODE_OT_select(wmOperatorType *ot)
 	
 	/* api callbacks */
 	ot->invoke = node_select_invoke;
+	ot->exec = node_select_exec;
 	ot->poll = ED_operator_node_active;
 	
 	/* flags */
@@ -875,7 +879,7 @@ static void node_find_cb(const struct bContext *C, void *UNUSED(arg), const char
 				BLI_snprintf(name, 256, "%s (%s)", node->name, node->label);
 			else
 				BLI_strncpy(name, node->name, 256);
-			if (0 == uiSearchItemAdd(items, name, node, 0))
+			if (false == uiSearchItemAdd(items, name, node, 0))
 				break;
 		}
 	}
@@ -922,7 +926,7 @@ static uiBlock *node_find_menu(bContext *C, ARegion *ar, void *arg_op)
 	uiEndBlock(C, block);
 	
 	//	uiButActiveOnly(C, ar, block, but); XXX using this here makes Blender hang - investigate
-	event = *(win->eventstate);  /* XXX huh huh? make api call */
+	wm_event_init_from_window(win, &event);
 	event.type = EVT_BUT_OPEN;
 	event.val = KM_PRESS;
 	event.customdata = but;

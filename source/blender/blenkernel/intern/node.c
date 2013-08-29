@@ -117,7 +117,7 @@ static void node_init(const struct bContext *C, bNodeTree *ntree, bNode *node)
 	if (node->flag & NODE_INIT)
 		return;
 	
-	node->flag = NODE_SELECT | ntype->flag;
+	node->flag = NODE_SELECT | NODE_OPTIONS | ntype->flag;
 	node->width = ntype->width;
 	node->miniwidth = 42.0f;
 	node->height = ntype->height;
@@ -149,6 +149,9 @@ static void node_init(const struct bContext *C, bNodeTree *ntree, bNode *node)
 		BLI_assert(C != NULL);
 		ntype->initfunc_api(C, &ptr);
 	}
+	
+	if (node->id)
+		id_us_plus(node->id);
 	
 	node->flag |= NODE_INIT;
 }
@@ -346,9 +349,6 @@ static void free_dynamic_typeinfo(bNodeType *ntype)
 		if (ntype->outputs) {
 			MEM_freeN(ntype->outputs);
 		}
-		if (ntype->ui_name) {
-			MEM_freeN((void *)ntype->ui_name);
-		}
 	}
 }
 
@@ -438,28 +438,6 @@ GHashIterator *nodeSocketTypeGetIterator(void)
 	return BLI_ghashIterator_new(nodesockettypes_hash);
 }
 
-void nodeMakeDynamicType(bNode *UNUSED(node))
-{
-	#if 0	/* XXX deprecated */
-	/* find SH_DYNAMIC_NODE ntype */
-	bNodeType *ntype = ntreeType_Shader->node_types.first;
-	while (ntype) {
-		if (ntype->type == NODE_DYNAMIC)
-			break;
-		ntype = ntype->next;
-	}
-
-	/* make own type struct to fill */
-	if (ntype) {
-		/*node->typeinfo= MEM_dupallocN(ntype);*/
-		bNodeType *newtype = MEM_callocN(sizeof(bNodeType), "dynamic bNodeType");
-		*newtype = *ntype;
-		BLI_strncpy(newtype->name, ntype->name, sizeof(newtype->name));
-		node->typeinfo = newtype;
-	}
-	#endif
-}
-
 struct bNodeSocket *nodeFindSocket(bNode *node, int in_out, const char *identifier)
 {
 	bNodeSocket *sock = (in_out == SOCK_IN ? node->inputs.first : node->outputs.first);
@@ -497,7 +475,7 @@ static bNodeSocket *make_socket(bNodeTree *ntree, bNode *UNUSED(node), int in_ou
 		BLI_strncpy(auto_identifier, name, sizeof(auto_identifier));
 	}
 	/* make the identifier unique */
-	BLI_uniquename_cb(unique_identifier_check, lb, NULL, '.', auto_identifier, sizeof(auto_identifier));
+	BLI_uniquename_cb(unique_identifier_check, lb, "socket", '.', auto_identifier, sizeof(auto_identifier));
 	
 	sock = MEM_callocN(sizeof(bNodeSocket), "sock");
 	sock->in_out = in_out;
@@ -547,60 +525,60 @@ bNodeSocket *nodeInsertSocket(bNodeTree *ntree, bNode *node, int in_out, const c
 const char *nodeStaticSocketType(int type, int subtype)
 {
 	switch (type) {
-	case SOCK_FLOAT:
-		switch (subtype) {
-		case PROP_UNSIGNED:
-			return "NodeSocketFloatUnsigned";
-		case PROP_PERCENTAGE:
-			return "NodeSocketFloatPercentage";
-		case PROP_FACTOR:
-			return "NodeSocketFloatFactor";
-		case PROP_ANGLE:
-			return "NodeSocketFloatAngle";
-		case PROP_TIME:
-			return "NodeSocketFloatTime";
-		case PROP_NONE:
-		default:
-			return "NodeSocketFloat";
-		}
-	case SOCK_INT:
-		switch (subtype) {
-		case PROP_UNSIGNED:
-			return "NodeSocketIntUnsigned";
-		case PROP_PERCENTAGE:
-			return "NodeSocketIntPercentage";
-		case PROP_FACTOR:
-			return "NodeSocketIntFactor";
-		case PROP_NONE:
-		default:
-			return "NodeSocketInt";
-		}
-	case SOCK_BOOLEAN:
-		return "NodeSocketBool";
-	case SOCK_VECTOR:
-		switch (subtype) {
-		case PROP_TRANSLATION:
-			return "NodeSocketVectorTranslation";
-		case PROP_DIRECTION:
-			return "NodeSocketVectorDirection";
-		case PROP_VELOCITY:
-			return "NodeSocketVectorVelocity";
-		case PROP_ACCELERATION:
-			return "NodeSocketVectorAcceleration";
-		case PROP_EULER:
-			return "NodeSocketVectorEuler";
-		case PROP_XYZ:
-			return "NodeSocketVectorXYZ";
-		case PROP_NONE:
-		default:
-			return "NodeSocketVector";
-		}
-	case SOCK_RGBA:
-		return "NodeSocketColor";
-	case SOCK_STRING:
-		return "NodeSocketString";
-	case SOCK_SHADER:
-		return "NodeSocketShader";
+		case SOCK_FLOAT:
+			switch (subtype) {
+				case PROP_UNSIGNED:
+					return "NodeSocketFloatUnsigned";
+				case PROP_PERCENTAGE:
+					return "NodeSocketFloatPercentage";
+				case PROP_FACTOR:
+					return "NodeSocketFloatFactor";
+				case PROP_ANGLE:
+					return "NodeSocketFloatAngle";
+				case PROP_TIME:
+					return "NodeSocketFloatTime";
+				case PROP_NONE:
+				default:
+					return "NodeSocketFloat";
+			}
+		case SOCK_INT:
+			switch (subtype) {
+				case PROP_UNSIGNED:
+					return "NodeSocketIntUnsigned";
+				case PROP_PERCENTAGE:
+					return "NodeSocketIntPercentage";
+				case PROP_FACTOR:
+					return "NodeSocketIntFactor";
+				case PROP_NONE:
+				default:
+					return "NodeSocketInt";
+			}
+		case SOCK_BOOLEAN:
+			return "NodeSocketBool";
+		case SOCK_VECTOR:
+			switch (subtype) {
+				case PROP_TRANSLATION:
+					return "NodeSocketVectorTranslation";
+				case PROP_DIRECTION:
+					return "NodeSocketVectorDirection";
+				case PROP_VELOCITY:
+					return "NodeSocketVectorVelocity";
+				case PROP_ACCELERATION:
+					return "NodeSocketVectorAcceleration";
+				case PROP_EULER:
+					return "NodeSocketVectorEuler";
+				case PROP_XYZ:
+					return "NodeSocketVectorXYZ";
+				case PROP_NONE:
+				default:
+					return "NodeSocketVector";
+			}
+		case SOCK_RGBA:
+			return "NodeSocketColor";
+		case SOCK_STRING:
+			return "NodeSocketString";
+		case SOCK_SHADER:
+			return "NodeSocketShader";
 	}
 	return NULL;
 }
@@ -608,60 +586,60 @@ const char *nodeStaticSocketType(int type, int subtype)
 const char *nodeStaticSocketInterfaceType(int type, int subtype)
 {
 	switch (type) {
-	case SOCK_FLOAT:
-		switch (subtype) {
-		case PROP_UNSIGNED:
-			return "NodeSocketInterfaceFloatUnsigned";
-		case PROP_PERCENTAGE:
-			return "NodeSocketInterfaceFloatPercentage";
-		case PROP_FACTOR:
-			return "NodeSocketInterfaceFloatFactor";
-		case PROP_ANGLE:
-			return "NodeSocketInterfaceFloatAngle";
-		case PROP_TIME:
-			return "NodeSocketInterfaceFloatTime";
-		case PROP_NONE:
-		default:
-			return "NodeSocketInterfaceFloat";
-		}
-	case SOCK_INT:
-		switch (subtype) {
-		case PROP_UNSIGNED:
-			return "NodeSocketInterfaceIntUnsigned";
-		case PROP_PERCENTAGE:
-			return "NodeSocketInterfaceIntPercentage";
-		case PROP_FACTOR:
-			return "NodeSocketInterfaceIntFactor";
-		case PROP_NONE:
-		default:
-			return "NodeSocketInterfaceInt";
-		}
-	case SOCK_BOOLEAN:
-		return "NodeSocketInterfaceBool";
-	case SOCK_VECTOR:
-		switch (subtype) {
-		case PROP_TRANSLATION:
-			return "NodeSocketInterfaceVectorTranslation";
-		case PROP_DIRECTION:
-			return "NodeSocketInterfaceVectorDirection";
-		case PROP_VELOCITY:
-			return "NodeSocketInterfaceVectorVelocity";
-		case PROP_ACCELERATION:
-			return "NodeSocketInterfaceVectorAcceleration";
-		case PROP_EULER:
-			return "NodeSocketInterfaceVectorEuler";
-		case PROP_XYZ:
-			return "NodeSocketInterfaceVectorXYZ";
-		case PROP_NONE:
-		default:
-			return "NodeSocketInterfaceVector";
-		}
-	case SOCK_RGBA:
-		return "NodeSocketInterfaceColor";
-	case SOCK_STRING:
-		return "NodeSocketInterfaceString";
-	case SOCK_SHADER:
-		return "NodeSocketInterfaceShader";
+		case SOCK_FLOAT:
+			switch (subtype) {
+				case PROP_UNSIGNED:
+					return "NodeSocketInterfaceFloatUnsigned";
+				case PROP_PERCENTAGE:
+					return "NodeSocketInterfaceFloatPercentage";
+				case PROP_FACTOR:
+					return "NodeSocketInterfaceFloatFactor";
+				case PROP_ANGLE:
+					return "NodeSocketInterfaceFloatAngle";
+				case PROP_TIME:
+					return "NodeSocketInterfaceFloatTime";
+				case PROP_NONE:
+				default:
+					return "NodeSocketInterfaceFloat";
+			}
+		case SOCK_INT:
+			switch (subtype) {
+				case PROP_UNSIGNED:
+					return "NodeSocketInterfaceIntUnsigned";
+				case PROP_PERCENTAGE:
+					return "NodeSocketInterfaceIntPercentage";
+				case PROP_FACTOR:
+					return "NodeSocketInterfaceIntFactor";
+				case PROP_NONE:
+				default:
+					return "NodeSocketInterfaceInt";
+			}
+		case SOCK_BOOLEAN:
+			return "NodeSocketInterfaceBool";
+		case SOCK_VECTOR:
+			switch (subtype) {
+				case PROP_TRANSLATION:
+					return "NodeSocketInterfaceVectorTranslation";
+				case PROP_DIRECTION:
+					return "NodeSocketInterfaceVectorDirection";
+				case PROP_VELOCITY:
+					return "NodeSocketInterfaceVectorVelocity";
+				case PROP_ACCELERATION:
+					return "NodeSocketInterfaceVectorAcceleration";
+				case PROP_EULER:
+					return "NodeSocketInterfaceVectorEuler";
+				case PROP_XYZ:
+					return "NodeSocketInterfaceVectorXYZ";
+				case PROP_NONE:
+				default:
+					return "NodeSocketInterfaceVector";
+			}
+		case SOCK_RGBA:
+			return "NodeSocketInterfaceColor";
+		case SOCK_STRING:
+			return "NodeSocketInterfaceString";
+		case SOCK_SHADER:
+			return "NodeSocketInterfaceShader";
 	}
 	return NULL;
 }
@@ -818,8 +796,11 @@ bNode *nodeAddStaticNode(const struct bContext *C, bNodeTree *ntree, int type)
 	const char *idname = NULL;
 	
 	NODE_TYPES_BEGIN(ntype)
-		if (ntype->type == type) {
-			idname = DATA_(ntype->idname);
+		/* do an extra poll here, because some int types are used
+		 * for multiple node types, this helps find the desired type
+		 */
+		if (ntype->type == type && (!ntype->poll || ntype->poll(ntype, ntree))) {
+			idname = ntype->idname;
 			break;
 		}
 	NODE_TYPES_END
@@ -1143,6 +1124,7 @@ static bNodeTree *ntreeCopyTree_internal(bNodeTree *ntree, const short do_id_use
 	}
 	else {
 		newtree = MEM_dupallocN(ntree);
+		newtree->id.lib = NULL;	/* same as owning datablock id.lib */
 		BKE_libblock_copy_data(&newtree->id, &ntree->id, true); /* copy animdata and ID props */
 	}
 
@@ -2014,7 +1996,11 @@ static bNodeSocket *make_socket_interface(bNodeTree *ntree, int in_out,
 	bNodeSocketType *stype = nodeSocketTypeFind(idname);
 	bNodeSocket *sock;
 	int own_index = ntree->cur_index++;
-	
+
+	if (stype == NULL) {
+		return NULL;
+	}
+
 	sock = MEM_callocN(sizeof(bNodeSocket), "socket template");
 	BLI_strncpy(sock->idname, stype->idname, sizeof(sock->idname));
 	node_socket_set_typeinfo(ntree, sock, stype);
@@ -2297,28 +2283,41 @@ bNode *nodeGetActive(bNodeTree *ntree)
 	return node;
 }
 
-/* two active flags, ID nodes have special flag for buttons display */
-bNode *nodeGetActiveID(bNodeTree *ntree, short idtype)
+static bNode *node_get_active_id_recursive(bNodeInstanceKey active_key, bNodeInstanceKey parent_key, bNodeTree *ntree, short idtype)
 {
-	bNode *node, *tnode;
-	
-	if (ntree == NULL) return NULL;
-
-	for (node = ntree->nodes.first; node; node = node->next)
-		if (node->id && GS(node->id->name) == idtype)
-			if (node->flag & NODE_ACTIVE_ID)
-				return node;
-	
-	/* no node with active ID in this tree, look inside groups */
-	for (node = ntree->nodes.first; node; node = node->next) {
-		if (node->type == NODE_GROUP) {
-			tnode = nodeGetActiveID((bNodeTree *)node->id, idtype);
-			if (tnode)
-				return tnode;
+	if (parent_key.value == active_key.value) {
+		bNode *node;
+		for (node = ntree->nodes.first; node; node = node->next)
+			if (node->id && GS(node->id->name) == idtype)
+				if (node->flag & NODE_ACTIVE_ID)
+					return node;
+	}
+	else {
+		bNode *node, *tnode;
+		/* no node with active ID in this tree, look inside groups */
+		for (node = ntree->nodes.first; node; node = node->next) {
+			if (node->type == NODE_GROUP) {
+				bNodeTree *group = (bNodeTree *)node->id;
+				if (group) {
+					bNodeInstanceKey group_key = BKE_node_instance_key(parent_key, ntree, node);
+					tnode = node_get_active_id_recursive(active_key, group_key, group, idtype);
+					if (tnode)
+						return tnode;
+				}
+			}
 		}
 	}
 	
 	return NULL;
+}
+
+/* two active flags, ID nodes have special flag for buttons display */
+bNode *nodeGetActiveID(bNodeTree *ntree, short idtype)
+{
+	if (ntree)
+		return node_get_active_id_recursive(ntree->active_viewer_key, NODE_INSTANCE_KEY_BASE, ntree, idtype);
+	else
+		return NULL;
 }
 
 bool nodeSetActiveID(bNodeTree *ntree, short idtype, ID *id)
@@ -2581,6 +2580,7 @@ int BKE_node_clipboard_get_type(void)
 
 /* magic number for initial hash key */
 const bNodeInstanceKey NODE_INSTANCE_KEY_BASE = {5381};
+const bNodeInstanceKey NODE_INSTANCE_KEY_NONE = {0};
 
 /* Generate a hash key from ntree and node names
  * Uses the djb2 algorithm with xor by Bernstein:
@@ -2666,7 +2666,7 @@ void BKE_node_instance_hash_clear(bNodeInstanceHash *hash, bNodeInstanceValueFP 
 
 void *BKE_node_instance_hash_pop(bNodeInstanceHash *hash, bNodeInstanceKey key)
 {
-	return BLI_ghash_pop(hash->ghash, &key, NULL);
+	return BLI_ghash_popkey(hash->ghash, &key, NULL);
 }
 
 int BKE_node_instance_hash_haskey(bNodeInstanceHash *hash, bNodeInstanceKey key)
@@ -2866,7 +2866,7 @@ void ntreeVerifyNodes(struct Main *main, struct ID *id)
 	} FOREACH_NODETREE_END
 }
 
-void ntreeUpdateTree(bNodeTree *ntree)
+void ntreeUpdateTree(Main *bmain, bNodeTree *ntree)
 {
 	bNode *node;
 	
@@ -2904,7 +2904,8 @@ void ntreeUpdateTree(bNodeTree *ntree)
 		ntreeInterfaceTypeUpdate(ntree);
 	
 	/* XXX hack, should be done by depsgraph!! */
-	ntreeVerifyNodes(G.main, &ntree->id);
+	if (bmain)
+		ntreeVerifyNodes(bmain, &ntree->id);
 	
 	if (ntree->update & (NTREE_UPDATE_LINKS | NTREE_UPDATE_NODES)) {
 		/* node updates can change sockets or links, repeat link pointer update afterward */
@@ -3210,8 +3211,11 @@ void node_type_size_preset(struct bNodeType *ntype, eNodeSizePreset size)
 		case NODE_SIZE_SMALL:
 			node_type_size(ntype, 100, 80, 320);
 			break;
+		case NODE_SIZE_MIDDLE:
+			node_type_size(ntype, 150, 120, 320);
+			break;
 		case NODE_SIZE_LARGE:
-			node_type_size(ntype, 140, 120, 500);
+			node_type_size(ntype, 240, 140, 320);
 			break;
 	}
 }
@@ -3387,6 +3391,7 @@ static void registerCompositNodes(void)
 
 	register_node_type_cmp_mask();
 	register_node_type_cmp_trackpos();
+	register_node_type_cmp_planetrackdeform();
 }
 
 static void registerShaderNodes(void) 
@@ -3400,6 +3405,9 @@ static void registerShaderNodes(void)
 	register_node_type_sh_brightcontrast();
 	register_node_type_sh_value();
 	register_node_type_sh_rgb();
+	register_node_type_sh_wireframe();
+	register_node_type_sh_wavelength();
+	register_node_type_sh_blackbody();
 	register_node_type_sh_mix_rgb();
 	register_node_type_sh_valtorgb();
 	register_node_type_sh_rgbtobw();
@@ -3411,11 +3419,14 @@ static void registerShaderNodes(void)
 	register_node_type_sh_curve_rgb();
 	register_node_type_sh_math();
 	register_node_type_sh_vect_math();
+	register_node_type_sh_vect_transform();
 	register_node_type_sh_squeeze();
 	register_node_type_sh_material_ext();
 	register_node_type_sh_invert();
 	register_node_type_sh_seprgb();
 	register_node_type_sh_combrgb();
+	register_node_type_sh_sephsv();
+	register_node_type_sh_combhsv();
 	register_node_type_sh_hue_sat();
 
 	register_node_type_sh_attribute();
@@ -3437,6 +3448,7 @@ static void registerShaderNodes(void)
 	register_node_type_sh_bsdf_translucent();
 	register_node_type_sh_bsdf_transparent();
 	register_node_type_sh_bsdf_velvet();
+	register_node_type_sh_bsdf_toon();
 	register_node_type_sh_emission();
 	register_node_type_sh_holdout();
 	//register_node_type_sh_volume_transparent();
@@ -3538,33 +3550,39 @@ void init_nodesystem(void)
 
 void free_nodesystem(void) 
 {
-	NODE_TYPES_BEGIN(nt)
-		if (nt->ext.free) {
-			nt->ext.free(nt->ext.data);
-		}
-	NODE_TYPES_END
-	
-	NODE_SOCKET_TYPES_BEGIN(st)
-		if (st->ext_socket.free)
-			st->ext_socket.free(st->ext_socket.data);
-		if (st->ext_interface.free)
-			st->ext_interface.free(st->ext_interface.data);
-	NODE_SOCKET_TYPES_END
-	
-	NODE_TREE_TYPES_BEGIN(nt)
-		if (nt->ext.free) {
-			nt->ext.free(nt->ext.data);
-		}
-	NODE_TREE_TYPES_END
-	
-	BLI_ghash_free(nodetypes_hash, NULL, node_free_type);
-	nodetypes_hash = NULL;
-	
-	BLI_ghash_free(nodesockettypes_hash, NULL, node_free_socket_type);
-	nodesockettypes_hash = NULL;
-	
-	BLI_ghash_free(nodetreetypes_hash, NULL, ntree_free_type);
-	nodetreetypes_hash = NULL;
+	if (nodetypes_hash) {
+		NODE_TYPES_BEGIN(nt)
+			if (nt->ext.free) {
+				nt->ext.free(nt->ext.data);
+			}
+		NODE_TYPES_END
+
+		BLI_ghash_free(nodetypes_hash, NULL, node_free_type);
+		nodetypes_hash = NULL;
+	}
+
+	if (nodesockettypes_hash) {
+		NODE_SOCKET_TYPES_BEGIN(st)
+			if (st->ext_socket.free)
+				st->ext_socket.free(st->ext_socket.data);
+			if (st->ext_interface.free)
+				st->ext_interface.free(st->ext_interface.data);
+		NODE_SOCKET_TYPES_END
+
+		BLI_ghash_free(nodesockettypes_hash, NULL, node_free_socket_type);
+		nodesockettypes_hash = NULL;
+	}
+
+	if (nodetreetypes_hash) {
+		NODE_TREE_TYPES_BEGIN(nt)
+			if (nt->ext.free) {
+				nt->ext.free(nt->ext.data);
+			}
+		NODE_TREE_TYPES_END
+
+		BLI_ghash_free(nodetreetypes_hash, NULL, ntree_free_type);
+		nodetreetypes_hash = NULL;
+	}
 }
 
 /* called from BKE_scene_unlink, when deleting a scene goes over all scenes

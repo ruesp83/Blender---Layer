@@ -1,25 +1,32 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 #include "util_debug.h"
 #include "util_foreach.h"
 #include "util_system.h"
 #include "util_task.h"
+
+//#define THREADING_DEBUG_ENABLED
+
+#ifdef THREADING_DEBUG_ENABLED
+#include <stdio.h>
+#define THREADING_DEBUG(...) do { printf(__VA_ARGS__); fflush(stdout); } while(0)
+#else
+#define THREADING_DEBUG(...)
+#endif
 
 CCL_NAMESPACE_BEGIN
 
@@ -95,8 +102,11 @@ void TaskPool::wait_work()
 		if(num == 0)
 			break;
 
-		if(!found_entry)
+		if(!found_entry) {
+			THREADING_DEBUG("num==%d, Waiting for condition in TaskPool::wait_work !found_entry\n", num);
 			num_cond.wait(num_lock);
+			THREADING_DEBUG("num==%d, condition wait done in TaskPool::wait_work !found_entry\n", num);
+		}
 	}
 }
 
@@ -109,8 +119,11 @@ void TaskPool::cancel()
 	{
 		thread_scoped_lock num_lock(num_mutex);
 
-		while(num)
+		while(num) {
+			THREADING_DEBUG("num==%d, Waiting for condition in TaskPool::cancel\n", num);
 			num_cond.wait(num_lock);
+			THREADING_DEBUG("num==%d condition wait done in TaskPool::cancel\n", num);
+		}
 	}
 
 	do_cancel = false;
@@ -134,8 +147,10 @@ void TaskPool::num_decrease(int done)
 	num -= done;
 
 	assert(num >= 0);
-	if(num == 0)
+	if(num == 0) {
+		THREADING_DEBUG("num==%d, notifying all in TaskPool::num_decrease\n", num);
 		num_cond.notify_all();
+	}
 
 	num_mutex.unlock();
 }
@@ -144,6 +159,7 @@ void TaskPool::num_increase()
 {
 	thread_scoped_lock num_lock(num_mutex);
 	num++;
+	THREADING_DEBUG("num==%d, notifying all in TaskPool::num_increase\n", num);
 	num_cond.notify_all();
 }
 
@@ -168,12 +184,8 @@ void TaskScheduler::init(int num_threads)
 		do_exit = false;
 
 		if(num_threads == 0) {
-			/* automatic number of threads will be main thread + num cores */
+			/* automatic number of threads */
 			num_threads = system_cpu_thread_count();
-		}
-		else {
-			/* main thread will also work, for fixed threads we count it too */
-			num_threads -= 1;
 		}
 
 		/* launch threads that will be waiting for work */

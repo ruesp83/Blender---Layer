@@ -1144,7 +1144,7 @@ void shade_input_set_shade_texco(ShadeInput *shi)
 
 					zbuf_make_winmat(&R, winmat);
 					if (shi->obi->flag & R_TRANSFORMED)
-						mult_m4_m4m4(obwinmat, winmat, obi->mat);
+						mul_m4_m4m4(obwinmat, winmat, obi->mat);
 					else
 						copy_m4_m4(obwinmat, winmat);
 
@@ -1415,6 +1415,10 @@ void shade_samples_fill_with_ps(ShadeSample *ssamp, PixStr *ps, int x, int y)
 					short b = R.samples->centmask[curmask];
 					xs = (float)x + R.samples->centLut[b & 15] + 0.5f;
 					ys = (float)y + R.samples->centLut[b >> 4] + 0.5f;
+				}
+				else if (R.i.curblur) {
+					xs= (float)x + R.mblur_jit[R.i.curblur-1][0] + 0.5f;
+					ys= (float)y + R.mblur_jit[R.i.curblur-1][1] + 0.5f;
 				}
 				else {
 					xs = (float)x + 0.5f;

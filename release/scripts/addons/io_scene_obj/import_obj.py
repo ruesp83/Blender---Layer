@@ -74,20 +74,22 @@ def line_value(line_split):
         return b' '.join(line_split[1:])
 
 
-def obj_image_load(imagepath, DIR, recursive):
+def obj_image_load(imagepath, DIR, recursive, relpath):
     """
     Mainly uses comprehensiveImageLoad
     but tries to replace '_' with ' ' for Max's exporter replaces spaces with underscores.
     """
     if b'_' in imagepath:
-        image = load_image(imagepath.replace(b'_', b' '), DIR, recursive=recursive)
+        image = load_image(imagepath.replace(b'_', b' '), DIR, recursive=recursive, relpath=relpath)
         if image:
             return image
 
-    return load_image(imagepath, DIR, recursive=recursive, place_holder=True)
+    return load_image(imagepath, DIR, recursive=recursive, place_holder=True, relpath=relpath)
 
 
-def create_materials(filepath, material_libs, unique_materials, unique_material_images, use_image_search, float_func):
+def create_materials(filepath, relpath,
+                     material_libs, unique_materials, unique_material_images,
+                     use_image_search, float_func):
     """
     Create all the used materials in this obj,
     assign colors and images to the materials from all referenced material libs
@@ -103,46 +105,21 @@ def create_materials(filepath, material_libs, unique_materials, unique_material_
         texture = bpy.data.textures.new(name=type, type='IMAGE')
 
         # Absolute path - c:\.. etc would work here
-        image = obj_image_load(imagepath, DIR, use_image_search)
-        has_data = False
-        image_depth = 0
+        image = obj_image_load(imagepath, DIR, use_image_search, relpath)
 
         if image is not None:
             texture.image = image
-            # note, this causes the image to load, see: [#32637]
-            # which makes the following has_data work as expected.
-            image_depth = image.depth
-            has_data = image.has_data
 
         # Adds textures for materials (rendering)
         if type == 'Kd':
-            if image_depth in {32, 128}:
-                # Image has alpha
-
-                mtex = blender_material.texture_slots.add()
-                mtex.texture = texture
-                mtex.texture_coords = 'UV'
-                mtex.use_map_color_diffuse = True
-                mtex.use_map_alpha = True
-
-                texture.use_mipmap = True
-                texture.use_interpolation = True
-                if image is not None:
-                    image.use_alpha = True
-                blender_material.use_transparency = True
-                if "alpha" not in context_material_vars:
-                    blender_material.alpha = 0.0
-
-                blender_material.game_settings.alpha_blend = 'ALPHA'
-            else:
-                mtex = blender_material.texture_slots.add()
-                mtex.texture = texture
-                mtex.texture_coords = 'UV'
-                mtex.use_map_color_diffuse = True
+            mtex = blender_material.texture_slots.add()
+            mtex.texture = texture
+            mtex.texture_coords = 'UV'
+            mtex.use_map_color_diffuse = True
 
             # adds textures to faces (Textured/Alt-Z mode)
             # Only apply the diffuse texture to the face if the image has not been set with the inline usemat func.
-            unique_material_images[context_material_name] = image, has_data  # set the texface image
+            unique_material_images[context_material_name] = image  # set the texface image
 
         elif type == 'Ka':
             mtex = blender_material.texture_slots.add()
@@ -181,6 +158,14 @@ def create_materials(filepath, material_libs, unique_materials, unique_material_
                 blender_material.alpha = 0.0
             # Todo, unset deffuse material alpha if it has an alpha channel
 
+        elif type == 'disp':
+            mtex = blender_material.texture_slots.add()
+            mtex.use_map_color_diffuse = False
+
+            mtex.texture = texture
+            mtex.texture_coords = 'UV'
+            mtex.use_map_displacement = True
+
         elif type == 'refl':
             mtex = blender_material.texture_slots.add()
             mtex.use_map_color_diffuse = False
@@ -202,10 +187,10 @@ def create_materials(filepath, material_libs, unique_materials, unique_material_
     for name in unique_materials:  # .keys()
         if name is not None:
             unique_materials[name] = bpy.data.materials.new(name.decode('utf-8', "replace"))
-            unique_material_images[name] = None, False  # assign None to all material images to start with, add to later.
+            unique_material_images[name] = None  # assign None to all material images to start with, add to later.
 
     unique_materials[None] = None
-    unique_material_images[None] = None, False
+    unique_material_images[None] = None
 
     for libname in material_libs:
         # print(libname)
@@ -371,6 +356,11 @@ def create_materials(filepath, material_libs, unique_materials, unique_material_
                         img_filepath = line_value(line.split())
                         if img_filepath:
                             load_material_image(context_material, context_material_name, img_filepath, 'D')
+
+                    elif line_lower.startswith((b'map_disp', b'disp')):  # reflectionmap
+                        img_filepath = line_value(line.split())
+                        if img_filepath:
+                            load_material_image(context_material, context_material_name, img_filepath, 'disp')
 
                     elif line_lower.startswith((b'map_refl', b'refl')):  # reflectionmap
                         img_filepath = line_value(line.split())
@@ -633,7 +623,7 @@ def create_mesh(new_objects,
                 blender_tface = me.tessface_uv_textures[0].data[i]
 
                 if context_material:
-                    image, has_data = unique_material_images[context_material]
+                    image = unique_material_images[context_material]
                     if image:  # Can be none if the material dosnt have an image.
                         blender_tface.image = image
 
@@ -838,6 +828,7 @@ def load(operator, context, filepath,
          use_split_groups=True,
          use_image_search=True,
          use_groups_as_vgroups=False,
+         relpath=None,
          global_matrix=None,
          ):
     """
@@ -1101,7 +1092,7 @@ def load(operator, context, filepath,
     time_sub = time_new
 
     print('\tloading materials and images...')
-    create_materials(filepath, material_libs, unique_materials, unique_material_images, use_image_search, float_func)
+    create_materials(filepath, relpath, material_libs, unique_materials, unique_material_images, use_image_search, float_func)
 
     time_new = time.time()
     print("%.4f sec" % (time_new - time_sub))

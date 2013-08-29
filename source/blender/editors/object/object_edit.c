@@ -41,7 +41,6 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
-#include "BLI_rand.h"
 
 #include "DNA_armature_types.h"
 #include "DNA_curve_types.h"
@@ -79,7 +78,8 @@
 #include "BKE_sca.h"
 #include "BKE_softbody.h"
 #include "BKE_modifier.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
+#include "BKE_report.h"
 
 #include "ED_armature.h"
 #include "ED_curve.h"
@@ -383,6 +383,11 @@ void ED_object_editmode_exit(bContext *C, int flag)
 	if (flag & EM_WAITCURSOR) waitcursor(1);
 
 	if (ED_object_editmode_load_ex(obedit, freedata) == false) {
+		/* in rare cases (background mode) its possible active object
+		 * is flagged for editmode, without 'obedit' being set [#35489] */
+		if (UNLIKELY(scene->basact && (scene->basact->object->mode & OB_MODE_EDIT))) {
+			scene->basact->object->mode &= ~OB_MODE_EDIT;
+		}
 		if (flag & EM_WAITCURSOR) waitcursor(0);
 		return;
 	}
@@ -474,13 +479,13 @@ void ED_object_editmode_enter(bContext *C, int flag)
 		ok = 1;
 		scene->obedit = ob;  /* context sees this */
 
-		EDBM_mesh_make(CTX_data_tool_settings(C), scene, ob);
+		EDBM_mesh_make(scene->toolsettings, ob);
 
-		em = BMEdit_FromObject(ob);
+		em = BKE_editmesh_from_object(ob);
 		if (LIKELY(em)) {
 			/* order doesn't matter */
 			EDBM_mesh_normals_update(em);
-			BMEdit_RecalcTessellation(em);
+			BKE_editmesh_tessface_calc(em);
 
 			BM_mesh_select_mode_flush(em->bm);
 		}
@@ -552,11 +557,20 @@ void ED_object_editmode_enter(bContext *C, int flag)
 	if (flag & EM_WAITCURSOR) waitcursor(0);
 }
 
-static int editmode_toggle_exec(bContext *C, wmOperator *UNUSED(op))
+static int editmode_toggle_exec(bContext *C, wmOperator *op)
 {
+	const int mode_flag = OB_MODE_EDIT;
+	const bool is_mode_set = CTX_data_edit_object(C);
 	ToolSettings *toolsettings =  CTX_data_tool_settings(C);
 
-	if (!CTX_data_edit_object(C))
+	if (!is_mode_set) {
+		Scene *scene = CTX_data_scene(C);
+		if (!ED_object_mode_compat_set(C, scene->basact->object, mode_flag, op->reports)) {
+			return OPERATOR_CANCELLED;
+		}
+	}
+
+	if (!is_mode_set)
 		ED_object_editmode_enter(C, EM_WAITCURSOR);
 	else
 		ED_object_editmode_exit(C, EM_FREEDATA | EM_FREEUNDO | EM_WAITCURSOR);  /* had EM_DO_UNDO but op flag calls undo too [#24685] */
@@ -578,10 +592,7 @@ static int editmode_toggle_poll(bContext *C)
 	if ((ob->restrictflag & OB_RESTRICT_VIEW) && !(ob->mode & OB_MODE_EDIT))
 		return 0;
 
-	return (ob->type == OB_MESH || ob->type == OB_ARMATURE ||
-	        ob->type == OB_FONT || ob->type == OB_MBALL ||
-	        ob->type == OB_LATTICE || ob->type == OB_SURF ||
-	        ob->type == OB_CURVE);
+	return (ELEM7(ob->type, OB_MESH, OB_ARMATURE, OB_FONT, OB_MBALL, OB_LATTICE, OB_SURF, OB_CURVE));
 }
 
 void OBJECT_OT_editmode_toggle(wmOperatorType *ot)
@@ -594,7 +605,6 @@ void OBJECT_OT_editmode_toggle(wmOperatorType *ot)
 	
 	/* api callbacks */
 	ot->exec = editmode_toggle_exec;
-	
 	ot->poll = editmode_toggle_poll;
 	
 	/* flags */
@@ -603,16 +613,25 @@ void OBJECT_OT_editmode_toggle(wmOperatorType *ot)
 
 /* *************************** */
 
-static int posemode_exec(bContext *C, wmOperator *UNUSED(op))
+static int posemode_exec(bContext *C, wmOperator *op)
 {
 	Base *base = CTX_data_active_base(C);
+	Object *ob = base->object;
+	const int mode_flag = OB_MODE_POSE;
+	const bool is_mode_set = (ob->mode & mode_flag) != 0;
 	
-	if (base->object->type == OB_ARMATURE) {
-		if (base->object == CTX_data_edit_object(C)) {
+	if (!is_mode_set) {
+		if (ED_object_mode_compat_set(C, ob, mode_flag, op->reports)) {
+			return OPERATOR_CANCELLED;
+		}
+	}
+
+	if (ob->type == OB_ARMATURE) {
+		if (ob == CTX_data_edit_object(C)) {
 			ED_object_editmode_exit(C, EM_FREEDATA | EM_DO_UNDO);
 			ED_armature_enter_posemode(C, base);
 		}
-		else if (base->object->mode & OB_MODE_POSE)
+		else if (is_mode_set)
 			ED_armature_exit_posemode(C, base);
 		else
 			ED_armature_enter_posemode(C, base);
@@ -1343,14 +1362,14 @@ static int shade_smooth_exec(bContext *C, wmOperator *op)
 
 static int shade_poll(bContext *C)
 {
-	return (ED_operator_object_active_editable(C) && !ED_operator_editmesh(C));
+	return (CTX_data_edit_object(C) == NULL);
 }
 
 void OBJECT_OT_shade_flat(wmOperatorType *ot)
 {
 	/* identifiers */
 	ot->name = "Shade Flat";
-	ot->description = "Display faces 'flat'";
+	ot->description = "Render and display faces uniform, using Face Normals";
 	ot->idname = "OBJECT_OT_shade_flat";
 	
 	/* api callbacks */
@@ -1365,7 +1384,7 @@ void OBJECT_OT_shade_smooth(wmOperatorType *ot)
 {
 	/* identifiers */
 	ot->name = "Shade Smooth";
-	ot->description = "Display faces 'smooth' (using vertex normals)";
+	ot->description = "Render and display faces smooth, using interpolated Vertex Normals";
 	ot->idname = "OBJECT_OT_shade_smooth";
 	
 	/* api callbacks */
@@ -1413,8 +1432,9 @@ static void UNUSED_FUNCTION(image_aspect) (Scene *scene, View3D *v3d)
 									space = size[0] / size[1];
 								}
 								else if (ELEM3(ob->type, OB_CURVE, OB_FONT, OB_SURF)) {
-									Curve *cu = ob->data;
-									space = cu->size[0] / cu->size[1];
+									float size[3];
+									BKE_curve_texspace_get(ob->data, NULL, NULL, size);
+									space = size[0] / size[1];
 								}
 							
 								x = ibuf->x / space;
@@ -1439,31 +1459,34 @@ static void UNUSED_FUNCTION(image_aspect) (Scene *scene, View3D *v3d)
 	
 }
 
-
 static EnumPropertyItem *object_mode_set_itemsf(bContext *C, PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), int *free)
-{	
+{
 	EnumPropertyItem *input = object_mode_items;
 	EnumPropertyItem *item = NULL;
 	Object *ob;
 	int totitem = 0;
-	
+
 	if (!C) /* needed for docs */
 		return object_mode_items;
 
-
-
 	ob = CTX_data_active_object(C);
-	while (ob && input->identifier) {
-		if ((input->value == OB_MODE_EDIT && OB_TYPE_SUPPORT_EDITMODE(ob->type)) ||
-		    (input->value == OB_MODE_POSE && (ob->type == OB_ARMATURE)) ||
-		    (input->value == OB_MODE_PARTICLE_EDIT && ob->particlesystem.first) ||
-		    ((input->value == OB_MODE_SCULPT || input->value == OB_MODE_VERTEX_PAINT ||
-		      input->value == OB_MODE_WEIGHT_PAINT || input->value == OB_MODE_TEXTURE_PAINT) && (ob->type == OB_MESH)) ||
-		    (input->value == OB_MODE_OBJECT))
-		{
-			RNA_enum_item_add(&item, &totitem, input);
+	if (ob) {
+		while (input->identifier) {
+			if ((input->value == OB_MODE_EDIT && OB_TYPE_SUPPORT_EDITMODE(ob->type)) ||
+			    (input->value == OB_MODE_POSE && (ob->type == OB_ARMATURE)) ||
+			    (input->value == OB_MODE_PARTICLE_EDIT && ob->particlesystem.first) ||
+			    ((input->value == OB_MODE_SCULPT || input->value == OB_MODE_VERTEX_PAINT ||
+			      input->value == OB_MODE_WEIGHT_PAINT || input->value == OB_MODE_TEXTURE_PAINT) && (ob->type == OB_MESH)) ||
+			    (input->value == OB_MODE_OBJECT))
+			{
+				RNA_enum_item_add(&item, &totitem, input);
+			}
+			input++;
 		}
-		input++;
+	}
+	else {
+		/* We need at least this one! */
+		RNA_enum_items_add_value(&item, &totitem, input, OB_MODE_OBJECT);
 	}
 
 	RNA_enum_item_end(&item, &totitem);
@@ -1493,37 +1516,65 @@ static const char *object_mode_op_string(int mode)
 }
 
 /* checks the mode to be set is compatible with the object
- * should be made into a generic function */
-static int object_mode_set_compat(bContext *UNUSED(C), wmOperator *op, Object *ob)
+ * should be made into a generic function
+ */
+static bool object_mode_compat_test(Object *ob, ObjectMode mode)
 {
-	ObjectMode mode = RNA_enum_get(op->ptr, "mode");
-
 	if (ob) {
 		if (mode == OB_MODE_OBJECT)
-			return 1;
+			return true;
 
 		switch (ob->type) {
 			case OB_MESH:
-				if (mode & (OB_MODE_EDIT | OB_MODE_SCULPT | OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT | OB_MODE_TEXTURE_PAINT | OB_MODE_PARTICLE_EDIT))
-					return 1;
-				return 0;
+				if (mode & (OB_MODE_EDIT | OB_MODE_SCULPT | OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT |
+				            OB_MODE_TEXTURE_PAINT | OB_MODE_PARTICLE_EDIT))
+				{
+					return true;
+				}
+				break;
 			case OB_CURVE:
 			case OB_SURF:
 			case OB_FONT:
 			case OB_MBALL:
 				if (mode & (OB_MODE_EDIT))
-					return 1;
-				return 0;
+					return true;
+				break;
 			case OB_LATTICE:
 				if (mode & (OB_MODE_EDIT | OB_MODE_WEIGHT_PAINT))
-					return 1;
+					return true;
+				break;
 			case OB_ARMATURE:
 				if (mode & (OB_MODE_EDIT | OB_MODE_POSE))
-					return 1;
+					return true;
+				break;
 		}
 	}
 
-	return 0;
+	return false;
+}
+
+/**
+ * Sets the mode to a compatible state (use before entering the mode).
+ *
+ * This is so each mode's exec function can call
+ */
+bool ED_object_mode_compat_set(bContext *C, Object *ob, int mode, ReportList *reports)
+{
+	bool ok;
+	if (!ELEM(ob->mode, mode, OB_MODE_OBJECT)) {
+		const char *opstring = object_mode_op_string(ob->mode);
+		WM_operator_name_call(C, opstring, WM_OP_EXEC_REGION_WIN, NULL);
+		ok = ELEM(ob->mode, mode, OB_MODE_OBJECT);
+		if (!ok) {
+			wmOperatorType *ot = WM_operatortype_find(opstring, false);
+			BKE_reportf(reports, RPT_ERROR, "Unable to execute '%s', error changing modes", ot->name);
+		}
+	}
+	else {
+		ok = true;
+	}
+
+	return ok;
 }
 
 static int object_mode_set_exec(bContext *C, wmOperator *op)
@@ -1533,25 +1584,31 @@ static int object_mode_set_exec(bContext *C, wmOperator *op)
 	ObjectMode restore_mode = (ob) ? ob->mode : OB_MODE_OBJECT;
 	int toggle = RNA_boolean_get(op->ptr, "toggle");
 
-	if (!ob || !object_mode_set_compat(C, op, ob))
+	if (!ob || !object_mode_compat_test(ob, mode))
 		return OPERATOR_PASS_THROUGH;
 
+	if (ob->mode != mode) {
+		/* we should be able to remove this call, each operator calls  */
+		ED_object_mode_compat_set(C, ob, mode, op->reports);
+	}
+
 	/* Exit current mode if it's not the mode we're setting */
-	if (ob->mode != OB_MODE_OBJECT && ob->mode != mode)
-		WM_operator_name_call(C, object_mode_op_string(ob->mode), WM_OP_EXEC_REGION_WIN, NULL);
-
-	if (mode != OB_MODE_OBJECT) {
+	if (mode != OB_MODE_OBJECT && (ob->mode != mode || toggle)) {
 		/* Enter new mode */
-		if (ob->mode != mode || toggle)
-			WM_operator_name_call(C, object_mode_op_string(mode), WM_OP_EXEC_REGION_WIN, NULL);
+		WM_operator_name_call(C, object_mode_op_string(mode), WM_OP_EXEC_REGION_WIN, NULL);
+	}
 
-		if (toggle) {
-			if (ob->mode == mode)
-				/* For toggling, store old mode so we know what to go back to */
-				ob->restore_mode = restore_mode;
-			else if (ob->restore_mode != OB_MODE_OBJECT && ob->restore_mode != mode) {
-				WM_operator_name_call(C, object_mode_op_string(ob->restore_mode), WM_OP_EXEC_REGION_WIN, NULL);
-			}
+	if (toggle) {
+		/* Special case for Object mode! */
+		if (mode == OB_MODE_OBJECT && restore_mode == OB_MODE_OBJECT && ob->restore_mode != OB_MODE_OBJECT) {
+			WM_operator_name_call(C, object_mode_op_string(ob->restore_mode), WM_OP_EXEC_REGION_WIN, NULL);
+		}
+		else if (ob->mode == mode) {
+			/* For toggling, store old mode so we know what to go back to */
+			ob->restore_mode = restore_mode;
+		}
+		else if (ob->restore_mode != OB_MODE_OBJECT && ob->restore_mode != mode) {
+			WM_operator_name_call(C, object_mode_op_string(ob->restore_mode), WM_OP_EXEC_REGION_WIN, NULL);
 		}
 	}
 
@@ -1561,7 +1618,7 @@ static int object_mode_set_exec(bContext *C, wmOperator *op)
 void OBJECT_OT_mode_set(wmOperatorType *ot)
 {
 	PropertyRNA *prop;
-
+	
 	/* identifiers */
 	ot->name = "Set Object Mode";
 	ot->description = "Sets the object interaction mode";
@@ -1575,16 +1632,22 @@ void OBJECT_OT_mode_set(wmOperatorType *ot)
 	/* flags */
 	ot->flag = 0; /* no register/undo here, leave it to operators being called */
 	
-	prop = RNA_def_enum(ot->srna, "mode", object_mode_items, OB_MODE_OBJECT, "Mode", "");
-	RNA_def_enum_funcs(prop, object_mode_set_itemsf);
+	ot->prop = RNA_def_enum(ot->srna, "mode", object_mode_items, OB_MODE_OBJECT, "Mode", "");
+	RNA_def_enum_funcs(ot->prop, object_mode_set_itemsf);
+	RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
 
-	RNA_def_boolean(ot->srna, "toggle", 0, "Toggle", "");
+	prop = RNA_def_boolean(ot->srna, "toggle", 0, "Toggle", "");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 
 
 void ED_object_toggle_modes(bContext *C, int mode)
 {
+	/* Couldn't we use object_mode_op_string() here?
+	 * Also, if several bits are set in mode, several toggle ops will be called, is this expected?
+	 * If so, would be nice to explain why. ;) --mont29
+	 */
 	if (mode & OB_MODE_SCULPT)
 		WM_operator_name_call(C, "SCULPT_OT_sculptmode_toggle", WM_OP_EXEC_REGION_WIN, NULL);
 	if (mode & OB_MODE_VERTEX_PAINT)
@@ -1603,7 +1666,7 @@ void ED_object_toggle_modes(bContext *C, int mode)
 
 /************************ Game Properties ***********************/
 
-static int game_property_new(bContext *C, wmOperator *op)
+static int game_property_new_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = CTX_data_active_object(C);
 	bProperty *prop;
@@ -1633,7 +1696,7 @@ void OBJECT_OT_game_property_new(wmOperatorType *ot)
 	ot->idname = "OBJECT_OT_game_property_new";
 
 	/* api callbacks */
-	ot->exec = game_property_new;
+	ot->exec = game_property_new_exec;
 	ot->poll = ED_operator_object_active_editable;
 
 	/* flags */
@@ -1643,7 +1706,7 @@ void OBJECT_OT_game_property_new(wmOperatorType *ot)
 	RNA_def_string(ot->srna, "name", "", MAX_NAME, "Name", "Name of the game property to add");
 }
 
-static int game_property_remove(bContext *C, wmOperator *op)
+static int game_property_remove_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = CTX_data_active_object(C);
 	bProperty *prop;
@@ -1674,7 +1737,7 @@ void OBJECT_OT_game_property_remove(wmOperatorType *ot)
 	ot->idname = "OBJECT_OT_game_property_remove";
 
 	/* api callbacks */
-	ot->exec = game_property_remove;
+	ot->exec = game_property_remove_exec;
 	ot->poll = ED_operator_object_active_editable;
 
 	/* flags */

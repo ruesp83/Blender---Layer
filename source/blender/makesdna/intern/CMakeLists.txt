@@ -29,7 +29,7 @@ add_definitions(-DWITH_DNA_GHASH)
 
 blender_include_dirs(
 	../../../../intern/guardedalloc
-	../../blenloader
+	../../../../intern/atomic
 	../../blenlib
 	..
 )
@@ -49,6 +49,11 @@ if(WIN32 AND NOT UNIX)
 endif()
 
 # SRC_DNA_INC is defined in the parent dir
+
+# for mallocn.c
+if (WITH_GUARDEDALLOC)
+	add_definitions(-DWITH_GUARDEDALLOC)
+endif()
 
 add_executable(makesdna ${SRC} ${SRC_DNA_INC})
 

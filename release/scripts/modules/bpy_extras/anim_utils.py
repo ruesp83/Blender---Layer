@@ -31,7 +31,9 @@ def bake_action(frame_start,
                 only_selected=False,
                 do_pose=True,
                 do_object=True,
+                do_visual_keying=True,
                 do_constraint_clear=False,
+                do_parents_clear=False,
                 do_clean=False,
                 action=None,
                 ):
@@ -52,8 +54,12 @@ def bake_action(frame_start,
     :type do_pose: bool
     :arg do_object: Bake objects.
     :type do_object: bool
-    :arg do_constraint_clear: Remove constraints (and do 'visual keying').
+    :arg do_visual_keying: Use the final transformations for baking ('visual keying')
+    :type do_visual_keying: bool
+    :arg do_constraint_clear: Remove constraints after baking.
     :type do_constraint_clear: bool
+    :arg do_parents_clear: Unparent after baking objects.
+    :type do_parents_clear: bool
     :arg do_clean: Remove redundant keyframes after baking.
     :type do_clean: bool
     :arg action: An action to bake the data into, or None for a new action
@@ -77,8 +83,17 @@ def bake_action(frame_start,
                 matrix[name] = pbone.matrix_basis.copy()
         return matrix
 
-    def obj_frame_info(obj, do_visual_keying):
-        return obj.matrix_local.copy() if do_visual_keying else obj.matrix_basis.copy()
+    if do_parents_clear:
+        def obj_frame_info(obj, do_visual_keying):
+            parent = obj.parent
+            matrix = obj.matrix_local if do_visual_keying else obj.matrix_local
+            if parent:
+                return parent.matrix_world * matrix
+            else:
+                return matrix.copy()
+    else:
+        def obj_frame_info(obj, do_visual_keying):
+            return obj.matrix_local.copy() if do_visual_keying else obj.matrix_local.copy()
 
     # -------------------------------------------------------------------------
     # Setup the Context
@@ -106,10 +121,11 @@ def bake_action(frame_start,
 
     for f in frame_range:
         scene.frame_set(f)
+        scene.update()
         if do_pose:
-            pose_info.append(pose_frame_info(obj, do_constraint_clear))
+            pose_info.append(pose_frame_info(obj, do_visual_keying))
         if do_object:
-            obj_info.append(obj_frame_info(obj, do_constraint_clear))
+            obj_info.append(obj_frame_info(obj, do_visual_keying))
 
     # -------------------------------------------------------------------------
     # Create action
@@ -191,6 +207,9 @@ def bake_action(frame_start,
                 obj.keyframe_insert("rotation_euler", -1, f, name, options)
 
             obj.keyframe_insert("scale", -1, f, name, options)
+
+        if do_parents_clear:
+            obj.parent = None
 
     # -------------------------------------------------------------------------
     # Clean

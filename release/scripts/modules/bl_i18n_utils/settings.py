@@ -101,7 +101,7 @@ IMPORT_MIN_LEVEL = 0.0
 
 # Languages in /branches we do not want to import in /trunk currently...
 IMPORT_LANGUAGES_SKIP = {
-    'am_ET', 'bg_BG', 'fi_FI', 'el_GR', 'et_EE', 'ne_NP', 'nl_NL', 'pl_PL', 'ro_RO', 'uz_UZ', 'uz_UZ@cyrillic',
+    'am_ET', 'bg_BG', 'fi_FI', 'el_GR', 'et_EE', 'ne_NP', 'pl_PL', 'ro_RO', 'uz_UZ', 'uz_UZ@cyrillic',
 }
 
 # Languages that need RTL pre-processing.
@@ -344,6 +344,7 @@ WARN_MSGID_END_POINT_ALLOWED = {
     "Temp. Diff.",
     "Float Neg. Exp.",
     "    RNA Path: bpy.types.",
+    "Max Ext.",
 }
 
 PARSER_CACHE_HASH = 'sha1'
@@ -466,9 +467,12 @@ def _do_set(ref, path):
     path = os.path.normpath(path)
     # If given path is absolute, make it relative to current ref one (else we consider it is already the case!)
     if os.path.isabs(path):
-        return os.path.relpath(path, ref)
-    else:
-        return path
+        # can't always find the relative path (between drive letters on windows)
+        try:
+            return os.path.relpath(path, ref)
+        except ValueError:
+            pass
+    return path
 
 def _gen_get_set_path(ref, name):
     def _get(self):

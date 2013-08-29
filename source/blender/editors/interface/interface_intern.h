@@ -94,7 +94,8 @@ typedef enum {
 	UI_WTYPE_BOX,
 	UI_WTYPE_SCROLL,
 	UI_WTYPE_LISTITEM,
-	UI_WTYPE_PROGRESSBAR
+	UI_WTYPE_PROGRESSBAR,
+	UI_WTYPE_LISTLABEL,
 } uiWidgetTypeEnum;
 
 /* menu scrolling */
@@ -201,7 +202,6 @@ struct uiBut {
 	uiButHandleFunc func;
 	void *func_arg1;
 	void *func_arg2;
-	void *func_arg3;
 
 	uiButHandleNFunc funcN;
 	void *func_argN;
@@ -231,10 +231,6 @@ struct uiBut {
 	short modifier_key;
 	short iconadd;
 
-	/* IDPOIN data */
-	uiIDPoinFuncFP idpoin_func;
-	ID **idpoin_idpp;
-
 	/* BLOCK data */
 	uiBlockCreateFunc block_create_func;
 
@@ -251,7 +247,6 @@ struct uiBut {
 
 	/* Operator data */
 	struct wmOperatorType *optype;
-	struct IDProperty *opproperties;
 	struct PointerRNA *opptr;
 	short opcontext;
 	unsigned char menu_key; /* 'a'-'z', always lower case */
@@ -372,9 +367,10 @@ extern void ui_delete_linkline(uiLinkLine *line, uiBut *but);
 
 void ui_fontscale(short *points, float aspect);
 
+extern bool ui_block_is_menu(const uiBlock *block);
 extern void ui_block_to_window_fl(const struct ARegion *ar, uiBlock *block, float *x, float *y);
 extern void ui_block_to_window(const struct ARegion *ar, uiBlock *block, int *x, int *y);
-extern void ui_block_to_window_rct(const struct ARegion *ar, uiBlock *block, const rctf *graph, rcti *winr);
+extern void ui_block_to_window_rctf(const struct ARegion *ar, uiBlock *block, rctf *rct_dst, const rctf *rct_src);
 extern void ui_window_to_block_fl(const struct ARegion *ar, uiBlock *block, float *x, float *y);
 extern void ui_window_to_block(const struct ARegion *ar, uiBlock *block, int *x, int *y);
 extern void ui_window_to_region(const ARegion *ar, int *x, int *y);
@@ -387,22 +383,24 @@ extern void ui_set_but_vectorf(uiBut *but, const float vec[3]);
 
 extern void ui_hsvcircle_vals_from_pos(float *val_rad, float *val_dist, const rcti *rect,
                                        const float mx, const float my);
+extern void ui_hsvcircle_pos_from_vals(struct uiBut *but, const rcti *rect, float *hsv, float *xpos, float *ypos);
+extern void ui_hsvcube_pos_from_vals(struct uiBut *but, const rcti *rect, float *hsv, float *xp, float *yp);
 
 extern void ui_get_but_string_ex(uiBut *but, char *str, const size_t maxlen, const int float_precision);
 extern void ui_get_but_string(uiBut *but, char *str, const size_t maxlen);
 extern void ui_convert_to_unit_alt_name(uiBut *but, char *str, size_t maxlen);
-extern int ui_set_but_string(struct bContext *C, uiBut *but, const char *str);
-extern int ui_get_but_string_max_length(uiBut *but);
-extern int ui_set_but_string_eval_num(struct bContext *C, uiBut *but, const char *str, double *value);
+extern bool ui_set_but_string(struct bContext *C, uiBut *but, const char *str);
+extern bool ui_set_but_string_eval_num(struct bContext *C, uiBut *but, const char *str, double *value);
+extern int  ui_get_but_string_max_length(uiBut *but);
 
 extern void ui_set_but_default(struct bContext *C, short all);
 
 extern void ui_check_but(uiBut *but);
-extern int  ui_is_but_float(uiBut *but);
-extern int  ui_is_but_bool(uiBut *but);
-extern int  ui_is_but_unit(uiBut *but);
-extern int  ui_is_but_rna_valid(uiBut *but);
-extern int  ui_is_but_utf8(uiBut *but);
+extern bool ui_is_but_float(uiBut *but);
+extern bool ui_is_but_bool(uiBut *but);
+extern bool ui_is_but_unit(uiBut *but);
+extern bool ui_is_but_rna_valid(uiBut *but);
+extern bool ui_is_but_utf8(uiBut *but);
 extern bool ui_is_but_interactive(uiBut *but);
 
 extern int  ui_is_but_push_ex(uiBut *but, double *value);
@@ -419,19 +417,30 @@ void ui_block_to_scene_linear_v3(uiBlock *block, float pixel[3]);
 
 /* interface_regions.c */
 
+struct uiKeyNavLock {
+	/* set when we're using keyinput */
+	bool is_keynav;
+	/* only used to check if we've moved the cursor */
+	int event_xy[2];
+};
+
 struct uiPopupBlockHandle {
 	/* internal */
 	struct ARegion *region;
-	int towardsx, towardsy;
-	double towardstime;
-	int dotowards;
 
-	int popup;
+	/* use only for 'UI_BLOCK_MOVEMOUSE_QUIT' popups */
+	float towards_xy[2];
+	double towardstime;
+	bool dotowards;
+
+	bool popup;
 	void (*popup_func)(struct bContext *C, void *arg, int event);
 	void (*cancel_func)(struct bContext *C, void *arg);
 	void *popup_arg;
 	
 	struct wmTimer *scrolltimer;
+
+	struct uiKeyNavLock keynav_state;
 
 	/* for operator popups */
 	struct wmOperatorType *optype;
@@ -450,8 +459,6 @@ struct uiPopupBlockHandle {
 };
 
 uiBlock *ui_block_func_COLOR(struct bContext *C, uiPopupBlockHandle *handle, void *arg_but);
-void ui_block_func_ICONROW(struct bContext *C, uiLayout *layout, void *arg_but);
-void ui_block_func_ICONTEXTROW(struct bContext *C, uiLayout *layout, void *arg_but);
 
 struct ARegion *ui_tooltip_create(struct bContext *C, struct ARegion *butregion, uiBut *but);
 void ui_tooltip_free(struct bContext *C, struct ARegion *ar);
@@ -464,11 +471,12 @@ void ui_popup_block_scrolltest(struct uiBlock *block);
 
 /* searchbox for string button */
 ARegion *ui_searchbox_create(struct bContext *C, struct ARegion *butregion, uiBut *but);
-int ui_searchbox_inside(struct ARegion *ar, int x, int y);
-void ui_searchbox_update(struct bContext *C, struct ARegion *ar, uiBut *but, int reset);
-void ui_searchbox_autocomplete(struct bContext *C, struct ARegion *ar, uiBut *but, char *str);
+bool ui_searchbox_inside(struct ARegion *ar, int x, int y);
+int  ui_searchbox_find_index(struct ARegion *ar, const char *name);
+void ui_searchbox_update(struct bContext *C, struct ARegion *ar, uiBut *but, const bool reset);
+bool ui_searchbox_autocomplete(struct bContext *C, struct ARegion *ar, uiBut *but, char *str);
 void ui_searchbox_event(struct bContext *C, struct ARegion *ar, uiBut *but, const struct wmEvent *event);
-void ui_searchbox_apply(uiBut *but, struct ARegion *ar);
+bool ui_searchbox_apply(uiBut *but, struct ARegion *ar);
 void ui_searchbox_free(struct bContext *C, struct ARegion *ar);
 void ui_but_search_test(uiBut *but);
 
@@ -511,7 +519,7 @@ extern void ui_pan_to_scroll(const struct wmEvent *event, int *type, int *val);
 extern void ui_button_activate_do(struct bContext *C, struct ARegion *ar, uiBut *but);
 extern void ui_button_execute_do(struct bContext *C, struct ARegion *ar, uiBut *but);
 extern void ui_button_active_free(const struct bContext *C, uiBut *but);
-extern int ui_button_is_active(struct ARegion *ar);
+extern bool ui_button_is_active(struct ARegion *ar);
 extern int ui_button_open_menu_direction(uiBut *but);
 extern void ui_button_text_password_hide(char password_str[UI_MAX_DRAW_STR], uiBut *but, int restore);
 
@@ -533,7 +541,7 @@ void ui_widget_color_init(struct ThemeUI *tui);
 void ui_draw_menu_item(struct uiFontStyle *fstyle, rcti *rect, const char *name, int iconid, int state);
 void ui_draw_preview_item(struct uiFontStyle *fstyle, rcti *rect, const char *name, int iconid, int state);
 
-extern unsigned char checker_stipple_sml[32 * 32 / 8];
+extern const unsigned char checker_stipple_sml[32 * 32 / 8];
 /* used for transp checkers */
 #define UI_TRANSP_DARK 100
 #define UI_TRANSP_LIGHT 160
@@ -544,11 +552,12 @@ extern unsigned char checker_stipple_sml[32 * 32 / 8];
 void uiStyleInit(void);
 
 /* interface_icons.c */
-int ui_id_icon_get(struct bContext *C, struct ID *id, int preview);
+int ui_id_icon_get(struct bContext *C, struct ID *id, const bool big);
 
 /* resources.c */
 void init_userdef_do_versions(void);
 void ui_theme_init_default(void);
+void ui_style_init_default(void);
 void ui_resources_init(void);
 void ui_resources_free(void);
 
@@ -556,7 +565,8 @@ void ui_resources_free(void);
 void ui_layout_add_but(uiLayout *layout, uiBut *but);
 int ui_but_can_align(uiBut *but);
 void ui_but_add_search(uiBut *but, PointerRNA *ptr, PropertyRNA *prop, PointerRNA *searchptr, PropertyRNA *searchprop);
-void ui_but_add_shortcut(uiBut *but, const char *key_str, const short do_strip);
+void ui_but_add_shortcut(uiBut *but, const char *key_str, const bool do_strip);
+void ui_layout_list_set_labels_active(uiLayout *layout);
 
 /* interface_anim.c */
 void ui_but_anim_flag(uiBut *but, float cfra);

@@ -60,26 +60,30 @@ struct bNodeSocket *node_add_socket_from_template(struct bNodeTree *ntree, struc
 	
 	/* initialize default_value */
 	switch (stemp->type) {
-		case SOCK_FLOAT: {
+		case SOCK_FLOAT:
+		{
 			bNodeSocketValueFloat *dval = sock->default_value;
 			dval->value = stemp->val1;
 			dval->min = stemp->min;
 			dval->max = stemp->max;
 			break;
 		}
-		case SOCK_INT: {
+		case SOCK_INT:
+		{
 			bNodeSocketValueInt *dval = sock->default_value;
 			dval->value = (int)stemp->val1;
 			dval->min = (int)stemp->min;
 			dval->max = (int)stemp->max;
 			break;
 		}
-		case SOCK_BOOLEAN: {
+		case SOCK_BOOLEAN:
+		{
 			bNodeSocketValueBoolean *dval = sock->default_value;
 			dval->value = (int)stemp->val1;
 			break;
 		}
-		case SOCK_VECTOR: {
+		case SOCK_VECTOR:
+		{
 			bNodeSocketValueVector *dval = sock->default_value;
 			dval->value[0] = stemp->val1;
 			dval->value[1] = stemp->val2;
@@ -88,7 +92,8 @@ struct bNodeSocket *node_add_socket_from_template(struct bNodeTree *ntree, struc
 			dval->max = stemp->max;
 			break;
 		}
-		case SOCK_RGBA: {
+		case SOCK_RGBA:
+		{
 			bNodeSocketValueRGBA *dval = sock->default_value;
 			dval->value[0] = stemp->val1;
 			dval->value[1] = stemp->val2;
@@ -105,14 +110,13 @@ static bNodeSocket *verify_socket_template(bNodeTree *ntree, bNode *node, int in
 {
 	bNodeSocket *sock;
 	
-	for (sock= socklist->first; sock; sock= sock->next) {
-		if (strncmp(sock->name, stemp->name, NODE_MAXSTR)==0)
+	for (sock = socklist->first; sock; sock = sock->next) {
+		if (strncmp(sock->name, stemp->name, NODE_MAXSTR) == 0)
 			break;
 	}
 	if (sock) {
 		sock->type = stemp->type;
-		if (stemp->limit == 0) sock->limit= 0xFFF;
-		else sock->limit = stemp->limit;
+		sock->limit = (stemp->limit == 0 ? 0xFFF : stemp->limit);
 		sock->flag |= stemp->flag;
 		
 		BLI_remlink(socklist, sock);
@@ -137,27 +141,27 @@ static void verify_socket_template_list(bNodeTree *ntree, bNode *node, int in_ou
 	bNodeSocketTemplate *stemp;
 	
 	/* no inputs anymore? */
-	if (stemp_first==NULL) {
-		for (sock = (bNodeSocket*)socklist->first; sock; sock=nextsock) {
+	if (stemp_first == NULL) {
+		for (sock = (bNodeSocket *)socklist->first; sock; sock = nextsock) {
 			nextsock = sock->next;
 			nodeRemoveSocket(ntree, node, sock);
 		}
 	}
 	else {
 		/* step by step compare */
-		stemp= stemp_first;
+		stemp = stemp_first;
 		while (stemp->type != -1) {
-			stemp->sock= verify_socket_template(ntree, node, in_out, socklist, stemp);
+			stemp->sock = verify_socket_template(ntree, node, in_out, socklist, stemp);
 			stemp++;
 		}
 		/* leftovers are removed */
-		for (sock = (bNodeSocket*)socklist->first; sock; sock=nextsock) {
+		for (sock = (bNodeSocket *)socklist->first; sock; sock = nextsock) {
 			nextsock = sock->next;
 			nodeRemoveSocket(ntree, node, sock);
 		}
 		
 		/* and we put back the verified sockets */
-		stemp= stemp_first;
+		stemp = stemp_first;
 		if (socklist->first) {
 			/* some dynamic sockets left, store the list start
 			 * so we can add static sockets infront of it.
@@ -180,7 +184,7 @@ static void verify_socket_template_list(bNodeTree *ntree, bNode *node, int in_ou
 
 void node_verify_socket_templates(bNodeTree *ntree, bNode *node)
 {
-	bNodeType *ntype= node->typeinfo;
+	bNodeType *ntype = node->typeinfo;
 	/* Don't try to match socket lists when there are no templates.
 	 * This prevents group node sockets from being removed, without the need to explicitly
 	 * check the node type here.
@@ -200,63 +204,69 @@ void node_socket_init_default_value(bNodeSocket *sock)
 	int subtype = sock->typeinfo->subtype;
 	
 	if (sock->default_value)
-		return;	/* already initialized */
+		return; /* already initialized */
 	
 	switch (type) {
-	case SOCK_FLOAT: {
-		bNodeSocketValueFloat *dval = MEM_callocN(sizeof(bNodeSocketValueFloat), "node socket value float");
-		dval->subtype = subtype;
-		dval->value = 0.0f;
-		dval->min = -FLT_MAX;
-		dval->max = FLT_MAX;
+		case SOCK_FLOAT:
+		{
+			bNodeSocketValueFloat *dval = MEM_callocN(sizeof(bNodeSocketValueFloat), "node socket value float");
+			dval->subtype = subtype;
+			dval->value = 0.0f;
+			dval->min = -FLT_MAX;
+			dval->max = FLT_MAX;
 		
-		sock->default_value = dval;
-		break;
-	}
-	case SOCK_INT: {
-		bNodeSocketValueInt *dval = MEM_callocN(sizeof(bNodeSocketValueInt), "node socket value int");
-		dval->subtype = subtype;
-		dval->value = 0;
-		dval->min = INT_MIN;
-		dval->max = INT_MAX;
+			sock->default_value = dval;
+			break;
+		}
+		case SOCK_INT:
+		{
+			bNodeSocketValueInt *dval = MEM_callocN(sizeof(bNodeSocketValueInt), "node socket value int");
+			dval->subtype = subtype;
+			dval->value = 0;
+			dval->min = INT_MIN;
+			dval->max = INT_MAX;
 		
-		sock->default_value = dval;
-		break;
-	}
-	case SOCK_BOOLEAN: {
-		bNodeSocketValueBoolean *dval = MEM_callocN(sizeof(bNodeSocketValueBoolean), "node socket value bool");
-		dval->value = false;
+			sock->default_value = dval;
+			break;
+		}
+		case SOCK_BOOLEAN:
+		{
+			bNodeSocketValueBoolean *dval = MEM_callocN(sizeof(bNodeSocketValueBoolean), "node socket value bool");
+			dval->value = false;
 		
-		sock->default_value = dval;
-		break;
-	}
-	case SOCK_VECTOR: {
-		static float default_value[] = { 0.0f, 0.0f, 0.0f };
-		bNodeSocketValueVector *dval = MEM_callocN(sizeof(bNodeSocketValueVector), "node socket value vector");
-		dval->subtype = subtype;
-		copy_v3_v3(dval->value, default_value);
-		dval->min = -FLT_MAX;
-		dval->max = FLT_MAX;
+			sock->default_value = dval;
+			break;
+		}
+		case SOCK_VECTOR:
+		{
+			static float default_value[] = { 0.0f, 0.0f, 0.0f };
+			bNodeSocketValueVector *dval = MEM_callocN(sizeof(bNodeSocketValueVector), "node socket value vector");
+			dval->subtype = subtype;
+			copy_v3_v3(dval->value, default_value);
+			dval->min = -FLT_MAX;
+			dval->max = FLT_MAX;
 		
-		sock->default_value = dval;
-		break;
-	}
-	case SOCK_RGBA: {
-		static float default_value[] = { 0.0f, 0.0f, 0.0f, 1.0f };
-		bNodeSocketValueRGBA *dval = MEM_callocN(sizeof(bNodeSocketValueRGBA), "node socket value color");
-		copy_v4_v4(dval->value, default_value);
+			sock->default_value = dval;
+			break;
+		}
+		case SOCK_RGBA:
+		{
+			static float default_value[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+			bNodeSocketValueRGBA *dval = MEM_callocN(sizeof(bNodeSocketValueRGBA), "node socket value color");
+			copy_v4_v4(dval->value, default_value);
 		
-		sock->default_value = dval;
-		break;
-	}
-	case SOCK_STRING: {
-		bNodeSocketValueString *dval = MEM_callocN(sizeof(bNodeSocketValueString), "node socket value string");
-		dval->subtype = subtype;
-		dval->value[0] = '\0';
+			sock->default_value = dval;
+			break;
+		}
+		case SOCK_STRING:
+		{
+			bNodeSocketValueString *dval = MEM_callocN(sizeof(bNodeSocketValueString), "node socket value string");
+			dval->subtype = subtype;
+			dval->value[0] = '\0';
 		
-		sock->default_value = dval;
-		break;
-	}
+			sock->default_value = dval;
+			break;
+		}
 	}
 }
 
@@ -272,43 +282,51 @@ void node_socket_copy_default_value(bNodeSocket *to, bNodeSocket *from)
 	node_socket_init_default_value(to);
 	
 	switch (from->typeinfo->type) {
-		case SOCK_FLOAT: {
+		case SOCK_FLOAT:
+		{
 			bNodeSocketValueFloat *toval = to->default_value;
 			bNodeSocketValueFloat *fromval = from->default_value;
 			*toval = *fromval;
 			break;
 		}
-		case SOCK_INT: {
+		case SOCK_INT:
+		{
 			bNodeSocketValueInt *toval = to->default_value;
 			bNodeSocketValueInt *fromval = from->default_value;
 			*toval = *fromval;
 			break;
 		}
-		case SOCK_BOOLEAN: {
+		case SOCK_BOOLEAN:
+		{
 			bNodeSocketValueBoolean *toval = to->default_value;
 			bNodeSocketValueBoolean *fromval = from->default_value;
 			*toval = *fromval;
 			break;
 		}
-		case SOCK_VECTOR: {
+		case SOCK_VECTOR:
+		{
 			bNodeSocketValueVector *toval = to->default_value;
 			bNodeSocketValueVector *fromval = from->default_value;
 			*toval = *fromval;
 			break;
 		}
-		case SOCK_RGBA: {
+		case SOCK_RGBA:
+		{
 			bNodeSocketValueRGBA *toval = to->default_value;
 			bNodeSocketValueRGBA *fromval = from->default_value;
 			*toval = *fromval;
 			break;
 		}
-		case SOCK_STRING: {
+		case SOCK_STRING:
+		{
 			bNodeSocketValueString *toval = to->default_value;
 			bNodeSocketValueString *fromval = from->default_value;
 			*toval = *fromval;
 			break;
 		}
 	}
+
+	to->flag |= (from->flag & SOCK_HIDE_VALUE);
 }
 
 static void standard_node_socket_interface_init_socket(bNodeTree *UNUSED(ntree), bNodeSocket *stemp, bNode *UNUSED(node), bNodeSocket *sock, const char *UNUSED(data_path))
@@ -333,21 +351,24 @@ static void standard_node_socket_interface_verify_socket(bNodeTree *UNUSED(ntree
 	node_socket_init_default_value(sock);
 	
 	switch (stemp->typeinfo->type) {
-		case SOCK_FLOAT: {
+		case SOCK_FLOAT:
+		{
 			bNodeSocketValueFloat *toval = sock->default_value;
 			bNodeSocketValueFloat *fromval = stemp->default_value;
 			toval->min = fromval->min;
 			toval->max = fromval->max;
 			break;
 		}
-		case SOCK_INT: {
+		case SOCK_INT:
+		{
 			bNodeSocketValueInt *toval = sock->default_value;
 			bNodeSocketValueInt *fromval = stemp->default_value;
 			toval->min = fromval->min;
 			toval->max = fromval->max;
 			break;
 		}
-		case SOCK_VECTOR: {
+		case SOCK_VECTOR:
+		{
 			bNodeSocketValueVector *toval = sock->default_value;
 			bNodeSocketValueVector *fromval = stemp->default_value;
 			toval->min = fromval->min;

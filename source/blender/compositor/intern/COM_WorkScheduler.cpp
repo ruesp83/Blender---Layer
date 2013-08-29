@@ -23,8 +23,6 @@
 #include <list>
 #include <stdio.h>
 
-#include "BKE_global.h"
-
 #include "COM_compositor.h"
 #include "COM_WorkScheduler.h"
 #include "COM_CPUDevice.h"
@@ -37,6 +35,8 @@
 
 #include "PIL_time.h"
 #include "BLI_threads.h"
+
+#include "BKE_global.h"
 
 #if COM_CURRENT_THREADING_MODEL == COM_TM_NOTHREAD
 #  ifndef DEBUG  /* test this so we dont get warnings in debug builds */
@@ -81,6 +81,7 @@ int g_highlightIndex;
 void **g_highlightedNodes;
 void **g_highlightedNodesRead;
 
+#if COM_CURRENT_THREADING_MODEL == COM_TM_QUEUE
 #define HIGHLIGHT(wp) \
 { \
 	ExecutionGroup *group = wp->getExecutionGroup(); \
@@ -103,6 +104,7 @@ void **g_highlightedNodesRead;
 		} \
 	} \
 }
+#endif  /* COM_CURRENT_THREADING_MODEL == COM_TM_QUEUE */
 
 void COM_startReadHighlights()
 {
@@ -304,13 +306,15 @@ void WorkScheduler::initialize(bool use_opencl)
 		g_context = NULL;
 		g_program = NULL;
 
-		OCL_init(); /* this will check and skip if already initialized */
+		if (!OCL_init()) /* this will check for errors and skip if already initialized */
+			return;
 
 		if (clCreateContextFromType) {
 			cl_uint numberOfPlatforms = 0;
 			cl_int error;
 			error = clGetPlatformIDs(0, 0, &numberOfPlatforms);
-			if (error != CL_SUCCESS) { printf("CLERROR[%d]: %s\n", error, clewErrorString(error));  }
+			if (error == -1001) { }   /* GPU not supported */
+			else if (error != CL_SUCCESS) { printf("CLERROR[%d]: %s\n", error, clewErrorString(error));  }
 			if (G.f & G_DEBUG) printf("%d number of platforms\n", numberOfPlatforms);
 			cl_platform_id *platforms = (cl_platform_id *)MEM_mallocN(sizeof(cl_platform_id) * numberOfPlatforms, __func__);
 			error = clGetPlatformIDs(numberOfPlatforms, platforms, 0);

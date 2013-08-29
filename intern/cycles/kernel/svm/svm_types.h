@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 #ifndef __SVM_TYPES_H__
@@ -51,6 +49,9 @@ typedef enum NodeType {
 	NODE_ATTR,
 	NODE_CONVERT,
 	NODE_FRESNEL,
+	NODE_WIREFRAME,
+	NODE_WAVELENGTH,
+	NODE_BLACKBODY,
 	NODE_EMISSION_WEIGHT,
 	NODE_TEX_GRADIENT,
 	NODE_TEX_VORONOI,
@@ -65,6 +66,7 @@ typedef enum NodeType {
 	NODE_SET_BUMP,
 	NODE_MATH,
 	NODE_VECTOR_MATH,
+	NODE_VECTOR_TRANSFORM,
 	NODE_MAPPING,
 	NODE_TEX_COORD,
 	NODE_TEX_COORD_BUMP_DX,
@@ -79,6 +81,8 @@ typedef enum NodeType {
 	NODE_CLOSURE_VOLUME,
 	NODE_SEPARATE_RGB,
 	NODE_COMBINE_RGB,
+	NODE_SEPARATE_HSV,
+	NODE_COMBINE_HSV,
 	NODE_HSV,
 	NODE_CAMERA,
 	NODE_INVERT,
@@ -137,6 +141,8 @@ typedef enum NodeHairInfo {
 	NODE_INFO_CURVE_IS_STRAND,
 	NODE_INFO_CURVE_INTERCEPT,
 	NODE_INFO_CURVE_THICKNESS,
+	/*fade for minimum hair width transpency*/
+	/*NODE_INFO_CURVE_FADE,*/
 	NODE_INFO_CURVE_TANGENT_NORMAL
 } NodeHairInfo;
 
@@ -149,7 +155,8 @@ typedef enum NodeLightPath {
 	NODE_LP_reflection,
 	NODE_LP_transmission,
 	NODE_LP_backfacing,
-	NODE_LP_ray_length
+	NODE_LP_ray_length,
+	NODE_LP_ray_depth
 } NodeLightPath;
 
 typedef enum NodeLightFalloff {
@@ -208,6 +215,7 @@ typedef enum NodeMath {
 	NODE_MATH_ROUND,
 	NODE_MATH_LESS_THAN,
 	NODE_MATH_GREATER_THAN,
+	NODE_MATH_MODULO,
 	NODE_MATH_CLAMP /* used for the clamp UI option */
 } NodeMath;
 
@@ -219,6 +227,18 @@ typedef enum NodeVectorMath {
 	NODE_VECTOR_MATH_CROSS_PRODUCT,
 	NODE_VECTOR_MATH_NORMALIZE
 } NodeVectorMath;
+
+typedef enum NodeVectorTransformType {
+	NODE_VECTOR_TRANSFORM_TYPE_VECTOR,
+	NODE_VECTOR_TRANSFORM_TYPE_POINT,
+	NODE_VECTOR_TRANSFORM_TYPE_NORMAL
+} NodeVectorTransformType;
+
+typedef enum NodeVectorTransformConvertSpace {
+	NODE_VECTOR_TRANSFORM_CONVERT_SPACE_WORLD,
+	NODE_VECTOR_TRANSFORM_CONVERT_SPACE_OBJECT,
+	NODE_VECTOR_TRANSFORM_CONVERT_SPACE_CAMERA
+} NodeVectorTransformConvertSpace;
 
 typedef enum NodeConvert {
 	NODE_CONVERT_FV,
@@ -252,12 +272,6 @@ typedef enum NodeNoiseBasis {
 	NODE_NOISE_CELL_NOISE
 } NodeNoiseBasis;
 
-typedef enum NodeWaveBasis {
-	NODE_WAVE_SINE,
-	NODE_WAVE_SAW,
-	NODE_WAVE_TRI
-} NodeWaveBasis;
-
 typedef enum NodeMusgraveType {
 	NODE_MUSGRAVE_MULTIFRACTAL,
 	NODE_MUSGRAVE_FBM,
@@ -270,6 +284,11 @@ typedef enum NodeWaveType {
 	NODE_WAVE_BANDS,
 	NODE_WAVE_RINGS
 } NodeWaveType;
+
+typedef enum NodeSkyType {
+	NODE_SKY_OLD,
+	NODE_SKY_NEW
+} NodeSkyType;
 
 typedef enum NodeGradientType {
 	NODE_BLEND_LINEAR,
@@ -305,7 +324,9 @@ typedef enum NodeTangentAxis {
 typedef enum NodeNormalMapSpace {
 	NODE_NORMAL_MAP_TANGENT,
 	NODE_NORMAL_MAP_OBJECT,
-	NODE_NORMAL_MAP_WORLD
+	NODE_NORMAL_MAP_WORLD,
+	NODE_NORMAL_MAP_BLENDER_OBJECT,
+	NODE_NORMAL_MAP_BLENDER_WORLD,
 } NodeNormalMapSpace;
 
 typedef enum ShaderType {
@@ -318,41 +339,52 @@ typedef enum ShaderType {
 
 typedef enum ClosureType {
 	CLOSURE_BSDF_ID,
-
+	
+	/* Diffuse */
 	CLOSURE_BSDF_DIFFUSE_ID,
 	CLOSURE_BSDF_OREN_NAYAR_ID,
+	CLOSURE_BSDF_WESTIN_SHEEN_ID,
 	CLOSURE_BSDF_DIFFUSE_RAMP_ID,
 	CLOSURE_BSDF_DIFFUSE_TOON_ID,
-
+	
+	/* Glossy */
 	CLOSURE_BSDF_GLOSSY_ID,
 	CLOSURE_BSDF_REFLECTION_ID,
 	CLOSURE_BSDF_MICROFACET_GGX_ID,
 	CLOSURE_BSDF_MICROFACET_BECKMANN_ID,
 	CLOSURE_BSDF_WARD_ID,
 	CLOSURE_BSDF_ASHIKHMIN_VELVET_ID,
-	CLOSURE_BSDF_WESTIN_SHEEN_ID,
+	CLOSURE_BSDF_WESTIN_BACKSCATTER_ID,
 	CLOSURE_BSDF_PHONG_RAMP_ID,
-	CLOSURE_BSDF_SPECULAR_TOON_ID,
-
+	CLOSURE_BSDF_GLOSSY_TOON_ID,
+	
+	/* Transmission */
 	CLOSURE_BSDF_TRANSMISSION_ID,
 	CLOSURE_BSDF_TRANSLUCENT_ID,
 	CLOSURE_BSDF_REFRACTION_ID,
-	CLOSURE_BSDF_WESTIN_BACKSCATTER_ID,
 	CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID,
 	CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID,
 	CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID,
 	CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID,
 	CLOSURE_BSDF_SHARP_GLASS_ID,
-
+	
+	/* Special cases */
+	CLOSURE_BSDF_BSSRDF_ID,
 	CLOSURE_BSDF_TRANSPARENT_ID,
 
-	CLOSURE_BSSRDF_ID,
+	/* BSSRDF */
+	CLOSURE_BSSRDF_COMPATIBLE_ID,
+	CLOSURE_BSSRDF_CUBIC_ID,
+	CLOSURE_BSSRDF_GAUSSIAN_ID,
+
+	/* Other */
 	CLOSURE_EMISSION_ID,
 	CLOSURE_DEBUG_ID,
 	CLOSURE_BACKGROUND_ID,
 	CLOSURE_HOLDOUT_ID,
 	CLOSURE_AMBIENT_OCCLUSION_ID,
 
+	/* Volume */
 	CLOSURE_VOLUME_ID,
 	CLOSURE_VOLUME_TRANSPARENT_ID,
 	CLOSURE_VOLUME_ISOTROPIC_ID,
@@ -362,10 +394,11 @@ typedef enum ClosureType {
 
 /* watch this, being lazy with memory usage */
 #define CLOSURE_IS_BSDF(type) (type <= CLOSURE_BSDF_TRANSPARENT_ID)
-#define CLOSURE_IS_BSDF_DIFFUSE(type) (type >= CLOSURE_BSDF_DIFFUSE_ID && type <= CLOSURE_BSDF_OREN_NAYAR_ID)
-#define CLOSURE_IS_BSDF_GLOSSY(type) (type >= CLOSURE_BSDF_GLOSSY_ID && type <= CLOSURE_BSDF_PHONG_RAMP_ID)
+#define CLOSURE_IS_BSDF_DIFFUSE(type) (type >= CLOSURE_BSDF_DIFFUSE_ID && type <= CLOSURE_BSDF_DIFFUSE_TOON_ID)
+#define CLOSURE_IS_BSDF_GLOSSY(type) (type >= CLOSURE_BSDF_GLOSSY_ID && type <= CLOSURE_BSDF_GLOSSY_TOON_ID)
 #define CLOSURE_IS_BSDF_TRANSMISSION(type) (type >= CLOSURE_BSDF_TRANSMISSION_ID && type <= CLOSURE_BSDF_SHARP_GLASS_ID)
-#define CLOSURE_IS_BSSRDF(type) (type == CLOSURE_BSSRDF_ID)
+#define CLOSURE_IS_BSDF_BSSRDF(type) (type == CLOSURE_BSDF_BSSRDF_ID)
+#define CLOSURE_IS_BSSRDF(type) (type >= CLOSURE_BSSRDF_COMPATIBLE_ID && type <= CLOSURE_BSSRDF_GAUSSIAN_ID)
 #define CLOSURE_IS_VOLUME(type) (type >= CLOSURE_VOLUME_ID && type <= CLOSURE_VOLUME_ISOTROPIC_ID)
 #define CLOSURE_IS_EMISSION(type) (type == CLOSURE_EMISSION_ID)
 #define CLOSURE_IS_HOLDOUT(type) (type == CLOSURE_HOLDOUT_ID)

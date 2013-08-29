@@ -43,12 +43,12 @@
 #endif   
 #include "MEM_guardedalloc.h"
 
-#include "BLO_readfile.h" 
-
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
+
+#include "BLO_readfile.h"
 
 #include "DNA_world_types.h"
 #include "DNA_camera_types.h"
@@ -92,7 +92,6 @@
 #include "PIL_time.h"
 
 #include "RE_pipeline.h"
-
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -274,7 +273,7 @@ static Scene *preview_prepare_scene(Scene *scene, ID *id, int id_type, ShaderPre
 	if (sce) {
 		
 		/* this flag tells render to not execute depsgraph or ipos etc */
-		sce->r.scemode |= R_PREVIEWBUTS;
+		sce->r.scemode |= R_BUTS_PREVIEW;
 		/* set world always back, is used now */
 		sce->world = pr_main->world.first;
 		/* now: exposure copy */
@@ -382,6 +381,10 @@ static Scene *preview_prepare_scene(Scene *scene, ID *id, int id_type, ShaderPre
 					}
 					else {
 						sce->lay = 1 << MA_SPHERE_A;
+
+						/* same as above, use current scene world to light sphere */
+						if (BKE_scene_use_new_shading_nodes(scene))
+							sce->world = scene->world;
 					}
 				}
 				else {
@@ -528,6 +531,7 @@ static int ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, r
 	int offx = 0;
 	int newx = BLI_rcti_size_x(rect);
 	int newy = BLI_rcti_size_y(rect);
+	int ok = 0;
 
 	if (!split || first) sprintf(name, "Preview %p", (void *)sa);
 	else sprintf(name, "SecondPreview %p", (void *)sa);
@@ -546,7 +550,6 @@ static int ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, r
 	/* test if something rendered ok */
 	re = RE_GetRender(name);
 	RE_AcquireResultImage(re, &rres);
-	RE_ReleaseResultImage(re);
 
 	if (rres.rectf) {
 		
@@ -560,27 +563,31 @@ static int ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, r
 				float fx = rect->xmin + offx;
 				float fy = rect->ymin;
 				
-				RE_ResultGet32(re, (unsigned int *)rect_byte);
+				RE_AcquiredResultGet32(re, &rres, (unsigned int *)rect_byte);
 				glaDrawPixelsSafe(fx, fy, rres.rectx, rres.recty, rres.rectx, GL_RGBA, GL_UNSIGNED_BYTE, rect_byte);
 				
 				MEM_freeN(rect_byte);
 				
-				return 1;
+				ok = 1;
 			}
 		}
 	}
 
-	return 0;
+	RE_ReleaseResultImage(re);
+
+	return ok;
 }
 
 void ED_preview_draw(const bContext *C, void *idp, void *parentp, void *slotp, rcti *rect)
 {
 	if (idp) {
+		wmWindowManager *wm = CTX_wm_manager(C);
 		ScrArea *sa = CTX_wm_area(C);
 		ID *id = (ID *)idp;
 		ID *parent = (ID *)parentp;
 		MTex *slot = (MTex *)slotp;
 		SpaceButs *sbuts = sa->spacedata.first;
+		ShaderPreview *sp = WM_jobs_customdata(wm, sa);
 		rcti newrect;
 		int ok;
 		int newx = BLI_rcti_size_x(rect);
@@ -601,13 +608,14 @@ void ED_preview_draw(const bContext *C, void *idp, void *parentp, void *slotp, r
 		if (ok)
 			*rect = newrect;
 
-		/* check for spacetype... */
-		if (sbuts->spacetype == SPACE_BUTS && sbuts->preview) {
+		/* start a new preview render job if signalled through sbuts->preview,
+		 * if no render result was found and no preview render job is running,
+		 * or if the job is running and the size of preview changed */
+		if ((sbuts->spacetype == SPACE_BUTS && sbuts->preview) ||
+		    (!ok && !WM_jobs_test(wm, sa, WM_JOB_TYPE_RENDER_PREVIEW)) ||
+			(sp && (ABS(sp->sizex - newx) >= 2 || ABS(sp->sizey - newy) > 2)))
+		{
 			sbuts->preview = 0;
-			ok = 0;
-		}
-	
-		if (ok == 0) {
 			ED_preview_shader_job(C, sa, id, parent, slot, newx, newy, PR_BUTS_RENDER);
 		}
 	}
@@ -959,7 +967,7 @@ static void icon_preview_startjob(void *customdata, short *stop, short *do_updat
 
 		br->icon_imbuf = get_brush_icon(br);
 
-		memset(sp->pr_rect, 0x888888, sp->sizex * sp->sizey * sizeof(unsigned int));
+		memset(sp->pr_rect, 0x88, sp->sizex * sp->sizey * sizeof(unsigned int));
 
 		if (!(br->icon_imbuf) || !(br->icon_imbuf->rect))
 			return;
@@ -1026,6 +1034,7 @@ static void icon_preview_startjob_all_sizes(void *customdata, short *stop, short
 {
 	IconPreview *ip = (IconPreview *)customdata;
 	IconPreviewSize *cur_size = ip->sizes.first;
+	int use_new_shading = BKE_scene_use_new_shading_nodes(ip->scene);
 
 	while (cur_size) {
 		ShaderPreview *sp = MEM_callocN(sizeof(ShaderPreview), "Icon ShaderPreview");
@@ -1038,7 +1047,20 @@ static void icon_preview_startjob_all_sizes(void *customdata, short *stop, short
 		sp->pr_method = PR_ICON_RENDER;
 		sp->pr_rect = cur_size->rect;
 		sp->id = ip->id;
-		sp->pr_main = G_pr_main;
+
+		if (use_new_shading) {
+			/* texture icon rendering is hardcoded to use BI,
+			 * so don't even think of using cycle's bmain for
+			 * texture icons
+			 */
+			if (GS(ip->id->name) != ID_TE)
+				sp->pr_main = G_pr_main_cycles;
+			else
+				sp->pr_main = G_pr_main;
+		}
+		else {
+			sp->pr_main = G_pr_main;
+		}
 
 		common_preview_startjob(sp, stop, do_update, progress);
 		shader_preview_free(sp);
@@ -1161,5 +1183,7 @@ void ED_preview_kill_jobs(const struct bContext *C)
 	wmWindowManager *wm = CTX_wm_manager(C);
 	if (wm)
 		WM_jobs_kill(wm, NULL, common_preview_startjob);
+	
+	ED_viewport_render_kill_jobs(C, false);
 }
 

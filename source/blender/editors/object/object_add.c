@@ -101,6 +101,7 @@
 #include "ED_mesh.h"
 #include "ED_node.h"
 #include "ED_object.h"
+#include "ED_physics.h"
 #include "ED_render.h"
 #include "ED_screen.h"
 #include "ED_transform.h"
@@ -225,7 +226,7 @@ float ED_object_new_primitive_matrix(bContext *C, Object *obedit,
 		return dia;
 	}
 
-	return 1.0f;
+	// return 1.0f;
 }
 
 /********************* Add Object Operator ********************/
@@ -261,13 +262,14 @@ void ED_object_add_generic_props(wmOperatorType *ot, int do_editmode)
 }
 
 int ED_object_add_generic_get_opts(bContext *C, wmOperator *op, float loc[3], float rot[3],
-                                   int *enter_editmode, unsigned int *layer, int *is_view_aligned)
+                                   bool *enter_editmode, unsigned int *layer, bool *is_view_aligned)
 {
 	View3D *v3d = CTX_wm_view3d(C);
+	unsigned int _layer;
 
 	/* Switch to Edit mode? */
 	if (RNA_struct_find_property(op->ptr, "enter_editmode")) { /* optional */
-		int _enter_editmode;
+		bool _enter_editmode;
 		if (!enter_editmode)
 			enter_editmode = &_enter_editmode;
 
@@ -282,7 +284,6 @@ int ED_object_add_generic_get_opts(bContext *C, wmOperator *op, float loc[3], fl
 	/* Get layers! */
 	{
 		int a, layer_values[20];
-		unsigned int _layer;
 		if (!layer)
 			layer = &_layer;
 
@@ -329,7 +330,7 @@ int ED_object_add_generic_get_opts(bContext *C, wmOperator *op, float loc[3], fl
 
 	/* Rotation! */
 	{
-		int _is_view_aligned;
+		bool _is_view_aligned;
 		float _rot[3];
 		if (!is_view_aligned)
 			is_view_aligned = &_is_view_aligned;
@@ -337,11 +338,11 @@ int ED_object_add_generic_get_opts(bContext *C, wmOperator *op, float loc[3], fl
 			rot = _rot;
 
 		if (RNA_struct_property_is_set(op->ptr, "rotation"))
-			*is_view_aligned = FALSE;
+			*is_view_aligned = false;
 		else if (RNA_struct_property_is_set(op->ptr, "view_align"))
 			*is_view_aligned = RNA_boolean_get(op->ptr, "view_align");
 		else {
-			*is_view_aligned = U.flag & USER_ADD_VIEWALIGNED;
+			*is_view_aligned = (U.flag & USER_ADD_VIEWALIGNED) != 0;
 			RNA_boolean_set(op->ptr, "view_align", *is_view_aligned);
 		}
 
@@ -375,13 +376,19 @@ Object *ED_object_add_type(bContext *C, int type, const float loc[3], const floa
 		ED_object_editmode_exit(C, EM_FREEDATA | EM_FREEUNDO | EM_WAITCURSOR | EM_DO_UNDO);  /* freedata, and undo */
 
 	/* deselects all, sets scene->basact */
-	ob = BKE_object_add(scene, type);
+	ob = BKE_object_add(bmain, scene, type);
 	BASACT->lay = ob->lay = layer;
 	/* editor level activate, notifiers */
 	ED_base_object_activate(C, BASACT);
 
 	/* more editor stuff */
 	ED_object_base_init_transform(C, BASACT, loc, rot);
+
+	/* Ignore collisions by default for non-mesh objects */
+	if (type != OB_MESH) {
+		ob->body_type = OB_BODY_TYPE_NO_COLLISION;
+		ob->gameflag &= ~(OB_SENSOR | OB_RIGID_BODY | OB_SOFT_BODY | OB_COLLISION | OB_CHARACTER | OB_OCCLUDER | OB_DYNAMIC | OB_NAVMESH); /* copied from rna_object.c */
+	}
 
 	DAG_id_type_tag(bmain, ID_OB);
 	DAG_relations_tag_update(bmain);
@@ -400,7 +407,7 @@ Object *ED_object_add_type(bContext *C, int type, const float loc[3], const floa
 /* for object add operator */
 static int object_add_exec(bContext *C, wmOperator *op)
 {
-	int enter_editmode;
+	bool enter_editmode;
 	unsigned int layer;
 	float loc[3], rot[3];
 
@@ -437,7 +444,8 @@ void OBJECT_OT_add(wmOperatorType *ot)
 static int effector_add_exec(bContext *C, wmOperator *op)
 {
 	Object *ob;
-	int type, enter_editmode;
+	int type;
+	bool enter_editmode;
 	unsigned int layer;
 	float loc[3], rot[3];
 	float mat[4][4];
@@ -503,7 +511,7 @@ static int object_camera_add_exec(bContext *C, wmOperator *op)
 	View3D *v3d = CTX_wm_view3d(C);
 	Scene *scene = CTX_data_scene(C);
 	Object *ob;
-	int enter_editmode;
+	bool enter_editmode;
 	unsigned int layer;
 	float loc[3], rot[3];
 
@@ -555,8 +563,8 @@ void OBJECT_OT_camera_add(wmOperatorType *ot)
 static int object_metaball_add_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
-	int newob = 0;
-	int enter_editmode;
+	bool newob = false;
+	bool enter_editmode;
 	unsigned int layer;
 	float loc[3], rot[3];
 	float mat[4][4];
@@ -567,7 +575,7 @@ static int object_metaball_add_exec(bContext *C, wmOperator *op)
 
 	if (obedit == NULL || obedit->type != OB_MBALL) {
 		obedit = ED_object_add_type(C, OB_MBALL, loc, rot, TRUE, layer);
-		newob = 1;
+		newob = true;
 	}
 	else
 		DAG_id_tag_update(&obedit->id, OB_RECALC_DATA);
@@ -611,7 +619,7 @@ void OBJECT_OT_metaball_add(wmOperatorType *ot)
 static int object_add_text_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
-	int enter_editmode;
+	bool enter_editmode;
 	unsigned int layer;
 	float loc[3], rot[3];
 
@@ -649,12 +657,12 @@ void OBJECT_OT_text_add(wmOperatorType *ot)
 static int object_armature_add_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
-	View3D *v3d = CTX_wm_view3d(C);
 	RegionView3D *rv3d = CTX_wm_region_view3d(C);
-	int newob = 0;
-	int enter_editmode;
+	bool newob = false;
+	bool enter_editmode;
 	unsigned int layer;
 	float loc[3], rot[3];
+	bool view_aligned = rv3d && (U.flag & USER_ADD_VIEWALIGNED);
 
 	if (!ED_object_add_generic_get_opts(C, op, loc, rot, &enter_editmode, &layer, NULL))
 		return OPERATOR_CANCELLED;
@@ -662,7 +670,7 @@ static int object_armature_add_exec(bContext *C, wmOperator *op)
 	if ((obedit == NULL) || (obedit->type != OB_ARMATURE)) {
 		obedit = ED_object_add_type(C, OB_ARMATURE, loc, rot, TRUE, layer);
 		ED_object_editmode_enter(C, 0);
-		newob = 1;
+		newob = true;
 	}
 	else {
 		DAG_id_tag_update(&obedit->id, OB_RECALC_DATA);
@@ -673,8 +681,7 @@ static int object_armature_add_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	/* v3d and rv3d are allowed to be NULL */
-	add_primitive_bone(CTX_data_scene(C), v3d, rv3d);
+	add_primitive_bone(obedit, view_aligned);
 
 	/* userdef */
 	if (newob && !enter_editmode)
@@ -1236,7 +1243,7 @@ static void make_object_duplilist_real(bContext *C, Scene *scene, Base *base,
 
 		ob->parent = NULL;
 		ob->constraints.first = ob->constraints.last = NULL;
-		ob->disp.first = ob->disp.last = NULL;
+		ob->curve_cache = NULL;
 		ob->transflag &= ~OB_DUPLI;
 		ob->lay = base->lay;
 
@@ -1378,7 +1385,7 @@ static EnumPropertyItem convert_target_items[] = {
 
 static void curvetomesh(Scene *scene, Object *ob) 
 {
-	if (ob->disp.first == NULL)
+	if (ELEM(NULL, ob->curve_cache, ob->curve_cache->disp.first))
 		BKE_displist_make_curveTypes(scene, ob, 0);  /* force creation */
 
 	BKE_mesh_from_nurbs(ob); /* also does users */
@@ -1424,7 +1431,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
-	Base *basen = NULL, *basact = NULL, *basedel = NULL;
+	Base *basen = NULL, *basact = NULL;
 	Object *ob, *ob1, *newob, *obact = CTX_data_active_object(C);
 	DerivedMesh *dm;
 	Curve *cu;
@@ -1489,8 +1496,10 @@ static int convert_exec(bContext *C, wmOperator *op)
 
 			BKE_mesh_to_curve(scene, newob);
 
-			if (newob->type == OB_CURVE)
+			if (newob->type == OB_CURVE) {
 				BKE_object_free_modifiers(newob);   /* after derivedmesh calls! */
+				ED_rigidbody_object_remove(scene, newob);
+			}
 		}
 		else if (ob->type == OB_MESH && ob->modifiers.first) { /* converting a mesh with no modifiers causes a segfault */
 			ob->flag |= OB_DONE;
@@ -1518,7 +1527,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 			dm = mesh_get_derived_final(scene, newob, CD_MASK_MESH);
 			// dm = mesh_create_derived_no_deform(ob1, NULL);  /* this was called original (instead of get_derived). man o man why! (ton) */
 
-			DM_to_mesh(dm, newob->data, newob);
+			DM_to_mesh(dm, newob->data, newob, CD_MASK_MESH);
 
 			/* re-tessellation is called by DM_to_mesh */
 
@@ -1544,7 +1553,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 
 			cu = newob->data;
 
-			if (!newob->disp.first)
+			if ( !newob->curve_cache || !newob->curve_cache->disp.first)
 				BKE_displist_make_curveTypes(scene, newob, 0);
 
 			newob->type = OB_CURVE;
@@ -1586,7 +1595,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 				curvetomesh(scene, newob);
 
 				/* meshes doesn't use displist */
-				BKE_displist_free(&newob->disp);
+				BKE_object_free_curve_cache(newob);
 			}
 		}
 		else if (ELEM(ob->type, OB_CURVE, OB_SURF)) {
@@ -1607,7 +1616,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 					newob = ob;
 
 					/* meshes doesn't use displist */
-					BKE_displist_free(&newob->disp);
+					BKE_object_free_curve_cache(newob);
 				}
 
 				curvetomesh(scene, newob);
@@ -1626,7 +1635,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 				ob->flag |= OB_DONE;
 			}
 
-			if (!baseob->disp.first) {
+			if (!baseob->curve_cache || !baseob->curve_cache->disp.first) {
 				BKE_displist_make_mball(scene, baseob);
 			}
 
@@ -1649,7 +1658,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 					for (a = 0; a < newob->totcol; a++) id_us_plus((ID *)me->mat[a]);
 				}
 
-				BKE_mesh_from_metaball(&baseob->disp, newob->data);
+				BKE_mesh_from_metaball(&baseob->curve_cache->disp, newob->data);
 
 				if (obact->type == OB_MBALL) {
 					basact = basen;
@@ -1677,14 +1686,6 @@ static int convert_exec(bContext *C, wmOperator *op)
 		if (!keep_original && (ob->flag & OB_DONE)) {
 			DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
 			((ID *)ob->data)->flag &= ~LIB_DOIT; /* flag not to convert this datablock again */
-		}
-
-		/* delete original if needed */
-		if (basedel) {
-			if (!keep_original)
-				ED_base_object_free_and_unlink(bmain, scene, basedel);
-
-			basedel = NULL;
 		}
 	}
 	CTX_DATA_END;
@@ -1752,7 +1753,7 @@ void OBJECT_OT_convert(wmOperatorType *ot)
 
 /* 
  * dupflag: a flag made from constants declared in DNA_userdef_types.h
- * The flag tells adduplicate() weather to copy data linked to the object, or to reference the existing data.
+ * The flag tells adduplicate() whether to copy data linked to the object, or to reference the existing data.
  * U.dupflag for default operations or you can construct a flag as python does
  * if the dupflag is 0 then no data will be copied (linked duplicate) */
 
@@ -2028,7 +2029,7 @@ static int duplicate_exec(bContext *C, wmOperator *op)
 	clear_id_newpoins();
 	clear_sca_new_poins();  /* sensor/contr/act */
 
-	CTX_DATA_BEGIN (C, Base *, base, selected_editable_bases)
+	CTX_DATA_BEGIN (C, Base *, base, selected_bases)
 	{
 		Base *basen = object_add_duplicate_internal(bmain, scene, base, dupflag);
 
@@ -2086,7 +2087,7 @@ void OBJECT_OT_duplicate(wmOperatorType *ot)
 static int add_named_exec(bContext *C, wmOperator *op)
 {
 	wmWindow *win = CTX_wm_window(C);
-	wmEvent *event = win ? win->eventstate : NULL;
+	const wmEvent *event = win ? win->eventstate : NULL;
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 	Base *basen, *base;

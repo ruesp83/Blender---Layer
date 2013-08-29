@@ -40,7 +40,7 @@ void TransformWriter::add_node_transform(COLLADASW::Node& node, float mat[4][4],
 	if (parent_mat) {
 		float invpar[4][4];
 		invert_m4_m4(invpar, parent_mat);
-		mult_m4_m4m4(local, invpar, mat);
+		mul_m4_m4m4(local, invpar, mat);
 	}
 	else {
 		copy_m4_m4(local, mat);
@@ -82,7 +82,7 @@ void TransformWriter::add_node_transform_ob(COLLADASW::Node& node, Object *ob, B
 		// calculate local mat
 
 		invert_m4_m4(imat, ob->parent->obmat);
-		mult_m4_m4m4(mat, imat, tmat);
+		mul_m4_m4m4(mat, imat, tmat);
 
 		// done
 
@@ -97,40 +97,31 @@ void TransformWriter::add_node_transform_ob(COLLADASW::Node& node, Object *ob, B
 
 	add_transform(node, loc, rot, scale);
 #endif
+
 	UnitConverter converter;
-	
-	/* Using parentinv should allow use of existing curves */
-	if (ob->parent) {
-		// If parentinv is identity don't add it.
-		bool add_parinv = false;
-    		
-		for (int i = 0; i < 16; ++i) {
-			float f = (i % 4 == i / 4) ? 1.0f : 0.0f;
-			add_parinv |= (ob->parentinv[i % 4][i / 4] != f);
-		}
+	double d_obmat[4][4];
+	float  f_obmat[4][4];
 
-		if (add_parinv) {
-			double dmat[4][4];
-			converter.mat4_to_dae_double(dmat, ob->parentinv);
-			node.addMatrix("parentinverse", dmat);
-		}
-	}
-
-	double d_obmat[4][4];	
-	converter.mat4_to_dae_double(d_obmat, ob->obmat);
+	/* Export the local Matrix (relative to the object parent) */
+	BKE_object_matrix_local_get(ob, f_obmat);
+	converter.mat4_to_dae_double(d_obmat, f_obmat);
 
 	switch (transformation_type) {
-		case BC_TRANSFORMATION_TYPE_MATRIX     : {
+		case BC_TRANSFORMATION_TYPE_MATRIX:
+		{
 			node.addMatrix("transform",d_obmat);
 			break;
 		}
-		case BC_TRANSFORMATION_TYPE_TRANSROTLOC: {
-			add_transform(node, ob->loc, ob->rot, ob->size); 
-			break;
-		}
-		case BC_TRANSFORMATION_TYPE_BOTH       : {
+		case BC_TRANSFORMATION_TYPE_BOTH:
+		{
 			node.addMatrix("transform",d_obmat);
-			add_transform(node, ob->loc, ob->rot, ob->size);
+			/* fall-through */
+		}
+		case BC_TRANSFORMATION_TYPE_TRANSROTLOC:
+		{
+			float loc[3], rot[3], scale[3];
+			TransformBase::decompose(f_obmat, loc, rot, NULL, scale);
+			add_transform(node, loc, rot, scale); 
 			break;
 		}
 	}

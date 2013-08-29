@@ -37,7 +37,7 @@
 #include "BKE_context.h"
 #include "BKE_object.h"
 #include "BKE_report.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
 
 #include "RNA_define.h"
 #include "RNA_access.h"
@@ -46,6 +46,7 @@
 
 #include "ED_mesh.h"
 #include "ED_screen.h"
+#include "ED_transform.h"
 #include "ED_view3d.h"
 
 #include "mesh_intern.h"  /* own include */
@@ -165,7 +166,7 @@ static short edbm_extrude_edge(Object *obedit, BMEditMesh *em, const char hflag,
 				if (mmd->mirror_ob) {
 					float imtx[4][4];
 					invert_m4_m4(imtx, mmd->mirror_ob->obmat);
-					mult_m4_m4m4(mtx, imtx, obedit->obmat);
+					mul_m4_m4m4(mtx, imtx, obedit->obmat);
 				}
 
 				BM_ITER_MESH (edge, &iter, bm, BM_EDGES_OF_MESH) {
@@ -266,7 +267,7 @@ static short edbm_extrude_vert(Object *obedit, BMEditMesh *em, const char hflag,
 static int edbm_extrude_repeat_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
-	BMEditMesh *em = BMEdit_FromObject(obedit);
+	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 	RegionView3D *rv3d = CTX_wm_region_view3d(C);
 		
 	const int steps = RNA_int_get(op->ptr, "steps");
@@ -329,36 +330,27 @@ static int edbm_extrude_mesh(Scene *scene, Object *obedit, BMEditMesh *em, wmOpe
 
 	zero_v3(nor);
 
-	/* XXX If those popup menus were to be enabled again, please get rid of this "menu string" syntax! */
 	if (em->selectmode & SCE_SELECT_VERTEX) {
 		if (em->bm->totvertsel == 0) nr = 0;
 		else if (em->bm->totvertsel == 1) nr = 4;
 		else if (em->bm->totedgesel == 0) nr = 4;
 		else if (em->bm->totfacesel == 0)
-			nr = 3;  /* pupmenu("Extrude %t|Only Edges %x3|Only Vertices %x4"); */
+			nr = 3;
 		else if (em->bm->totfacesel == 1)
-			nr = 1;  /* pupmenu("Extrude %t|Region %x1|Only Edges% x3|Only Vertices %x4"); */
+			nr = 1;
 		else
-			nr = 1;  /* pupmenu("Extrude %t|Region %x1|Individual Faces %x2|Only Edges %x3|Only Vertices %x4"); */
+			nr = 1;
 	}
 	else if (em->selectmode & SCE_SELECT_EDGE) {
 		if (em->bm->totedgesel == 0) nr = 0;
 		
 		nr = 1;
-#if 0
-		else if (em->totedgesel == 1) nr = 3;
-		else if (em->totfacesel == 0) nr = 3;
-		else if (em->totfacesel == 1)
-			nr = 1;  /* pupmenu("Extrude %t|Region %x1|Only Edges %x3"); */
-		else
-			nr = 1;  /* pupmenu("Extrude %t|Region %x1|Individual Faces %x2|Only Edges %x3"); */
-#endif
 	}
 	else {
 		if (em->bm->totfacesel == 0) nr = 0;
 		else if (em->bm->totfacesel == 1) nr = 1;
 		else
-			nr = 1;  /* pupmenu("Extrude %t|Region %x1|Individual Faces %x2"); */
+			nr = 1;
 	}
 
 	if (nr < 1) return 'g';
@@ -409,7 +401,7 @@ static int edbm_extrude_region_exec(bContext *C, wmOperator *op)
 {
 	Scene *scene = CTX_data_scene(C);
 	Object *obedit = CTX_data_edit_object(C);
-	BMEditMesh *em = BMEdit_FromObject(obedit);
+	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 	
 	edbm_extrude_mesh(scene, obedit, em, op, NULL);
 
@@ -438,13 +430,13 @@ void MESH_OT_extrude_region(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_boolean(ot->srna, "mirror", 0, "Mirror Editing", "");
+	Transform_Properties(ot, P_NO_DEFAULTS | P_MIRROR_DUMMY);
 }
 
 static int edbm_extrude_verts_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
-	BMEditMesh *em = BMEdit_FromObject(obedit);
+	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 	float nor[3];
 
 	edbm_extrude_verts_indiv(em, op, BM_ELEM_SELECT, nor);
@@ -469,13 +461,13 @@ void MESH_OT_extrude_verts_indiv(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* to give to transform */
-	RNA_def_boolean(ot->srna, "mirror", 0, "Mirror Editing", "");
+	Transform_Properties(ot, P_NO_DEFAULTS | P_MIRROR_DUMMY);
 }
 
 static int edbm_extrude_edges_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
-	BMEditMesh *em = BMEdit_FromObject(obedit);
+	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 	float nor[3];
 
 	edbm_extrude_edges_indiv(em, op, BM_ELEM_SELECT, nor);
@@ -500,13 +492,13 @@ void MESH_OT_extrude_edges_indiv(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* to give to transform */
-	RNA_def_boolean(ot->srna, "mirror", 0, "Mirror Editing", "");
+	Transform_Properties(ot, P_NO_DEFAULTS | P_MIRROR_DUMMY);
 }
 
 static int edbm_extrude_faces_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
-	BMEditMesh *em = BMEdit_FromObject(obedit);
+	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 	float nor[3];
 
 	edbm_extrude_discrete_faces(em, op, BM_ELEM_SELECT, nor);
@@ -530,7 +522,7 @@ void MESH_OT_extrude_faces_indiv(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_boolean(ot->srna, "mirror", 0, "Mirror Editing", "");
+	Transform_Properties(ot, P_NO_DEFAULTS | P_MIRROR_DUMMY);
 }
 
 /* *************** add-click-mesh (extrude) operator ************** */
@@ -718,10 +710,10 @@ void MESH_OT_dupli_extrude_cursor(wmOperatorType *ot)
 static int edbm_spin_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
-	BMEditMesh *em = BMEdit_FromObject(obedit);
+	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 	BMesh *bm = em->bm;
 	BMOperator spinop;
-	float cent[3], axis[3], imat[3][3];
+	float cent[3], axis[3];
 	float d[3] = {0.0f, 0.0f, 0.0f};
 	int steps, dupli;
 	float angle;
@@ -734,15 +726,10 @@ static int edbm_spin_exec(bContext *C, wmOperator *op)
 	angle = -angle;
 	dupli = RNA_boolean_get(op->ptr, "dupli");
 
-	/* undo object transformation */
-	copy_m3_m4(imat, obedit->imat);
-	sub_v3_v3(cent, obedit->obmat[3]);
-	mul_m3_v3(imat, cent);
-	mul_m3_v3(imat, axis);
-
+	/* keep the values in worldspace since we're passing the obmat */
 	if (!EDBM_op_init(em, &spinop, op,
-	                  "spin geom=%hvef cent=%v axis=%v dvec=%v steps=%i angle=%f use_duplicate=%b",
-	                  BM_ELEM_SELECT, cent, axis, d, steps, angle, dupli))
+	                  "spin geom=%hvef cent=%v axis=%v dvec=%v steps=%i angle=%f space=%m4 use_duplicate=%b",
+	                  BM_ELEM_SELECT, cent, axis, d, steps, angle, obedit->obmat, dupli))
 	{
 		return OPERATOR_CANCELLED;
 	}
@@ -802,14 +789,13 @@ void MESH_OT_spin(wmOperatorType *ot)
 static int edbm_screw_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
-	BMEditMesh *em = BMEdit_FromObject(obedit);
+	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 	BMesh *bm = em->bm;
 	BMEdge *eed;
 	BMVert *eve, *v1, *v2;
 	BMIter iter, eiter;
 	BMOperator spinop;
-	float dvec[3], nor[3], cent[3], axis[3];
-	float imat[3][3];
+	float dvec[3], nor[3], cent[3], axis[3], v1_co_global[3], v2_co_global[3];
 	int steps, turns;
 	int valence;
 
@@ -818,13 +804,6 @@ static int edbm_screw_exec(bContext *C, wmOperator *op)
 	steps = RNA_int_get(op->ptr, "steps");
 	RNA_float_get_array(op->ptr, "center", cent);
 	RNA_float_get_array(op->ptr, "axis", axis);
-
-	/* undo object transformation */
-	copy_m3_m4(imat, obedit->imat);
-	sub_v3_v3(cent, obedit->obmat[3]);
-	mul_m3_v3(imat, cent);
-	mul_m3_v3(imat, axis);
-
 
 	/* find two vertices with valence count == 1, more or less is wrong */
 	v1 = NULL;
@@ -858,15 +837,17 @@ static int edbm_screw_exec(bContext *C, wmOperator *op)
 	}
 
 	/* calculate dvec */
-	sub_v3_v3v3(dvec, v1->co, v2->co);
+	mul_v3_m4v3(v1_co_global, obedit->obmat, v1->co);
+	mul_v3_m4v3(v2_co_global, obedit->obmat, v2->co);
+	sub_v3_v3v3(dvec, v1_co_global, v2_co_global);
 	mul_v3_fl(dvec, 1.0f / steps);
 
-	if (dot_v3v3(nor, dvec) > 0.000f)
+	if (dot_v3v3(nor, dvec) > 0.0f)
 		negate_v3(dvec);
 
 	if (!EDBM_op_init(em, &spinop, op,
-	                  "spin geom=%hvef cent=%v axis=%v dvec=%v steps=%i angle=%f use_duplicate=%b",
-	                  BM_ELEM_SELECT, cent, axis, dvec, turns * steps, DEG2RADF(360.0f * turns), false))
+	                  "spin geom=%hvef cent=%v axis=%v dvec=%v steps=%i angle=%f space=%m4 use_duplicate=%b",
+	                  BM_ELEM_SELECT, cent, axis, dvec, turns * steps, DEG2RADF(360.0f * turns), obedit->obmat, false))
 	{
 		return OPERATOR_CANCELLED;
 	}

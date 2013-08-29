@@ -1,10 +1,27 @@
+/*
+ * ***** BEGIN GPL LICENSE BLOCK *****
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ * ***** END GPL LICENSE BLOCK *****
+ */
+
 /** \file gameengine/Ketsji/KX_BlenderMaterial.cpp
  *  \ingroup ketsji
  */
 
-// ------------------------------------
-// ...
-// ------------------------------------
 #include "GL/glew.h"
 
 #include "KX_BlenderMaterial.h"
@@ -138,6 +155,11 @@ void KX_BlenderMaterial::GetMaterialRGBAColor(unsigned char *rgba) const
 Material *KX_BlenderMaterial::GetBlenderMaterial() const
 {
 	return mMaterial->material;
+}
+
+Image *KX_BlenderMaterial::GetBlenderImage() const
+{
+	return mMaterial->tface.tpage;
 }
 
 Scene* KX_BlenderMaterial::GetBlenderScene() const
@@ -314,7 +336,7 @@ void KX_BlenderMaterial::setBlenderShaderData( bool enable, RAS_IRasterizer *ras
 		else
 			BL_Texture::DisableAllTextures();
 
-		mBlenderShader->SetProg(true, ras->GetTime());
+		mBlenderShader->SetProg(true, ras->GetTime(), ras);
 		mLastBlenderShader= mBlenderShader;
 	}
 }
@@ -400,7 +422,7 @@ KX_BlenderMaterial::ActivatShaders(
 	
 		if (rasty->GetDrawingMode() == RAS_IRasterizer::KX_TEXTURED)
 			tmp->setShaderData(true, rasty);
-		else if (rasty->GetDrawingMode() == RAS_IRasterizer::KX_SHADOW && IsAlpha() && !rasty->GetUsingOverrideShader())
+		else if (rasty->GetDrawingMode() == RAS_IRasterizer::KX_SHADOW && mMaterial->alphablend != GEMAT_SOLID && !rasty->GetUsingOverrideShader())
 			tmp->setShaderData(true, rasty);
 		else
 			tmp->setShaderData(false, rasty);
@@ -447,7 +469,7 @@ KX_BlenderMaterial::ActivateBlenderShaders(
 	
 		if (rasty->GetDrawingMode() == RAS_IRasterizer::KX_TEXTURED)
 			tmp->setBlenderShaderData(true, rasty);
-		else if (rasty->GetDrawingMode() == RAS_IRasterizer::KX_SHADOW && IsAlpha() && !rasty->GetUsingOverrideShader())
+		else if (rasty->GetDrawingMode() == RAS_IRasterizer::KX_SHADOW && mMaterial->alphablend != GEMAT_SOLID && !rasty->GetUsingOverrideShader())
 			tmp->setBlenderShaderData(true, rasty);
 		else
 			tmp->setBlenderShaderData(false, rasty);
@@ -498,7 +520,7 @@ KX_BlenderMaterial::ActivateMat(
 
 		if (rasty->GetDrawingMode() == RAS_IRasterizer::KX_TEXTURED)
 			tmp->setTexData( true,rasty  );
-		else if (rasty->GetDrawingMode() == RAS_IRasterizer::KX_SHADOW && IsAlpha() && !rasty->GetUsingOverrideShader())
+		else if (rasty->GetDrawingMode() == RAS_IRasterizer::KX_SHADOW && mMaterial->alphablend != GEMAT_SOLID && !rasty->GetUsingOverrideShader())
 			tmp->setTexData(true, rasty);
 		else
 			tmp->setTexData( false,rasty);
@@ -635,7 +657,7 @@ void KX_BlenderMaterial::ActivatGLMaterials( RAS_IRasterizer* rasty )const
 void KX_BlenderMaterial::ActivateTexGen(RAS_IRasterizer *ras) const
 {
 	if (ras->GetDrawingMode() == RAS_IRasterizer::KX_TEXTURED || 
-		(ras->GetDrawingMode() == RAS_IRasterizer::KX_SHADOW && IsAlpha() && !ras->GetUsingOverrideShader())) {
+		(ras->GetDrawingMode() == RAS_IRasterizer::KX_SHADOW && mMaterial->alphablend != GEMAT_SOLID && !ras->GetUsingOverrideShader())) {
 		ras->SetAttribNum(0);
 		if (mShader && GLEW_ARB_shader_objects) {
 			if (mShader->GetAttribute() == BL_Shader::SHD_TANGENT) {
@@ -786,9 +808,7 @@ void KX_BlenderMaterial::UpdateIPO(
 void KX_BlenderMaterial::Replace_IScene(SCA_IScene *val)
 {
 	mScene= static_cast<KX_Scene *>(val);
-	if (mBlenderShader)
-		mBlenderShader->SetScene(mScene);
-	
+
 	OnConstruction();
 }
 

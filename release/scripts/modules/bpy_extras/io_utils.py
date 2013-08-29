@@ -409,7 +409,10 @@ def path_reference(filepath,
     if mode == 'ABSOLUTE':
         return filepath_abs
     elif mode == 'RELATIVE':
-        return os.path.relpath(filepath_abs, base_dst)
+        try:  # can't always find the relative path (between drive letters on windows)
+            return os.path.relpath(filepath_abs, base_dst)
+        except ValueError:
+            return filepath_abs
     elif mode == 'STRIP':
         return os.path.basename(filepath_abs)
 
@@ -436,8 +439,18 @@ def path_reference_copy(copy_set, report=print):
             pass
         else:
             dir_to = os.path.dirname(file_dst)
-            os.makedirs(dir_to, exist_ok=True)
-            shutil.copy(file_src, file_dst)
+
+            try:
+                os.makedirs(dir_to, exist_ok=True)
+            except:
+                import traceback
+                traceback.print_exc()
+
+            try:
+                shutil.copy(file_src, file_dst)
+            except:
+                import traceback
+                traceback.print_exc()
 
 
 def unique_name(key, name, name_dict, name_max=-1, clean_func=None, sep="."):

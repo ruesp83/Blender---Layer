@@ -19,8 +19,8 @@
 bl_info = {
     'name': "Nodes Efficiency Tools",
     'author': "Bartek Skorupa",
-    'version': (2, 21),
-    'blender': (2, 6, 6),
+    'version': (2, 33),
+    'blender': (2, 6, 8),
     'location': "Node Editor Properties Panel (Ctrl-SPACE)",
     'description': "Nodes Efficiency Tools",
     'warning': "",
@@ -32,6 +32,7 @@ bl_info = {
 import bpy
 from bpy.types import Operator, Panel, Menu
 from bpy.props import FloatProperty, EnumProperty, BoolProperty
+from mathutils import Vector
 
 #################
 # rl_outputs:
@@ -62,6 +63,9 @@ rl_outputs = (
     ('use_pass_refraction', 'Refract', 'Refract', True, False),
     ('use_pass_shadow', 'Shadow', 'Shadow', True, True),
     ('use_pass_specular', 'Specular', 'Spec', True, False),
+    ('use_pass_subsurface_color', 'Subsurface Color', 'SubsurfaceCol', False, True),
+    ('use_pass_subsurface_direct', 'Subsurface Direct', 'SubsurfaceDir', False, True),
+    ('use_pass_subsurface_indirect', 'Subsurface Indirect', 'SubsurfaceInd', False, True),
     ('use_pass_transmission_color', 'Transmission Color', 'TransCol', False, True),
     ('use_pass_transmission_direct', 'Transmission Direct', 'TransDir', False, True),
     ('use_pass_transmission_indirect', 'Transmission Indirect', 'TransInd', False, True),
@@ -117,24 +121,29 @@ navs = [
     ('PREV', 'Prev', 'Previous blend type/operation'),
     ]
 # list of mixing shaders
-merge_shaders = ('MIX', 'ADD')
+merge_shaders_types = ('MIX', 'ADD')
 # list of regular shaders. Entry: (identified, type, name for humans). Will be used in SwapShaders and menus.
 # Keeping mixed case to avoid having to translate entries when adding new nodes in SwapNodes.
 regular_shaders = (
-    ('ShaderNodeBsdfTransparent', 'BSDF_TRANSPARENT', 'Transparent BSDF'),
-    ('ShaderNodeBsdfGlossy', 'BSDF_GLOSSY', 'Glossy BSDF'),
-    ('ShaderNodeBsdfGlass', 'BSDF_GLASS', 'Glass BSDF'),
     ('ShaderNodeBsdfDiffuse', 'BSDF_DIFFUSE', 'Diffuse BSDF'),
-    ('ShaderNodeEmission', 'EMISSION', 'Emission'),
-    ('ShaderNodeBsdfVelvet', 'BSDF_VELVET', 'Velvet BSDF'),
-    ('ShaderNodeBsdfTranslucent', 'BSDF_TRANSLUCENT', 'Translucent BSDF'),
-    ('ShaderNodeAmbientOcclusion', 'AMBIENT_OCCLUSION', 'Ambient Occlusion'),
-    ('ShaderNodeBackground', 'BACKGROUND', 'Background'),
+    ('ShaderNodeBsdfGlossy', 'BSDF_GLOSSY', 'Glossy BSDF'),
+    ('ShaderNodeBsdfTransparent', 'BSDF_TRANSPARENT', 'Transparent BSDF'),
     ('ShaderNodeBsdfRefraction', 'BSDF_REFRACTION', 'Refraction BSDF'),
+    ('ShaderNodeBsdfGlass', 'BSDF_GLASS', 'Glass BSDF'),
+    ('ShaderNodeBsdfTranslucent', 'BSDF_TRANSLUCENT', 'Translucent BSDF'),
     ('ShaderNodeBsdfAnisotropic', 'BSDF_ANISOTROPIC', 'Anisotropic BSDF'),
+    ('ShaderNodeBsdfVelvet', 'BSDF_VELVET', 'Velvet BSDF'),
+    ('ShaderNodeBsdfToon', 'BSDF_TOON', 'Toon BSDF'),
+    ('ShaderNodeSubsurfaceScattering', 'SUBSURFACE_SCATTERING', 'Subsurface Scattering'),
+    ('ShaderNodeEmission', 'EMISSION', 'Emission'),
+    ('ShaderNodeBackground', 'BACKGROUND', 'Background'),
+    ('ShaderNodeAmbientOcclusion', 'AMBIENT_OCCLUSION', 'Ambient Occlusion'),
     ('ShaderNodeHoldout', 'HOLDOUT', 'Holdout'),
     )
-
+merge_shaders = (
+    ('ShaderNodeMixShader', 'MIX_SHADER', 'Mix Shader'),
+    ('ShaderNodeAddShader', 'ADD_SHADER', 'Add Shader'),
+    )
 
 def get_nodes_links(context):
     space = context.space_data
@@ -205,7 +214,7 @@ class MergeNodes(Operator, NodeToolBase):
             if node.select and node.outputs:
                 if merge_type == 'AUTO':
                     for (type, types_list, dst) in (
-                            ('SHADER', merge_shaders, selected_shader),
+                            ('SHADER', merge_shaders_types, selected_shader),
                             ('RGBA', [t[0] for t in blend_types], selected_mix),
                             ('VALUE', [t[0] for t in operations], selected_math),
                             ):
@@ -223,7 +232,7 @@ class MergeNodes(Operator, NodeToolBase):
                             dst.append([i, node.location.x, node.location.y])
                 else:
                     for (type, types_list, dst) in (
-                            ('SHADER', merge_shaders, selected_shader),
+                            ('SHADER', merge_shaders_types, selected_shader),
                             ('MIX', [t[0] for t in blend_types], selected_mix),
                             ('MATH', [t[0] for t in operations], selected_math),
                             ):
@@ -290,8 +299,19 @@ class MergeNodes(Operator, NodeToolBase):
                 count_adds = i + 1
                 count_after = len(nodes)
                 index = count_after - 1
+                first_selected = nodes[nodes_list[0][0]]
+                # "last" node has been added as first, so its index is count_before.
+                last_add = nodes[count_before]
+                # add links from last_add to all links 'to_socket' of out links of first selected.
+                for fs_link in first_selected.outputs[0].links:
+                    # Prevent cyclic dependencies when nodes to be marged are linked to one another.
+                    # Create list of invalid indexes.
+                    invalid_i = [n[0] for n in (selected_mix + selected_math + selected_shader)]
+                    # Link only if "to_node" index not in invalid indexes list.
+                    if fs_link.to_node not in [nodes[i] for i in invalid_i]:
+                        links.new(last_add.outputs[0], fs_link.to_socket)
                 # add link from "first" selected and "first" add node
-                links.new(nodes[nodes_list[0][0]].outputs[0], nodes[count_after - 1].inputs[first])
+                links.new(first_selected.outputs[0], nodes[count_after - 1].inputs[first])
                 # add links between added ADD nodes and between selected and ADD nodes
                 for i in range(count_adds):
                     if i < count_adds - 1:
@@ -300,7 +320,7 @@ class MergeNodes(Operator, NodeToolBase):
                         links.new(nodes[index].inputs[second], nodes[nodes_list[i + 1][0]].outputs[0])
                     index -= 1
                 # set "last" of added nodes as active
-                nodes.active = nodes[count_before]
+                nodes.active = last_add
                 for i, x, y in nodes_list:
                     nodes[i].select = False
 
@@ -708,17 +728,21 @@ class NodesSwap(Operator, NodeToolBase):
                 ('NodeMixRGB', 'Mix Node', 'Mix Node'),
                 ('NodeMath', 'Math Node', 'Math Node'),
                 ('CompositorNodeAlphaOver', 'Alpha Over', 'Alpha Over'),
-                ('ShaderNodeBsdfTransparent', 'Transparent BSDF', 'Transparent BSDF'),
-                ('ShaderNodeBsdfGlossy', 'Glossy BSDF', 'Glossy BSDF'),
-                ('ShaderNodeBsdfGlass', 'Glass BSDF', 'Glass BSDF'),
+                ('ShaderNodeMixShader', 'Mix Shader', 'Mix Shader'),
+                ('ShaderNodeAddShader', 'Add Shader', 'Add Shader'),
                 ('ShaderNodeBsdfDiffuse', 'Diffuse BSDF', 'Diffuse BSDF'),
-                ('ShaderNodeEmission', 'Emission', 'Emission'),
-                ('ShaderNodeBsdfVelvet', 'Velvet BSDF', 'Velvet BSDF'),
-                ('ShaderNodeBsdfTranslucent', 'Translucent BSDF', 'Translucent BSDF'),
-                ('ShaderNodeAmbientOcclusion', 'Ambient Occlusion', 'Ambient Occlusion'),
-                ('ShaderNodeBackground', 'Background', 'Background'),
+                ('ShaderNodeBsdfGlossy', 'Glossy BSDF', 'Glossy BSDF'),
+                ('ShaderNodeBsdfTransparent', 'Transparent BSDF', 'Transparent BSDF'),
                 ('ShaderNodeBsdfRefraction', 'Refraction BSDF', 'Refraction BSDF'),
+                ('ShaderNodeBsdfGlass', 'Glass BSDF', 'Glass BSDF'),
+                ('ShaderNodeBsdfTranslucent', 'Translucent BSDF', 'Translucent BSDF'),
                 ('ShaderNodeBsdfAnisotropic', 'Anisotropic BSDF', 'Anisotropic BSDF'),
+                ('ShaderNodeBsdfVelvet', 'Velvet BSDF', 'Velvet BSDF'),
+                ('ShaderNodeBsdfToon', 'Toon BSDF', 'Toon BSDF'),
+                ('ShaderNodeSubsurfaceScattering', 'SUBSURFACE_SCATTERING', 'Subsurface Scattering'),
+                ('ShaderNodeEmission', 'Emission', 'Emission'),
+                ('ShaderNodeBackground', 'Background', 'Background'),
+                ('ShaderNodeAmbientOcclusion', 'Ambient Occlusion', 'Ambient Occlusion'),
                 ('ShaderNodeHoldout', 'Holdout', 'Holdout'),
                 ]
             )
@@ -737,9 +761,11 @@ class NodesSwap(Operator, NodeToolBase):
         # regular_shaders - global list. Entry: (identifier, type, name for humans)
         # example: ('ShaderNodeBsdfTransparent', 'BSDF_TRANSPARENT', 'Transparent BSDF')
         swap_shaders = option in (s[0] for s in regular_shaders)
-        if swap_shaders:
+        swap_merge_shaders = option in (s[0] for s in merge_shaders)
+        if swap_shaders or swap_merge_shaders:
             # replace_types - list of node types that can be replaced using selected option
-            replace_types = [type[1] for type in regular_shaders]
+            shaders = regular_shaders + merge_shaders
+            replace_types = [type[1] for type in shaders]
             new_type = option
         elif option == 'CompositorNodeSwitch':
             replace_types = ('REROUTE', 'MIX_RGB', 'MATH', 'ALPHAOVER')
@@ -763,25 +789,49 @@ class NodesSwap(Operator, NodeToolBase):
                     hide = True
                 new_node = nodes.new(new_type)
                 # if swap Mix to Math of vice-verca - try to set blend type or operation accordingly
-                if new_node.type == 'MIX_RGB':
+                if new_node.type in {'MIX_RGB', 'ALPHAOVER'}:
+                    new_node.inputs[0].default_value = 1.0
                     if node.type == 'MATH':
                         if node.operation in [entry[0] for entry in blend_types]:
-                            new_node.blend_type = node.operation
+                            if hasattr(new_node, 'blend_type'):
+                                new_node.blend_type = node.operation
+                        for i in range(2):
+                            new_node.inputs[i+1].default_value = [node.inputs[i].default_value] * 3 + [1.0]
+                    elif node.type in {'MIX_RGB', 'ALPHAOVER'}:
+                        for i in range(3):
+                            new_node.inputs[i].default_value = node.inputs[i].default_value
                 elif new_node.type == 'MATH':
-                    if node.type == 'MIX_RGB':
-                        if node.blend_type in [entry[0] for entry in operations]:
-                            new_node.operation = node.blend_type
+                    if node.type in {'MIX_RGB', 'ALPHAOVER'}:
+                        if hasattr(node, 'blend_type'):
+                            if node.blend_type in [entry[0] for entry in operations]:
+                                new_node.operation = node.blend_type
+                        for i in range(2):
+                            channels = []
+                            for c in range(3):
+                                channels.append(node.inputs[i+1].default_value[c])
+                            new_node.inputs[i].default_value = max(channels)
                 old_inputs_count = len(node.inputs)
                 new_inputs_count = len(new_node.inputs)
+                replace = []  # entries - pairs: old input index, new input index.
                 if swap_shaders:
-                    replace = []
                     for old_i, old_input in enumerate(node.inputs):
                         for new_i, new_input in enumerate(new_node.inputs):
                             if old_input.name == new_input.name:
                                 replace.append((old_i, new_i))
+                                new_input.default_value = old_input.default_value
                                 break
+                elif option == 'ShaderNodeAddShader':
+                    if node.type == 'ADD_SHADER':
+                        replace = ((0, 0), (1, 1))
+                    elif node.type == 'MIX_SHADER':
+                        replace = ((1, 0), (2, 1))
+                elif option == 'ShaderNodeMixShader':
+                    if node.type == 'ADD_SHADER':
+                        replace = ((0, 1), (1, 2))
+                    elif node.type == 'MIX_SHADER':
+                        replace = ((1, 1), (2, 2))
                 elif new_inputs_count == 1:
-                    replace = ((0, 0), )  # old input 0 (first of the entry) will be replaced by new input 0.
+                    replace = ((0, 0), )
                 elif new_inputs_count == 2:
                     if old_inputs_count == 1:
                         replace = ((0, 0), )
@@ -803,12 +853,10 @@ class NodesSwap(Operator, NodeToolBase):
                             links.new(in_link.from_socket, new_node.inputs[new_i])
                 for out_link in node.outputs[0].links:
                     links.new(new_node.outputs[0], out_link.to_socket)
-                new_node.location = node.location
-                new_node.label = node.label
+                for attr in {'location', 'label', 'mute', 'show_preview', 'width_hidden', 'use_clamp'}:
+                    if hasattr(node, attr) and hasattr(new_node, attr):
+                        setattr(new_node, attr, getattr(node, attr))
                 new_node.hide = hide
-                new_node.mute = node.mute
-                new_node.show_preview = node.show_preview
-                new_node.width_hidden = node.width_hidden
                 nodes.active = new_node
                 reselect.append(new_node)
                 bpy.ops.node.select_all(action="DESELECT")
@@ -985,7 +1033,7 @@ class AlignNodes(Operator, NodeToolBase):
             max_y_w = selected_sorted_y[count - 1][3]  # width of node with max loc.y
             max_y_h = selected_sorted_y[count - 1][4]  # height of node with max loc.y
 
-            if self.option == 'AXIS_X':
+            if self.option == 'AXIS_Y':  # Horizontally. Equivelent of s -> x -> 0 with even spacing.
                 loc_x = min_x
                 #loc_y = (max_x_loc_y + min_x_loc_y) / 2.0
                 loc_y = (max_y - max_y_h / 2.0 + min_y - min_y_h / 2.0) / 2.0
@@ -1054,6 +1102,74 @@ class SelectParentChildren(Operator, NodeToolBase):
         return {'FINISHED'}
 
 
+class DetachOutputs(Operator, NodeToolBase):
+    bl_idname = "node.detach_outputs"
+    bl_label = "Detach Outputs"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        nodes, links = get_nodes_links(context)
+        selected = context.selected_nodes
+        bpy.ops.node.duplicate_move_keep_inputs()
+        new_nodes = context.selected_nodes
+        bpy.ops.node.select_all(action="DESELECT")
+        for node in selected:
+            node.select = True
+        bpy.ops.node.delete_reconnect()
+        for new_node in new_nodes:
+            new_node.select = True
+        bpy.ops.transform.translate('INVOKE_DEFAULT')
+        
+        return {'FINISHED'}
+
+
+class LinkToOutputNode(Operator, NodeToolBase):
+    bl_idname = "node.link_to_output_node"
+    bl_label = "Link to Output Node"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        valid = False
+        if (space.type == 'NODE_EDITOR' and
+                space.node_tree is not None and
+                context.active_node is not None
+                ):
+            valid = True
+        return valid
+    
+    def execute(self, context):
+        nodes, links = get_nodes_links(context)
+        active = nodes.active
+        output_node = None
+        for node in nodes:
+            if (node.type == 'OUTPUT_MATERIAL' or\
+                    node.type == 'OUTPUT_WORLD' or\
+                    node.type == 'OUTPUT_LAMP' or\
+                    node.type == 'COMPOSITE'):
+                output_node = node
+                break
+        if not output_node:
+            bpy.ops.node.select_all(action="DESELECT")
+            type = context.space_data.tree_type
+            if type == 'ShaderNodeTree':
+                output_node = nodes.new('ShaderNodeOutputMaterial')
+            elif type == 'CompositorNodeTree':
+                output_node = nodes.new('CompositorNodeComposite')
+            output_node.location = active.location + Vector((300.0, 0.0))
+            nodes.active = output_node
+        if (output_node and active.outputs):
+            output_index = 0
+            for i, output in enumerate(active.outputs):
+                if output.type == output_node.inputs[0].type:
+                    output_index = i
+                    break
+            links.new(active.outputs[output_index], output_node.inputs[0])
+
+        return {'FINISHED'}
+
+
 #############################################################
 #  P A N E L S
 #############################################################
@@ -1076,9 +1192,11 @@ class EfficiencyToolsPanel(Panel, NodeToolBase):
         box.menu(NodeAlignMenu.bl_idname, text="Align Nodes (Shift =)")
         box.menu(CopyToSelectedMenu.bl_idname, text="Copy to Selected (Shift-C)")
         box.operator(NodesClearLabel.bl_idname).option = True
-        box.menu(AddReroutesMenu.bl_idname, text="Add Reroutes")
-        box.menu(NodesSwapMenu.bl_idname, text="Swap Nodes")
-        box.menu(LinkActiveToSelectedMenu.bl_idname, text="Link Active To Selected")
+        box.operator(DetachOutputs.bl_idname)
+        box.menu(AddReroutesMenu.bl_idname, text="Add Reroutes ( / )")
+        box.menu(NodesSwapMenu.bl_idname, text="Swap Nodes (Shift-S)")
+        box.menu(LinkActiveToSelectedMenu.bl_idname, text="Link Active To Selected ( \\ )")
+        box.operator(LinkToOutputNode.bl_idname)
 
 
 #############################################################
@@ -1099,9 +1217,11 @@ class EfficiencyToolsMenu(Menu, NodeToolBase):
         layout.menu(NodeAlignMenu.bl_idname, text="Align Nodes")
         layout.menu(CopyToSelectedMenu.bl_idname, text="Copy to Selected")
         layout.operator(NodesClearLabel.bl_idname).option = True
+        layout.operator(DetachOutputs.bl_idname)
         layout.menu(AddReroutesMenu.bl_idname, text="Add Reroutes")
         layout.menu(NodesSwapMenu.bl_idname, text="Swap Nodes")
         layout.menu(LinkActiveToSelectedMenu.bl_idname, text="Link Active To Selected")
+        layout.operator(LinkToOutputNode.bl_idname)
 
 
 class MergeNodesMenu(Menu, NodeToolBase):
@@ -1123,7 +1243,7 @@ class MergeShadersMenu(Menu, NodeToolBase):
 
     def draw(self, context):
         layout = self.layout
-        for type in merge_shaders:
+        for type in merge_shaders_types:
             props = layout.operator(MergeNodes.bl_idname, text=type)
             props.mode = type
             props.merge_type = 'SHADER'
@@ -1253,7 +1373,8 @@ class ShadersSwapMenu(Menu):
 
     def draw(self, context):
         layout = self.layout
-        for opt, type, txt in regular_shaders:
+        shaders = merge_shaders + regular_shaders
+        for opt, type, txt in shaders:
             layout.operator(NodesSwap.bl_idname, text=txt).option = opt
 
 
@@ -1264,7 +1385,8 @@ class LinkActiveToSelectedMenu(Menu, NodeToolBase):
     def draw(self, context):
         layout = self.layout
         layout.menu(LinkStandardMenu.bl_idname)
-        layout.menu(LinkUseNamesMenu.bl_idname, text="Use names/labels")
+        layout.menu(LinkUseNodeNameMenu.bl_idname)
+        layout.menu(LinkUseOutputsNamesMenu.bl_idname)
 
 
 class LinkStandardMenu(Menu, NodeToolBase):
@@ -1273,24 +1395,14 @@ class LinkStandardMenu(Menu, NodeToolBase):
 
     def draw(self, context):
         layout = self.layout
-        props = layout.operator(NodesLinkActiveToSelected.bl_idname, text="Don't Replace Links (Shift-F)")
+        props = layout.operator(NodesLinkActiveToSelected.bl_idname, text="Don't Replace Links")
         props.replace = False
         props.use_node_name = False
         props.use_outputs_names = False
-        props = layout.operator(NodesLinkActiveToSelected.bl_idname, text="Replace Links (Ctrl-Shift-F)")
+        props = layout.operator(NodesLinkActiveToSelected.bl_idname, text="Replace Links")
         props.replace = True
         props.use_node_name = False
         props.use_outputs_names = False
-
-
-class LinkUseNamesMenu(Menu, NodeToolBase):
-    bl_idname = "NODE_MT_link_use_names_menu"
-    bl_label = "Link Active to Selected"
-
-    def draw(self, context):
-        layout = self.layout
-        layout.menu(LinkUseNodeNameMenu.bl_idname, text="Use Node Name/Label")
-        layout.menu(LinkUseOutputsNamesMenu.bl_idname, text="Use Outputs Names")
 
 
 class LinkUseNodeNameMenu(Menu, NodeToolBase):
@@ -1299,12 +1411,12 @@ class LinkUseNodeNameMenu(Menu, NodeToolBase):
 
     def draw(self, context):
         layout = self.layout
-        props = layout.operator(NodesLinkActiveToSelected.bl_idname, text="Replace Links")
-        props.replace = True
-        props.use_node_name = True
-        props.use_outputs_names = False
         props = layout.operator(NodesLinkActiveToSelected.bl_idname, text="Don't Replace Links")
         props.replace = False
+        props.use_node_name = True
+        props.use_outputs_names = False
+        props = layout.operator(NodesLinkActiveToSelected.bl_idname, text="Replace Links")
+        props.replace = True
         props.use_node_name = True
         props.use_outputs_names = False
 
@@ -1315,12 +1427,12 @@ class LinkUseOutputsNamesMenu(Menu, NodeToolBase):
 
     def draw(self, context):
         layout = self.layout
-        props = layout.operator(NodesLinkActiveToSelected.bl_idname, text="Replace Links")
-        props.replace = True
-        props.use_node_name = False
-        props.use_outputs_names = True
         props = layout.operator(NodesLinkActiveToSelected.bl_idname, text="Don't Replace Links")
         props.replace = False
+        props.use_node_name = False
+        props.use_outputs_names = True
+        props = layout.operator(NodesLinkActiveToSelected.bl_idname, text="Replace Links")
+        props.replace = True
         props.use_node_name = False
         props.use_outputs_names = True
 
@@ -1451,12 +1563,23 @@ kmi_defs = (
     (BatchChangeNodes.bl_idname, 'UP_ARROW', False, False, True,
         (('blend_type', 'PREV'), ('operation', 'PREV'),)),
     # LINK ACTIVE TO SELECTED
-    # Don't use names, replace links (Ctrl Shift F)
-    (NodesLinkActiveToSelected.bl_idname, 'F', True, True, False,
-        (('replace', True), ('use_node_name', False), ('use_outputs_names', False),)),
-    # Don't use names, don't replace links (Shift F)
-    (NodesLinkActiveToSelected.bl_idname, 'F', False, True, False,
+    # Don't use names, don't replace links (K)
+    (NodesLinkActiveToSelected.bl_idname, 'K', False, False, False,
         (('replace', False), ('use_node_name', False), ('use_outputs_names', False),)),
+    # Don't use names, replace links (Shift K)
+    (NodesLinkActiveToSelected.bl_idname, 'K', False, True, False,
+        (('replace', True), ('use_node_name', False), ('use_outputs_names', False),)),
+    # Use node name, don't replace links (')
+    (NodesLinkActiveToSelected.bl_idname, 'QUOTE', False, False, False,
+        (('replace', False), ('use_node_name', True), ('use_outputs_names', False),)),
+    # Don't use names, replace links (')
+    (NodesLinkActiveToSelected.bl_idname, 'QUOTE', False, True, False,
+        (('replace', True), ('use_node_name', True), ('use_outputs_names', False),)),
+    (NodesLinkActiveToSelected.bl_idname, 'SEMI_COLON', False, False, False,
+        (('replace', False), ('use_node_name', False), ('use_outputs_names', True),)),
+    # Don't use names, replace links (')
+    (NodesLinkActiveToSelected.bl_idname, 'SEMI_COLON', False, True, False,
+        (('replace', True), ('use_node_name', False), ('use_outputs_names', True),)),
     # CHANGE MIX FACTOR
     (ChangeMixFactor.bl_idname, 'LEFT_ARROW', False, False, True, (('option', -0.1),)),
     (ChangeMixFactor.bl_idname, 'RIGHT_ARROW', False, False, True, (('option', 0.1),)),
@@ -1470,18 +1593,25 @@ kmi_defs = (
     (ChangeMixFactor.bl_idname, 'ONE', True, True, True, (('option', 1.0),)),
     # CLEAR LABEL (Alt L)
     (NodesClearLabel.bl_idname, 'L', False, False, True, (('option', False),)),
+    # DETACH OUTPUTS (Alt Shift D)
+    (DetachOutputs.bl_idname, 'D', False, True, True, None),
+    # LINK TO OUTPUT NODE (O)
+    (LinkToOutputNode.bl_idname, 'O', False, False, False, None),
     # SELECT PARENT/CHILDREN
     # Select Children
     (SelectParentChildren.bl_idname, 'RIGHT_BRACKET', False, False, False, (('option', 'CHILD'),)),
     # Select Parent
     (SelectParentChildren.bl_idname, 'LEFT_BRACKET', False, False, False, (('option', 'PARENT'),)),
+    # Add Texture Setup
     (NodesAddTextureSetup.bl_idname, 'T', True, False, False, None),
+    # Copy Label from active to selected
+    (NodesCopyLabel.bl_idname, 'V', False, True, False, (('option', 'FROM_ACTIVE'),)),
     # MENUS
     ('wm.call_menu', 'SPACE', True, False, False, (('name', EfficiencyToolsMenu.bl_idname),)),
     ('wm.call_menu', 'SLASH', False, False, False, (('name', AddReroutesMenu.bl_idname),)),
     ('wm.call_menu', 'NUMPAD_SLASH', False, False, False, (('name', AddReroutesMenu.bl_idname),)),
     ('wm.call_menu', 'EQUAL', False, True, False, (('name', NodeAlignMenu.bl_idname),)),
-    ('wm.call_menu', 'F', False, True, True, (('name', LinkUseNamesMenu.bl_idname),)),
+    ('wm.call_menu', 'BACK_SLASH', False, False, False, (('name', LinkActiveToSelectedMenu.bl_idname),)),
     ('wm.call_menu', 'C', False, True, False, (('name', CopyToSelectedMenu.bl_idname),)),
     ('wm.call_menu', 'S', False, True, False, (('name', NodesSwapMenu.bl_idname),)),
     )

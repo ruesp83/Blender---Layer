@@ -62,14 +62,14 @@ class TIME_HT_header(Header):
             #   hide the play-reversed button
             #   since JACK transport doesn't support reversed playback
             if scene.sync_mode == 'AUDIO_SYNC' and context.user_preferences.system.audio_device == 'JACK':
-                sub = row.row()
+                sub = row.row(align=True)
                 sub.scale_x = 2.0
                 sub.operator("screen.animation_play", text="", icon='PLAY')
             else:
                 row.operator("screen.animation_play", text="", icon='PLAY_REVERSE').reverse = True
                 row.operator("screen.animation_play", text="", icon='PLAY')
         else:
-            sub = row.row()
+            sub = row.row(align=True)
             sub.scale_x = 2.0
             sub.operator("screen.animation_play", text="", icon='PAUSE')
         row.operator("screen.keyframe_jump", text="", icon='NEXT_KEYFRAME').next = True
@@ -85,7 +85,7 @@ class TIME_HT_header(Header):
             row.prop(toolsettings, "use_keyframe_insert_keyingset", text="", toggle=True)
 
             if screen.is_animation_playing:
-                subsub = row.row()
+                subsub = row.row(align=True)
                 subsub.prop(toolsettings, "use_record_with_nla", toggle=True)
 
         row = layout.row(align=True)
@@ -214,7 +214,7 @@ def marker_menu_generic(layout):
     layout.operator("marker.add", "Add Marker")
     layout.operator("marker.duplicate", text="Duplicate Marker")
 
-    if(len(bpy.data.scenes) > 10):
+    if len(bpy.data.scenes) > 10:
         layout.operator_context = 'INVOKE_DEFAULT'
         layout.operator("marker.make_links_scene", text="Duplicate Marker to Scene...", icon='OUTLINER_OB_EMPTY')
     else:

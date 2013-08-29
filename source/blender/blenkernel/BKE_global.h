@@ -36,6 +36,7 @@
  *   any data in Blender. This block is not serialized, but built anew
  *   for every fresh Blender run.
  */
+
 #include "DNA_listBase.h"
 
 #ifdef __cplusplus
@@ -45,7 +46,6 @@ extern "C" {
 /* forwards */
 struct Main;
 struct Object;
-struct BME_Glob;
 
 typedef struct Global {
 
@@ -55,18 +55,21 @@ typedef struct Global {
 	/* strings: lastsaved */
 	char ima[1024], lib[1024]; /* 1024 = FILE_MAX */
 
-	/* flag: if != 0 G.main->name contains valid relative base path */
-	int relbase_valid;
+	/* when set: G.main->name contains valid relative base path */
+	bool relbase_valid;
+	bool file_loaded;
+	bool save_over;
 
 	/* strings of recent opened files */
 	struct ListBase recent_files;
 
 	/* has escape been pressed or Ctrl+C pressed in background mode, used for render quit */
-	short is_break;
+	bool is_break;
 
-	short moving, file_loaded;
-	char background;
-	char factory_startup;
+	bool background;
+	bool factory_startup;
+
+	short moving;
 	short winpos, displaymode;  /* used to be in Render */
 
 	/* to indicate render is busy, prevent renderwindow events etc */
@@ -82,26 +85,16 @@ typedef struct Global {
 	/* debug flag, G_DEBUG, G_DEBUG_PYTHON & friends, set python or command line args */
 	int debug;
 
-	/* Used for BMesh transformations */
-	struct BME_Glob *editBMesh;
-
-	/* Frank's variables */
-	int save_over;
-
-	/* Rob's variables (keep here for WM recode) */
-	int have_quicktime;
-	int ui_international;
-	int charstart;
-	int charmin;
-	int charmax;
-	struct VFont *selfont;
-	struct ListBase ttfdata;
+	bool have_quicktime;
 
 	/* this variable is written to / read from FileGlobal->fileflags */
 	int fileflags;
 
-	/* save the allowed windowstate of blender when using -W or -w */
+	/* save the allowed windowstate of blender when using -W or -w (GHOST_TWindowState) */
 	int windowstate;
+
+	/* message to use when autoexec fails */
+	char autoexec_fail[200];
 } Global;
 
 /* **************** GLOBAL ********************* */
@@ -118,6 +111,8 @@ typedef struct Global {
 
 #define G_SCRIPT_AUTOEXEC (1 << 13)
 #define G_SCRIPT_OVERRIDE_PREF (1 << 14) /* when this flag is set ignore the userprefs */
+#define G_SCRIPT_AUTOEXEC_FAIL (1 << 15)
+#define G_SCRIPT_AUTOEXEC_FAIL_QUIET (1 << 16)
 
 /* #define G_NOFROZEN	(1 << 17) also removed */
 /* #define G_GREASEPENCIL   (1 << 17)   also removed */
@@ -132,10 +127,12 @@ enum {
 	G_DEBUG_EVENTS =    (1 << 3), /* input/window/screen events */
 	G_DEBUG_HANDLERS =  (1 << 4), /* events handling */
 	G_DEBUG_WM =        (1 << 5), /* operator, undo */
-	G_DEBUG_JOBS =      (1 << 6)  /* jobs time profiling */
+	G_DEBUG_JOBS =      (1 << 6), /* jobs time profiling */
+	G_DEBUG_FREESTYLE = (1 << 7), /* freestyle messages */
 };
 
-#define G_DEBUG_ALL  (G_DEBUG | G_DEBUG_FFMPEG | G_DEBUG_PYTHON | G_DEBUG_EVENTS | G_DEBUG_WM | G_DEBUG_JOBS)
+#define G_DEBUG_ALL  (G_DEBUG | G_DEBUG_FFMPEG | G_DEBUG_PYTHON | G_DEBUG_EVENTS | G_DEBUG_WM | G_DEBUG_JOBS | \
+                      G_DEBUG_FREESTYLE)
 
 
 /* G.fileflags */
@@ -171,11 +168,6 @@ enum {
 
 #define G_FILE_FLAGS_RUNTIME (G_FILE_NO_UI | G_FILE_RELATIVE_REMAP | G_FILE_MESH_COMPAT | G_FILE_SAVE_COPY)
 
-/* G.windowstate */
-#define G_WINDOWSTATE_USERDEF       0
-#define G_WINDOWSTATE_BORDER        1
-#define G_WINDOWSTATE_FULLSCREEN    2
-
 /* ENDIAN_ORDER: indicates what endianness the platform where the file was
  * written had. */
 #if !defined(__BIG_ENDIAN__) && !defined(__LITTLE_ENDIAN__)
@@ -199,8 +191,7 @@ enum {
 /* G.moving, signals drawing in (3d) window to denote transform */
 #define G_TRANSFORM_OBJ         1
 #define G_TRANSFORM_EDIT        2
-#define G_TRANSFORM_MANIP       4
-#define G_TRANSFORM_PARTICLE    8
+#define G_TRANSFORM_SEQ         4
 
 /* G.special1 */
 

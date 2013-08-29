@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 #include "device.h"
@@ -49,13 +47,16 @@ Integrator::Integrator()
 	sample_clamp = 0.0f;
 	motion_blur = false;
 
+	aa_samples = 0;
 	diffuse_samples = 1;
 	glossy_samples = 1;
 	transmission_samples = 1;
 	ao_samples = 1;
 	mesh_light_samples = 1;
 	subsurface_samples = 1;
-	progressive = true;
+	method = PATH;
+
+	sampling_pattern = SAMPLING_PATTERN_SOBOL;
 
 	need_update = true;
 }
@@ -103,7 +104,8 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 	
 	kintegrator->sample_clamp = (sample_clamp == 0.0f)? FLT_MAX: sample_clamp*3.0f;
 
-	kintegrator->progressive = progressive;
+	kintegrator->branched = (method == BRANCHED_PATH);
+	kintegrator->aa_samples = aa_samples;
 	kintegrator->diffuse_samples = diffuse_samples;
 	kintegrator->glossy_samples = glossy_samples;
 	kintegrator->transmission_samples = transmission_samples;
@@ -111,15 +113,17 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 	kintegrator->mesh_light_samples = mesh_light_samples;
 	kintegrator->subsurface_samples = subsurface_samples;
 
+	kintegrator->sampling_pattern = sampling_pattern;
+
 	/* sobol directions table */
 	int max_samples = 1;
 
-	if(!progressive) {
+	if(method == BRANCHED_PATH) {
 		foreach(Light *light, scene->lights)
 			max_samples = max(max_samples, light->samples);
 
 		max_samples = max(max_samples, max(diffuse_samples, max(glossy_samples, transmission_samples)));
-		max_samples = max(max_samples, max(ao_samples, mesh_light_samples));
+		max_samples = max(max_samples, max(ao_samples, max(mesh_light_samples, subsurface_samples)));
 	}
 
 	max_samples *= (max_bounce + transparent_max_bounce + 2);
@@ -159,14 +163,16 @@ bool Integrator::modified(const Integrator& integrator)
 		layer_flag == integrator.layer_flag &&
 		seed == integrator.seed &&
 		sample_clamp == integrator.sample_clamp &&
-		progressive == integrator.progressive &&
+		method == integrator.method &&
+		aa_samples == integrator.aa_samples &&
 		diffuse_samples == integrator.diffuse_samples &&
 		glossy_samples == integrator.glossy_samples &&
 		transmission_samples == integrator.transmission_samples &&
 		ao_samples == integrator.ao_samples &&
 		mesh_light_samples == integrator.mesh_light_samples &&
 		subsurface_samples == integrator.subsurface_samples &&
-		motion_blur == integrator.motion_blur);
+		motion_blur == integrator.motion_blur &&
+		sampling_pattern == integrator.sampling_pattern);
 }
 
 void Integrator::tag_update(Scene *scene)

@@ -52,7 +52,6 @@ void register_node_type_cmp_value(void);
 void register_node_type_cmp_rgb(void);
 void register_node_type_cmp_curve_time(void);
 void register_node_type_cmp_movieclip(void);
-void register_node_type_cmp_usermask(struct bNodeTreeType *ttype);
 
 void register_node_type_cmp_composite(void);
 void register_node_type_cmp_viewer(void);
@@ -138,5 +137,8 @@ void register_node_type_cmp_bokehblur(void);
 void register_node_type_cmp_switch(void);
 void register_node_type_cmp_pixelate(void);
 void register_node_type_cmp_trackpos(void);
+void register_node_type_cmp_planetrackdeform(void);
+
+void node_cmp_rlayers_force_hidden_passes(struct bNode *node);
 
 #endif

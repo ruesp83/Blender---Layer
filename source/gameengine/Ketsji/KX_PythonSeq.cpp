@@ -15,11 +15,6 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- * The Original Code is: none of this file.
- *
  * Contributor(s): Campbell Barton
  *
  * ***** END GPL LICENSE BLOCK *****
@@ -74,7 +69,7 @@ static Py_ssize_t KX_PythonSeq_len( PyObject *self )
 	PyObjectPlus *self_plus= BGE_PROXY_REF(((KX_PythonSeq *)self)->base);
 
 	if (self_plus==NULL) {
-		PyErr_SetString(PyExc_SystemError, "len(seq): "BGE_PROXY_ERROR_MSG);
+		PyErr_SetString(PyExc_SystemError, "len(seq): " BGE_PROXY_ERROR_MSG);
 		return -1;
 	}
 	
@@ -105,7 +100,7 @@ static PyObject *KX_PythonSeq_getIndex(PyObject *self, Py_ssize_t index)
 	PyObjectPlus *self_plus= BGE_PROXY_REF(((KX_PythonSeq *)self)->base);
 	 
 	if (self_plus==NULL) {
-		PyErr_SetString(PyExc_SystemError, "val = seq[i]: "BGE_PROXY_ERROR_MSG);
+		PyErr_SetString(PyExc_SystemError, "val = seq[i]: " BGE_PROXY_ERROR_MSG);
 		return NULL;
 	}
 	
@@ -269,7 +264,7 @@ static PyObject *KX_PythonSeq_subscript(PyObject *self, PyObject *key)
 	PyObjectPlus *self_plus= BGE_PROXY_REF(((KX_PythonSeq *)self)->base);
 	
 	if (self_plus==NULL) {
-		PyErr_SetString(PyExc_SystemError, "val = seq[key], KX_PythonSeq: "BGE_PROXY_ERROR_MSG);
+		PyErr_SetString(PyExc_SystemError, "val = seq[key], KX_PythonSeq: " BGE_PROXY_ERROR_MSG);
 		return NULL;
 	}
 	
@@ -299,7 +294,7 @@ static int KX_PythonSeq_contains(PyObject *self, PyObject *key)
 	PyObjectPlus *self_plus= BGE_PROXY_REF(((KX_PythonSeq *)self)->base);
 	
 	if (self_plus==NULL) {
-		PyErr_SetString(PyExc_SystemError, "key in seq, KX_PythonSeq: "BGE_PROXY_ERROR_MSG);
+		PyErr_SetString(PyExc_SystemError, "key in seq, KX_PythonSeq: " BGE_PROXY_ERROR_MSG);
 		return -1;
 	}
 	if (!PyUnicode_Check(key)) {
@@ -330,7 +325,7 @@ static PyObject *KX_PythonSeq_get(PyObject *self, PyObject *args)
 	return def;
 }
 
-PySequenceMethods KX_PythonSeq_as_sequence = {
+static PySequenceMethods KX_PythonSeq_as_sequence = {
 	NULL,		/* Cant set the len otherwise it can evaluate as false */
 	NULL,		/* sq_concat */
 	NULL,		/* sq_repeat */
@@ -349,7 +344,7 @@ static PyMappingMethods KX_PythonSeq_as_mapping = {
 	0,	/* mp_ass_subscript */
 };
 
-PyMethodDef KX_PythonSeq_methods[] = {
+static PyMethodDef KX_PythonSeq_methods[] = {
 	// dict style access for props
 	{"get",(PyCFunction) KX_PythonSeq_get, METH_VARARGS},
 	{NULL,NULL} //Sentinel
@@ -362,7 +357,7 @@ PyMethodDef KX_PythonSeq_methods[] = {
 static PyObject *KX_PythonSeq_getIter(KX_PythonSeq *self)
 {
 	if (BGE_PROXY_REF(self->base)==NULL) {
-		PyErr_SetString(PyExc_SystemError, "for i in seq: "BGE_PROXY_ERROR_MSG);
+		PyErr_SetString(PyExc_SystemError, "for i in seq: " BGE_PROXY_ERROR_MSG);
 		return NULL;
 	}
 	
@@ -409,7 +404,8 @@ static PyObject *KX_PythonSeq_richcmp(PyObject *a, PyObject *b, int op)
 	
 	switch (op) {
 	case Py_NE:
-		ok = !ok; /* pass through */
+		ok = !ok;
+		/* fall-through */
 	case Py_EQ:
 		res = ok ? Py_False : Py_True;
 		break;

@@ -977,7 +977,7 @@ int ANIM_apply_keyingset(bContext *C, ListBase *dsources, bAction *act, KeyingSe
 			PropertyRNA *prop;
 			
 			RNA_id_pointer_create(ksp->id, &id_ptr);
-			if (RNA_path_resolve(&id_ptr, ksp->rna_path, &ptr, &prop) && prop)
+			if (RNA_path_resolve_property(&id_ptr, ksp->rna_path, &ptr, &prop))
 				arraylen = RNA_property_array_length(&ptr, prop);
 		}
 		
@@ -1004,8 +1004,8 @@ int ANIM_apply_keyingset(bContext *C, ListBase *dsources, bAction *act, KeyingSe
 				
 				// XXX: only object transforms?
 				DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
+				break;
 			}
-			break;
 		}
 		
 		/* send notifiers for updates (this doesn't require context to work!) */

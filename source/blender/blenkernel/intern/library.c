@@ -95,6 +95,7 @@
 #include "BKE_lamp.h"
 #include "BKE_lattice.h"
 #include "BKE_library.h"
+#include "BKE_linestyle.h"
 #include "BKE_mesh.h"
 #include "BKE_material.h"
 #include "BKE_main.h"
@@ -118,8 +119,6 @@
 #ifdef WITH_PYTHON
 #include "BPY_extern.h"
 #endif
-
-#define MAX_IDPUP  60  /* was 24 */
 
 /* GS reads the memory pointed at in a specific ordering. 
  * only use this definition, makes little and big endian systems
@@ -281,6 +280,8 @@ bool id_make_local(ID *id, bool test)
 			return false; /* can't be linked */
 		case ID_GD:
 			return false; /* not implemented */
+		case ID_LS:
+			return 0; /* not implemented */
 	}
 
 	return false;
@@ -379,6 +380,9 @@ bool id_copy(ID *id, ID **newid, bool test)
 		case ID_MSK:
 			if (!test) *newid = (ID *)BKE_mask_copy((Mask *)id);
 			return true;
+		case ID_LS:
+			if (!test) *newid = (ID *)BKE_copy_linestyle((FreestyleLineStyle *)id);
+			return 1;
 	}
 	
 	return false;
@@ -509,6 +513,8 @@ ListBase *which_libbase(Main *mainlib, short type)
 			return &(mainlib->movieclip);
 		case ID_MSK:
 			return &(mainlib->mask);
+		case ID_LS:
+			return &(mainlib->linestyle);
 	}
 	return NULL;
 }
@@ -594,6 +600,7 @@ int set_listbasepointers(Main *main, ListBase **lb)
 	lb[a++] = &(main->world);
 	lb[a++] = &(main->screen);
 	lb[a++] = &(main->object);
+	lb[a++] = &(main->linestyle); /* referenced by scenes */
 	lb[a++] = &(main->scene);
 	lb[a++] = &(main->library);
 	lb[a++] = &(main->wm);
@@ -720,6 +727,9 @@ static ID *alloc_libblock_notest(short type)
 		case ID_MSK:
 			id = MEM_callocN(sizeof(Mask), "Mask");
 			break;
+		case ID_LS:
+			id = MEM_callocN(sizeof(FreestyleLineStyle), "Freestyle Line Style");
+			break;
 	}
 	return id;
 }
@@ -813,6 +823,14 @@ void set_free_windowmanager_cb(void (*func)(bContext *C, wmWindowManager *) )
 {
 	free_windowmanager_cb = func;
 }
+
+static void (*free_notifier_reference_cb)(const void *) = NULL;
+
+void set_free_notifier_reference_cb(void (*func)(const void *) )
+{
+	free_notifier_reference_cb = func;
+}
+
 
 static void animdata_dtar_clear_cb(ID *UNUSED(id), AnimData *adt, void *userdata)
 {
@@ -955,7 +973,14 @@ void BKE_libblock_free(ListBase *lb, void *idv)
 		case ID_MSK:
 			BKE_mask_free(bmain, (Mask *)id);
 			break;
+		case ID_LS:
+			BKE_free_linestyle((FreestyleLineStyle *)id);
+			break;
 	}
+
+	/* avoid notifying on removed data */
+	if (free_notifier_reference_cb)
+		free_notifier_reference_cb(id);
 
 	BLI_remlink(lb, id);
 
@@ -1035,6 +1060,7 @@ void free_main(Main *mainvar)
 				case  32: BKE_libblock_free(lb, id); break;
 				default:
 					BLI_assert(0);
+					break;
 			}
 #endif
 		}
@@ -1052,6 +1078,9 @@ ID *BKE_libblock_find_name(const short type, const char *name)      /* type: "OB
 	BLI_assert(lb != NULL);
 	return BLI_findstring(lb, name, offsetof(ID, name) + 2);
 }
+
+#if 0 /* UNUSED */
+#define MAX_IDPUP  60  /* was 24 */
 
 static void get_flags_for_id(ID *id, char *buf) 
 {
@@ -1133,7 +1162,6 @@ static void IDnames_to_dyn_pupstring(DynStr *pupds, ListBase *lb, ID *link, shor
 	}
 }
 
-
 /* used by headerbuttons.c buttons.c editobject.c editseq.c */
 /* if (nr == NULL) no MAX_IDPUP, this for non-header browsing */
 void IDnames_to_pupstring(const char **str, const char *title, const char *extraops, ListBase *lb, ID *link, short *nr)
@@ -1158,7 +1186,6 @@ void IDnames_to_pupstring(const char **str, const char *title, const char *extra
 }
 
 /* skips viewer images */
-#if 0 /* unused */
 void IMAnames_to_pupstring(const char **str, const char *title, const char *extraops, ListBase *lb, ID *link, short *nr)
 {
 	DynStr *pupds = BLI_dynstr_new();
@@ -1240,16 +1267,12 @@ static ID *is_dupid(ListBase *lb, ID *id, const char *name)
 static bool check_for_dupid(ListBase *lb, ID *id, char *name)
 {
 	ID *idtest;
-	int nr = 0, nrtest, a, left_len;
+	int nr = 0, a, left_len;
 #define MAX_IN_USE 64
 	bool in_use[MAX_IN_USE];
 	/* to speed up finding unused numbers within [1 .. MAX_IN_USE - 1] */
 
 	char left[MAX_ID_NAME + 8], leftest[MAX_ID_NAME + 8];
-
-	/* make sure input name is terminated properly */
-	/* if ( strlen(name) > MAX_ID_NAME-3 ) name[MAX_ID_NAME-3] = 0; */
-	/* removed since this is only ever called from one place - campbell */
 
 	while (true) {
 
@@ -1277,6 +1300,7 @@ static bool check_for_dupid(ListBase *lb, ID *id, char *name)
 		}
 
 		for (idtest = lb->first; idtest; idtest = idtest->next) {
+			int nrtest;
 			if ( (id != idtest) &&
 			     (idtest->lib == NULL) &&
 			     (*name == *(idtest->name + 2)) &&
@@ -1291,8 +1315,8 @@ static bool check_for_dupid(ListBase *lb, ID *id, char *name)
 					nr = nrtest + 1;    /* track largest unused */
 			}
 		}
-		/* At this point, nr will be at least 1. */
-		BLI_assert(nr >= 1);
+		/* At this point, 'nr' will typically be at least 1. (but not always) */
+		// BLI_assert(nr >= 1);
 
 		/* decide which value of nr to use */
 		for (a = 0; a < MAX_IN_USE; a++) {
@@ -1405,11 +1429,26 @@ bool new_id(ListBase *lb, ID *id, const char *tname)
  * don't have other library users. */
 void id_clear_lib_data(Main *bmain, ID *id)
 {
+	bNodeTree *ntree = NULL;
+
 	BKE_id_lib_local_paths(bmain, id->lib, id);
 
 	id->lib = NULL;
 	id->flag = LIB_LOCAL;
 	new_id(which_libbase(bmain, GS(id->name)), id, NULL);
+
+	/* internal bNodeTree blocks inside ID types below
+	 * also stores id->lib, make sure this stays in sync.
+	 */
+	switch (GS(id->name)) {
+		case ID_SCE:	ntree = ((Scene *)id)->nodetree;		break;
+		case ID_MA:		ntree = ((Material *)id)->nodetree;		break;
+		case ID_LA:		ntree = ((Lamp *)id)->nodetree;			break;
+		case ID_WO:		ntree = ((World *)id)->nodetree;		break;
+		case ID_TE:		ntree = ((Tex *)id)->nodetree;			break;
+	}
+	if (ntree)
+		ntree->id.lib = NULL;
 }
 
 /* next to indirect usage in read/writefile also in editobject.c scene.c */
@@ -1535,6 +1574,9 @@ void BKE_library_make_local(Main *bmain, Library *lib, bool untagged_only)
 			{
 				if (lib == NULL || id->lib == lib) {
 					if (id->lib) {
+						/* for Make Local > All we should be calling id_make_local,
+						 * but doing that breaks append (see #36003 and #36006), we
+						 * we should make it work with all datablocks and id.us==0 */
 						id_clear_lib_data(bmain, id); /* sets 'id->flag' */
 
 						/* why sort alphabetically here but not in

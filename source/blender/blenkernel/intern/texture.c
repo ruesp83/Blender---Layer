@@ -906,42 +906,6 @@ void BKE_texture_make_local(Tex *tex)
 	}
 }
 
-/* ------------------------------------------------------------------------- */
-#if 0 /* UNUSED */
-void autotexname(Tex *tex)
-{
-	Main *bmain = G.main;
-	char texstr[20][15] = {"None", "Clouds", "Wood", "Marble", "Magic", "Blend",
-		                   "Stucci", "Noise", "Image", "EnvMap", "Musgrave",
-		                   "Voronoi", "DistNoise", "Point Density", "Voxel Data", "Ocean", "", "", ""};
-	Image *ima;
-	char di[FILE_MAXDIR], fi[FILE_MAXFILE];
-	
-	if (tex) {
-		if (tex->use_nodes) {
-			new_id(&bmain->tex, (ID *)tex, "Noddy");
-		}
-		else if (tex->type == TEX_IMAGE) {
-			ima = tex->ima;
-			if (ima) {
-				BLI_split_file_part(ima->name, fi, sizeof(fi));
-				strcpy(di, "I.");
-				strcat(di, fi);
-				new_id(&bmain->tex, (ID *)tex, di);
-			}
-			else {
-				new_id(&bmain->tex, (ID *)tex, texstr[tex->type]);
-			}
-		}
-		else {
-			new_id(&bmain->tex, (ID *)tex, texstr[tex->type]);
-		}
-	}
-}
-#endif
-
-/* ------------------------------------------------------------------------- */
-
 Tex *give_current_object_texture(Object *ob)
 {
 	Material *ma, *node_ma;
@@ -1420,10 +1384,10 @@ void BKE_free_oceantex(struct OceanTex *ot)
 
 
 /* ------------------------------------------------------------------------- */
-int BKE_texture_dependsOnTime(const struct Tex *texture)
+bool BKE_texture_dependsOnTime(const struct Tex *texture)
 {
 	if (texture->ima &&
-	         ELEM(texture->ima->source, IMA_SRC_SEQUENCE, IMA_SRC_MOVIE))
+	    ELEM(texture->ima->source, IMA_SRC_SEQUENCE, IMA_SRC_MOVIE))
 	{
 		return 1;
 	}

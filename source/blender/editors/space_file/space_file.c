@@ -35,13 +35,12 @@
 
 #include "BIF_gl.h"
 
-#include "BLO_readfile.h"
-
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
-#include "BLI_rand.h"
 #include "BLI_utildefines.h"
 #include "BLI_fileops_types.h"
+
+#include "BLO_readfile.h"
 
 #include "BKE_context.h"
 #include "BKE_screen.h"
@@ -149,7 +148,6 @@ static void file_free(SpaceLink *sl)
 static void file_init(wmWindowManager *UNUSED(wm), ScrArea *sa)
 {
 	SpaceFile *sfile = (SpaceFile *)sa->spacedata.first;
-	//printf("file_init\n");
 
 	/* refresh system directory list */
 	fsmenu_refresh_system_category(fsmenu_get());
@@ -256,7 +254,7 @@ static void file_refresh(const bContext *C, ScrArea *UNUSED(sa))
 
 }
 
-static void file_listener(ScrArea *sa, wmNotifier *wmn)
+static void file_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn)
 {
 	/* SpaceFile *sfile = (SpaceFile *)sa->spacedata.first; */
 
@@ -292,7 +290,7 @@ static void file_main_area_init(wmWindowManager *wm, ARegion *ar)
 	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
 }
 
-static void file_main_area_listener(ARegion *ar, wmNotifier *wmn)
+static void file_main_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -314,7 +312,6 @@ static void file_main_area_draw(const bContext *C, ARegion *ar)
 	/* draw entirely, view changes should be handled here */
 	SpaceFile *sfile = CTX_wm_space_file(C);
 	FileSelectParams *params = ED_fileselect_get_params(sfile);
-	FileLayout *layout = NULL;
 
 	View2D *v2d = &ar->v2d;
 	View2DScrollers *scrollers;
@@ -324,15 +321,14 @@ static void file_main_area_draw(const bContext *C, ARegion *ar)
 	if (!sfile->files || filelist_empty(sfile->files))
 		file_refresh(C, NULL);
 
-	layout = ED_fileselect_get_layout(sfile, ar);
-
 	/* clear and setup matrix */
 	UI_GetThemeColor3fv(TH_BACK, col);
 	glClearColor(col[0], col[1], col[2], 0.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 	
 	/* Allow dynamically sliders to be set, saves notifiers etc. */
-	if (layout && (layout->flag == FILE_LAYOUT_VER)) {
+	
+	if (params->display == FILE_IMGDISPLAY) {
 		v2d->scroll = V2D_SCROLL_RIGHT;
 		v2d->keepofs &= ~V2D_LOCKOFS_Y;
 		v2d->keepofs |= V2D_LOCKOFS_X;
@@ -414,7 +410,7 @@ static void file_keymap(struct wmKeyConfig *keyconf)
 	WM_keymap_add_item(keymap, "FILE_OT_hidedot", HKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "FILE_OT_previous", BACKSPACEKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "FILE_OT_next", BACKSPACEKEY, KM_PRESS, KM_SHIFT, 0);
-	WM_keymap_add_item(keymap, "FILE_OT_directory_new", IKEY, KM_PRESS, 0, 0);  /* XXX needs button */
+	WM_keymap_add_item(keymap, "FILE_OT_directory_new", IKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "FILE_OT_delete", XKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "FILE_OT_delete", DELKEY, KM_PRESS, 0, 0);
 	WM_keymap_verify_item(keymap, "FILE_OT_smoothscroll", TIMER1, KM_ANY, KM_ANY, 0);
@@ -442,6 +438,10 @@ static void file_keymap(struct wmKeyConfig *keyconf)
 	RNA_boolean_set(kmi->ptr, "extend", TRUE);
 	RNA_boolean_set(kmi->ptr, "fill", TRUE);
 	RNA_boolean_set(kmi->ptr, "open", FALSE);
+
+	/* front and back mouse folder navigation */
+	WM_keymap_add_item(keymap, "FILE_OT_previous", BUTTON4MOUSE, KM_CLICK, 0, 0);
+	WM_keymap_add_item(keymap, "FILE_OT_next", BUTTON5MOUSE, KM_CLICK, 0, 0);
 
 	WM_keymap_add_item(keymap, "FILE_OT_select_all_toggle", AKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "FILE_OT_refresh", PADPERIOD, KM_PRESS, 0, 0);
@@ -497,12 +497,14 @@ static void file_channel_area_draw(const bContext *C, ARegion *ar)
 	ED_region_panels(C, ar, 1, NULL, -1);
 }
 
-static void file_channel_area_listener(ARegion *UNUSED(ar), wmNotifier *wmn)
+static void file_channel_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *UNUSED(ar), wmNotifier *UNUSED(wmn))
 {
+#if 0
 	/* context changes */
 	switch (wmn->category) {
 		
 	}
+#endif
 }
 
 /* add handlers, stuff you only do once or on area/region changes */
@@ -557,7 +559,7 @@ static void file_ui_area_draw(const bContext *C, ARegion *ar)
 	UI_view2d_view_restore(C);
 }
 
-static void file_ui_area_listener(ARegion *ar, wmNotifier *wmn)
+static void file_ui_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
 {
 	/* context changes */
 	switch (wmn->category) {

@@ -80,7 +80,7 @@
  * Edges and Vertices in BMesh are much like their counterparts in EditMesh,
  * except for some members private to the BMesh api.
  *
- * \note There can be more then one edge between two vertices in bmesh,
+ * \note There can be more than one edge between two vertices in bmesh,
  * though the rest of blender (e.g. DerivedMesh, CDDM, CCGSubSurf, etc) does not support this.
  *
  *
@@ -251,8 +251,9 @@ extern "C" {
 #include "intern/bmesh_operator_api.h"
 #include "intern/bmesh_error.h"
 
-#include "intern/bmesh_construct.h"
 #include "intern/bmesh_core.h"
+#include "intern/bmesh_construct.h"
+#include "intern/bmesh_edgeloop.h"
 #include "intern/bmesh_interp.h"
 #include "intern/bmesh_iterators.h"
 #include "intern/bmesh_log.h"
@@ -267,10 +268,6 @@ extern "C" {
 #include "intern/bmesh_walkers.h"
 
 #include "intern/bmesh_inline.h"
-
-#include "tools/bmesh_bevel.h"
-#include "tools/bmesh_decimate.h"
-#include "tools/bmesh_triangulate.h"
 
 #ifdef __cplusplus
 }

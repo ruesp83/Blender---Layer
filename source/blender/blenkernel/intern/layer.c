@@ -39,6 +39,7 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_math_base.h"
+#include "BLI_math_vector.h"
 //#include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
@@ -352,123 +353,146 @@ int image_remove_layer(Image *ima, const int action)
 }
 
 static float blend_normal(float B, float L, float O)
-{	
+{
 	return (O * (L) + (1.0f - O) * B);
 }
 
 static float blend_lighten(const float B, const float L, float O)
-{	
+{
 	return (O * ((L > B) ? L : B) + (1.0f - O) * B);
 }
 
 static float blend_darken(const float B, const float L, float O)
-{	
+{
 	return (O * ((L > B) ? B : L) + (1.0f - O) * B);
 }
 
 static float blend_multiply(const float B, const float L, float O)
-{	
+{
 	return (O * ((B * L) / 1.0f) + (1.0f - O) * B);
 }
 
 static float blend_average(const float B, const float L, float O)
-{	
+{
 	return (O * ((B + L) / 2) + (1.0f - O) * B);
 }
 
 static float blend_add(const float B, const float L, float O)
-{	
+{
 	return (O * (MIN2(1.0f, (B + L))) + (1.0f - O) * B);
 }
 
 static float blend_subtract(const float B, const float L, float O)
-{	
+{
 	return (O * ((B + L < 1.0f) ? 0 : (B + L - 1.0f)) + (1.0f - O) * B);
 }
 
 static float blend_difference(const float B, const float L, float O)
-{	
+{
 	return (O * (abs(B - L)) + (1.0f - O) * B);
 }
 
 static float blend_negation(const float B, const float L, float O)
-{	
+{
 	return (O * (1.0f - abs(1.0f - B - L)) + (1.0f - O) * B);
 }
 
 static float blend_screen(const float B, const float L, float O)
-{	
+{
 	return (O * (1.0f - ((1.0f - B) * (1 - L))) + (1.0f - O) * B);
 }
 
 static float blend_exclusion(const float B, const float L, float O)
-{	
+{
 	return (O * (B + L - 2 * B * L) + (1.0f - O) * B);
 }
 
 static float blend_overlay(const float B, const float L, float O)
-{	
+{
 	return (O * ((L < 0.5f) ? (2 * B * L) : (1.0f - 2 * (1.0f - B) * (1.0f - L))) + (1.0f - O) * B);
 }
 
 static float blend_soft_light(const float B, const float L, float O)
-{	
-	/* TODO */
-	//return (O * ((L < 0.5f) ? (2 * ((B >> 1) + 64)) * L : (1.0f - (2 * (1.0f - ((B >> 1) + 64)) * (1.0f - L)))) + (1.0f - O) * B);
-	return L;
+{
+	return (O * ((1.0f - B) * blend_multiply(B, L, O) + B * blend_screen(B, L, O)) + (1.0f - O) * B);
 }
 
 static float blend_hard_light(const float B, const float L, float O)
-{	
+{
 	return (O * ((B < 0.5f) ? (2 * L * B) : (1.0f - 2 * (1.0f - L) * (1.0f - B))) + (1.0f - O) * B);
 }
 
 static float blend_color_dodge(const float B, const float L, float O)
-{	
-	/* TODO */
-	//return (O * ((L == 1.0f) ? L : min_ff(1.0f, ((B << 8 ) / (1.0f - L)))) + (1.0f - O) * B);
-	return L;
+{
+	/* TEST */
+	return (O * (B / (1.0f - L)) + (1.0f - O) * B);
 }
 
 static float blend_color_burn(const float B, const float L, float O)
-{	
-	/* TODO */
-	//return (O * ((L == 0) ? L : max_ff(0, (1.0f - ((1.0f - B) << 8 ) / L))) + (1.0f - O) * B);
-	return L;
+{
+	/* TEST */
+	return (O * (1.0f - ((1.0f - B) / L)) + (1.0f - O) * B);
+}
+
+static float blend_inverse_color_burn(const float B, const float L, float O)
+{
+	/* TEST */
+	return (O * (1.0f - ((1.0f - L) / B)) + (1.0f - O) * B);
+}
+
+static float blend_soft_burn(const float B, const float L, float O)
+{
+	float r;
+	/* TEST */
+	if (B + L < 1.0f) {
+		r = (O * ((0.5f * L) / (1.0f - B)) + (1.0f - O) * B);
+	}
+	else {
+		r = (O * (1.0f - (0.5f * (1.0f - B)) / L) + (1.0f - O) * B);
+	}
+	return r;
 }
 
 static float blend_linear_dodge(const float B, const float L, float O)
-{	
+{
 	return (O * (min_ff(1.0f, (B + L))) + (1.0f - O) * B);
 }
 
 static float blend_linear_burn(const float B, const float L, float O)
-{	
+{
 	return (O * ((B + L < 1.0f) ? 0 : (B + L - 1.0f)) + (1.0f - O) * B);
 }
 
 static float blend_linear_light(const float B, const float L, float O)
-{	
+{
 	return (O * ((2 * L) < 0.5f) ? ((B + (2 * L) < 1.0f) ? 0 : (B + (2 * L) - 1.0f)) : (min_ff(1.0f, (B + (2 * (L - 0.5f))))) + (1.0f - O) * B);
 }
 
 static float blend_vivid_light(const float B, const float L, float O)
-{	
-	/* TODO */
-	//return (O * (L < 0.5f) ? (((2 * L) == 0) ? (2 * L) : max_ff(0, (1.0f - ((1.0f - B) << 8 ) / (2 * L)))) : (min_ff(1.0f, (B + (2 * (L - 0.5f))))) + (1.0f - O) * B);
-	return L;
+{
+	float r;
+	/* TEST */
+	// ChannelBlend_VividLight(A,B) ((uint8)(B < 128)?ChannelBlend_ColorBurn(L,(2 * B)):ChannelBlend_ColorDodge(Ls,(2 * (B - 128))))
+	if (B < 0.5f) {
+		r = blend_color_burn(B * 2, L, O);
+	}
+	else {
+		r = blend_color_dodge((2 * (B - 0.5f)), L, O);
+	}
+	return (O * r + (1.0f - O) * B);
 }
 
 static float blend_pin_light(const float B, const float L, float O)
-{	
+{
 	return (O * (L < 0.5f) ? (((2 * L) > B) ? B : (2 * L)) : (((2 * (L - 0.5f)) > B) ? (2 * (L - 0.5f)) : B) + (1.0f - O) * B);
 }
 
 static float blend_hard_mix(const float B, const float L, float O)
-{	
-	/* TODO */
+{
+	/* TEST */
 	//return (O * (((L < 0.5f) ? (((2 * L) == 0) ? (2 * L) : max_ff(0, (1.0f - ((1.0f - B) << 8 ) / (2 * L)))) : (min_ff(1.0f, (B + (2 * (L - 0.5f))))) < 0.5f) ? 0 : 1.0f) + (1.0f - O) * B);
-	return L;
+	//ChannelBlend_HardMix(A,B)    ((uint8)((ChannelBlend_VividLight(L,B) < 128) ? 0:255))
+	return (O * ((blend_vivid_light(B, L, O) < 0.5f) ? 0 : 1.0f) + (1.0f - O) * B);
 }
 
 static float clipcolour(float col) 
@@ -479,13 +503,6 @@ static float clipcolour(float col)
 	if (col > 1)
 		col = 1;
 	return col;
-}
-
-static char pixel_is_transparent(const char pix[4])
-{	
-	if ((pix[0] == 0) && (pix[1] == 0) && (pix[2] == 0) && (pix[3] == 0))
-		return 1;
-	return 0;
 }
 
 static void copy_co(int rect, float *fp, char *cp, float co)
@@ -621,6 +638,12 @@ ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode)
 
 	case IMA_LAYER_HARD_MIX:
 		blend_callback = blend_hard_mix;
+		break;
+	case IMA_LAYER_INVERSE_COLOR_BURN:
+		blend_callback = blend_inverse_color_burn;
+		break;
+	case IMA_LAYER_SOFT_BURN:
+		blend_callback = blend_soft_burn;
 		break;
 	}
 

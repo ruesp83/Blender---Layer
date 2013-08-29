@@ -69,6 +69,7 @@
 #include "BKE_bvhutils.h"
 #include "BKE_camera.h"
 #include "BKE_constraint.h"
+#include "BKE_curve.h"
 #include "BKE_displist.h"
 #include "BKE_deform.h"
 #include "BKE_DerivedMesh.h"    /* for geometry targets */
@@ -81,7 +82,7 @@
 #include "BKE_mesh.h"
 #include "BKE_shrinkwrap.h"
 #include "BKE_mesh.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
 #include "BKE_tracking.h"
 #include "BKE_movieclip.h"
 
@@ -132,8 +133,8 @@ bConstraintOb *BKE_constraints_make_evalob(Scene *scene, Object *ob, void *subda
 				unit_m4(cob->matrix);
 			
 			copy_m4_m4(cob->startmat, cob->matrix);
+			break;
 		}
-		break;
 		case CONSTRAINT_OBTYPE_BONE:
 		{
 			/* only set if we have valid bone, otherwise default */
@@ -152,15 +153,14 @@ bConstraintOb *BKE_constraints_make_evalob(Scene *scene, Object *ob, void *subda
 				}
 				
 				/* matrix in world-space */
-				mult_m4_m4m4(cob->matrix, ob->obmat, cob->pchan->pose_mat);
+				mul_m4_m4m4(cob->matrix, ob->obmat, cob->pchan->pose_mat);
 			}
 			else
 				unit_m4(cob->matrix);
 				
 			copy_m4_m4(cob->startmat, cob->matrix);
+			break;
 		}
-		break;
-			
 		default: /* other types not yet handled */
 			unit_m4(cob->matrix);
 			unit_m4(cob->startmat);
@@ -181,7 +181,7 @@ void BKE_constraints_clear_evalob(bConstraintOb *cob)
 	
 	/* calculate delta of constraints evaluation */
 	invert_m4_m4(imat, cob->startmat);
-	mult_m4_m4m4(delta, cob->matrix, imat);
+	mul_m4_m4m4(delta, cob->matrix, imat);
 	
 	/* copy matrices back to source */
 	switch (cob->type) {
@@ -195,20 +195,20 @@ void BKE_constraints_clear_evalob(bConstraintOb *cob)
 				/* copy inverse of delta back to owner */
 				invert_m4_m4(cob->ob->constinv, delta);
 			}
+			break;
 		}
-		break;
 		case CONSTRAINT_OBTYPE_BONE:
 		{
 			/* cob->ob or cob->pchan might not exist */
 			if (cob->ob && cob->pchan) {
 				/* copy new pose-matrix back to owner */
-				mult_m4_m4m4(cob->pchan->pose_mat, cob->ob->imat, cob->matrix);
+				mul_m4_m4m4(cob->pchan->pose_mat, cob->ob->imat, cob->matrix);
 				
 				/* copy inverse of delta back to owner */
 				invert_m4_m4(cob->pchan->constinv, delta);
 			}
+			break;
 		}
-		break;
 	}
 	
 	/* free tempolary struct */
@@ -239,20 +239,20 @@ void BKE_constraint_mat_convertspace(Object *ob, bPoseChannel *pchan, float mat[
 			{
 				/* world to pose */
 				invert_m4_m4(imat, ob->obmat);
-				mult_m4_m4m4(mat, imat, mat);
+				mul_m4_m4m4(mat, imat, mat);
 				
 				/* use pose-space as stepping stone for other spaces... */
 				if (ELEM(to, CONSTRAINT_SPACE_LOCAL, CONSTRAINT_SPACE_PARLOCAL)) {
 					/* call self with slightly different values */
 					BKE_constraint_mat_convertspace(ob, pchan, mat, CONSTRAINT_SPACE_POSE, to);
 				}
+				break;
 			}
-			break;
 			case CONSTRAINT_SPACE_POSE: /* ---------- FROM POSESPACE ---------- */
 			{
 				/* pose to world */
 				if (to == CONSTRAINT_SPACE_WORLD) {
-					mult_m4_m4m4(mat, ob->obmat, mat);
+					mul_m4_m4m4(mat, ob->obmat, mat);
 				}
 				/* pose to local */
 				else if (to == CONSTRAINT_SPACE_LOCAL) {
@@ -264,11 +264,11 @@ void BKE_constraint_mat_convertspace(Object *ob, bPoseChannel *pchan, float mat[
 				else if (to == CONSTRAINT_SPACE_PARLOCAL) {
 					if (pchan->bone) {
 						invert_m4_m4(imat, pchan->bone->arm_mat);
-						mult_m4_m4m4(mat, imat, mat);
+						mul_m4_m4m4(mat, imat, mat);
 					}
 				}
+				break;
 			}
-			break;
 			case CONSTRAINT_SPACE_LOCAL: /* ------------ FROM LOCALSPACE --------- */
 			{
 				/* local to pose - do inverse procedure that was done for pose to local */
@@ -282,14 +282,14 @@ void BKE_constraint_mat_convertspace(Object *ob, bPoseChannel *pchan, float mat[
 					/* call self with slightly different values */
 					BKE_constraint_mat_convertspace(ob, pchan, mat, CONSTRAINT_SPACE_POSE, to);
 				}
+				break;
 			}
-			break;
 			case CONSTRAINT_SPACE_PARLOCAL: /* -------------- FROM LOCAL WITH PARENT ---------- */
 			{
 				/* local + parent to pose */
 				if (pchan->bone) {
 					copy_m4_m4(diff_mat, pchan->bone->arm_mat);
-					mult_m4_m4m4(mat, mat, diff_mat);
+					mul_m4_m4m4(mat, mat, diff_mat);
 				}
 				
 				/* use pose-space as stepping stone for other spaces */
@@ -297,8 +297,8 @@ void BKE_constraint_mat_convertspace(Object *ob, bPoseChannel *pchan, float mat[
 					/* call self with slightly different values */
 					BKE_constraint_mat_convertspace(ob, pchan, mat, CONSTRAINT_SPACE_POSE, to);
 				}
+				break;
 			}
-			break;
 		}
 	}
 	else {
@@ -307,9 +307,9 @@ void BKE_constraint_mat_convertspace(Object *ob, bPoseChannel *pchan, float mat[
 			/* check if object has a parent */
 			if (ob->parent) {
 				/* 'subtract' parent's effects from owner */
-				mult_m4_m4m4(diff_mat, ob->parent->obmat, ob->parentinv);
+				mul_m4_m4m4(diff_mat, ob->parent->obmat, ob->parentinv);
 				invert_m4_m4(imat, diff_mat);
-				mult_m4_m4m4(mat, imat, mat);
+				mul_m4_m4m4(mat, imat, mat);
 			}
 			else {
 				/* Local space in this case will have to be defined as local to the owner's 
@@ -320,15 +320,15 @@ void BKE_constraint_mat_convertspace(Object *ob, bPoseChannel *pchan, float mat[
 				zero_v3(diff_mat[3]);
 				
 				invert_m4_m4(imat, diff_mat);
-				mult_m4_m4m4(mat, imat, mat);
+				mul_m4_m4m4(mat, imat, mat);
 			}
 		}
 		else if (from == CONSTRAINT_SPACE_LOCAL && to == CONSTRAINT_SPACE_WORLD) {
 			/* check that object has a parent - otherwise this won't work */
 			if (ob->parent) {
 				/* 'add' parent's effect back to owner */
-				mult_m4_m4m4(diff_mat, ob->parent->obmat, ob->parentinv);
-				mult_m4_m4m4(mat, diff_mat, mat);
+				mul_m4_m4m4(diff_mat, ob->parent->obmat, ob->parentinv);
+				mul_m4_m4m4(mat, diff_mat, mat);
 			}
 			else {
 				/* Local space in this case will have to be defined as local to the owner's 
@@ -338,7 +338,7 @@ void BKE_constraint_mat_convertspace(Object *ob, bPoseChannel *pchan, float mat[
 				normalize_m4(diff_mat);
 				zero_v3(diff_mat[3]);
 				
-				mult_m4_m4m4(mat, diff_mat, mat);
+				mul_m4_m4m4(mat, diff_mat, mat);
 			}
 		}
 	}
@@ -350,7 +350,7 @@ void BKE_constraint_mat_convertspace(Object *ob, bPoseChannel *pchan, float mat[
 static void contarget_get_mesh_mat(Object *ob, const char *substring, float mat[4][4])
 {
 	DerivedMesh *dm = NULL;
-	BMEditMesh *em = BMEdit_FromObject(ob);
+	BMEditMesh *em = BKE_editmesh_from_object(ob);
 	float vec[3] = {0.0f, 0.0f, 0.0f};
 	float normal[3] = {0.0f, 0.0f, 0.0f}, plane[3];
 	float imat[3][3], tmat[3][3];
@@ -380,29 +380,31 @@ static void contarget_get_mesh_mat(Object *ob, const char *substring, float mat[
 	if (dm) {
 		MDeformVert *dvert = dm->getVertDataArray(dm, CD_MDEFORMVERT);
 		int numVerts = dm->getNumVerts(dm);
-		int i, count = 0;
+		int i;
 		float co[3], nor[3];
 		
 		/* check that dvert is a valid pointers (just in case) */
 		if (dvert) {
 			MDeformVert *dv = dvert;
+			float weightsum = 0.0f;
+
 			/* get the average of all verts with that are in the vertex-group */
 			for (i = 0; i < numVerts; i++, dv++) {
 				MDeformWeight *dw = defvert_find_index(dv, defgroup);
-				if (dw && dw->weight != 0.0f) {
+
+				if (dw && dw->weight > 0.0f) {
 					dm->getVertCo(dm, i, co);
 					dm->getVertNo(dm, i, nor);
-					add_v3_v3(vec, co);
-					add_v3_v3(normal, nor);
-					count++;
-					
+					madd_v3_v3fl(vec, co, dw->weight);
+					madd_v3_v3fl(normal, nor, dw->weight);
+					weightsum += dw->weight;
 				}
 			}
 
 			/* calculate averages of normal and coordinates */
-			if (count > 0) {
-				mul_v3_fl(vec, 1.0f / count);
-				mul_v3_fl(normal, 1.0f / count);
+			if (weightsum > 0) {
+				mul_v3_fl(vec, 1.0f / weightsum);
+				mul_v3_fl(normal, 1.0f / weightsum);
 			}
 			
 			
@@ -447,7 +449,7 @@ static void contarget_get_lattice_mat(Object *ob, const char *substring, float m
 {
 	Lattice *lt = (Lattice *)ob->data;
 	
-	DispList *dl = BKE_displist_find(&ob->disp, DL_VERTS);
+	DispList *dl = ob->curve_cache ? BKE_displist_find(&ob->curve_cache->disp, DL_VERTS) : NULL;
 	float *co = dl ? dl->verts : NULL;
 	BPoint *bp = lt->def;
 	
@@ -532,7 +534,7 @@ static void constraint_target_to_mat4(Object *ob, const char *substring, float m
 			 */
 			if (headtail < 0.000001f) {
 				/* skip length interpolation if set to head */
-				mult_m4_m4m4(mat, ob->obmat, pchan->pose_mat);
+				mul_m4_m4m4(mat, ob->obmat, pchan->pose_mat);
 			}
 			else {
 				float tempmat[4][4], loc[3];
@@ -544,7 +546,7 @@ static void constraint_target_to_mat4(Object *ob, const char *substring, float m
 				copy_m4_m4(tempmat, pchan->pose_mat);
 				copy_v3_v3(tempmat[3], loc);
 				
-				mult_m4_m4m4(mat, ob->obmat, tempmat);
+				mul_m4_m4m4(mat, ob->obmat, tempmat);
 			}
 		}
 		else
@@ -755,12 +757,12 @@ static void childof_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *tar
 			/* multiply target (parent matrix) by offset (parent inverse) to get 
 			 * the effect of the parent that will be exerted on the owner
 			 */
-			mult_m4_m4m4(parmat, ct->matrix, data->invmat);
+			mul_m4_m4m4(parmat, ct->matrix, data->invmat);
 			
 			/* now multiply the parent matrix by the owner matrix to get the 
 			 * the effect of this constraint (i.e. owner is 'parented' to parent)
 			 */
-			mult_m4_m4m4(cob->matrix, parmat, cob->matrix);
+			mul_m4_m4m4(cob->matrix, parmat, cob->matrix);
 		}
 		else {
 			float invmat[4][4], tempmat[4][4];
@@ -797,13 +799,13 @@ static void childof_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *tar
 			/* multiply target (parent matrix) by offset (parent inverse) to get 
 			 * the effect of the parent that will be exerted on the owner
 			 */
-			mult_m4_m4m4(parmat, ct->matrix, invmat);
+			mul_m4_m4m4(parmat, ct->matrix, invmat);
 			
 			/* now multiply the parent matrix by the owner matrix to get the 
 			 * the effect of this constraint (i.e.  owner is 'parented' to parent)
 			 */
 			copy_m4_m4(tempmat, cob->matrix);
-			mult_m4_m4m4(cob->matrix, parmat, tempmat);
+			mul_m4_m4m4(cob->matrix, parmat, tempmat);
 			
 			/* without this, changes to scale and rotation can change location
 			 * of a parentless bone or a disconnected bone. Even though its set
@@ -1162,10 +1164,10 @@ static void followpath_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstra
 		 */
 		
 		/* only happens on reload file, but violates depsgraph still... fix! */
-		if (cu->path == NULL || cu->path->data == NULL)
+		if (ct->tar->curve_cache == NULL || ct->tar->curve_cache->path == NULL || ct->tar->curve_cache->path->data == NULL)
 			BKE_displist_make_curveTypes(cob->scene, ct->tar, 0);
 		
-		if (cu->path && cu->path->data) {
+		if (ct->tar->curve_cache->path && ct->tar->curve_cache->path->data) {
 			float quat[4];
 			if ((data->followflag & FOLLOWPATH_STATIC) == 0) {
 				/* animated position along curve depending on time */
@@ -1204,8 +1206,8 @@ static void followpath_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstra
 					vec_to_quat(quat, dir, (short)data->trackflag, (short)data->upflag);
 					
 					normalize_v3(dir);
-					q[0] = (float)cos(0.5 * vec[3]);
-					x1 = (float)sin(0.5 * vec[3]);
+					q[0] = cosf(0.5 * vec[3]);
+					x1 = sinf(0.5 * vec[3]);
 					q[1] = -x1 * dir[0];
 					q[2] = -x1 * dir[1];
 					q[3] = -x1 * dir[2];
@@ -1220,13 +1222,13 @@ static void followpath_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstra
 				if (data->followflag & FOLLOWPATH_RADIUS) {
 					float tmat[4][4], rmat[4][4];
 					scale_m4_fl(tmat, radius);
-					mult_m4_m4m4(rmat, tmat, totmat);
+					mul_m4_m4m4(rmat, tmat, totmat);
 					copy_m4_m4(totmat, rmat);
 				}
 				
 				copy_v3_v3(totmat[3], vec);
 				
-				mul_serie_m4(ct->matrix, ct->tar->obmat, totmat, NULL, NULL, NULL, NULL, NULL, NULL);
+				mul_m4_m4m4(ct->matrix, ct->tar->obmat, totmat);
 			}
 		}
 	}
@@ -1252,7 +1254,7 @@ static void followpath_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *
 		mat4_to_size(size, cob->matrix);
 		
 		/* apply targetmat - containing location on path, and rotation */
-		mul_serie_m4(cob->matrix, ct->matrix, obmat, NULL, NULL, NULL, NULL, NULL, NULL);
+		mul_m4_m4m4(cob->matrix, ct->matrix, obmat);
 		
 		/* un-apply scaling caused by path */
 		if ((data->followflag & FOLLOWPATH_RADIUS) == 0) { /* XXX - assume that scale correction means that radius will have some scale error in it - Campbell */
@@ -1932,10 +1934,8 @@ static void pycon_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstraintTa
 	if (VALID_CONS_TARGET(ct)) {
 		/* special exception for curves - depsgraph issues */
 		if (ct->tar->type == OB_CURVE) {
-			Curve *cu = ct->tar->data;
-			
 			/* this check is to make sure curve objects get updated on file load correctly.*/
-			if (cu->path == NULL || cu->path->data == NULL) /* only happens on reload file, but violates depsgraph still... fix! */
+			if (ct->tar->curve_cache == NULL || ct->tar->curve_cache->path == NULL || ct->tar->curve_cache->path->data == NULL) /* only happens on reload file, but violates depsgraph still... fix! */
 				BKE_displist_make_curveTypes(cob->scene, ct->tar, 0);
 		}
 		
@@ -2079,6 +2079,8 @@ static void actcon_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstraintT
 			axis = data->type - 20;
 		}
 		
+		BLI_assert((unsigned int)axis < 3);
+
 		/* Target defines the animation */
 		s = (vec[axis] - data->min) / (data->max - data->min);
 		CLAMP(s, 0, 1);
@@ -2140,7 +2142,7 @@ static void actcon_evaluate(bConstraint *UNUSED(con), bConstraintOb *cob, ListBa
 		 * function has already taken care of everything else.
 		 */
 		copy_m4_m4(temp, cob->matrix);
-		mult_m4_m4m4(cob->matrix, temp, ct->matrix);
+		mul_m4_m4m4(cob->matrix, temp, ct->matrix);
 	}
 }
 
@@ -2233,8 +2235,8 @@ static void locktrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 					
 						/* the z axis gets mapped onto a third orthogonal vector */
 						cross_v3_v3v3(totmat[2], totmat[0], totmat[1]);
+						break;
 					}
-					break;
 					case TRACK_Z: /* LOCK X TRACK Z */
 					{
 						/* Projection of Vector on the plane */
@@ -2247,8 +2249,8 @@ static void locktrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 					
 						/* the z axis gets mapped onto a third orthogonal vector */
 						cross_v3_v3v3(totmat[1], totmat[2], totmat[0]);
+						break;
 					}
-					break;
 					case TRACK_nY: /* LOCK X TRACK -Y */
 					{
 						/* Projection of Vector on the plane */
@@ -2262,8 +2264,8 @@ static void locktrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 					
 						/* the z axis gets mapped onto a third orthogonal vector */
 						cross_v3_v3v3(totmat[2], totmat[0], totmat[1]);
+						break;
 					}
-					break;
 					case TRACK_nZ: /* LOCK X TRACK -Z */
 					{
 						/* Projection of Vector on the plane */
@@ -2277,16 +2279,16 @@ static void locktrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 						
 						/* the z axis gets mapped onto a third orthogonal vector */
 						cross_v3_v3v3(totmat[1], totmat[2], totmat[0]);
+						break;
 					}
-					break;
 					default:
 					{
 						unit_m3(totmat);
+						break;
 					}
-					break;
 				}
+				break;
 			}
-			break;
 			case LOCK_Y: /* LOCK Y */
 			{
 				switch (data->trackflag) {
@@ -2302,8 +2304,8 @@ static void locktrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 
 						/* the z axis gets mapped onto a third orthogonal vector */
 						cross_v3_v3v3(totmat[2], totmat[0], totmat[1]);
+						break;
 					}
-					break;
 					case TRACK_Z: /* LOCK Y TRACK Z */
 					{
 						/* Projection of Vector on the plane */
@@ -2316,8 +2318,8 @@ static void locktrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 					
 						/* the z axis gets mapped onto a third orthogonal vector */
 						cross_v3_v3v3(totmat[0], totmat[1], totmat[2]);
+						break;
 					}
-					break;
 					case TRACK_nX: /* LOCK Y TRACK -X */
 					{
 						/* Projection of Vector on the plane */
@@ -2331,8 +2333,8 @@ static void locktrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 					
 						/* the z axis gets mapped onto a third orthogonal vector */
 						cross_v3_v3v3(totmat[2], totmat[0], totmat[1]);
+						break;
 					}
-					break;
 					case TRACK_nZ: /* LOCK Y TRACK -Z */
 					{
 						/* Projection of Vector on the plane */
@@ -2346,16 +2348,16 @@ static void locktrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 					
 						/* the z axis gets mapped onto a third orthogonal vector */
 						cross_v3_v3v3(totmat[0], totmat[1], totmat[2]);
+						break;
 					}
-					break;
 					default:
 					{
 						unit_m3(totmat);
+						break;
 					}
-					break;
 				}
+				break;
 			}
-			break;
 			case LOCK_Z: /* LOCK Z */
 			{
 				switch (data->trackflag) {
@@ -2371,8 +2373,8 @@ static void locktrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 					
 						/* the x axis gets mapped onto a third orthogonal vector */
 						cross_v3_v3v3(totmat[1], totmat[2], totmat[0]);
+						break;
 					}
-					break;
 					case TRACK_Y: /* LOCK Z TRACK Y */
 					{
 						/* Projection of Vector on the plane */
@@ -2385,8 +2387,8 @@ static void locktrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 						
 						/* the x axis gets mapped onto a third orthogonal vector */
 						cross_v3_v3v3(totmat[0], totmat[1], totmat[2]);
+						break;
 					}
-					break;
 					case TRACK_nX: /* LOCK Z TRACK -X */
 					{
 						/* Projection of Vector on the plane */
@@ -2400,8 +2402,8 @@ static void locktrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 					
 						/* the x axis gets mapped onto a third orthogonal vector */
 						cross_v3_v3v3(totmat[1], totmat[2], totmat[0]);
+						break;
 					}
-					break;
 					case TRACK_nY: /* LOCK Z TRACK -Y */
 					{
 						/* Projection of Vector on the plane */
@@ -2415,21 +2417,21 @@ static void locktrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 						
 						/* the x axis gets mapped onto a third orthogonal vector */
 						cross_v3_v3v3(totmat[0], totmat[1], totmat[2]);
+						break;
 					}
-					break;
 					default:
 					{
 						unit_m3(totmat);
+						break;
 					}
-					break;
 				}
+				break;
 			}
-			break;
 			default:
 			{
 				unit_m3(totmat);
+				break;
 			}
-			break;
 		}
 		/* Block to keep matrix heading */
 		copy_m3_m4(tmpmat, cob->matrix);
@@ -2517,7 +2519,7 @@ static void distlimit_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 	
 	/* only evaluate if there is a target */
 	if (VALID_CONS_TARGET(ct)) {
-		float dvec[3], dist = 0.0f, sfac = 1.0f;
+		float dvec[3], dist, sfac = 1.0f;
 		short clamp_surf = 0;
 		
 		/* calculate our current distance from the target */
@@ -2826,7 +2828,7 @@ static void minmax_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *targ
 		if (data->flag & MINMAX_USEROT) {
 			/* take rotation of target into account by doing the transaction in target's localspace */
 			invert_m4_m4(imat, tarmat);
-			mult_m4_m4m4(tmat, imat, obmat);
+			mul_m4_m4m4(tmat, imat, obmat);
 			copy_m4_m4(obmat, tmat);
 			unit_m4(tarmat);
 		}
@@ -2879,7 +2881,7 @@ static void minmax_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *targ
 			}
 			if (data->flag & MINMAX_USEROT) {
 				/* get out of localspace */
-				mult_m4_m4m4(tmat, ct->matrix, obmat);
+				mul_m4_m4m4(tmat, ct->matrix, obmat);
 				copy_m4_m4(cob->matrix, tmat);
 			}
 			else {
@@ -3006,14 +3008,12 @@ static void clampto_flush_tars(bConstraint *con, ListBase *list, short nocopy)
 static void clampto_get_tarmat(bConstraint *UNUSED(con), bConstraintOb *cob, bConstraintTarget *ct, float UNUSED(ctime))
 {
 	if (VALID_CONS_TARGET(ct)) {
-		Curve *cu = ct->tar->data;
-		
 		/* note: when creating constraints that follow path, the curve gets the CU_PATH set now,
 		 *		currently for paths to work it needs to go through the bevlist/displist system (ton) 
 		 */
 		
 		/* only happens on reload file, but violates depsgraph still... fix! */
-		if (cu->path == NULL || cu->path->data == NULL)
+		if (ct->tar->curve_cache == NULL || ct->tar->curve_cache->path == NULL || ct->tar->curve_cache->path->data == NULL)
 			BKE_displist_make_curveTypes(cob->scene, ct->tar, 0);
 	}
 	
@@ -3031,7 +3031,6 @@ static void clampto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *tar
 	
 	/* only evaluate if there is a target and it is a curve */
 	if (VALID_CONS_TARGET(ct) && (ct->tar->type == OB_CURVE)) {
-		Curve *cu = data->tar->data;
 		float obmat[4][4], ownLoc[3];
 		float curveMin[3], curveMax[3];
 		float targetMatrix[4][4] = MAT4_UNITY;
@@ -3044,7 +3043,7 @@ static void clampto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *tar
 		BKE_object_minmax(ct->tar, curveMin, curveMax, TRUE);
 		
 		/* get targetmatrix */
-		if (cu->path && cu->path->data) {
+		if (data->tar->curve_cache &&  data->tar->curve_cache->path && data->tar->curve_cache->path->data) {
 			float vec[4], dir[3], totmat[4][4];
 			float curvetime;
 			short clamp_axis;
@@ -3119,7 +3118,7 @@ static void clampto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *tar
 				unit_m4(totmat);
 				copy_v3_v3(totmat[3], vec);
 				
-				mul_serie_m4(targetMatrix, ct->tar->obmat, totmat, NULL, NULL, NULL, NULL, NULL, NULL);
+				mul_m4_m4m4(targetMatrix, ct->tar->obmat, totmat);
 			}
 		}
 		
@@ -3257,15 +3256,16 @@ static void transform_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 			case 1: /* rotation */
 				for (i = 0; i < 3; i++) {
 					float tmin, tmax;
+					float val;
 					
 					tmin = data->to_min[i];
 					tmax = data->to_max[i];
 					
 					/* all values here should be in degrees */
-					eul[i] = tmin + (sval[(int)data->map[i]] * (tmax - tmin));
+					val = tmin + (sval[(int)data->map[i]] * (tmax - tmin));
 					
-					/* now convert final value back to radians */
-					eul[i] = DEG2RADF(eul[i]);
+					/* now convert final value back to radians, and add to original rotation (so that it can still be rotated) */
+					eul[i] += DEG2RADF(val);
 				}
 				break;
 			default: /* location */
@@ -3646,14 +3646,12 @@ static void splineik_flush_tars(bConstraint *con, ListBase *list, short nocopy)
 static void splineik_get_tarmat(bConstraint *UNUSED(con), bConstraintOb *cob, bConstraintTarget *ct, float UNUSED(ctime))
 {
 	if (VALID_CONS_TARGET(ct)) {
-		Curve *cu = ct->tar->data;
-		
 		/* note: when creating constraints that follow path, the curve gets the CU_PATH set now,
 		 *		currently for paths to work it needs to go through the bevlist/displist system (ton) 
 		 */
 		
 		/* only happens on reload file, but violates depsgraph still... fix! */
-		if (cu->path == NULL || cu->path->data == NULL)
+		if (ct->tar->curve_cache == NULL || ct->tar->curve_cache->path == NULL || ct->tar->curve_cache->path->data == NULL)
 			BKE_displist_make_curveTypes(cob->scene, ct->tar, 0);
 	}
 	
@@ -3876,7 +3874,7 @@ static void followtrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase 
 			else {
 				BKE_tracking_get_camera_object_matrix(cob->scene, camob, mat);
 
-				mult_m4_m4m4(cob->matrix, obmat, mat);
+				mul_m4_m4m4(cob->matrix, obmat, mat);
 				translate_m4(cob->matrix, track->bundle_pos[0], track->bundle_pos[1], track->bundle_pos[2]);
 			}
 		}
@@ -3962,7 +3960,7 @@ static void followtrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase 
 
 				copy_m4_m4(rmat, camob->obmat);
 				zero_v3(rmat[3]);
-				mult_m4_m4m4(cob->matrix, cob->matrix, rmat);
+				mul_m4_m4m4(cob->matrix, cob->matrix, rmat);
 
 				copy_v3_v3(cob->matrix[3], disp);
 			}
@@ -3983,7 +3981,7 @@ static void followtrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase 
 				/* apply camera rotation so Z-axis would be co-linear */
 				copy_m4_m4(rmat, camob->obmat);
 				zero_v3(rmat[3]);
-				mult_m4_m4m4(cob->matrix, cob->matrix, rmat);
+				mul_m4_m4m4(cob->matrix, cob->matrix, rmat);
 
 				copy_v3_v3(cob->matrix[3], disp);
 			}
@@ -4074,7 +4072,7 @@ static void camerasolver_evaluate(bConstraint *con, bConstraintOb *cob, ListBase
 
 		copy_m4_m4(obmat, cob->matrix);
 
-		mult_m4_m4m4(cob->matrix, obmat, mat);
+		mul_m4_m4m4(cob->matrix, obmat, mat);
 	}
 }
 
@@ -4140,7 +4138,7 @@ static void objectsolver_evaluate(bConstraint *con, bConstraintOb *cob, ListBase
 			BKE_tracking_camera_get_reconstructed_interpolate(tracking, object, framenr, mat);
 
 			invert_m4_m4(camimat, cammat);
-			mult_m4_m4m4(parmat, cammat, data->invmat);
+			mul_m4_m4m4(parmat, cammat, data->invmat);
 
 			copy_m4_m4(cammat, camob->obmat);
 			copy_m4_m4(obmat, cob->matrix);
@@ -4411,8 +4409,8 @@ static bConstraint *add_new_constraint(Object *ob, bPoseChannel *pchan, const ch
 				con->ownspace = CONSTRAINT_SPACE_POSE;
 				con->flag |= CONSTRAINT_SPACEONCE;
 			}
+			break;
 		}
-		break;
 	}
 	
 	return con;
@@ -4637,8 +4635,8 @@ void BKE_get_constraint_target_matrix(Scene *scene, bConstraint *con, int index,
 					unit_m4(cob->matrix);
 					unit_m4(cob->startmat);
 				}
+				break;
 			}
-			break;
 			case CONSTRAINT_OBTYPE_BONE: /* this may occur in some cases */
 			{
 				cob->ob = NULL; /* this might not work at all :/ */
@@ -4651,8 +4649,8 @@ void BKE_get_constraint_target_matrix(Scene *scene, bConstraint *con, int index,
 					unit_m4(cob->matrix);
 					unit_m4(cob->startmat);
 				}
+				break;
 			}
-			break;
 		}
 		
 		/* get targets - we only need the first one though (and there should only be one) */
@@ -4709,7 +4707,7 @@ void BKE_get_constraint_targets_for_solving(bConstraint *con, bConstraintOb *cob
 /* ---------- Evaluation ----------- */
 
 /* This function is called whenever constraints need to be evaluated. Currently, all
- * constraints that can be evaluated are everytime this gets run.
+ * constraints that can be evaluated are every time this gets run.
  *
  * BKE_constraints_make_evalob and BKE_constraints_clear_evalob should be called before and 
  * after running this function, to sort out cob

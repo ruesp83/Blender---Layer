@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 #include <Python.h>
@@ -63,7 +61,7 @@ static PyObject *create_func(PyObject *self, PyObject *args)
 	BL::RenderEngine engine(engineptr);
 
 	PointerRNA userprefptr;
-	RNA_id_pointer_create((ID*)PyLong_AsVoidPtr(pyuserpref), &userprefptr);
+	RNA_pointer_create(NULL, &RNA_UserPreferences, (void*)PyLong_AsVoidPtr(pyuserpref), &userprefptr);
 	BL::UserPreferences userpref(userprefptr);
 
 	PointerRNA dataptr;
@@ -258,6 +256,7 @@ static PyObject *osl_update_node_func(PyObject *self, PyObject *args)
 		
 		if(param->isclosure) {
 			socket_type = "NodeSocketShader";
+			data_type = BL::NodeSocket::type_SHADER;
 		}
 		else if(param->type.vecsemantics == TypeDesc::COLOR) {
 			socket_type = "NodeSocketColor";
@@ -316,11 +315,6 @@ static PyObject *osl_update_node_func(PyObject *self, PyObject *args)
 				b_node.outputs.remove(b_sock);
 				b_sock = BL::NodeSocket(PointerRNA_NULL);
 			}
-			
-			if (!b_sock) {
-				/* create new socket */
-				b_sock = b_node.outputs.create(socket_type.c_str(), param->name.c_str(), param->name.c_str());
-			}
 		}
 		else {
 			b_sock = b_node.inputs[param->name];
@@ -330,15 +324,16 @@ static PyObject *osl_update_node_func(PyObject *self, PyObject *args)
 				b_node.inputs.remove(b_sock);
 				b_sock = BL::NodeSocket(PointerRNA_NULL);
 			}
-			
-			if (!b_sock) {
-				/* create new socket */
-				b_sock = b_node.inputs.create(socket_type.c_str(), param->name.c_str(), param->name.c_str());
-			}
 		}
 
-		/* set default value */
-		if(b_sock) {
+		if(!b_sock) {
+			/* create new socket */
+			if(param->isoutput)
+				b_sock = b_node.outputs.create(socket_type.c_str(), param->name.c_str(), param->name.c_str());
+			else
+				b_sock = b_node.inputs.create(socket_type.c_str(), param->name.c_str(), param->name.c_str());
+
+			/* set default value */
 			if(data_type == BL::NodeSocket::type_VALUE) {
 				set_float(b_sock.ptr, "default_value", default_float);
 			}

@@ -38,6 +38,8 @@
 
 #if defined(_WIN64) && !defined(FREE_WINDOWS64)
 typedef unsigned __int64 uint_ptr;
+#elif defined(FREE_WINDOWS64)
+typedef unsigned long long uint_ptr;
 #else
 typedef unsigned long uint_ptr;
 #endif
@@ -71,6 +73,7 @@ typedef unsigned long uint_ptr;
 #include "KX_ObstacleSimulation.h"
 
 #include "BL_ActionManager.h"
+#include "BL_Action.h"
 
 #include "PyObjectPlus.h" /* python stuff */
 
@@ -165,7 +168,6 @@ KX_GameObject::~KX_GameObject()
 
 	if (m_actionManager)
 	{
-		KX_GetActiveScene()->RemoveAnimatedObject(this);
 		delete m_actionManager;
 	}
 
@@ -413,7 +415,7 @@ BL_ActionManager* KX_GameObject::GetActionManager()
 	// We only want to create an action manager if we need it
 	if (!m_actionManager)
 	{
-		KX_GetActiveScene()->AddAnimatedObject(this);
+		GetScene()->AddAnimatedObject(this);
 		m_actionManager = new BL_ActionManager(this);
 	}
 	return m_actionManager;
@@ -428,9 +430,10 @@ bool KX_GameObject::PlayAction(const char* name,
 								short play_mode,
 								float layer_weight,
 								short ipo_flags,
-								float playback_speed)
+								float playback_speed,
+								short blend_mode)
 {
-	return GetActionManager()->PlayAction(name, start, end, layer, priority, blendin, play_mode, layer_weight, ipo_flags, playback_speed);
+	return GetActionManager()->PlayAction(name, start, end, layer, priority, blendin, play_mode, layer_weight, ipo_flags, playback_speed, blend_mode);
 }
 
 void KX_GameObject::StopAction(short layer)
@@ -482,8 +485,7 @@ void KX_GameObject::ProcessReplica()
 	m_pSGNode = NULL;
 	m_pClient_info = new KX_ClientObjectInfo(*m_pClient_info);
 	m_pClient_info->m_gameobject = this;
-	if (m_actionManager)
-		m_actionManager = new BL_ActionManager(this);
+	m_actionManager = NULL;
 	m_state = 0;
 
 	KX_Scene* scene = KX_GetActiveScene();
@@ -1572,7 +1574,7 @@ static int mathutils_kxgameob_vector_set_index(BaseMathObject *bmo, int subtype,
 	return mathutils_kxgameob_vector_set(bmo, subtype);
 }
 
-Mathutils_Callback mathutils_kxgameob_vector_cb = {
+static Mathutils_Callback mathutils_kxgameob_vector_cb = {
 	mathutils_kxgameob_generic_check,
 	mathutils_kxgameob_vector_get,
 	mathutils_kxgameob_vector_set,
@@ -1628,7 +1630,7 @@ static int mathutils_kxgameob_matrix_set(BaseMathObject *bmo, int subtype)
 	return 0;
 }
 
-Mathutils_Callback mathutils_kxgameob_matrix_cb = {
+static Mathutils_Callback mathutils_kxgameob_matrix_cb = {
 	mathutils_kxgameob_generic_check,
 	mathutils_kxgameob_matrix_get,
 	mathutils_kxgameob_matrix_set,
@@ -1800,7 +1802,7 @@ static PyObject *Map_GetItem(PyObject *self_v, PyObject *item)
 	PyObject *pyconvert;
 	
 	if (self == NULL) {
-		PyErr_SetString(PyExc_SystemError, "val = gameOb[key]: KX_GameObject, "BGE_PROXY_ERROR_MSG);
+		PyErr_SetString(PyExc_SystemError, "val = gameOb[key]: KX_GameObject, " BGE_PROXY_ERROR_MSG);
 		return NULL;
 	}
 	
@@ -1834,7 +1836,7 @@ static int Map_SetItem(PyObject *self_v, PyObject *key, PyObject *val)
 		PyErr_Clear();
 	
 	if (self == NULL) {
-		PyErr_SetString(PyExc_SystemError, "gameOb[key] = value: KX_GameObject, "BGE_PROXY_ERROR_MSG);
+		PyErr_SetString(PyExc_SystemError, "gameOb[key] = value: KX_GameObject, " BGE_PROXY_ERROR_MSG);
 		return -1;
 	}
 	
@@ -1858,15 +1860,14 @@ static int Map_SetItem(PyObject *self_v, PyObject *key, PyObject *val)
 		}
 	}
 	else { /* ob["key"] = value */
-		int set= 0;
+		bool set = false;
 		
 		/* as CValue */
 		if (attr_str && PyObject_TypeCheck(val, &PyObjectPlus::Type)==0) /* don't allow GameObjects for eg to be assigned to CValue props */
 		{
-			CValue* vallie = self->ConvertPythonToValue(val, ""); /* error unused */
+			CValue *vallie = self->ConvertPythonToValue(val, false, "gameOb[key] = value: ");
 			
-			if (vallie)
-			{
+			if (vallie) {
 				CValue* oldprop = self->GetProperty(attr_str);
 				
 				if (oldprop)
@@ -1875,7 +1876,7 @@ static int Map_SetItem(PyObject *self_v, PyObject *key, PyObject *val)
 					self->SetProperty(attr_str, vallie);
 				
 				vallie->Release();
-				set= 1;
+				set = true;
 				
 				/* try remove dict value to avoid double ups */
 				if (self->m_attr_dict) {
@@ -1883,13 +1884,12 @@ static int Map_SetItem(PyObject *self_v, PyObject *key, PyObject *val)
 						PyErr_Clear();
 				}
 			}
-			else {
-				PyErr_Clear();
+			else if (PyErr_Occurred()) {
+				return -1;
 			}
 		}
 		
-		if (set==0)
-		{
+		if (set == false) {
 			if (self->m_attr_dict==NULL) /* lazy init */
 				self->m_attr_dict= PyDict_New();
 			
@@ -1898,7 +1898,7 @@ static int Map_SetItem(PyObject *self_v, PyObject *key, PyObject *val)
 			{
 				if (attr_str)
 					self->RemoveProperty(attr_str); /* overwrite the CValue if it exists */
-				set= 1;
+				set = true;
 			}
 			else {
 				if (attr_str)	PyErr_Format(PyExc_KeyError, "gameOb[key] = value: KX_GameObject, key \"%s\" not be added to internal dictionary", attr_str);
@@ -1906,8 +1906,9 @@ static int Map_SetItem(PyObject *self_v, PyObject *key, PyObject *val)
 			}
 		}
 		
-		if (set==0)
+		if (set == false) {
 			return -1; /* pythons error value */
+		}
 		
 	}
 	
@@ -1919,7 +1920,7 @@ static int Seq_Contains(PyObject *self_v, PyObject *value)
 	KX_GameObject* self = static_cast<KX_GameObject*>BGE_PROXY_REF(self_v);
 	
 	if (self == NULL) {
-		PyErr_SetString(PyExc_SystemError, "val in gameOb: KX_GameObject, "BGE_PROXY_ERROR_MSG);
+		PyErr_SetString(PyExc_SystemError, "val in gameOb: KX_GameObject, " BGE_PROXY_ERROR_MSG);
 		return -1;
 	}
 	
@@ -2283,7 +2284,7 @@ PyObject *KX_GameObject::pyattr_get_localTransform(void *self_v, const KX_PYATTR
 {
 	KX_GameObject* self = static_cast<KX_GameObject*>(self_v);
 
-	double *mat = MT_CmMatrix4x4().getPointer();
+	double mat[16];
 
 	MT_Transform trans;
 	
@@ -3312,11 +3313,12 @@ KX_PYMETHODDEF_DOC(KX_GameObject, playAction,
 	short layer=0, priority=0;
 	short ipo_flags=0;
 	short play_mode=0;
+	short blend_mode=0;
 
-	static const char *kwlist[] = {"name", "start_frame", "end_frame", "layer", "priority", "blendin", "play_mode", "layer_weight", "ipo_flags", "speed", NULL};
+	static const char *kwlist[] = {"name", "start_frame", "end_frame", "layer", "priority", "blendin", "play_mode", "layer_weight", "ipo_flags", "speed", "blend_mode", NULL};
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwds, "sff|hhfhfhf:playAction", const_cast<char**>(kwlist),
-									&name, &start, &end, &layer, &priority, &blendin, &play_mode, &layer_weight, &ipo_flags, &speed))
+	if (!PyArg_ParseTupleAndKeywords(args, kwds, "sff|hhfhfhfh:playAction", const_cast<char**>(kwlist),
+									&name, &start, &end, &layer, &priority, &blendin, &play_mode, &layer_weight, &ipo_flags, &speed, &blend_mode))
 		return NULL;
 
 	layer_check(layer, "playAction");
@@ -3324,7 +3326,13 @@ KX_PYMETHODDEF_DOC(KX_GameObject, playAction,
 	if (play_mode < 0 || play_mode > BL_Action::ACT_MODE_MAX)
 	{
 		printf("KX_GameObject.playAction(): given play_mode (%d) is out of range (0 - %d), setting to ACT_MODE_PLAY", play_mode, BL_Action::ACT_MODE_MAX-1);
-		play_mode = BL_Action::ACT_MODE_MAX;
+		play_mode = BL_Action::ACT_MODE_PLAY;
+	}
+
+	if (blend_mode < 0 || blend_mode > BL_Action::ACT_BLEND_MAX)
+	{
+		printf("KX_GameObject.playAction(): given blend_mode (%d) is out of range (0 - %d), setting to ACT_BLEND_BLEND", blend_mode, BL_Action::ACT_BLEND_MAX-1);
+		blend_mode = BL_Action::ACT_BLEND_BLEND;
 	}
 
 	if (layer_weight < 0.f || layer_weight > 1.f)
@@ -3333,7 +3341,7 @@ KX_PYMETHODDEF_DOC(KX_GameObject, playAction,
 		layer_weight = 0.f;
 	}
 
-	PlayAction(name, start, end, layer, priority, blendin, play_mode, layer_weight, ipo_flags, speed);
+	PlayAction(name, start, end, layer, priority, blendin, play_mode, layer_weight, ipo_flags, speed, blend_mode);
 
 	Py_RETURN_NONE;
 }

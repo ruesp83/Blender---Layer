@@ -48,6 +48,8 @@
 
 #include "MOD_util.h"
 
+static bool dependsOnNormals(ModifierData *md);
+
 
 static void initData(ModifierData *md)
 {
@@ -95,7 +97,7 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 	return dataMask;
 }
 
-static int isDisabled(ModifierData *md, int UNUSED(useRenderParams))
+static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
 {
 	ShrinkwrapModifierData *smd = (ShrinkwrapModifierData *) md;
 	return !smd->target;
@@ -120,8 +122,9 @@ static void deformVerts(ModifierData *md, Object *ob,
 	CustomDataMask dataMask = requiredDataMask(ob, md);
 
 	/* ensure we get a CDDM with applied vertex coords */
-	if (dataMask)
-		dm = get_cddm(ob, NULL, dm, vertexCos);
+	if (dataMask) {
+		dm = get_cddm(ob, NULL, dm, vertexCos, dependsOnNormals(md));
+	}
 
 	shrinkwrapModifier_deform((ShrinkwrapModifierData *)md, ob, dm, vertexCos, numVerts);
 
@@ -136,8 +139,9 @@ static void deformVertsEM(ModifierData *md, Object *ob, struct BMEditMesh *editD
 	CustomDataMask dataMask = requiredDataMask(ob, md);
 
 	/* ensure we get a CDDM with applied vertex coords */
-	if (dataMask)
-		dm = get_cddm(ob, editData, dm, vertexCos);
+	if (dataMask) {
+		dm = get_cddm(ob, editData, dm, vertexCos, dependsOnNormals(md));
+	}
 
 	shrinkwrapModifier_deform((ShrinkwrapModifierData *)md, ob, dm, vertexCos, numVerts);
 
@@ -161,7 +165,7 @@ static void updateDepgraph(ModifierData *md, DagForest *forest,
 		                 DAG_RL_OB_DATA | DAG_RL_DATA_DATA, "Shrinkwrap Modifier");
 }
 
-static int dependsOnNormals(ModifierData *md)
+static bool dependsOnNormals(ModifierData *md)
 {
 	ShrinkwrapModifierData *smd = (ShrinkwrapModifierData *)md;
 

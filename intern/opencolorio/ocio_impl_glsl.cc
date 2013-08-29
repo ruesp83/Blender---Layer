@@ -51,8 +51,7 @@ using namespace OCIO_NAMESPACE;
 
 #include "ocio_impl.h"
 
-static const int LUT3D_EDGE_SIZE = 32;
-
+static const int LUT3D_EDGE_SIZE = 64;
 
 /* **** OpenGL drawing routines using GLSL for color space transform ***** */
 
@@ -60,6 +59,7 @@ typedef struct OCIO_GLSLDrawState {
 	bool lut3d_texture_allocated;  /* boolean flag indicating whether
 	                                * lut texture is allocated
 	                                */
+	bool lut3d_texture_valid;
 
 	GLuint lut3d_texture;  /* OGL texture ID for 3D LUT */
 
@@ -77,15 +77,28 @@ typedef struct OCIO_GLSLDrawState {
 	GLint last_texture, last_texture_unit;
 } OCIO_GLSLDrawState;
 
-static const char * g_fragShaderText = ""
+/* Hardcoded to do alpha predivide before color space conversion */
+/* NOTE: This is true we only do de-premul here and NO premul
+ *       and the reason is simple -- opengl is always configured
+ *       for straight alpha at this moment
+ */
+static const char *g_fragShaderText = ""
 "\n"
 "uniform sampler2D tex1;\n"
 "uniform sampler3D tex2;\n"
+"uniform bool predivide;\n"
 "\n"
 "void main()\n"
 "{\n"
 "    vec4 col = texture2D(tex1, gl_TexCoord[0].st);\n"
+"    if (predivide && col[3] > 0.0 && col[3] < 1.0) {\n"
+"        float inv_alpha = 1.0 / col[3];\n"
+"        col[0] *= inv_alpha;\n"
+"        col[1] *= inv_alpha;\n"
+"        col[2] *= inv_alpha;\n"
+"    }\n"
 "    gl_FragColor = OCIODisplay(col, tex2);\n"
+"\n"
 "}\n";
 
 static GLuint compileShaderText(GLenum shaderType, const char *text)
@@ -102,6 +115,7 @@ static GLuint compileShaderText(GLenum shaderType, const char *text)
 		GLchar log[1000];
 		GLsizei len;
 		glGetShaderInfoLog(shader, 1000, &len, log);
+		fprintf(stderr, "Shader compile error:\n%s\n", log);
 		return 0;
 	}
 
@@ -152,12 +166,12 @@ static OCIO_GLSLDrawState *allocateOpenGLState(void)
 }
 
 /* Ensure LUT texture and array are allocated */
-static void ensureLUT3DAllocated(OCIO_GLSLDrawState *state)
+static bool ensureLUT3DAllocated(OCIO_GLSLDrawState *state)
 {
 	int num_3d_entries = 3 * LUT3D_EDGE_SIZE * LUT3D_EDGE_SIZE * LUT3D_EDGE_SIZE;
 
 	if (state->lut3d_texture_allocated)
-		return;
+		return state->lut3d_texture_valid;
 
 	glGenTextures(1, &state->lut3d_texture);
 
@@ -170,11 +184,22 @@ static void ensureLUT3DAllocated(OCIO_GLSLDrawState *state)
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+	/* clean glError buffer */
+	while (glGetError() != GL_NO_ERROR) {}
+
 	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB16F_ARB,
 	             LUT3D_EDGE_SIZE, LUT3D_EDGE_SIZE, LUT3D_EDGE_SIZE,
-	             0, GL_RGB,GL_FLOAT, &state->lut3d);
+	             0, GL_RGB, GL_FLOAT, state->lut3d);
 
 	state->lut3d_texture_allocated = true;
+
+	/* GL_RGB16F_ARB could be not supported at some drivers
+	 * in this case we could not use GLSL display
+	 */
+	state->lut3d_texture_valid = glGetError() == GL_NO_ERROR;
+
+	return state->lut3d_texture_valid;
 }
 
 /**
@@ -187,7 +212,7 @@ static void ensureLUT3DAllocated(OCIO_GLSLDrawState *state)
  * When all drawing is finished, finishGLSLDraw shall be called to
  * restore OpenGL context to it's pre-GLSL draw state.
  */
-bool OCIOImpl::setupGLSLDraw(OCIO_GLSLDrawState **state_r, OCIO_ConstProcessorRcPtr *processor)
+bool OCIOImpl::setupGLSLDraw(OCIO_GLSLDrawState **state_r, OCIO_ConstProcessorRcPtr *processor, bool predivide)
 {
 	ConstProcessorRcPtr ocio_processor = *(ConstProcessorRcPtr *) processor;
 
@@ -200,7 +225,12 @@ bool OCIOImpl::setupGLSLDraw(OCIO_GLSLDrawState **state_r, OCIO_ConstProcessorRc
 	glGetIntegerv(GL_TEXTURE_2D, &state->last_texture);
 	glGetIntegerv(GL_ACTIVE_TEXTURE, &state->last_texture_unit);
 
-	ensureLUT3DAllocated(state);
+	if (!ensureLUT3DAllocated(state)) {
+		glActiveTexture(state->last_texture_unit);
+		glBindTexture(GL_TEXTURE_2D, state->last_texture);
+
+		return false;
+	}
 
 	/* Step 1: Create a GPU Shader Description */
 	GpuShaderDesc shaderDesc;
@@ -252,6 +282,7 @@ bool OCIOImpl::setupGLSLDraw(OCIO_GLSLDrawState **state_r, OCIO_ConstProcessorRc
 		glUseProgram(state->program);
 		glUniform1i(glGetUniformLocation(state->program, "tex1"), 0);
 		glUniform1i(glGetUniformLocation(state->program, "tex2"), 1);
+		glUniform1i(glGetUniformLocation(state->program, "predivide"), predivide);
 
 		return true;
 	}

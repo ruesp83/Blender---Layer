@@ -36,7 +36,6 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
-#include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
 #include "BLF_translation.h"
@@ -129,6 +128,9 @@ static void info_main_area_init(wmWindowManager *wm, ARegion *ar)
 {
 	wmKeyMap *keymap;
 
+	/* force it on init, for old files, until it becomes config */
+	ar->v2d.scroll = (V2D_SCROLL_RIGHT);
+	
 	UI_view2d_region_reinit(&ar->v2d, V2D_COMMONVIEW_CUSTOM, ar->winx, ar->winy);
 
 	/* own keymap */
@@ -231,7 +233,7 @@ static void info_header_area_draw(const bContext *C, ARegion *ar)
 	ED_region_header(C, ar);
 }
 
-static void info_main_area_listener(ARegion *ar, wmNotifier *wmn)
+static void info_main_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
 {
 	// SpaceInfo *sinfo = sa->spacedata.first;
 
@@ -246,7 +248,7 @@ static void info_main_area_listener(ARegion *ar, wmNotifier *wmn)
 	}
 }
 
-static void info_header_listener(ARegion *ar, wmNotifier *wmn)
+static void info_header_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -269,6 +271,7 @@ static void info_header_listener(ARegion *ar, wmNotifier *wmn)
 		case NC_ID:
 			if (wmn->action == NA_RENAME)
 				ED_region_tag_redraw(ar);
+			break;
 	}
 	
 }

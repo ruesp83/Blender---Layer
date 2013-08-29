@@ -359,17 +359,21 @@ void IMB_alpha_under_color_byte(unsigned char *rect, int x, int y, float backcol
 	unsigned char *cp = rect;
 
 	while (a--) {
-		if (cp[3] == 0) {
+		if (cp[3] == 255) {
+			/* pass */
+		}
+		else if (cp[3] == 0) {
 			cp[0] = backcol[0] * 255;
 			cp[1] = backcol[1] * 255;
 			cp[2] = backcol[2] * 255;
 		}
 		else {
-			int mul = 255 - cp[3];
+			float alpha = cp[3] / 255.0;
+			float mul = 1.0f - alpha;
 
-			cp[0] = (cp[0] * cp[3] >> 8) + mul * backcol[0] / 255;
-			cp[1] = (cp[1] * cp[3] >> 8) + mul * backcol[1] / 255;
-			cp[2] = (cp[2] * cp[3] >> 8) + mul * backcol[2] / 255;
+			cp[0] = (cp[0] * alpha) + mul * backcol[0];
+			cp[1] = (cp[1] * alpha) + mul * backcol[1];
+			cp[2] = (cp[2] * alpha) + mul * backcol[2];
 		}
 
 		cp[3] = 255;
@@ -404,6 +408,94 @@ void IMB_invert_channels(ImBuf *in, const short r, const short g, const short b,
 			if (a) cp[3] = 255 - cp[3];
 		}
 	}
+}
+
+void IMB_invert_value(ImBuf *in)
+{
+	int x, y;
+
+	for (y = 0; y < in->y; y++) {
+		for (x = 0; x < in->x; x++) {
+			int pixel_index = (y * in->x + x) * 4;
+
+			if (in->rect) {
+				int value, value2, min, delta;
+				unsigned char *pixel = (unsigned char *)in->rect + pixel_index;
+				
+				if (pixel[0] > pixel[1]) {
+					value = MAX2(pixel[0], pixel[2]);
+					min = MIN2(pixel[1], pixel[2]);
+				}
+				else {
+					value = MAX2(pixel[1], pixel[2]);
+					min = MIN2(pixel[0], pixel[2]);
+				}
+				delta = value - min;
+				if ((value == 0) || (delta == 0)) {
+					pixel[0] = 255 - value;
+					pixel[1] = 255 - value;
+					pixel[2] = 255 - value;
+				}
+				else {
+					value2 = value / 2;
+					if (pixel[0] == value) {
+						pixel[0] = 255 - pixel[0];
+						pixel[2] = ((pixel[0] * pixel[2]) + value2) / value;
+						pixel[1] = ((pixel[0] * pixel[1]) + value2) / value;
+					}
+					else if (pixel[1] == value) {
+						pixel[1] = 255 - pixel[1];
+						pixel[0] = ((pixel[1] * pixel[0]) + value2) / value;
+						pixel[2] = ((pixel[1] * pixel[2]) + value2) / value;
+					}
+					else {
+						pixel[2] = 255 - pixel[2];
+						pixel[1] = ((pixel[2] * pixel[1]) + value2) / value;
+						pixel[0] = ((pixel[2] * pixel[0]) + value2) / value;
+					}
+				}
+			}
+			else if (in->rect_float) {
+				float value, value2, min, delta;
+				float *pixel = in->rect_float + pixel_index;
+
+				if (pixel[0] > pixel[1]) {
+					value = MAX2(pixel[0], pixel[2]);
+					min = MIN2(pixel[1], pixel[2]);
+				}
+				else {
+					value = MAX2(pixel[1], pixel[2]);
+					min = MIN2(pixel[0], pixel[2]);
+				}
+				delta = value - min;
+				if ((value == 0) || (delta == 0)) {
+					pixel[0] = 1.0f - value;
+					pixel[1] = 1.0f - value;
+					pixel[2] = 1.0f - value;
+				}
+				else {
+					value2 = value / 2.0f;
+					if (pixel[0] == value) {
+						pixel[0] = 1.0f - pixel[0];
+						pixel[2] = ((pixel[0] * pixel[2]) + value2) / value;
+						pixel[1] = ((pixel[0] * pixel[1]) + value2) / value;
+					}
+					else if (pixel[1] == value) {
+						pixel[1] = 1.0f - pixel[1];
+						pixel[0] = ((pixel[1] * pixel[0]) + value2) / value;
+						pixel[2] = ((pixel[1] * pixel[2]) + value2) / value;
+					}
+					else {
+						pixel[2] = 1.0f - pixel[2];
+						pixel[1] = ((pixel[2] * pixel[1]) + value2) / value;
+						pixel[0] = ((pixel[2] * pixel[0]) + value2) / value;
+					}
+				}
+			}
+		}
+	}
+
+	
 }
 
 /* Aggiungere nei parametri: unsigned char *mask_rect, float *mask_rect_float */
@@ -467,6 +559,251 @@ void IMB_bright_contrast(ImBuf *in, float bright, float contrast)
 					else */
 						pixel[c] = v;
 				}
+			}
+		}
+	}
+}
+
+void IMB_desaturate(ImBuf *in, int type)
+{
+	int x, y;
+	int min, max;
+
+	for (y = 0; y < in->y; y++) {
+		for (x = 0; x < in->x; x++) {
+			int pixel_index = (y * in->x + x) * 4;
+
+			if (in->rect) {
+				unsigned char *pixel = (unsigned char *)in->rect + pixel_index;
+				if (type == 1) { /* Lightness */
+					int lightness;
+
+					max = MAX2(pixel[0], pixel[1]);
+					max = MAX2(max, pixel[3]);
+					min = MIN2(pixel[0], pixel[1]);
+					min = MIN2(min, pixel[3]);
+
+					lightness = (max + min) / 2;
+
+					pixel[0] = lightness;
+					pixel[1] = lightness;
+					pixel[2] = lightness;
+				}
+				else if (type == 2) { /* Luminosity */
+					int luminosity;
+					
+					luminosity = FTOCHAR(RGB_LUMINANCE((float)pixel[0] / 255.0f, (float)pixel[1] / 255.0f, (float)pixel[2] / 255.0f) + 0.5f);
+
+					pixel[0] = luminosity;
+					pixel[1] = luminosity;
+					pixel[2] = luminosity;
+				}
+				else { /* Average */
+					int average;
+
+					average = (pixel[0] + pixel[1] + pixel[2] + 1) / 3;
+					pixel[0] = average;
+					pixel[1] = average;
+					pixel[2] = average;
+				}
+			}
+			else if (in->rect_float) {
+				float *pixel = in->rect_float + pixel_index;
+
+				if (type == 1) { /* Lightness */
+					float lightness;
+
+					max = MAX2(pixel[0], pixel[1]);
+					max = MAX2(max, pixel[3]);
+					min = MIN2(pixel[0], pixel[1]);
+					min = MIN2(min, pixel[3]);
+
+					lightness = (max + min) / 2;
+
+					pixel[0] = lightness;
+					pixel[1] = lightness;
+					pixel[2] = lightness;
+				}
+				else if (type == 2) { /* Luminosity */
+					float luminosity;
+					
+					luminosity = RGB_LUMINANCE(pixel[0], pixel[1], pixel[2]) + 0.5f;
+
+					pixel[0] = luminosity;
+					pixel[1] = luminosity;
+					pixel[2] = luminosity;
+				}
+				else { /* Average */
+					float average;
+
+					average = (pixel[0] + pixel[1] + pixel[2] + 1) / 3;
+					pixel[0] = average;
+					pixel[1] = average;
+					pixel[2] = average;
+				}
+			}
+		}
+	}
+}
+
+void IMB_posterize(ImBuf *in, int levels)
+{
+	int x, y;
+
+	levels = levels - 1;
+	for (y = 0; y < in->y; y++) {
+		for (x = 0; x < in->x; x++) {
+			int pixel_index = (y * in->x + x) * 4;
+
+			if (in->rect) {
+				unsigned char *pixel = (unsigned char *)in->rect + pixel_index;
+				
+				pixel[0] = FTOCHAR(round((float)pixel[0] / 255.0f * levels) / levels);
+				pixel[1] = FTOCHAR(round((float)pixel[1] / 255.0f * levels) / levels);
+				pixel[2] = FTOCHAR(round((float)pixel[2] / 255.0f * levels) / levels);
+			}
+			else if (in->rect_float) {
+				float *pixel = in->rect_float + pixel_index;
+
+				pixel[0] = round(pixel[0] * levels) / levels;
+				pixel[1] = round(pixel[1] * levels) / levels;
+				pixel[2] = round(pixel[2] * levels) / levels;
+			}
+		}
+	}
+}
+
+void IMB_threshold(ImBuf *in, int low, int high)
+{
+	int x, y;
+	int value;
+
+	for (y = 0; y < in->y; y++) {
+		for (x = 0; x < in->x; x++) {
+			int pixel_index = (y * in->x + x) * 4;
+
+			if (in->rect) {
+				unsigned char *pixel = (unsigned char *)in->rect + pixel_index;
+				
+				value = MAX2(pixel[0], pixel[1]);
+				value = MAX2(value, pixel[2]);
+
+				value = (value >= low && value <= high ) ? 255 : 0;
+
+				pixel[0] = value;
+				pixel[1] = value;
+				pixel[2] = value;
+			}
+			else if (in->rect_float) {
+				float *pixel = in->rect_float + pixel_index;
+
+				value = MAX2(pixel[0], pixel[1]);
+				value = MAX2(value, pixel[2]);
+
+				value = (FTOCHAR(value) >= low && FTOCHAR(value) <= high ) ? 1.0f : 0;
+
+				pixel[0] = value;
+				pixel[1] = value;
+				pixel[2] = value;
+			}
+		}
+	}
+}
+
+void IMB_exposure(ImBuf *in, float exposure, float offset, float gamma)
+{
+	int x, y;
+	float gain;
+
+	gain = powf(2.0f, exposure);
+	gamma = 1.0f / gamma;
+	for (y = 0; y < in->y; y++) {
+		for (x = 0; x < in->x; x++) {
+			int pixel_index = (y * in->x + x) * 4;
+
+			if (in->rect) {
+				unsigned char *pixel = (unsigned char *)in->rect + pixel_index;
+				
+				if (gamma == 1.0f) {
+					pixel[0] = FTOCHAR((float)pixel[0] / 255.0f * gain + offset);
+					pixel[1] = FTOCHAR((float)pixel[1] / 255.0f * gain + offset);
+					pixel[2] = FTOCHAR((float)pixel[2] / 255.0f * gain + offset);
+				}
+				else {
+					pixel[0] = FTOCHAR(powf((float)pixel[0] / 255.0f * gain + offset, gamma));
+					pixel[1] = FTOCHAR(powf((float)pixel[1] / 255.0f * gain + offset, gamma));
+					pixel[2] = FTOCHAR(powf((float)pixel[2] / 255.0f * gain + offset, gamma));
+				}
+			}
+			else if (in->rect_float) {
+				float *pixel = in->rect_float + pixel_index;
+
+				if (gamma == 1.0f) {
+					pixel[0] = pixel[0] * gain + offset;
+					pixel[1] = pixel[1] * gain + offset;
+					pixel[2] = pixel[2] * gain + offset;
+				}
+				else {
+					pixel[0] = powf(pixel[0] * gain + offset, gamma);
+					pixel[1] = powf(pixel[1] * gain + offset, gamma);
+					pixel[2] = powf(pixel[2] * gain + offset, gamma);
+				}
+			}
+		}
+	}
+}
+
+void IMB_colorize(ImBuf *in, int hue, int saturation, int lightness)
+{
+	int x, y;
+	float lum, h, s;
+	
+	h = (float)hue / 360.0f;
+	s = (float)saturation / 100.0f;
+
+	for (y = 0; y < in->y; y++) {
+		for (x = 0; x < in->x; x++) {
+			int pixel_index = (y * in->x + x) * 4;
+
+			if (in->rect) {
+				float r, g, b;
+
+				unsigned char *pixel = (unsigned char *)in->rect + pixel_index;
+				
+				lum = RGB_LUMINANCE((float)pixel[0] / 255.0f, (float)pixel[1] / 255.0f, (float)pixel[2] / 255.0f);
+
+				if (lightness > 0) {
+					lum = lum * (100.0f - lightness) / 100.0f;
+					lum += 1.0f - (100.0f - lightness) / 100.0f;
+				}
+				else if (lightness < 0) {
+					lum = lum * (lightness + 100.0f) / 100.0f;
+				}
+				
+				r = (float)pixel[0] / 255.0f;
+				g = (float)pixel[1] / 255.0f;
+				b = (float)pixel[2] / 255.0f;
+
+				hsl_to_rgb(h, s, lum, &r, &g, &b);
+
+				pixel[0] = FTOCHAR(r);
+				pixel[1] = FTOCHAR(g);
+				pixel[2] = FTOCHAR(b);
+			}
+			else if (in->rect_float) {
+				float *pixel = in->rect_float + pixel_index;
+
+				lum = RGB_LUMINANCE(pixel[0], pixel[1], pixel[2]);
+
+				if (lightness > 0) {
+					lum = lum * (100.0f - lightness) / 100.0f;
+					lum += 1.0f - (100.0f - lightness) / 100.0f;
+				}
+				else if (lightness < 0) {
+					lum = lum * (lightness + 100.0f) / 100.0f;
+				}
+
+				hsl_to_rgb(h, s, lum, &pixel[0], &pixel[1], &pixel[2]);
 			}
 		}
 	}

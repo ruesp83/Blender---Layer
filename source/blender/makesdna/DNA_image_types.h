@@ -129,7 +129,9 @@ typedef enum ImageLayerMode {
 	IMA_LAYER_LINEAR_LIGHT = 18,
 	IMA_LAYER_VIVID_LIGHT = 19,
 	IMA_LAYER_PIN_LIGHT = 20,
-	IMA_LAYER_HARD_MIX = 21
+	IMA_LAYER_HARD_MIX = 21,
+	IMA_LAYER_INVERSE_COLOR_BURN = 22,
+	IMA_LAYER_SOFT_BURN = 23
 }ImageLayerMode;
 
 /*#define ChannelBlend_Reflect(A,B)    ((uint8)((B == 255) ? B:min(255, (A * A / (255 - B)))))
@@ -313,7 +315,7 @@ typedef struct Image {
 	/* for generated images */
 	int gen_x, gen_y;
 	char gen_type, gen_flag;
-	char gen_pad[2];
+	short gen_depth;
 	
 	/* display aspect - for UV editing images resized for faster openGL display */
 	float aspx, aspy;
@@ -339,7 +341,7 @@ typedef struct Image {
 #define IMA_DO_PREMUL		4    /* deprecated, should not be used */
 #define IMA_REFLECT			16
 #define IMA_NOCOLLECT   	32
-#define IMA_DONE_TAG		64
+// #define IMA_DONE_TAG		64  // UNUSED
 #define IMA_OLD_PREMUL		128
 /*#define IMA_CM_PREDIVIDE	256*/  /* deprecated, should not be used */
 #define IMA_USED_FOR_RENDER	512

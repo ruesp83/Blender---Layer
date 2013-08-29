@@ -366,8 +366,8 @@ static void get_index_dir(struct anim *anim, char *index_dir, size_t index_dir_l
 	if (!anim->index_dir[0]) {
 		char fname[FILE_MAXFILE];
 		BLI_split_dirfile(anim->name, index_dir, fname, index_dir_len, sizeof(fname));
-		BLI_join_dirfile(index_dir, index_dir_len, index_dir, "BL_proxy");
-		BLI_join_dirfile(index_dir, index_dir_len, index_dir, fname);
+		BLI_path_append(index_dir, index_dir_len, "BL_proxy");
+		BLI_path_append(index_dir, index_dir_len, fname);
 	}
 	else {
 		BLI_strncpy(index_dir, anim->index_dir, index_dir_len);
@@ -552,7 +552,7 @@ static struct proxy_output_ctx *alloc_proxy_output_ffmpeg(
 	rv->video_buffer = (uint8_t *)MEM_mallocN(
 	        rv->video_buffersize, "FFMPEG video buffer");
 
-	rv->orig_height = st->codec->height;
+	rv->orig_height = av_get_cropped_height_from_codec(st->codec);
 
 	if (st->codec->width != width || st->codec->height != height ||
 	    st->codec->pix_fmt != rv->c->pix_fmt)
@@ -567,7 +567,7 @@ static struct proxy_output_ctx *alloc_proxy_output_ffmpeg(
 
 		rv->sws_ctx = sws_getContext(
 		        st->codec->width,
-		        st->codec->height,
+		        rv->orig_height,
 		        st->codec->pix_fmt,
 		        width, height,
 		        rv->c->pix_fmt,
@@ -809,7 +809,8 @@ static IndexBuildContext *index_ffmpeg_create_context(struct anim *anim, IMB_Tim
 			context->proxy_ctx[i] = alloc_proxy_output_ffmpeg(
 			        anim, context->iStream, proxy_sizes[i],
 			        context->iCodecCtx->width * proxy_fac[i],
-			        context->iCodecCtx->height * proxy_fac[i],
+			        av_get_cropped_height_from_codec(
+			        context->iCodecCtx) * proxy_fac[i],
 			        quality);
 			if (!context->proxy_ctx[i]) {
 				proxy_sizes_in_use &= ~proxy_sizes[i];

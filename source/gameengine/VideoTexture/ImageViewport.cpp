@@ -38,6 +38,7 @@
 #include "KX_PythonInit.h"
 #include "Texture.h"
 #include "ImageBase.h"
+#include "VideoBase.h"
 #include "FilterSource.h"
 #include "ImageViewport.h"
 
@@ -358,8 +359,7 @@ static PyGetSetDef imageViewportGetSets[] =
 
 
 // define python type
-PyTypeObject ImageViewportType =
-{ 
+PyTypeObject ImageViewportType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	"VideoTexture.ImageViewport",   /*tp_name*/
 	sizeof(PyImage),          /*tp_basicsize*/

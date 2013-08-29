@@ -627,36 +627,47 @@ void IMB_partial_rect_from_float(ImBuf *ibuf, float *buffer, int x, int y, int w
 
 void IMB_float_from_rect(ImBuf *ibuf)
 {
+	float *rect_float;
+
 	/* verify if we byte and float buffers */
 	if (ibuf->rect == NULL)
 		return;
 
-	/* lock the color management thread
-	 * need this because allocated but not filled float buffer will confuse
-	 * display transform which lead to black areas across the frame
+	/* allocate float buffer outside of image buffer,
+	 * so work-in-progress color space conversion doesn't
+	 * interfere with other parts of blender
 	 */
-	BLI_lock_thread(LOCK_COLORMANAGE);
+	rect_float = ibuf->rect_float;
+	if (rect_float == NULL) {
+		int size;
 
-	if (ibuf->rect_float == NULL) {
-		if (imb_addrectfloatImBuf(ibuf) == 0) {
-			BLI_unlock_thread(LOCK_COLORMANAGE);
+		size = ibuf->x * ibuf->y;
+		size = size * 4 * sizeof(float);
+		ibuf->channels = 4;
 
+		rect_float = MEM_mapallocN(size, "IMB_float_from_rect");
+
+		if (rect_float == NULL)
 			return;
-		}
 	}
 
 	/* first, create float buffer in non-linear space */
-	IMB_buffer_float_from_byte(ibuf->rect_float, (unsigned char *) ibuf->rect, IB_PROFILE_SRGB, IB_PROFILE_SRGB,
+	IMB_buffer_float_from_byte(rect_float, (unsigned char *) ibuf->rect, IB_PROFILE_SRGB, IB_PROFILE_SRGB,
 	                           FALSE, ibuf->x, ibuf->y, ibuf->x, ibuf->x);
 
 	/* then make float be in linear space */
-	IMB_colormanagement_colorspace_to_scene_linear(ibuf->rect_float, ibuf->x, ibuf->y, ibuf->channels,
+	IMB_colormanagement_colorspace_to_scene_linear(rect_float, ibuf->x, ibuf->y, ibuf->channels,
 	                                               ibuf->rect_colorspace, FALSE);
 
 	/* byte buffer is straight alpha, float should always be premul */
-	IMB_premultiply_rect_float(ibuf->rect_float, ibuf->planes, ibuf->x, ibuf->y);
+	IMB_premultiply_rect_float(rect_float, ibuf->channels, ibuf->x, ibuf->y);
 
-	BLI_unlock_thread(LOCK_COLORMANAGE);
+
+	if (ibuf->rect_float == NULL) {
+		ibuf->rect_float = rect_float;
+		ibuf->mall |= IB_rectfloat;
+		ibuf->flags |= IB_rectfloat;
+	}
 }
 
 /**************************** Color to Grayscale *****************************/
@@ -664,14 +675,14 @@ void IMB_float_from_rect(ImBuf *ibuf)
 /* no profile conversion */
 void IMB_color_to_bw(ImBuf *ibuf)
 {
-	float *rctf = ibuf->rect_float;
+	float *rct_fl = ibuf->rect_float;
 	uchar *rct = (uchar *)ibuf->rect;
 	int i;
 
-	if (rctf) {
-		for (i = ibuf->x * ibuf->y; i > 0; i--, rctf += 4)
-			if (rctf[3] != 0.0f) {
-				rctf[0] = rctf[1] = rctf[2] = rgb_to_grayscale(rctf);
+	if (rct_fl) {
+		for (i = ibuf->x * ibuf->y; i > 0; i--, rct_fl += 4)
+			if (rct_fl[3] != 0.0f) {
+				rct_fl[0] = rct_fl[1] = rct_fl[2] = rgb_to_grayscale(rct_fl);
 			}
 	}
 
@@ -717,7 +728,7 @@ void IMB_saturation(ImBuf *ibuf, float sat)
 {
 	int i;
 	unsigned char *rct = (unsigned char *)ibuf->rect;
-	float *rctf = ibuf->rect_float;
+	float *rct_fl = ibuf->rect_float;
 	float hsv[3];
 
 	if (rct) {
@@ -730,10 +741,10 @@ void IMB_saturation(ImBuf *ibuf, float sat)
 		}
 	}
 
-	if (rctf) {
-		for (i = ibuf->x * ibuf->y; i > 0; i--, rctf += 4) {
-			rgb_to_hsv_v(rctf, hsv);
-			hsv_to_rgb(hsv[0], hsv[1] * sat, hsv[2], rctf, rctf + 1, rctf + 2);
+	if (rct_fl) {
+		for (i = ibuf->x * ibuf->y; i > 0; i--, rct_fl += 4) {
+			rgb_to_hsv_v(rct_fl, hsv);
+			hsv_to_rgb(hsv[0], hsv[1] * sat, hsv[2], rct_fl, rct_fl + 1, rct_fl + 2);
 		}
 	}
 }

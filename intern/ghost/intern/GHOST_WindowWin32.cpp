@@ -50,14 +50,6 @@
 #define WGL_SAMPLE_BUFFERS_ARB  0x2041
 #define WGL_SAMPLES_ARB         0x2042
 
-// win64 doesn't define GWL_USERDATA
-#ifdef WIN32  /* why? - probably should remove */
-#  ifndef GWL_USERDATA
-#    define GWL_USERDATA GWLP_USERDATA
-#    define GWL_WNDPROC GWLP_WNDPROC
-#  endif
-#endif
-
 const wchar_t *GHOST_WindowWin32::s_windowClassName = L"GHOST_WindowClass";
 const int GHOST_WindowWin32::s_maxTitleLength = 128;
 HGLRC GHOST_WindowWin32::s_firsthGLRc = NULL;
@@ -114,6 +106,11 @@ static int is_crappy_intel_card(void)
 	return is_crappy;
 }
 
+/* force NVidia Optimus to used dedicated graphics */
+extern "C" {
+	__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
+}
+
 GHOST_WindowWin32::GHOST_WindowWin32(
     GHOST_SystemWin32 *system,
     const STR_String& title,
@@ -154,7 +151,8 @@ GHOST_WindowWin32::GHOST_WindowWin32(
 	m_normal_state(GHOST_kWindowStateNormal),
 	m_stereo(stereoVisual),
 	m_nextWindow(NULL),
-	m_parentWindowHwnd(parentwindowhwnd)
+	m_parentWindowHwnd(parentwindowhwnd),
+	m_inLiveResize(false)
 {
 	OSVERSIONINFOEX versionInfo;
 	bool hasMinVersionForTaskbar = false;
@@ -270,7 +268,7 @@ GHOST_WindowWin32::GHOST_WindowWin32(
 		}
 
 		// Store a pointer to this class in the window structure
-		::SetWindowLongPtr(m_hWnd, GWL_USERDATA, (LONG_PTR) this);
+		::SetWindowLongPtr(m_hWnd, GWLP_USERDATA, (LONG_PTR) this);
 
 		// Store the device context
 		m_hDC = ::GetDC(m_hWnd);
@@ -650,6 +648,20 @@ GHOST_TSuccess GHOST_WindowWin32::swapBuffers()
 	return ::SwapBuffers(hDC) == TRUE ? GHOST_kSuccess : GHOST_kFailure;
 }
 
+GHOST_TSuccess GHOST_WindowWin32::setSwapInterval(int interval)
+{
+	if (!WGL_EXT_swap_control)
+		return GHOST_kFailure;
+	return wglSwapIntervalEXT(interval) == TRUE ? GHOST_kSuccess : GHOST_kFailure;
+}
+
+int GHOST_WindowWin32::getSwapInterval()
+{
+	if (WGL_EXT_swap_control)
+		return wglGetSwapIntervalEXT();
+
+	return 0;
+}
 
 GHOST_TSuccess GHOST_WindowWin32::activateDrawingContext()
 {
@@ -697,7 +709,9 @@ GHOST_TSuccess GHOST_WindowWin32::initMultisample(PIXELFORMATDESCRIPTOR pfd)
 		WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
 		WGL_COLOR_BITS_ARB, pfd.cColorBits,
 		WGL_DEPTH_BITS_ARB, pfd.cDepthBits,
+#ifdef GHOST_OPENGL_ALPHA
 		WGL_ALPHA_BITS_ARB, pfd.cAlphaBits,
+#endif
 		WGL_STENCIL_BITS_ARB, pfd.cStencilBits,
 		WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
 		WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
@@ -890,7 +904,7 @@ GHOST_TSuccess GHOST_WindowWin32::installDrawingContext(GHOST_TDrawingContextTyp
 					}
 					else {
 						m_multisampleEnabled = GHOST_kSuccess;
-						printf("Multisample failed to initialized\n");
+						printf("Multisample failed to initialize\n");
 						success = GHOST_kSuccess;
 					}
 				}
@@ -1307,8 +1321,10 @@ static int WeightPixelFormat(PIXELFORMATDESCRIPTOR& pfd)
 
 	weight += pfd.cColorBits - 8;
 
+#ifdef GHOST_OPENGL_ALPHA
 	if (pfd.cAlphaBits > 0)
 		weight ++;
+#endif
 
 	/* want swap copy capability -- it matters a lot */
 	if (pfd.dwFlags & PFD_SWAP_COPY) weight += 16;

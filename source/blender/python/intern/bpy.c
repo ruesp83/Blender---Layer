@@ -58,6 +58,10 @@
 #include "../generic/blf_py_api.h"
 #include "../mathutils/mathutils.h"
 
+#ifdef WITH_FREESTYLE
+#  include "BPy_Freestyle.h"
+#endif
+
 PyObject *bpy_package_py = NULL;
 
 PyDoc_STRVAR(bpy_script_paths_doc,
@@ -86,7 +90,7 @@ static PyObject *bpy_script_paths(PyObject *UNUSED(self))
 	return ret;
 }
 
-static int bpy_blend_paths_visit_cb(void *userdata, char *UNUSED(path_dst), const char *path_src)
+static bool bpy_blend_paths_visit_cb(void *userdata, char *UNUSED(path_dst), const char *path_src)
 {
 	PyObject *list = (PyObject *)userdata;
 	PyObject *item = PyUnicode_DecodeFSDefault(path_src);
@@ -256,6 +260,9 @@ void BPy_init_modules(void)
 	}
 	/* stand alone utility modules not related to blender directly */
 	IDProp_Init_Types(); /* not actually a submodule, just types */
+#ifdef WITH_FREESTYLE
+	Freestyle_Init();
+#endif
 
 	mod = PyModule_New("_bpy");
 

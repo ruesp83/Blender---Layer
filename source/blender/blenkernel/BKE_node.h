@@ -32,8 +32,8 @@
  *  \ingroup bke
  */
 
-#include "BLI_ghash.h"
 #include "BLI_utildefines.h"
+#include "BLI_ghash.h"
 
 #include "DNA_listBase.h"
 
@@ -113,7 +113,7 @@ typedef struct bNodeSocketTemplate {
 typedef struct bNodeSocketType {
 	char idname[64];				/* identifier name */
 	
-	void (*draw)(struct bContext *C, struct uiLayout *layout, struct PointerRNA *ptr, struct PointerRNA *node_ptr);
+	void (*draw)(struct bContext *C, struct uiLayout *layout, struct PointerRNA *ptr, struct PointerRNA *node_ptr, const char *text);
 	void (*draw_color)(struct bContext *C, struct PointerRNA *ptr, struct PointerRNA *node_ptr, float *r_color);
 	
 	void (*interface_draw)(struct bContext *C, struct uiLayout *layout, struct PointerRNA *ptr);
@@ -131,7 +131,7 @@ typedef struct bNodeSocketType {
 	int type, subtype;
 } bNodeSocketType;
 
-typedef void (*NodeSocketDrawFunction)(struct bContext *C, struct uiLayout *layout, struct PointerRNA *ptr, struct PointerRNA *node_ptr, int linked);
+typedef void (*NodeSocketDrawFunction)(struct bContext *C, struct uiLayout *layout, struct PointerRNA *ptr, struct PointerRNA *node_ptr);
 
 typedef void *(*NodeInitExecFunction)(struct bNodeExecContext *context, struct bNode *node, bNodeInstanceKey key);
 typedef void (*NodeFreeExecFunction)(struct bNode *node, void *nodedata);
@@ -222,14 +222,6 @@ typedef struct bNodeType {
 	/* gpu */
 	NodeGPUExecFunction gpufunc;
 	
-	/* Group type static info
-	 * 
-	 * XXX This data is needed by group operators. If these operators could be implemented completely in Python,
-	 * the static data could instead be stored in Python classes and would need no special treatment.
-	 * Due to the way group operators move nodes between data blocks this is currently not possible.
-	 */
-	char group_tree_idname[64];		/* tree type associated to the group node type */
-	
 	/* RNA integration */
 	ExtensionRNA ext;
 } bNodeType;
@@ -287,6 +279,7 @@ typedef struct bNodeType {
 typedef enum eNodeSizePreset {
 	NODE_SIZE_DEFAULT,
 	NODE_SIZE_SMALL,
+	NODE_SIZE_MIDDLE,
 	NODE_SIZE_LARGE
 } eNodeSizePreset;
 
@@ -305,8 +298,6 @@ typedef struct bNodeTreeType {
 	void (*free_cache)(struct bNodeTree *ntree);
 	void (*free_node_cache)(struct bNodeTree *ntree, struct bNode *node);
 	void (*foreach_nodeclass)(struct Scene *scene, void *calldata, bNodeClassCallback func);	/* iteration over all node classes */
-	/* Add menu for this node tree. */
-	void (*draw_add_menu)(const struct bContext *C, struct uiLayout *layout, struct bNodeTree *ntree);
 	/* Check visibility in the node editor */
 	int (*poll)(const struct bContext *C, struct bNodeTreeType *ntreetype);
 	/* Select a node tree from the context */
@@ -340,7 +331,7 @@ struct GHashIterator *ntreeTypeGetIterator(void);
 #define NODE_TREE_TYPES_BEGIN(ntype) \
 { \
 	GHashIterator *__node_tree_type_iter__ = ntreeTypeGetIterator(); \
-	for (; BLI_ghashIterator_notDone(__node_tree_type_iter__); BLI_ghashIterator_step(__node_tree_type_iter__)) { \
+	for (; !BLI_ghashIterator_done(__node_tree_type_iter__); BLI_ghashIterator_step(__node_tree_type_iter__)) { \
 		bNodeTreeType *ntype = BLI_ghashIterator_getValue(__node_tree_type_iter__);
 
 #define NODE_TREE_TYPES_END \
@@ -368,7 +359,7 @@ struct bNodeTree *ntreeFromID(struct ID *id);
 
 void              ntreeMakeLocal(struct bNodeTree *ntree);
 int               ntreeHasType(struct bNodeTree *ntree, int type);
-void              ntreeUpdateTree(struct bNodeTree *ntree);
+void              ntreeUpdateTree(struct Main *main, struct bNodeTree *ntree);
 /* XXX Currently each tree update call does call to ntreeVerifyNodes too.
  * Some day this should be replaced by a decent depsgraph automatism!
  */
@@ -416,7 +407,7 @@ struct GHashIterator *nodeTypeGetIterator(void);
 #define NODE_TYPES_BEGIN(ntype) \
 { \
 	GHashIterator *__node_type_iter__ = nodeTypeGetIterator(); \
-	for (; BLI_ghashIterator_notDone(__node_type_iter__); BLI_ghashIterator_step(__node_type_iter__)) { \
+	for (; !BLI_ghashIterator_done(__node_type_iter__); BLI_ghashIterator_step(__node_type_iter__)) { \
 		bNodeType *ntype = BLI_ghashIterator_getValue(__node_type_iter__);
 
 #define NODE_TYPES_END \
@@ -436,16 +427,13 @@ const char *	nodeStaticSocketInterfaceType(int type, int subtype);
 #define NODE_SOCKET_TYPES_BEGIN(stype) \
 { \
 	GHashIterator *__node_socket_type_iter__ = nodeSocketTypeGetIterator(); \
-	for (; BLI_ghashIterator_notDone(__node_socket_type_iter__); BLI_ghashIterator_step(__node_socket_type_iter__)) { \
+	for (; !BLI_ghashIterator_done(__node_socket_type_iter__); BLI_ghashIterator_step(__node_socket_type_iter__)) { \
 		bNodeSocketType *stype = BLI_ghashIterator_getValue(__node_socket_type_iter__);
 
 #define NODE_SOCKET_TYPES_END \
 	} \
 	BLI_ghashIterator_free(__node_socket_type_iter__); \
 }
-
-void			nodeMakeDynamicType(struct bNode *node);
-int				nodeDynamicUnlinkText(struct ID *txtid);
 
 struct bNodeSocket *nodeFindSocket(struct bNode *node, int in_out, const char *identifier);
 struct bNodeSocket *nodeAddSocket(struct bNodeTree *ntree, struct bNode *node, int in_out, const char *idname,
@@ -520,6 +508,7 @@ typedef struct bNodeInstanceHash
 typedef void (*bNodeInstanceValueFP)(void *value);
 
 extern const bNodeInstanceKey NODE_INSTANCE_KEY_BASE;
+extern const bNodeInstanceKey NODE_INSTANCE_KEY_NONE;
 
 bNodeInstanceKey       BKE_node_instance_key(bNodeInstanceKey parent_key, struct bNodeTree *ntree, struct bNode *node);
 
@@ -546,11 +535,11 @@ BLI_INLINE void                       BKE_node_instance_hash_iterator_free(bNode
 BLI_INLINE bNodeInstanceKey           BKE_node_instance_hash_iterator_get_key(bNodeInstanceHashIterator *iter) { return *(bNodeInstanceKey *)BLI_ghashIterator_getKey(iter); }
 BLI_INLINE void                      *BKE_node_instance_hash_iterator_get_value(bNodeInstanceHashIterator *iter) { return BLI_ghashIterator_getValue(iter); }
 BLI_INLINE void                       BKE_node_instance_hash_iterator_step(bNodeInstanceHashIterator *iter) { BLI_ghashIterator_step(iter); }
-BLI_INLINE bool                       BKE_node_instance_hash_iterator_not_done(bNodeInstanceHashIterator *iter) { return BLI_ghashIterator_notDone(iter); }
+BLI_INLINE bool                       BKE_node_instance_hash_iterator_done(bNodeInstanceHashIterator *iter) { return BLI_ghashIterator_done(iter); }
 
 #define NODE_INSTANCE_HASH_ITER(iter_, hash_) \
 	for (BKE_node_instance_hash_iterator_init(&iter_, hash_); \
-	     BKE_node_instance_hash_iterator_not_done(&iter_); \
+	     BKE_node_instance_hash_iterator_done(&iter_) == false; \
 	     BKE_node_instance_hash_iterator_step(&iter_))
 
 
@@ -575,9 +564,6 @@ void            BKE_node_preview_set_pixel(struct bNodePreview *preview, const f
 /* ************** NODE TYPE ACCESS *************** */
 
 const char     *nodeLabel(struct bNode *node);
-struct bNodeTree *nodeGroupEditGet(struct bNode *node);
-struct bNodeTree *nodeGroupEditSet(struct bNode *node, int edit);
-void            nodeGroupEditClear(struct bNode *node);
 
 int				nodeGroupPoll(struct bNodeTree *nodetree, struct bNodeTree *grouptree);
 
@@ -753,6 +739,13 @@ struct ShadeResult;
 #define SH_NODE_NORMAL_MAP				175
 #define SH_NODE_HAIR_INFO				176
 #define SH_NODE_SUBSURFACE_SCATTERING	177
+#define SH_NODE_WIREFRAME				178
+#define SH_NODE_BSDF_TOON				179
+#define SH_NODE_WAVELENGTH				180
+#define SH_NODE_BLACKBODY				181
+#define SH_NODE_VECT_TRANSFORM			182
+#define SH_NODE_SEPHSV					183
+#define SH_NODE_COMBHSV					184
 
 /* custom defines options for Material node */
 #define SH_NODE_MAT_DIFF   1
@@ -785,34 +778,37 @@ void            ntreeGPUMaterialNodes(struct bNodeTree *ntree, struct GPUMateria
 /* ************** COMPOSITE NODES *************** */
 
 /* output socket defines */
-#define RRES_OUT_IMAGE				0
-#define RRES_OUT_ALPHA				1
-#define RRES_OUT_Z					2
-#define RRES_OUT_NORMAL				3
-#define RRES_OUT_UV					4
-#define RRES_OUT_VEC				5
-#define RRES_OUT_RGBA				6
-#define RRES_OUT_DIFF				7
-#define RRES_OUT_SPEC				8
-#define RRES_OUT_SHADOW				9
-#define RRES_OUT_AO					10
-#define RRES_OUT_REFLECT			11
-#define RRES_OUT_REFRACT			12
-#define RRES_OUT_INDIRECT			13
-#define RRES_OUT_INDEXOB			14
-#define RRES_OUT_INDEXMA			15
-#define RRES_OUT_MIST				16
-#define RRES_OUT_EMIT				17
-#define RRES_OUT_ENV				18
-#define RRES_OUT_DIFF_DIRECT		19
-#define RRES_OUT_DIFF_INDIRECT		20
-#define RRES_OUT_DIFF_COLOR			21
-#define RRES_OUT_GLOSSY_DIRECT		22
-#define RRES_OUT_GLOSSY_INDIRECT	23
-#define RRES_OUT_GLOSSY_COLOR		24
-#define RRES_OUT_TRANSM_DIRECT		25
-#define RRES_OUT_TRANSM_INDIRECT	26
-#define RRES_OUT_TRANSM_COLOR		27
+#define RRES_OUT_IMAGE					0
+#define RRES_OUT_ALPHA					1
+#define RRES_OUT_Z						2
+#define RRES_OUT_NORMAL					3
+#define RRES_OUT_UV						4
+#define RRES_OUT_VEC					5
+#define RRES_OUT_RGBA					6
+#define RRES_OUT_DIFF					7
+#define RRES_OUT_SPEC					8
+#define RRES_OUT_SHADOW					9
+#define RRES_OUT_AO						10
+#define RRES_OUT_REFLECT				11
+#define RRES_OUT_REFRACT				12
+#define RRES_OUT_INDIRECT				13
+#define RRES_OUT_INDEXOB				14
+#define RRES_OUT_INDEXMA				15
+#define RRES_OUT_MIST					16
+#define RRES_OUT_EMIT					17
+#define RRES_OUT_ENV					18
+#define RRES_OUT_DIFF_DIRECT			19
+#define RRES_OUT_DIFF_INDIRECT			20
+#define RRES_OUT_DIFF_COLOR				21
+#define RRES_OUT_GLOSSY_DIRECT			22
+#define RRES_OUT_GLOSSY_INDIRECT		23
+#define RRES_OUT_GLOSSY_COLOR			24
+#define RRES_OUT_TRANSM_DIRECT			25
+#define RRES_OUT_TRANSM_INDIRECT		26
+#define RRES_OUT_TRANSM_COLOR			27
+#define RRES_OUT_SUBSURFACE_DIRECT		28
+#define RRES_OUT_SUBSURFACE_INDIRECT	29
+#define RRES_OUT_SUBSURFACE_COLOR		30
 
 /* note: types are needed to restore callbacks, don't change values */
 #define CMP_NODE_VIEWER		201
@@ -902,6 +898,7 @@ void            ntreeGPUMaterialNodes(struct bNodeTree *ntree, struct GPUMateria
 #define CMP_NODE_PIXELATE       318
 
 #define CMP_NODE_MAP_RANGE	319
+#define CMP_NODE_PLANETRACKDEFORM	320
 
 /* channel toggles */
 #define CMP_CHAN_RGB		1
@@ -928,6 +925,11 @@ void            ntreeGPUMaterialNodes(struct bNodeTree *ntree, struct GPUMateria
 #define CMP_SCALE_RENDERSIZE_FRAME_ASPECT  (1 << 0)
 #define CMP_SCALE_RENDERSIZE_FRAME_CROP    (1 << 1)
 
+/* track position node, in custom1 */
+#define CMP_TRACKPOS_ABSOLUTE			0
+#define CMP_TRACKPOS_RELATIVE_START	1
+#define CMP_TRACKPOS_RELATIVE_FRAME	2
+#define CMP_TRACKPOS_ABSOLUTE_FRAME	3
 
 /* API */
 struct CompBuf;
@@ -936,7 +938,7 @@ void ntreeCompositExecTree(struct bNodeTree *ntree, struct RenderData *rd, int r
 void ntreeCompositTagRender(struct Scene *sce);
 int ntreeCompositTagAnimated(struct bNodeTree *ntree);
 void ntreeCompositTagGenerators(struct bNodeTree *ntree);
-void ntreeCompositForceHidden(struct bNodeTree *ntree, struct Scene *scene);
+void ntreeCompositForceHidden(struct bNodeTree *ntree);
 void ntreeCompositClearTags(struct bNodeTree *ntree);
 
 struct bNodeSocket *ntreeCompositOutputFileAddSocket(struct bNodeTree *ntree, struct bNode *node,

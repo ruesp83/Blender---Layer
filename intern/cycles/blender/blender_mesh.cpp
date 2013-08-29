@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
  
@@ -82,15 +80,21 @@ static void mikk_get_texture_coordinate(const SMikkTSpaceContext *context, float
 	MikkUserData *userdata = (MikkUserData*)context->m_pUserData;
 	BL::MeshTextureFace tf = userdata->layer.data[face_num];
 	float3 tfuv;
-
-	if(vert_num == 0)
-		tfuv = get_float3(tf.uv1());
-	else if(vert_num == 1)
-		tfuv = get_float3(tf.uv2());
-	else if(vert_num == 2)
-		tfuv = get_float3(tf.uv3());
-	else
-		tfuv = get_float3(tf.uv4());
+	
+	switch (vert_num) {
+		case 0:
+			tfuv = get_float3(tf.uv1());
+			break;
+		case 1:
+			tfuv = get_float3(tf.uv2());
+			break;
+		case 2:
+			tfuv = get_float3(tf.uv3());
+			break;
+		default:
+			tfuv = get_float3(tf.uv4());
+			break;
+	}
 	
 	uv[0] = tfuv.x;
 	uv[1] = tfuv.y;
@@ -100,9 +104,16 @@ static void mikk_get_normal(const SMikkTSpaceContext *context, float N[3], const
 {
 	MikkUserData *userdata = (MikkUserData*)context->m_pUserData;
 	BL::MeshTessFace f = userdata->mesh.tessfaces[face_num];
-	int4 vi = get_int4(f.vertices_raw());
-	BL::MeshVertex v = userdata->mesh.vertices[vi[vert_num]];
-	float3 vN = get_float3(v.normal());
+	float3 vN;
+
+	if(f.use_smooth()) {
+		int4 vi = get_int4(f.vertices_raw());
+		BL::MeshVertex v = userdata->mesh.vertices[vi[vert_num]];
+		vN = get_float3(v.normal());
+	}
+	else {
+		vN = get_float3(f.normal());
+	}
 
 	N[0] = vN.x;
 	N[1] = vN.y;
@@ -199,13 +210,27 @@ static void mikk_compute_tangents(BL::Mesh b_mesh, BL::MeshTextureFaceLayer b_la
 
 static void create_mesh(Scene *scene, Mesh *mesh, BL::Mesh b_mesh, const vector<uint>& used_shaders)
 {
-	/* create vertices */
+	/* count vertices and faces */
+	int numverts = b_mesh.vertices.length();
+	int numfaces = b_mesh.tessfaces.length();
+	int numtris = 0;
+
 	BL::Mesh::vertices_iterator v;
+	BL::Mesh::tessfaces_iterator f;
 
-	for(b_mesh.vertices.begin(v); v != b_mesh.vertices.end(); ++v)
-		mesh->verts.push_back(get_float3(v->co()));
+	for(b_mesh.tessfaces.begin(f); f != b_mesh.tessfaces.end(); ++f) {
+		int4 vi = get_int4(f->vertices_raw());
+		numtris += (vi[3] == 0)? 1: 2;
+	}
 
-	/* create vertex normals */
+	/* reserve memory */
+	mesh->reserve(numverts, numtris, 0, 0);
+
+	/* create vertex coordinates and normals */
+	int i = 0;
+	for(b_mesh.vertices.begin(v); v != b_mesh.vertices.end(); ++v, ++i)
+		mesh->verts[i] = get_float3(v->co());
+
 	Attribute *attr_N = mesh->attributes.add(ATTR_STD_VERTEX_NORMAL);
 	float3 *N = attr_N->data_float3();
 
@@ -213,10 +238,10 @@ static void create_mesh(Scene *scene, Mesh *mesh, BL::Mesh b_mesh, const vector<
 		*N = get_float3(v->normal());
 
 	/* create faces */
-	BL::Mesh::tessfaces_iterator f;
-	vector<int> nverts;
+	vector<int> nverts(numfaces);
+	int fi = 0, ti = 0;
 
-	for(b_mesh.tessfaces.begin(f); f != b_mesh.tessfaces.end(); ++f) {
+	for(b_mesh.tessfaces.begin(f); f != b_mesh.tessfaces.end(); ++f, ++fi) {
 		int4 vi = get_int4(f->vertices_raw());
 		int n = (vi[3] == 0)? 3: 4;
 		int mi = clamp(f->material_index(), 0, used_shaders.size()-1);
@@ -226,18 +251,18 @@ static void create_mesh(Scene *scene, Mesh *mesh, BL::Mesh b_mesh, const vector<
 		if(n == 4) {
 			if(len_squared(cross(mesh->verts[vi[1]] - mesh->verts[vi[0]], mesh->verts[vi[2]] - mesh->verts[vi[0]])) == 0.0f ||
 				len_squared(cross(mesh->verts[vi[2]] - mesh->verts[vi[0]], mesh->verts[vi[3]] - mesh->verts[vi[0]])) == 0.0f) {
-				mesh->add_triangle(vi[0], vi[1], vi[3], shader, smooth);
-				mesh->add_triangle(vi[2], vi[3], vi[1], shader, smooth);
+				mesh->set_triangle(ti++, vi[0], vi[1], vi[3], shader, smooth);
+				mesh->set_triangle(ti++, vi[2], vi[3], vi[1], shader, smooth);
 			}
 			else {
-				mesh->add_triangle(vi[0], vi[1], vi[2], shader, smooth);
-				mesh->add_triangle(vi[0], vi[2], vi[3], shader, smooth);
+				mesh->set_triangle(ti++, vi[0], vi[1], vi[2], shader, smooth);
+				mesh->set_triangle(ti++, vi[0], vi[2], vi[3], shader, smooth);
 			}
 		}
 		else
-			mesh->add_triangle(vi[0], vi[1], vi[2], shader, smooth);
+			mesh->set_triangle(ti++, vi[0], vi[1], vi[2], shader, smooth);
 
-		nverts.push_back(n);
+		nverts[fi] = n;
 	}
 
 	/* create vertex color attributes */
@@ -336,7 +361,7 @@ static void create_mesh(Scene *scene, Mesh *mesh, BL::Mesh b_mesh, const vector<
 		size_t i = 0;
 
 		for(b_mesh.vertices.begin(v); v != b_mesh.vertices.end(); ++v)
-			generated[i++] = get_float3(v->co())*size - loc;
+			generated[i++] = get_float3(v->undeformed_co())*size - loc;
 	}
 }
 
@@ -435,31 +460,39 @@ Mesh *BlenderSync::sync_mesh(BL::Object b_ob, bool object_updated, bool hide_tri
 	mesh_synced.insert(mesh);
 
 	/* create derived mesh */
-	BL::Mesh b_mesh = object_to_mesh(b_data, b_ob, b_scene, true, !preview);
 	PointerRNA cmesh = RNA_pointer_get(&b_ob_data.ptr, "cycles");
 
 	vector<Mesh::Triangle> oldtriangle = mesh->triangles;
 	
-	/* compares curve_keys rather than strands in order to handle quick hair adjustsments in dynamic BVH - other methods could probably do this better*/
+	/* compares curve_keys rather than strands in order to handle quick hair
+	 * adjustsments in dynamic BVH - other methods could probably do this better*/
 	vector<Mesh::CurveKey> oldcurve_keys = mesh->curve_keys;
 
 	mesh->clear();
 	mesh->used_shaders = used_shaders;
 	mesh->name = ustring(b_ob_data.name().c_str());
 
-	if(b_mesh) {
-		if(!(hide_tris && experimental && is_cpu)) {
-			if(cmesh.data && experimental && RNA_boolean_get(&cmesh, "use_subdivision"))
-				create_subd_mesh(mesh, b_mesh, &cmesh, used_shaders);
-			else
-				create_mesh(scene, mesh, b_mesh, used_shaders);
+	if(render_layer.use_surfaces || render_layer.use_hair) {
+		if(preview)
+			b_ob.update_from_editmode();
+
+		bool need_undeformed = mesh->need_attribute(scene, ATTR_STD_GENERATED);
+		BL::Mesh b_mesh = object_to_mesh(b_data, b_ob, b_scene, true, !preview, need_undeformed);
+
+		if(b_mesh) {
+			if(render_layer.use_surfaces && !(hide_tris && experimental)) {
+				if(cmesh.data && experimental && RNA_boolean_get(&cmesh, "use_subdivision"))
+					create_subd_mesh(mesh, b_mesh, &cmesh, used_shaders);
+				else
+					create_mesh(scene, mesh, b_mesh, used_shaders);
+			}
+
+			if(render_layer.use_hair && experimental)
+				sync_curves(mesh, b_mesh, b_ob, object_updated);
+
+			/* free derived mesh */
+			b_data.meshes.remove(b_mesh);
 		}
-
-		if(experimental && is_cpu)
-			sync_curves(mesh, b_mesh, b_ob, object_updated);
-
-		/* free derived mesh */
-		b_data.meshes.remove(b_mesh);
 	}
 
 	/* displacement method */
@@ -507,7 +540,7 @@ void BlenderSync::sync_mesh_motion(BL::Object b_ob, Mesh *mesh, int motion)
 		return;
 
 	/* get derived mesh */
-	BL::Mesh b_mesh = object_to_mesh(b_data, b_ob, b_scene, true, !preview);
+	BL::Mesh b_mesh = object_to_mesh(b_data, b_ob, b_scene, true, !preview, false);
 
 	if(b_mesh) {
 		BL::Mesh::vertices_iterator v;

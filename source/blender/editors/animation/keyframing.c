@@ -810,7 +810,7 @@ short insert_keyframe_direct(ReportList *reports, PointerRNA ptr, PropertyRNA *p
 		PointerRNA tmp_ptr;
 		
 		/* try to get property we should be affecting */
-		if ((RNA_path_resolve(&ptr, fcu->rna_path, &tmp_ptr, &prop) == 0) || (prop == NULL)) {
+		if (RNA_path_resolve_property(&ptr, fcu->rna_path, &tmp_ptr, &prop) == false) {
 			/* property not found... */
 			const char *idname = (ptr.id.data) ? ((ID *)ptr.id.data)->name : TIP_("<No ID pointer>");
 			
@@ -909,6 +909,7 @@ short insert_keyframe(ReportList *reports, ID *id, bAction *act, const char grou
 {	
 	PointerRNA id_ptr, ptr;
 	PropertyRNA *prop = NULL;
+	AnimData *adt;
 	FCurve *fcu;
 	int array_index_max = array_index + 1;
 	int ret = 0;
@@ -920,7 +921,7 @@ short insert_keyframe(ReportList *reports, ID *id, bAction *act, const char grou
 	}
 	
 	RNA_id_pointer_create(id, &id_ptr);
-	if ((RNA_path_resolve(&id_ptr, rna_path, &ptr, &prop) == 0) || (prop == NULL)) {
+	if (RNA_path_resolve_property(&id_ptr, rna_path, &ptr, &prop) == false) {
 		BKE_reportf(reports, RPT_ERROR,
 		            "Could not insert keyframe, as RNA path is invalid for the given ID (ID = %s, path = %s)",
 		            (id) ? id->name : TIP_("<Missing ID block>"), rna_path);
@@ -929,8 +930,6 @@ short insert_keyframe(ReportList *reports, ID *id, bAction *act, const char grou
 	
 	/* if no action is provided, keyframe to the default one attached to this ID-block */
 	if (act == NULL) {
-		AnimData *adt = BKE_animdata_from_id(id);
-		
 		/* get action to add F-Curve+keyframe to */
 		act = verify_adt_action(id, 1);
 		
@@ -940,10 +939,11 @@ short insert_keyframe(ReportList *reports, ID *id, bAction *act, const char grou
 			            id->name, rna_path);
 			return 0;
 		}
-		
-		/* apply NLA-mapping to frame to use (if applicable) */
-		cfra = BKE_nla_tweakedit_remap(adt, cfra, NLATIME_CONVERT_UNMAP);
 	}
+	
+	/* apply NLA-mapping to frame to use (if applicable) */
+	adt = BKE_animdata_from_id(id);
+	cfra = BKE_nla_tweakedit_remap(adt, cfra, NLATIME_CONVERT_UNMAP);
 	
 	/* key entire array convenience method */
 	if (array_index == -1) {
@@ -1012,7 +1012,7 @@ short delete_keyframe(ReportList *reports, ID *id, bAction *act, const char grou
 	
 	/* validate pointer first - exit if failure */
 	RNA_id_pointer_create(id, &id_ptr);
-	if ((RNA_path_resolve(&id_ptr, rna_path, &ptr, &prop) == 0) || (prop == NULL)) {
+	if (RNA_path_resolve_property(&id_ptr, rna_path, &ptr, &prop) == false) {
 		BKE_reportf(reports, RPT_ERROR,
 		            "Could not delete keyframe, as RNA path is invalid for the given ID (ID = %s, path = %s)",
 		            id->name, rna_path);
@@ -1113,7 +1113,7 @@ static short clear_keyframe(ReportList *reports, ID *id, bAction *act, const cha
 
 	/* validate pointer first - exit if failure */
 	RNA_id_pointer_create(id, &id_ptr);
-	if ((RNA_path_resolve(&id_ptr, rna_path, &ptr, &prop) == 0) || (prop == NULL)) {
+	if (RNA_path_resolve_property(&id_ptr, rna_path, &ptr, &prop) == false) {
 		BKE_reportf(reports, RPT_ERROR,
 		            "Could not clear keyframe, as RNA path is invalid for the given ID (ID = %s, path = %s)",
 		            id->name, rna_path);
@@ -1663,7 +1663,7 @@ void ANIM_OT_keyframe_insert_button(wmOperatorType *ot)
 	ot->poll = modify_key_op_poll;
 	
 	/* flags */
-	ot->flag = OPTYPE_UNDO;
+	ot->flag = OPTYPE_UNDO | OPTYPE_INTERNAL;
 
 	/* properties */
 	RNA_def_boolean(ot->srna, "all", 1, "All", "Insert a keyframe for all element of the array");
@@ -1733,7 +1733,7 @@ void ANIM_OT_keyframe_delete_button(wmOperatorType *ot)
 	ot->poll = modify_key_op_poll;
 	
 	/* flags */
-	ot->flag = OPTYPE_UNDO;
+	ot->flag = OPTYPE_UNDO | OPTYPE_INTERNAL;
 
 	/* properties */
 	RNA_def_boolean(ot->srna, "all", 1, "All", "Delete keyframes from all elements of the array");
@@ -1802,7 +1802,7 @@ void ANIM_OT_keyframe_clear_button(wmOperatorType *ot)
 	ot->poll = modify_key_op_poll;
 
 	/* flags */
-	ot->flag = OPTYPE_UNDO;
+	ot->flag = OPTYPE_UNDO | OPTYPE_INTERNAL;
 
 	/* properties */
 	RNA_def_boolean(ot->srna, "all", 1, "All", "Clear keyframes from all elements of the array");
@@ -1962,10 +1962,11 @@ short id_frame_has_keyframe(ID *id, float frame, short filter)
 			return object_frame_has_keyframe((Object *)id, frame, filter);
 			break;
 			
-		case ID_SCE: /* scene */
+#if 0
 		// XXX TODO... for now, just use 'normal' behavior
-		//	break;
-		
+		case ID_SCE: /* scene */
+			break;
+#endif
 		default:  /* 'normal type' */
 		{
 			AnimData *adt = BKE_animdata_from_id(id);
@@ -1973,8 +1974,8 @@ short id_frame_has_keyframe(ID *id, float frame, short filter)
 			/* only check keyframes in active action */
 			if (adt)
 				return action_frame_has_keyframe(adt->action, frame, filter);
+			break;
 		}
-		break;
 	}
 	
 	

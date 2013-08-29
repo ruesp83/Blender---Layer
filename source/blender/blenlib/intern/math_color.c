@@ -96,6 +96,56 @@ void hsv_to_rgb_v(const float hsv[3], float r_rgb[3])
 	hsv_to_rgb(hsv[0], hsv[1], hsv[2], &r_rgb[0], &r_rgb[1], &r_rgb[2]);
 }
 
+static float hsl_value (float n1, float n2, float hue)
+{
+	float val;
+
+	if (hue > 6.0)
+		hue -= 6.0;
+	else if (hue < 0.0)
+		hue += 6.0;
+
+	if (hue < 1.0)
+		val = n1 + (n2 - n1) * hue;
+	else if (hue < 3.0)
+		val = n2;
+	else if (hue < 4.0)
+		val = n1 + (n2 - n1) * (4.0 - hue);
+	else
+		val = n1;
+
+	return val;
+}
+
+void hsl_to_rgb(float h, float s, float l, float *r, float *g, float *b)
+{
+	if (s == 0) {
+		/*  achromatic case  */
+		*r = l;
+		*g = l;
+		*b = l;
+	}
+	else {
+		float m1, m2;
+
+		if (l <= 0.5)
+			m2 = l * (1.0 + s);
+		else
+			m2 = l + s - l * s;
+
+		m1 = 2.0 * l - m2;
+
+		*r = hsl_value (m1, m2, h * 6.0 + 2.0);
+		*g = hsl_value (m1, m2, h * 6.0);
+		*b = hsl_value (m1, m2, h * 6.0 - 2.0);
+	}
+}
+
+void hsl_to_rgb_v(const float hsl[3], float r_rgb[3])
+{
+	hsl_to_rgb(hsl[0], hsl[1], hsl[2], &r_rgb[0], &r_rgb[1], &r_rgb[2]);
+}
+
 void rgb_to_yuv(float r, float g, float b, float *ly, float *lu, float *lv)
 {
 	float y, u, v;
@@ -150,6 +200,7 @@ void rgb_to_ycc(float r, float g, float b, float *ly, float *lcb, float *lcr, in
 			break;
 		default:
 			assert(!"invalid colorspace");
+			break;
 	}
 
 	*ly = y;
@@ -183,7 +234,8 @@ void ycc_to_rgb(float y, float cb, float cr, float *lr, float *lg, float *lb, in
 			b = y + 1.772f * cb - 226.816f;
 			break;
 		default:
-			assert(!"invalid colorspace");
+			BLI_assert(0);
+			break;
 	}
 	*lr = r / 255.0f;
 	*lg = g / 255.0f;
@@ -197,17 +249,26 @@ void hex_to_rgb(char *hexcol, float *r, float *g, float *b)
 	if (hexcol[0] == '#') hexcol++;
 
 	if (sscanf(hexcol, "%02x%02x%02x", &ri, &gi, &bi) == 3) {
-		*r = ri / 255.0f;
-		*g = gi / 255.0f;
-		*b = bi / 255.0f;
-		CLAMP(*r, 0.0f, 1.0f);
-		CLAMP(*g, 0.0f, 1.0f);
-		CLAMP(*b, 0.0f, 1.0f);
+		/* six digit hex colors */
+	}
+	else if (sscanf(hexcol, "%01x%01x%01x", &ri, &gi, &bi) == 3) {
+		/* three digit hex colors (#123 becomes #112233) */
+		ri += ri << 4;
+		gi += gi << 4;
+		bi += bi << 4;
 	}
 	else {
 		/* avoid using un-initialized vars */
 		*r = *g = *b = 0.0f;
+		return;
 	}
+
+	*r = ri * (1.0f / 255.0f);
+	*g = gi * (1.0f / 255.0f);
+	*b = bi * (1.0f / 255.0f);
+	CLAMP(*r, 0.0f, 1.0f);
+	CLAMP(*g, 0.0f, 1.0f);
+	CLAMP(*b, 0.0f, 1.0f);
 }
 
 void rgb_to_hsv(float r, float g, float b, float *lh, float *ls, float *lv)
@@ -394,17 +455,17 @@ void cpack_to_rgb(unsigned int col, float *r, float *g, float *b)
 
 void rgb_uchar_to_float(float col_r[3], const unsigned char col_ub[3])
 {
-	col_r[0] = ((float)col_ub[0]) / 255.0f;
-	col_r[1] = ((float)col_ub[1]) / 255.0f;
-	col_r[2] = ((float)col_ub[2]) / 255.0f;
+	col_r[0] = ((float)col_ub[0]) * (1.0f / 255.0f);
+	col_r[1] = ((float)col_ub[1]) * (1.0f / 255.0f);
+	col_r[2] = ((float)col_ub[2]) * (1.0f / 255.0f);
 }
 
 void rgba_uchar_to_float(float col_r[4], const unsigned char col_ub[4])
 {
-	col_r[0] = ((float)col_ub[0]) / 255.0f;
-	col_r[1] = ((float)col_ub[1]) / 255.0f;
-	col_r[2] = ((float)col_ub[2]) / 255.0f;
-	col_r[3] = ((float)col_ub[3]) / 255.0f;
+	col_r[0] = ((float)col_ub[0]) * (1.0f / 255.0f);
+	col_r[1] = ((float)col_ub[1]) * (1.0f / 255.0f);
+	col_r[2] = ((float)col_ub[2]) * (1.0f / 255.0f);
+	col_r[3] = ((float)col_ub[3]) * (1.0f / 255.0f);
 }
 
 void rgb_float_to_uchar(unsigned char col_r[3], const float col_f[3])

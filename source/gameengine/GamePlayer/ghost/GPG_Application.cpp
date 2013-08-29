@@ -99,6 +99,12 @@ extern "C"
 #include "GHOST_IWindow.h"
 #include "GHOST_Rect.h"
 
+#ifdef WITH_AUDASPACE
+#  include "AUD_C-API.h"
+#  include "AUD_I3DDevice.h"
+#  include "AUD_IDevice.h"
+#endif
+
 static void frameTimerProc(GHOST_ITimerTask* task, GHOST_TUns64 time);
 
 static GHOST_ISystem* fSystem = 0;
@@ -260,14 +266,14 @@ bool GPG_Application::startScreenSaverPreview(
 		}
 
 		SetParent(ghost_hwnd, parentWindow);
-		LONG style = GetWindowLong(ghost_hwnd, GWL_STYLE);
-		LONG exstyle = GetWindowLong(ghost_hwnd, GWL_EXSTYLE);
+		LONG_PTR style = GetWindowLongPtr(ghost_hwnd, GWL_STYLE);
+		LONG_PTR exstyle = GetWindowLongPtr(ghost_hwnd, GWL_EXSTYLE);
 
 		RECT adjrc = { 0, 0, windowWidth, windowHeight };
 		AdjustWindowRectEx(&adjrc, style, FALSE, exstyle);
 
 		style = (style & (~(WS_POPUP|WS_OVERLAPPEDWINDOW|WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_THICKFRAME|WS_MINIMIZEBOX|WS_MAXIMIZEBOX|WS_TILEDWINDOW ))) | WS_CHILD;
-		SetWindowLong(ghost_hwnd, GWL_STYLE, style);
+		SetWindowLongPtr(ghost_hwnd, GWL_STYLE, style);
 		SetWindowPos(ghost_hwnd, NULL, adjrc.left, adjrc.top, 0, 0, SWP_NOZORDER|SWP_NOSIZE|SWP_NOACTIVATE);
 
 		/* Check the size of the client rectangle of the window and resize the window
@@ -503,6 +509,7 @@ bool GPG_Application::processEvent(GHOST_IEvent* event)
 				GHOST_Rect bnds;
 				window->getClientBounds(bnds);
 				m_canvas->Resize(bnds.getWidth(), bnds.getHeight());
+				m_ketsjiengine->Resize();
 			}
 			}
 			break;
@@ -553,12 +560,11 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 		GameData *gm= &m_startScene->gm;
 		bool properties	= (SYS_GetCommandLineInt(syshandle, "show_properties", 0) != 0);
 		bool profile = (SYS_GetCommandLineInt(syshandle, "show_profile", 0) != 0);
-		bool fixedFr = (gm->flag & GAME_ENABLE_ALL_FRAMES);
 
 		bool showPhysics = (gm->flag & GAME_SHOW_PHYSICS);
 		SYS_WriteCommandLineInt(syshandle, "show_physics", showPhysics);
 
-		bool fixed_framerate= (SYS_GetCommandLineInt(syshandle, "fixedtime", fixedFr) != 0);
+		bool fixed_framerate= (SYS_GetCommandLineInt(syshandle, "fixedtime", (gm->flag & GAME_ENABLE_ALL_FRAMES)) != 0);
 		bool frameRate = (SYS_GetCommandLineInt(syshandle, "show_framerate", 0) != 0);
 		bool useLists = (SYS_GetCommandLineInt(syshandle, "displaylists", gm->flag & GAME_DISPLAY_LISTS) != 0);
 		bool nodepwarnings = (SYS_GetCommandLineInt(syshandle, "ignore_deprecation_warnings", 1) != 0);
@@ -576,7 +582,12 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 		m_canvas = new GPG_Canvas(window);
 		if (!m_canvas)
 			return false;
-				
+
+		if (gm->vsync == VSYNC_ADAPTIVE)
+			m_canvas->SetSwapInterval(-1);
+		else
+			m_canvas->SetSwapInterval((gm->vsync == VSYNC_ON) ? 1 : 0);
+
 		m_canvas->Init();
 		if (gm->flag & GAME_SHOW_MOUSE)
 			m_canvas->SetMouseState(RAS_ICanvas::MOUSE_NORMAL);
@@ -630,8 +641,6 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 		m_ketsjiengine->SetCanvas(m_canvas);
 		m_ketsjiengine->SetRenderTools(m_rendertools);
 		m_ketsjiengine->SetRasterizer(m_rasterizer);
-
-		m_ketsjiengine->SetTimingDisplay(frameRate, false, false);
 
 		KX_KetsjiEngine::SetExitKey(ConvertKeyCode(gm->exitkey));
 #ifdef WITH_PYTHON
@@ -727,6 +736,15 @@ bool GPG_Application::startEngine(void)
 		if (m_startScene->gm.stereoflag == STEREO_DOME)
 			m_ketsjiengine->InitDome(m_startScene->gm.dome.res, m_startScene->gm.dome.mode, m_startScene->gm.dome.angle, m_startScene->gm.dome.resbuf, m_startScene->gm.dome.tilt, m_startScene->gm.dome.warptext);
 
+		// initialize 3D Audio Settings
+		AUD_I3DDevice* dev = AUD_get3DDevice();
+		if (dev)
+		{
+			dev->setSpeedOfSound(m_startScene->audio.speed_of_sound);
+			dev->setDopplerFactor(m_startScene->audio.doppler_factor);
+			dev->setDistanceModel(AUD_DistanceModel(m_startScene->audio.distance_model));
+		}
+
 #ifdef WITH_PYTHON
 		// Set the GameLogic.globalDict from marshal'd data, so we can
 		// load new blend files and keep data in GameLogic.globalDict
@@ -774,9 +792,6 @@ void GPG_Application::stopEngine()
 	}
 
 	m_pyGlobalDictString_Length = saveGamePythonConfig(&m_pyGlobalDictString);
-	
-	// when exiting the mainloop
-	exitGamePythonScripting();
 #endif
 	
 	m_ketsjiengine->StopEngine();
@@ -790,6 +805,7 @@ void GPG_Application::stopEngine()
 		m_system->removeTimer(m_frameTimer);
 		m_frameTimer = 0;
 	}
+
 	m_engineRunning = false;
 }
 
@@ -866,6 +882,11 @@ void GPG_Application::exitEngine()
 	}
 
 	GPU_extensions_exit();
+
+#ifdef WITH_PYTHON
+	// Call this after we're sure nothing needs Python anymore (e.g., destructors)
+	exitGamePlayerPythonScripting();
+#endif
 
 	m_exitRequested = 0;
 	m_engineInitialized = false;

@@ -279,6 +279,22 @@ typedef struct MVertSkin {
 	int flag;
 } MVertSkin;
 
+typedef struct FreestyleEdge {
+	char flag;
+	char pad[3];
+} FreestyleEdge;
+
+/* FreestyleEdge->flag */
+#define FREESTYLE_EDGE_MARK	1
+
+typedef struct FreestyleFace {
+	char flag;
+	char pad[3];
+} FreestyleFace;
+
+/* FreestyleFace->flag */
+#define FREESTYLE_FACE_MARK	1
+
 /* mvert->flag (1=SELECT) */
 #define ME_SPHERETEST		2
 #define ME_VERT_TMP_TAG		4
@@ -293,7 +309,7 @@ typedef struct MVertSkin {
 						/* reserve 16 for ME_HIDE */
 #define ME_EDGERENDER		(1<<5)
 #define ME_LOOSEEDGE		(1<<7)
-/* #define ME_SEAM_LAST		(1<<8) */ /* UNUSED */
+#define ME_EDGE_TMP_TAG		(1 << 8)
 #define ME_SHARP			(1<<9)    /* only reason this flag remains a 'short' */
 
 /* puno = vertexnormal (mface) */

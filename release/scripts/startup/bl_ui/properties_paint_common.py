@@ -83,6 +83,11 @@ def brush_texture_settings(layout, brush, sculpt):
         layout.row().prop(tex_slot, "tex_paint_map_mode", text="")
         layout.separator()
 
+    if tex_slot.map_mode == 'STENCIL':
+        if brush.texture and brush.texture.type == 'IMAGE':
+            layout.operator("brush.stencil_fit_image_aspect")
+        layout.operator("brush.stencil_reset_transform")
+
     # angle and texture_angle_source
     col = layout.column()
     col.active = brush.brush_capabilities.has_texture_angle_source
@@ -117,9 +122,20 @@ def brush_texture_settings(layout, brush, sculpt):
 def brush_mask_texture_settings(layout, brush):
     mask_tex_slot = brush.mask_texture_slot
 
-    if(brush.mask_texture):
-        layout.label(text="Mask Mapping:")
+    layout.label(text="Mask Mapping:")
+
+    # map_mode
+    layout.row().prop(mask_tex_slot, "mask_map_mode", text="")
+    layout.separator()
+
+    if mask_tex_slot.map_mode == 'STENCIL':
+        if brush.mask_texture and brush.mask_texture.type == 'IMAGE':
+            layout.operator("brush.stencil_fit_image_aspect").mask = True
+        layout.operator("brush.stencil_reset_transform").mask = True
+
+    if brush.mask_texture:
         col = layout.column()
+        col.label(text="Angle:")
         col.active = brush.brush_capabilities.has_texture_angle
         col.prop(mask_tex_slot, "angle", text="")
 

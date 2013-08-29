@@ -128,7 +128,7 @@ static int view_pan_init(bContext *C, wmOperator *op)
 }
 
 /* apply transform to view (i.e. adjust 'cur' rect) */
-static void view_pan_apply(wmOperator *op)
+static void view_pan_apply(bContext *C, wmOperator *op)
 {
 	v2dViewPanData *vpd = op->customdata;
 	View2D *v2d = vpd->v2d;
@@ -153,6 +153,7 @@ static void view_pan_apply(wmOperator *op)
 	
 	/* request updates to be done... */
 	ED_region_tag_redraw(vpd->ar);
+	WM_event_add_mousemove(C);
 	
 	UI_view2d_sync(vpd->sc, vpd->sa, v2d, V2D_LOCK_COPY);
 	
@@ -181,7 +182,7 @@ static int view_pan_exec(bContext *C, wmOperator *op)
 	if (!view_pan_init(C, op))
 		return OPERATOR_CANCELLED;
 	
-	view_pan_apply(op);
+	view_pan_apply(C, op);
 	view_pan_exit(op);
 	return OPERATOR_FINISHED;
 }
@@ -209,7 +210,7 @@ static int view_pan_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 		RNA_int_set(op->ptr, "deltax", event->prevx - event->x);
 		RNA_int_set(op->ptr, "deltay", event->prevy - event->y);
 		
-		view_pan_apply(op);
+		view_pan_apply(C, op);
 		view_pan_exit(op);
 		return OPERATOR_FINISHED;
 	}
@@ -246,9 +247,9 @@ static int view_pan_modal(bContext *C, wmOperator *op, const wmEvent *event)
 			vpd->lastx = event->x;
 			vpd->lasty = event->y;
 			
-			view_pan_apply(op);
+			view_pan_apply(C, op);
+			break;
 		}
-		break;
 			/* XXX - Mode switching isn't implemented. See comments in 36818.
 			 * switch to zoom */
 #if 0
@@ -312,7 +313,7 @@ static void VIEW2D_OT_pan(wmOperatorType *ot)
 
 /* ------------------ Scrollwheel Versions (2) ---------------------- */
 
-/* this operator only needs this single callback, where it callsthe view_pan_*() methods */
+/* this operator only needs this single callback, where it calls the view_pan_*() methods */
 static int view_scrollright_exec(bContext *C, wmOperator *op)
 {
 	v2dViewPanData *vpd;
@@ -333,7 +334,7 @@ static int view_scrollright_exec(bContext *C, wmOperator *op)
 	RNA_int_set(op->ptr, "deltay", 0);
 	
 	/* apply movement, then we're done */
-	view_pan_apply(op);
+	view_pan_apply(C, op);
 	view_pan_exit(op);
 	
 	return OPERATOR_FINISHED;
@@ -356,7 +357,7 @@ static void VIEW2D_OT_scroll_right(wmOperatorType *ot)
 
 
 
-/* this operator only needs this single callback, where it callsthe view_pan_*() methods */
+/* this operator only needs this single callback, where it calls the view_pan_*() methods */
 static int view_scrollleft_exec(bContext *C, wmOperator *op)
 {
 	v2dViewPanData *vpd;
@@ -377,7 +378,7 @@ static int view_scrollleft_exec(bContext *C, wmOperator *op)
 	RNA_int_set(op->ptr, "deltay", 0);
 	
 	/* apply movement, then we're done */
-	view_pan_apply(op);
+	view_pan_apply(C, op);
 	view_pan_exit(op);
 	
 	return OPERATOR_FINISHED;
@@ -399,7 +400,7 @@ static void VIEW2D_OT_scroll_left(wmOperatorType *ot)
 }
 
 
-/* this operator only needs this single callback, where it callsthe view_pan_*() methods */
+/* this operator only needs this single callback, where it calls the view_pan_*() methods */
 static int view_scrolldown_exec(bContext *C, wmOperator *op)
 {
 	v2dViewPanData *vpd;
@@ -425,7 +426,7 @@ static int view_scrolldown_exec(bContext *C, wmOperator *op)
 	}
 	
 	/* apply movement, then we're done */
-	view_pan_apply(op);
+	view_pan_apply(C, op);
 	view_pan_exit(op);
 	
 	return OPERATOR_FINISHED;
@@ -449,7 +450,7 @@ static void VIEW2D_OT_scroll_down(wmOperatorType *ot)
 
 
 
-/* this operator only needs this single callback, where it callsthe view_pan_*() methods */
+/* this operator only needs this single callback, where it calls the view_pan_*() methods */
 static int view_scrollup_exec(bContext *C, wmOperator *op)
 {
 	v2dViewPanData *vpd;
@@ -475,7 +476,7 @@ static int view_scrollup_exec(bContext *C, wmOperator *op)
 	}
 	
 	/* apply movement, then we're done */
-	view_pan_apply(op);
+	view_pan_apply(C, op);
 	view_pan_exit(op);
 	
 	return OPERATOR_FINISHED;
@@ -738,7 +739,7 @@ static void VIEW2D_OT_zoom_in(wmOperatorType *ot)
 	RNA_def_float(ot->srna, "zoomfacy", 0, -FLT_MAX, FLT_MAX, "Zoom Factor Y", "", -FLT_MAX, FLT_MAX);
 }
 	
-/* this operator only needs this single callback, where it callsthe view_zoom_*() methods */
+/* this operator only needs this single callback, where it calls the view_zoom_*() methods */
 static int view_zoomout_exec(bContext *C, wmOperator *op)
 {
 	ScrArea *sa = CTX_wm_area(C);
@@ -1175,7 +1176,7 @@ static int view_borderzoom_exec(bContext *C, wmOperator *op)
 		 */
 		float zoom, center, size;
 		
-		/* TODO: is this zoom factor calculation valid? It seems to produce same results everytime... */
+		/* TODO: is this zoom factor calculation valid? It seems to produce same results every time... */
 		if ((v2d->keepzoom & V2D_LOCKZOOM_X) == 0) {
 			size = BLI_rctf_size_x(&cur_new);
 			zoom = size / BLI_rctf_size_x(&rect);
@@ -1288,7 +1289,7 @@ void UI_view2d_smooth_view(bContext *C, ARegion *ar,
 		fac = smooth_view_rect_to_fac(&v2d->cur, cur);
 	}
 
-	if (C && U.smooth_viewtx && fac > FLT_EPSILON) {
+	if (U.smooth_viewtx && fac > FLT_EPSILON) {
 		int changed = FALSE;
 
 		if (BLI_rctf_compare(&sms.new_cur, &v2d->cur, FLT_EPSILON) == FALSE)
@@ -1674,9 +1675,8 @@ static int scroller_activate_modal(bContext *C, wmOperator *op, const wmEvent *e
 			vsm->lasty = event->y;
 			
 			scroller_activate_apply(C, op);
+			break;
 		}
-		break;
-			
 		case LEFTMOUSE:
 		case MIDDLEMOUSE:
 			if (event->val == KM_RELEASE) {

@@ -15,9 +15,6 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
  * Contributors: 2004/2005/2006 Blender Foundation, full recode
  * Contributors: Vertex color baking, Copyright 2011 AutoCRC
  *
@@ -48,12 +45,12 @@
 #include "DNA_meshdata_types.h"
 
 #include "BKE_customdata.h"
-#include "BKE_depsgraph.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
 #include "BKE_scene.h"
+#include "BKE_library.h"
 
 #include "IMB_imbuf.h"
 #include "IMB_colormanagement.h"
@@ -580,7 +577,7 @@ static void do_bake_shade(void *handle, int x, int y, float u, float v)
 	if (bs->type == RE_BAKE_NORMALS && R.r.bake_normal_space == R_BAKE_SPACE_TANGENT)
 		bake_shade(handle, ob, shi, quad, x, y, u, v, tvn, ttang);
 	else
-		bake_shade(handle, ob, shi, quad, x, y, u, v, 0, 0);
+		bake_shade(handle, ob, shi, quad, x, y, u, v, NULL, NULL);
 }
 
 static int get_next_bake_face(BakeShade *bs)
@@ -641,7 +638,7 @@ static int get_next_bake_face(BakeShade *bs)
 					bs->mloop = me->mloop + bs->mpoly->loopstart;
 
 					/* Tag mesh for reevaluation. */
-					DAG_id_tag_update(&me->id, 0);
+					me->id.flag |= LIB_DOIT;
 				}
 				else {
 					Image *ima = NULL;
@@ -998,6 +995,11 @@ int RE_bake_shade_all_selected(Render *re, int type, Object *actob, short *do_up
 			}
 			BKE_image_release_ibuf(ima, ibuf, NULL);
 		}
+	}
+
+	if (R.r.bake_flag & R_BAKE_VCOL) {
+		/* untag all meshes */
+		tag_main_lb(&G.main->mesh, false);
 	}
 
 	BLI_init_threads(&threads, do_bake_thread, re->r.threads);

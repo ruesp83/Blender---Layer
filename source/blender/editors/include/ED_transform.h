@@ -80,7 +80,7 @@ enum TfmMode {
 	TFM_TIME_EXTEND,
 	TFM_TIME_DUPLICATE,
 	TFM_BAKE_TIME,
-	TFM_BEVEL,
+	TFM_DEPRECATED,  /* was BEVEL */
 	TFM_BWEIGHT,
 	TFM_ALIGN,
 	TFM_EDGE_SLIDE,
@@ -90,16 +90,14 @@ enum TfmMode {
 
 /* TRANSFORM CONTEXTS */
 #define CTX_NONE            0
-#define CTX_TEXTURE         1
-#define CTX_EDGE            2
-#define CTX_NO_PET          4
-#define CTX_TWEAK           8
-#define CTX_NO_MIRROR       16
-#define CTX_AUTOCONFIRM     32
-#define CTX_BMESH           64
-#define CTX_NDOF            128
-#define CTX_MOVIECLIP       256
-#define CTX_MASK            512
+#define CTX_TEXTURE         (1 << 0)
+#define CTX_EDGE            (1 << 1)
+#define CTX_NO_PET          (1 << 2)
+#define CTX_NO_MIRROR       (1 << 3)
+#define CTX_AUTOCONFIRM     (1 << 4)
+#define CTX_NDOF            (1 << 5)
+#define CTX_MOVIECLIP       (1 << 6)
+#define CTX_MASK            (1 << 7)
 
 /* Standalone call to get the transformation center corresponding to the current situation
  * returns 1 if successful, 0 otherwise (usually means there's no selection)
@@ -113,7 +111,8 @@ struct Base;
 struct Scene;
 struct Object;
 
-int BIF_snappingSupported(struct Object *obedit);
+/* UNUSED */
+// int BIF_snappingSupported(struct Object *obedit);
 
 struct TransformOrientation;
 struct bContext;
@@ -122,23 +121,21 @@ struct ReportList;
 void BIF_clearTransformOrientation(struct bContext *C);
 void BIF_removeTransformOrientation(struct bContext *C, struct TransformOrientation *ts);
 void BIF_removeTransformOrientationIndex(struct bContext *C, int index);
-void BIF_createTransformOrientation(struct bContext *C, struct ReportList *reports, char *name, int use, int overwrite);
+void BIF_createTransformOrientation(struct bContext *C, struct ReportList *reports, char *name, int use_view,
+                                    int use, int overwrite);
 void BIF_selectTransformOrientation(struct bContext *C, struct TransformOrientation *ts);
 void BIF_selectTransformOrientationValue(struct bContext *C, int orientation);
 
 void ED_getTransformOrientationMatrix(const struct bContext *C, float orientation_mat[3][3], const bool activeOnly);
 
-struct EnumPropertyItem *BIF_enumTransformOrientation(struct bContext *C);
-const char *BIF_menustringTransformOrientation(const struct bContext *C, const char *title);  /* the returned value was allocated and needs to be freed after use */
 int BIF_countTransformOrientation(const struct bContext *C);
 
 void BIF_TransformSetUndo(const char *str);
 
-void BIF_selectOrientation(void);
-
 /* to be able to add operator properties to other operators */
 
 #define P_MIRROR        (1 << 0)
+#define P_MIRROR_DUMMY  (P_MIRROR | (1 << 9))
 #define P_PROPORTIONAL  (1 << 1)
 #define P_AXIS          (1 << 2)
 #define P_SNAP          (1 << 3)
@@ -147,6 +144,7 @@ void BIF_selectOrientation(void);
 #define P_CONSTRAINT    (1 << 6)
 #define P_OPTIONS       (1 << 7)
 #define P_CORRECT_UV    (1 << 8)
+#define P_NO_DEFAULTS   (1 << 10)
 
 void Transform_Properties(struct wmOperatorType *ot, int flags);
 
@@ -177,6 +175,7 @@ typedef enum SnapMode {
 } SnapMode;
 
 #define SNAP_MIN_DISTANCE 30
+#define TRANSFORM_DIST_MAX_RAY (FLT_MAX / 2.0f)
 
 bool peelObjectsTransForm(struct TransInfo *t, struct ListBase *depth_peels, const float mval[2], SnapMode mode);
 bool peelObjectsContext(struct bContext *C, struct ListBase *depth_peels, const float mval[2], SnapMode mode);
@@ -184,9 +183,11 @@ bool snapObjectsTransform(struct TransInfo *t, const float mval[2], float *r_dis
 bool snapObjectsContext(struct bContext *C, const float mval[2], float *r_dist_px, float r_loc[3], float r_no[3], SnapMode mode);
 /* taks args for all settings */
 bool snapObjectsEx(struct Scene *scene, struct Base *base_act, struct View3D *v3d, struct ARegion *ar, struct Object *obedit, short snap_mode,
-                   const float mval[2], float *r_dist_px, float r_loc[3], float r_no[3], SnapMode mode);
+                   const float mval[2], float *r_dist_px,
+                   float r_loc[3], float r_no[3], float *r_ray_dist, SnapMode mode);
 bool snapObjectsRayEx(struct Scene *scene, struct Base *base_act, struct View3D *v3d, struct ARegion *ar, struct Object *obedit, short snap_mode,
-                      const float ray_start[3], const float ray_normal[3],
+                      struct Object **r_ob, float r_obmat[4][4],
+                      const float ray_start[3], const float ray_normal[3], float *r_ray_dist,
                       const float mval[2], float *r_dist_px, float r_loc[3], float r_no[3], SnapMode mode);
 
 bool snapNodesTransform(struct TransInfo *t, const int mval[2], float *r_dist_px, float r_loc[2], char *r_node_border, SnapMode mode);

@@ -49,6 +49,7 @@
 #include "DNA_key_types.h"
 #include "DNA_lamp_types.h"
 #include "DNA_lattice_types.h"
+#include "DNA_linestyle_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_material_types.h"
 #include "DNA_meta_types.h"
@@ -426,7 +427,7 @@ static void acf_summary_backdrop(bAnimContext *ac, bAnimListElem *ale, float ymi
 static void acf_summary_name(bAnimListElem *UNUSED(ale), char *name)
 {
 	if (name)
-		BLI_strncpy(name, IFACE_("DopeSheet Summary"), ANIM_CHAN_NAME_SIZE);
+		BLI_strncpy(name, IFACE_("Dope Sheet Summary"), ANIM_CHAN_NAME_SIZE);
 }
 
 // FIXME: this is really a temp icon I think
@@ -573,8 +574,7 @@ static void *acf_scene_setting_ptr(bAnimListElem *ale, int setting, short *type)
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (scene->adt)
 				return GET_ACF_FLAG_PTR(scene->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 			
 		default: /* unsupported */
 			return NULL;
@@ -718,9 +718,8 @@ static void *acf_object_setting_ptr(bAnimListElem *ale, int setting, short *type
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (ob->adt)
 				return GET_ACF_FLAG_PTR(ob->adt->flag, type);
-			else
-				return NULL;
-			
+			return NULL;
+
 		default: /* unsupported */
 			return NULL;
 	}
@@ -1052,9 +1051,8 @@ static void *acf_fillactd_setting_ptr(bAnimListElem *ale, int setting, short *ty
 			if (adt) {
 				return GET_ACF_FLAG_PTR(adt->flag, type);
 			}
-			else
-				return NULL;
-			
+			return NULL;
+
 		case ACHANNEL_SETTING_EXPAND: /* expanded */
 			return GET_ACF_FLAG_PTR(act->flag, type);
 		
@@ -1212,9 +1210,8 @@ static void *acf_dsmat_setting_ptr(bAnimListElem *ale, int setting, short *type)
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (ma->adt)
 				return GET_ACF_FLAG_PTR(ma->adt->flag, type);
-			else
-				return NULL;
-		
+			return NULL;
+
 		default: /* unsupported */
 			return NULL;
 	}
@@ -1289,8 +1286,7 @@ static void *acf_dslam_setting_ptr(bAnimListElem *ale, int setting, short *type)
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (la->adt)
 				return GET_ACF_FLAG_PTR(la->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 		
 		default: /* unsupported */
 			return NULL;
@@ -1373,8 +1369,7 @@ static void *acf_dstex_setting_ptr(bAnimListElem *ale, int setting, short *type)
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (tex->adt)
 				return GET_ACF_FLAG_PTR(tex->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 		
 		default: /* unsupported */
 			return NULL;
@@ -1450,8 +1445,7 @@ static void *acf_dscam_setting_ptr(bAnimListElem *ale, int setting, short *type)
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (ca->adt)
 				return GET_ACF_FLAG_PTR(ca->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 		
 		default: /* unsupported */
 			return NULL;
@@ -1537,8 +1531,7 @@ static void *acf_dscur_setting_ptr(bAnimListElem *ale, int setting, short *type)
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (cu->adt)
 				return GET_ACF_FLAG_PTR(cu->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 		
 		default: /* unsupported */
 			return NULL;
@@ -1614,8 +1607,7 @@ static void *acf_dsskey_setting_ptr(bAnimListElem *ale, int setting, short *type
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (key->adt)
 				return GET_ACF_FLAG_PTR(key->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 		
 		default: /* unsupported */
 			return NULL;
@@ -1691,8 +1683,7 @@ static void *acf_dswor_setting_ptr(bAnimListElem *ale, int setting, short *type)
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (wo->adt)
 				return GET_ACF_FLAG_PTR(wo->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 		
 		default: /* unsupported */
 			return NULL;
@@ -1768,8 +1759,7 @@ static void *acf_dspart_setting_ptr(bAnimListElem *ale, int setting, short *type
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (part->adt)
 				return GET_ACF_FLAG_PTR(part->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 		
 		default: /* unsupported */
 			return NULL;
@@ -1845,8 +1835,7 @@ static void *acf_dsmball_setting_ptr(bAnimListElem *ale, int setting, short *typ
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (mb->adt)
 				return GET_ACF_FLAG_PTR(mb->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 		
 		default: /* unsupported */
 			return NULL;
@@ -1922,8 +1911,7 @@ static void *acf_dsarm_setting_ptr(bAnimListElem *ale, int setting, short *type)
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (arm->adt)
 				return GET_ACF_FLAG_PTR(arm->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 		
 		default: /* unsupported */
 			return NULL;
@@ -2010,8 +1998,7 @@ static void *acf_dsntree_setting_ptr(bAnimListElem *ale, int setting, short *typ
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (ntree->adt)
 				return GET_ACF_FLAG_PTR(ntree->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 			
 		default: /* unsupported */
 			return NULL;
@@ -2035,6 +2022,82 @@ static bAnimChannelType ACF_DSNTREE =
 	acf_generic_dataexpand_setting_valid,   /* has setting */
 	acf_dsntree_setting_flag,               /* flag for setting */
 	acf_dsntree_setting_ptr                 /* pointer for setting */
+};
+
+/* LineStyle Expander  ------------------------------------------- */
+
+/* TODO: just get this from RNA? */
+static int acf_dslinestyle_icon(bAnimListElem *UNUSED(ale))
+{
+	return ICON_BRUSH_DATA; /* FIXME */
+}
+
+/* get the appropriate flag(s) for the setting when it is valid  */
+static int acf_dslinestyle_setting_flag(bAnimContext *UNUSED(ac), int setting, short *neg)
+{
+	/* clear extra return data first */
+	*neg = 0;
+	
+	switch (setting) {
+		case ACHANNEL_SETTING_EXPAND: /* expanded */
+			return LS_DS_EXPAND;
+			
+		case ACHANNEL_SETTING_MUTE: /* mute (only in NLA) */
+			return ADT_NLA_EVAL_OFF;
+			
+		case ACHANNEL_SETTING_VISIBLE: /* visible (only in Graph Editor) */
+			*neg = 1;
+			return ADT_CURVES_NOT_VISIBLE;
+			
+		case ACHANNEL_SETTING_SELECT: /* selected */
+			return ADT_UI_SELECTED;
+			
+		default: /* unsupported */
+			return 0;
+	}
+}
+
+/* get pointer to the setting */
+static void *acf_dslinestyle_setting_ptr(bAnimListElem *ale, int setting, short *type)
+{
+	FreestyleLineStyle *linestyle = (FreestyleLineStyle *)ale->data;
+	
+	/* clear extra return data first */
+	*type = 0;
+	
+	switch (setting) {
+		case ACHANNEL_SETTING_EXPAND: /* expanded */
+			return GET_ACF_FLAG_PTR(linestyle->flag, type);
+			
+		case ACHANNEL_SETTING_SELECT: /* selected */
+		case ACHANNEL_SETTING_MUTE: /* muted (for NLA only) */
+		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
+			if (linestyle->adt)
+				return GET_ACF_FLAG_PTR(linestyle->adt->flag, type);
+			return NULL;
+			
+		default: /* unsupported */
+			return NULL;
+	}
+}
+
+/* node tree expander type define */
+static bAnimChannelType ACF_DSLINESTYLE =
+{
+	"Line Style Expander",			/* type name */
+	
+	acf_generic_dataexpand_color,	/* backdrop color */
+	acf_generic_dataexpand_backdrop,/* backdrop */
+	acf_generic_indention_1,		/* indent level */
+	acf_generic_basic_offset,		/* offset */
+	
+	acf_generic_idblock_name,		/* name */
+	acf_generic_idblock_nameprop,	/* name prop */
+	acf_dslinestyle_icon,			/* icon */
+	
+	acf_generic_dataexpand_setting_valid,	/* has setting */
+	acf_dslinestyle_setting_flag,			/* flag for setting */
+	acf_dslinestyle_setting_ptr				/* pointer for setting */
 };
 
 /* Mesh Expander  ------------------------------------------- */
@@ -2087,8 +2150,7 @@ static void *acf_dsmesh_setting_ptr(bAnimListElem *ale, int setting, short *type
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (me->adt)
 				return GET_ACF_FLAG_PTR(me->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 			
 		default: /* unsupported */
 			return NULL;
@@ -2164,8 +2226,7 @@ static void *acf_dslat_setting_ptr(bAnimListElem *ale, int setting, short *type)
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (lt->adt)
 				return GET_ACF_FLAG_PTR(lt->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 			
 		default: /* unsupported */
 			return NULL;
@@ -2241,8 +2302,7 @@ static void *acf_dsspk_setting_ptr(bAnimListElem *ale, int setting, short *type)
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
 			if (spk->adt)
 				return GET_ACF_FLAG_PTR(spk->adt->flag, type);
-			else
-				return NULL;
+			return NULL;
 		
 		default: /* unsupported */
 			return NULL;
@@ -2749,6 +2809,7 @@ static void ANIM_init_channel_typeinfo_data(void)
 		animchannelTypeInfo[type++] = &ACF_DSTEX;        /* Texture Channel */
 		animchannelTypeInfo[type++] = &ACF_DSLAT;        /* Lattice Channel */
 		animchannelTypeInfo[type++] = &ACF_DSSPK;        /* Speaker Channel */
+		animchannelTypeInfo[type++] = &ACF_DSLINESTYLE;  /* LineStyle Channel */
 		
 		animchannelTypeInfo[type++] = &ACF_SHAPEKEY;     /* ShapeKey */
 		
@@ -2842,9 +2903,8 @@ short ANIM_channel_setting_get(bAnimContext *ac, bAnimListElem *ale, int setting
 						return ((*val) & flag) == 0;
 					else
 						return ((*val) & flag) != 0;
+					break;
 				}
-				break;
-					
 				case sizeof(short): /* short pointer for setting */
 				{
 					short *val = (short *)ptr;
@@ -2853,9 +2913,8 @@ short ANIM_channel_setting_get(bAnimContext *ac, bAnimListElem *ale, int setting
 						return ((*val) & flag) == 0;
 					else
 						return ((*val) & flag) != 0;
+					break;
 				}
-				break;
-					
 				case sizeof(char):  /* char pointer for setting */
 				{
 					char *val = (char *)ptr;
@@ -2864,8 +2923,8 @@ short ANIM_channel_setting_get(bAnimContext *ac, bAnimListElem *ale, int setting
 						return ((*val) & flag) == 0;
 					else
 						return ((*val) & flag) != 0;
+					break;
 				}
-				break;
 			}
 		}
 	}
@@ -2915,22 +2974,20 @@ void ANIM_channel_setting_set(bAnimContext *ac, bAnimListElem *ale, int setting,
 				{
 					int *val = (int *)ptr;
 					ACF_SETTING_SET(*val, flag, mode);
+					break;
 				}
-				break;
-					
 				case sizeof(short): /* short pointer for setting */
 				{
 					short *val = (short *)ptr;
 					ACF_SETTING_SET(*val, flag, mode);
+					break;
 				}
-				break;
-					
 				case sizeof(char):  /* char pointer for setting */
 				{
 					char *val = (char *)ptr;
 					ACF_SETTING_SET(*val, flag, mode);
+					break;
 				}
-				break;
 			}
 		}
 	}
@@ -3077,14 +3134,14 @@ void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float 
 				{
 					SpaceAction *saction = (SpaceAction *)ac->sl;
 					draw_sliders = (saction->flag & SACTION_SLIDERS);
+					break;
 				}
-				break;
 				case SPACE_IPO:
 				{
 					SpaceIpo *sipo = (SpaceIpo *)ac->sl;
 					draw_sliders = (sipo->flag & SIPO_SLIDERS);
+					break;
 				}
-				break;
 			}
 		}
 
@@ -3201,7 +3258,7 @@ static void achannel_setting_slider_cb(bContext *C, void *id_poin, void *fcu_poi
 	RNA_id_pointer_create(id, &id_ptr);
 	
 	/* try to resolve the path stored in the F-Curve */
-	if (RNA_path_resolve(&id_ptr, fcu->rna_path, &ptr, &prop)) {
+	if (RNA_path_resolve_property(&id_ptr, fcu->rna_path, &ptr, &prop)) {
 		/* set the special 'replace' flag if on a keyframe */
 		if (fcurve_frame_has_keyframe(fcu, cfra, 0))
 			flag |= INSERTKEY_REPLACE;
@@ -3239,7 +3296,7 @@ static void achannel_setting_slider_shapekey_cb(bContext *C, void *key_poin, voi
 	RNA_id_pointer_create((ID *)key, &id_ptr);
 	
 	/* try to resolve the path stored in the F-Curve */
-	if (RNA_path_resolve(&id_ptr, rna_path, &ptr, &prop)) {
+	if (RNA_path_resolve_property(&id_ptr, rna_path, &ptr, &prop)) {
 		/* find or create new F-Curve */
 		// XXX is the group name for this ok?
 		bAction *act = verify_adt_action((ID *)key, 1);
@@ -3364,6 +3421,7 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, bAnimChann
 				case ACHANNEL_SETTING_EXPAND: /* expanding - cannot flush, otherwise all would open/close at once */
 				default:
 					uiButSetFunc(but, achannel_setting_widget_cb, NULL, NULL);
+					break;
 			}
 		}
 	}
@@ -3467,14 +3525,14 @@ void ANIM_channel_draw_widgets(bContext *C, bAnimContext *ac, bAnimListElem *ale
 				{
 					SpaceAction *saction = (SpaceAction *)ac->sl;
 					draw_sliders = (saction->flag & SACTION_SLIDERS);
+					break;
 				}
-				break;
 				case SPACE_IPO:
 				{
 					SpaceIpo *sipo = (SpaceIpo *)ac->sl;
 					draw_sliders = (sipo->flag & SIPO_SLIDERS);
+					break;
 				}
-				break;
 			}
 		}
 		
@@ -3536,7 +3594,7 @@ void ANIM_channel_draw_widgets(bContext *C, bAnimContext *ac, bAnimListElem *ale
 					RNA_id_pointer_create(ale->id, &id_ptr);
 					
 					/* try to resolve the path */
-					if (RNA_path_resolve(&id_ptr, rna_path, &ptr, &prop)) {
+					if (RNA_path_resolve_property(&id_ptr, rna_path, &ptr, &prop)) {
 						uiBut *but;
 						
 						/* create the slider button, and assign relevant callback to ensure keyframes are inserted... */

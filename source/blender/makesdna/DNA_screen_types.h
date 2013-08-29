@@ -102,7 +102,7 @@ typedef struct Panel {		/* the part from uiBlock that needs saved in file */
 
 	char panelname[64], tabname[64];	/* defined as UI_MAX_NAME_STR */
 	char drawname[64];					/* panelname is identifier for restoring location */
-	short ofsx, ofsy, sizex, sizey;
+	int ofsx, ofsy, sizex, sizey;
 	short labelofs, pad;
 	short flag, runtime_flag;
 	short control;
@@ -112,28 +112,54 @@ typedef struct Panel {		/* the part from uiBlock that needs saved in file */
 	void *activedata;			/* runtime for panel manipulation */
 } Panel;
 
-typedef struct uiList {				/* some list UI data need to be saved in file */
+/* uiList dynamic data... */
+/* These two Lines with # tell makesdna this struct can be excluded. */
+#
+#
+typedef struct uiListDyn {
+	int height;                   /* Number of rows needed to draw all elements. */
+	int visual_height;            /* Actual visual height of the list (in rows). */
+	int visual_height_min;        /* Minimal visual height of the list (in rows). */
+
+	int items_len;                /* Number of items in collection. */
+	int items_shown;              /* Number of items actually visible after filtering. */
+
+	/* Filtering data. */
+	int *items_filter_flags;      /* items_len length. */
+	int *items_filter_neworder;   /* org_idx -> new_idx, items_len length. */
+} uiListDyn;
+
+typedef struct uiList {           /* some list UI data need to be saved in file */
 	struct uiList *next, *prev;
 
-	struct uiListType *type;		/* runtime */
-	void *padp;
+	struct uiListType *type;      /* runtime */
 
-	char list_id[64];				/* defined as UI_MAX_NAME_STR */
+	char list_id[64];             /* defined as UI_MAX_NAME_STR */
 
-	int layout_type;				/* How items are layedout in the list */
-	int padi;
+	int layout_type;              /* How items are layedout in the list */
+	int flag;
 
 	int list_scroll;
-	int list_size;
+	int list_grip;
 	int list_last_len;
-	int list_grip_size;
-/*	char list_search[64]; */
+	int padi1;
+
+	/* Filtering data. */
+	char filter_byname[64];	      /* defined as UI_MAX_NAME_STR */
+	int filter_flag;
+	int filter_orderby_flag;
+
+	/* Custom sub-classes properties. */
+	IDProperty *properties;
+
+	/* Dynamic data (runtime). */
+	uiListDyn *dyn_data;
 } uiList;
 
 typedef struct ScrArea {
 	struct ScrArea *next, *prev;
 	
-	ScrVert *v1, *v2, *v3, *v4;
+	ScrVert *v1, *v2, *v3, *v4;		/* ordered (bl, tl, tr, br) */
 	bScreen *full;			/* if area==full, this is the parent */
 
 	rcti totrct;			/* rect bound by v1 v2 v3 v4 */
@@ -195,7 +221,7 @@ typedef struct ARegion {
 /* swap */
 #define WIN_BACK_OK		1
 #define WIN_FRONT_OK	2
-#define WIN_EQUAL		3
+// #define WIN_EQUAL		3  // UNUSED
 
 /* area->flag */
 #define HEADER_NO_PULLDOWN		1
@@ -217,7 +243,6 @@ typedef struct ARegion {
 /* screen->full */
 #define SCREENNORMAL	0
 #define SCREENFULL		1
-#define SCREENFULLTEMP	2
 
 
 /* Panel->snap - for snapping to screen edges */
@@ -233,12 +258,37 @@ typedef struct ARegion {
 #define PNL_DEFAULT_CLOSED		1
 #define PNL_NO_HEADER			2
 
-/* uilist layout_type */
+/* uiList layout_type */
 enum {
 	UILST_LAYOUT_DEFAULT          = 0,
 	UILST_LAYOUT_COMPACT          = 1,
 	UILST_LAYOUT_GRID             = 2,
 };
+
+/* uiList flag */
+enum {
+	UILST_SCROLL_TO_ACTIVE_ITEM   = 1 << 0,          /* Scroll list to make active item visible. */
+	UILST_RESIZING                = 1 << 1,          /* We are currently resizing, deactivate autosize! */
+};
+
+/* uiList filter flags (dyn_data) */
+enum {
+	UILST_FLT_ITEM      = 1 << 31,  /* This item has passed the filter process successfully. */
+};
+
+/* uiList filter options */
+enum {
+	UILST_FLT_SHOW      = 1 << 0,          /* Show filtering UI. */
+	UILST_FLT_EXCLUDE   = UILST_FLT_ITEM,  /* Exclude filtered items, *must* use this same value. */
+};
+
+/* uiList filter orderby type */
+enum {
+	UILST_FLT_ORDERBY_NAME         = 1 << 0,
+	UILST_FLT_ORDERBY_REVERSE      = 1 << 31  /* Special value, bitflag used to reverse order! */
+};
+
+#define UILST_FLT_ORDERBY_MASK (((unsigned int)UILST_FLT_ORDERBY_REVERSE) - 1)
 
 /* regiontype, first two are the default set */
 /* Do NOT change order, append on end. Types are hardcoded needed */

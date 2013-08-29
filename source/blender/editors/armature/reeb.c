@@ -26,12 +26,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_context.h"
-
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
 #include "BLI_edgehash.h"
 #include "BLI_ghash.h"
+
+#include "BKE_context.h"
 
 #include "reeb.h"
 
@@ -198,7 +198,7 @@ ReebGraph *newReebGraph(void)
 	rg = MEM_callocN(sizeof(ReebGraph), "reeb graph");
 	
 	rg->totnodes = 0;
-	rg->emap = BLI_edgehash_new();
+	rg->emap = BLI_edgehash_new(__func__);
 	
 	
 	rg->free_arc = REEB_freeArc;
@@ -1661,7 +1661,7 @@ int filterSmartReebGraph(ReebGraph *UNUSED(rg), float UNUSED(threshold))
 			float avg_vec[3] = {0, 0, 0};
 			
 			for (BLI_ghashIterator_init(&ghi, arc->faces);
-			     BLI_ghashIterator_notDone(&ghi);
+			     BLI_ghashIterator_done(&ghi) == false;
 			     BLI_ghashIterator_step(&ghi))
 			{
 				EditFace *efa = BLI_ghashIterator_getValue(&ghi);
@@ -2047,7 +2047,7 @@ void mergeArcFaces(ReebGraph *UNUSED(rg), ReebArc *aDst, ReebArc *aSrc)
 	GHashIterator ghi;
 	
 	for (BLI_ghashIterator_init(&ghi, aSrc->faces);
-	     BLI_ghashIterator_notDone(&ghi);
+	     BLI_ghashIterator_done(&ghi) == false;
 	     BLI_ghashIterator_step(&ghi))
 	{
 		EditFace *efa = BLI_ghashIterator_getValue(&ghi);

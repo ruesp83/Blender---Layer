@@ -97,8 +97,8 @@ static struct WMInitStruct {
 	int windowstate;
 	WinOverrideFlag override_flag;
 	
-	int native_pixels;
-} wm_init_state = {0, 0, 0, 0, GHOST_kWindowStateNormal, 0, 1};
+	bool native_pixels;
+} wm_init_state = {0, 0, 0, 0, GHOST_kWindowStateNormal, 0, true};
 
 /* ******** win open & close ************ */
 
@@ -525,6 +525,7 @@ void WM_window_open_temp(bContext *C, rcti *position, int type)
 {
 	wmWindow *win;
 	ScrArea *sa;
+	Scene *scene = CTX_data_scene(C);
 	
 	/* changes rect to fit within desktop */
 	wm_window_check_position(position);
@@ -550,9 +551,16 @@ void WM_window_open_temp(bContext *C, rcti *position, int type)
 		wm_window_raise(win);
 	}
 	
-	/* add new screen? */
-	if (win->screen == NULL)
-		win->screen = ED_screen_add(win, CTX_data_scene(C), "temp");
+	if (win->screen == NULL) {
+		/* add new screen */
+		win->screen = ED_screen_add(win, scene, "temp");
+	}
+	else {
+		/* switch scene for rendering */
+		if (win->screen->scene != scene)
+			ED_screen_set_scene(C, win->screen, scene);
+	}
+
 	win->screen->temp = 1; 
 	
 	/* make window active, and validate/resize */
@@ -677,10 +685,8 @@ static int query_qual(modifierKeyType qual)
 	return val;
 }
 
-void wm_window_make_drawable(bContext *C, wmWindow *win) 
+void wm_window_make_drawable(wmWindowManager *wm, wmWindow *win) 
 {
-	wmWindowManager *wm = CTX_wm_manager(C);
-
 	if (win != wm->windrawable && win->ghostwin) {
 //		win->lmbut = 0;	/* keeps hanging when mousepressed while other window opened */
 		
@@ -713,6 +719,11 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 		GHOST_TEventDataPtr data = GHOST_GetEventData(evt);
 		wmWindow *win;
 		
+		/* Ghost now can call this function for life resizes, but it should return if WM didn't initialize yet.
+		 * Can happen on file read (especially full size window)  */
+		if ((wm->initialized & WM_INIT_WINDOW) == 0) {
+			return 1;
+		}
 		if (!ghostwin) {
 			/* XXX - should be checked, why are we getting an event here, and */
 			/* what is it? */
@@ -786,7 +797,7 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 				
 				win->addmousemove = 1;   /* enables highlighted buttons */
 				
-				wm_window_make_drawable(C, win);
+				wm_window_make_drawable(wm, win);
 
 				/* window might be focused by mouse click in configuration of window manager
 				 * when focus is not following mouse
@@ -797,7 +808,7 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 				 * currently it seems to be common practice to generate new event for, but probably
 				 * we'll need utility function for this? (sergey)
 				 */
-				event = *(win->eventstate);
+				wm_event_init_from_window(win, &event);
 				event.type = MOUSEMOVE;
 				event.prevx = event.x;
 				event.prevy = event.y;
@@ -817,7 +828,7 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 					printf("%s: ghost redraw %d\n", __func__, win->winid);
 				}
 				
-				wm_window_make_drawable(C, win);
+				wm_window_make_drawable(wm, win);
 				WM_event_add_notifier(C, NC_WINDOW, NULL);
 
 				break;
@@ -898,10 +909,17 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 							}
 						}
 					
-						wm_window_make_drawable(C, win);
+						wm_window_make_drawable(wm, win);
 						wm_draw_window_clear(win);
 						WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
 						WM_event_add_notifier(C, NC_WINDOW | NA_EDITED, NULL);
+						
+#if defined(__APPLE__) || defined(WIN32)
+						/* OSX and Win32 don't return to the mainloop while resize */
+						wm_event_do_handlers(C);
+						wm_event_do_notifiers(C);
+						wm_draw_update(C);
+#endif
 					}
 				}
 				break;
@@ -939,7 +957,7 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 				win->eventstate->x = wx;
 				win->eventstate->y = wy;
 				
-				event = *(win->eventstate);  /* copy last state, like mouse coords */
+				wm_event_init_from_window(win, &event);  /* copy last state, like mouse coords */
 				
 				/* activate region */
 				event.type = MOUSEMOVE;
@@ -1047,7 +1065,8 @@ static int wm_window_timer(const bContext *C)
 				else if (wt->event_type == TIMERAUTOSAVE)
 					wm_autosave_timer(C, wm, wt);
 				else if (win) {
-					wmEvent event = *(win->eventstate);
+					wmEvent event;
+					wm_event_init_from_window(win, &event);
 					
 					event.type = wt->event_type;
 					event.val = 0;
@@ -1305,6 +1324,16 @@ void wm_window_swap_buffers(wmWindow *win)
 #endif
 }
 
+void wm_window_set_swap_interval (wmWindow *win, int interval)
+{
+	GHOST_SetSwapInterval(win->ghostwin, interval);
+}
+
+int wm_window_get_swap_interval (wmWindow *win)
+{
+	return GHOST_GetSwapInterval(win->ghostwin);
+}
+
 
 /* ******************* exported api ***************** */
 
@@ -1332,7 +1361,7 @@ void WM_init_state_normal_set(void)
 	wm_init_state.override_flag |= WIN_OVERRIDE_WINSTATE;
 }
 
-void WM_init_native_pixels(int do_it)
+void WM_init_native_pixels(bool do_it)
 {
 	wm_init_state.native_pixels = do_it;
 }

@@ -30,6 +30,8 @@
  */
 
 
+#include <GL/glxew.h>
+
 #include "GHOST_WindowX11.h"
 #include "GHOST_SystemX11.h"
 #include "STR_String.h"
@@ -211,7 +213,9 @@ GHOST_WindowX11(
 		attributes[i++] = GLX_BLUE_SIZE;  attributes[i++] = 1;
 		attributes[i++] = GLX_GREEN_SIZE; attributes[i++] = 1;
 		attributes[i++] = GLX_DEPTH_SIZE; attributes[i++] = 1;
+#ifdef GHOST_OPENGL_ALPHA
 		attributes[i++] = GLX_ALPHA_SIZE; attributes[i++] = 1;
+#endif
 		/* GLX >= 1.4 required for multi-sample */
 		if (samples && (glxVersionMajor >= 1) && (glxVersionMinor >= 4)) {
 			attributes[i++] = GLX_SAMPLE_BUFFERS; attributes[i++] = 1;
@@ -1510,4 +1514,24 @@ endFullScreen() const
 	XUngrabPointer(m_display, CurrentTime);
 
 	return GHOST_kSuccess;
+}
+
+GHOST_TSuccess
+GHOST_WindowX11::
+setSwapInterval(int interval) {
+	if (!GLX_EXT_swap_control)
+		return GHOST_kFailure;
+	glXSwapIntervalEXT(m_display, m_window, interval);
+	return GHOST_kSuccess;
+}
+
+int
+GHOST_WindowX11::
+getSwapInterval() {
+	if (GLX_EXT_swap_control) {
+		unsigned int value;
+		glXQueryDrawable(m_display, m_window, GLX_SWAP_INTERVAL_EXT, &value);
+		return (int)value;
+	}
+	return 0;
 }

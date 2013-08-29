@@ -773,7 +773,7 @@ static void child_get_inverse_matrix(Scene *scene, Object *ob, bConstraint *con,
 			 * the effect of the constraint
 			 */
 			invert_m4_m4(imat, pchan->pose_mat);
-			mult_m4_m4m4(tmat, pmat, imat);
+			mul_m4_m4m4(tmat, pmat, imat);
 			invert_m4_m4(invmat, tmat);
 
 			/* 5. restore constraints */
@@ -1572,12 +1572,13 @@ static short get_new_constraint_target(bContext *C, int con_type, Object **tar_o
 	
 	/* if still not found, add a new empty to act as a target (if allowed) */
 	if ((found == 0) && (add)) {
+		Main *bmain = CTX_data_main(C);
 		Scene *scene = CTX_data_scene(C);
 		Base *base = BASACT, *newbase = NULL;
 		Object *obt;
 		
 		/* add new target object */
-		obt = BKE_object_add(scene, OB_EMPTY);
+		obt = BKE_object_add(bmain, scene, OB_EMPTY);
 		
 		/* set layers OK */
 		newbase = BASACT;

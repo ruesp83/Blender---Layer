@@ -102,6 +102,13 @@ void interp_v4_v4v4v4v4(float p[4], const float v1[4], const float v2[4], const 
 	p[3] = v1[3] * w[0] + v2[3] * w[1] + v3[3] * w[2] + v4[3] * w[3];
 }
 
+void interp_v3_v3v3v3_uv(float p[3], const float v1[3], const float v2[3], const float v3[3], const float uv[2])
+{
+	p[0] = v1[0] + ((v2[0] - v1[0]) * uv[0]) + ((v3[0] - v1[0]) * uv[1]);
+	p[1] = v1[1] + ((v2[1] - v1[1]) * uv[0]) + ((v3[1] - v1[1]) * uv[1]);
+	p[2] = v1[2] + ((v2[2] - v1[2]) * uv[0]) + ((v3[2] - v1[2]) * uv[1]);
+}
+
 void mid_v3_v3v3(float v[3], const float v1[3], const float v2[3])
 {
 	v[0] = 0.5f * (v1[0] + v2[0]);
@@ -120,6 +127,57 @@ void mid_v3_v3v3v3(float v[3], const float v1[3], const float v2[3], const float
 	v[0] = (v1[0] + v2[0] + v3[0]) / 3.0f;
 	v[1] = (v1[1] + v2[1] + v3[1]) / 3.0f;
 	v[2] = (v1[2] + v2[2] + v3[2]) / 3.0f;
+}
+
+/**
+ * Specialized function for calculating normals.
+ * fastpath for:
+ *
+ * \code{.c}
+ * add_v3_v3v3(r, a, b);
+ * normalize_v3(r)
+ * mul_v3_fl(r, angle_normalized_v3v3(a, b) / M_PI_2);
+ * \endcode
+ *
+ * We can use the length of (a + b) to calculate the angle.
+ */
+void mid_v3_v3v3_angle_weighted(float r[3], const float a[3], const float b[3])
+{
+	/* trick, we want the middle of 2 normals as well as the angle between them
+	 * avoid multiple calculations by */
+	float angle;
+
+	/* double check they are normalized */
+	BLI_ASSERT_UNIT_V3(a);
+	BLI_ASSERT_UNIT_V3(b);
+
+	add_v3_v3v3(r, a, b);
+	angle = ((float)(1.0 / (M_PI / 2.0)) *
+	         /* normally we would only multiply by 2,
+	          * but instead of an angle make this 0-1 factor */
+	         2.0f) *
+	        acosf(normalize_v3(r) / 2.0f);
+	mul_v3_fl(r, angle);
+}
+/**
+ * Same as mid_v3_v3v3_angle_weighted
+ * but \a r is assumed to be accumulated normals, divided by their total.
+ */
+void mid_v3_angle_weighted(float r[3])
+{
+	/* trick, we want the middle of 2 normals as well as the angle between them
+	 * avoid multiple calculations by */
+	float angle;
+
+	/* double check they are normalized */
+	BLI_assert(len_squared_v3(r) <= 1.0f + FLT_EPSILON);
+
+	angle = ((float)(1.0 / (M_PI / 2.0)) *
+	         /* normally we would only multiply by 2,
+	          * but instead of an angle make this 0-1 factor */
+	         2.0f) *
+	        acosf(normalize_v3(r));
+	mul_v3_fl(r, angle);
 }
 
 /**
@@ -484,6 +542,16 @@ void print_v4(const char *str, const float v[4])
 	printf("%s: %.3f %.3f %.3f %.3f\n", str, v[0], v[1], v[2], v[3]);
 }
 
+void print_vn(const char *str, const float v[], const int n)
+{
+	int i = 0;
+	printf("%s[%d]:", str, n);
+	while (i < n) {
+		printf(" %.3f", v[i++]);
+	}
+	printf("\n");
+}
+
 void minmax_v3v3_v3(float min[3], float max[3], const float vec[3])
 {
 	if (min[0] > vec[0]) min[0] = vec[0];
@@ -525,6 +593,28 @@ void dist_ensure_v2_v2fl(float v1[2], const float v2[2], const float dist)
 		normalize_v2(nor);
 		madd_v2_v2v2fl(v1, v2, nor, dist);
 	}
+}
+
+void axis_sort_v3(const float axis_values[3], int r_axis_order[3])
+{
+	float v[3];
+	copy_v3_v3(v, axis_values);
+
+#define SWAP_AXIS(a, b) { \
+	SWAP(float, v[a],            v[b]); \
+	SWAP(int,   r_axis_order[a], r_axis_order[b]); \
+} (void)0
+
+	if (v[0] < v[1]) {
+		if (v[2] < v[0]) {  SWAP_AXIS(0, 2); }
+	}
+	else {
+		if (v[1] < v[2]) { SWAP_AXIS(0, 1); }
+		else             { SWAP_AXIS(0, 2); }
+	}
+	if (v[2] < v[1])     { SWAP_AXIS(1, 2); }
+
+#undef SWAP_AXIS
 }
 
 /***************************** Array Functions *******************************/

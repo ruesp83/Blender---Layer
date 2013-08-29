@@ -15,11 +15,6 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- * The Original Code is: none of this file.
- *
  * Contributors: Brecht Van Lommel.
  *
  * ***** END GPL LICENSE BLOCK *****
@@ -338,7 +333,7 @@ StrandShadeCache *strand_shade_cache_create(void)
 void strand_shade_cache_free(StrandShadeCache *cache)
 {
 	BLI_ghash_free(cache->refcounthash, NULL, NULL);
-	BLI_ghash_free(cache->resulthash, (GHashKeyFreeFP)MEM_freeN, NULL);
+	BLI_ghash_free(cache->resulthash, MEM_freeN, NULL);
 	BLI_memarena_free(cache->memarena);
 	MEM_freeN(cache);
 }
@@ -377,7 +372,7 @@ static void strand_shade_get(Render *re, StrandShadeCache *cache, ShadeSample *s
 	/* lower reference count and remove if not needed anymore by any samples */
 	(*refcount)--;
 	if (*refcount == 0) {
-		BLI_ghash_remove(cache->resulthash, &pair, (GHashKeyFreeFP)MEM_freeN, NULL);
+		BLI_ghash_remove(cache->resulthash, &pair, MEM_freeN, NULL);
 		BLI_ghash_remove(cache->refcounthash, &pair, NULL, NULL);
 	}
 }
@@ -412,7 +407,7 @@ void strand_shade_unref(StrandShadeCache *cache, ObjectInstanceRen *obi, StrandV
 
 	(*refcount)--;
 	if (*refcount == 0) {
-		BLI_ghash_remove(cache->resulthash, &pair, (GHashKeyFreeFP)MEM_freeN, NULL);
+		BLI_ghash_remove(cache->resulthash, &pair, MEM_freeN, NULL);
 		BLI_ghash_remove(cache->refcounthash, &pair, NULL, NULL);
 	}
 }
@@ -788,7 +783,7 @@ int zbuffer_strands_abuf(Render *re, RenderPart *pa, APixstrand *apixbuf, ListBa
 	ObjectRen *obr;
 	ObjectInstanceRen *obi;
 	ZSpan zspan;
-	StrandRen *strand=0;
+	StrandRen *strand = NULL;
 	StrandVert *svert;
 	StrandBound *sbound;
 	StrandPart spart;
@@ -858,7 +853,7 @@ int zbuffer_strands_abuf(Render *re, RenderPart *pa, APixstrand *apixbuf, ListBa
 
 		/* compute matrix and try clipping whole object */
 		if (obi->flag & R_TRANSFORMED)
-			mult_m4_m4m4(obwinmat, winmat, obi->mat);
+			mul_m4_m4m4(obwinmat, winmat, obi->mat);
 		else
 			copy_m4_m4(obwinmat, winmat);
 

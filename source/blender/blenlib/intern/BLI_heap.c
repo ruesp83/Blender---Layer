@@ -15,21 +15,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- * The Original Code is: none of this file.
- *
  * Contributor(s): Brecht Van Lommel
  *
  * ***** END GPL LICENSE BLOCK *****
- * A heap / priority queue ADT.
  */
 
 /** \file blender/blenlib/intern/BLI_heap.c
  *  \ingroup bli
+ *
+ * A heap / priority queue ADT.
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "MEM_guardedalloc.h"
@@ -37,6 +34,14 @@
 #include "BLI_utildefines.h"
 #include "BLI_memarena.h"
 #include "BLI_heap.h"
+
+#ifdef __GNUC__
+#  pragma GCC diagnostic error "-Wsign-conversion"
+#  if (__GNUC__ * 100 + __GNUC_MINOR__) >= 406  /* gcc4.6+ only */
+#    pragma GCC diagnostic error "-Wsign-compare"
+#    pragma GCC diagnostic error "-Wconversion"
+#  endif
+#endif
 
 /***/
 
@@ -158,7 +163,7 @@ HeapNode *BLI_heap_insert(Heap *heap, float value, void *ptr)
 {
 	HeapNode *node;
 
-	if (UNLIKELY((heap->size + 1) > heap->bufsize)) {
+	if (UNLIKELY(heap->size >= heap->bufsize)) {
 		heap->bufsize *= 2;
 		heap->tree = MEM_reallocN(heap->tree, heap->bufsize * sizeof(*heap->tree));
 	}
@@ -179,7 +184,7 @@ HeapNode *BLI_heap_insert(Heap *heap, float value, void *ptr)
 
 	heap->size++;
 
-	heap_up(heap, heap->size - 1);
+	heap_up(heap, node->index);
 
 	return node;
 }
@@ -203,6 +208,8 @@ void *BLI_heap_popmin(Heap *heap)
 {
 	void *ptr = heap->tree[0]->ptr;
 
+	BLI_assert(heap->size != 0);
+
 	heap->tree[0]->ptr = heap->freenodes;
 	heap->freenodes = heap->tree[0];
 
@@ -222,6 +229,8 @@ void *BLI_heap_popmin(Heap *heap)
 void BLI_heap_remove(Heap *heap, HeapNode *node)
 {
 	unsigned int i = node->index;
+
+	BLI_assert(heap->size != 0);
 
 	while (i > 0) {
 		unsigned int p = HEAP_PARENT(i);

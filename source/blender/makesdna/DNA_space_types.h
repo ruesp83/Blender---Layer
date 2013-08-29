@@ -72,6 +72,8 @@ struct wmTimer;
 struct MovieClip;
 struct MovieClipScopes;
 struct Mask;
+struct GHash;
+struct BLI_mempool;
 
 
 /* SpaceLink (Base) ==================================== */
@@ -130,8 +132,9 @@ typedef struct SpaceButs {
 	short mainb, mainbo, mainbuser; /* context tabs */
 	short re_align, align;          /* align for panels */
 	short preview;                  /* preview is signal to refresh */
-	short texture_context;          /* texture context selector (material, world, brush)*/
-	char flag, pad;
+	/* texture context selector (material, lamp, particles, world, other)*/
+	short texture_context, texture_context_prev;
+	char flag, pad[7];
 	
 	void *path;                     /* runtime */
 	int pathflag, dataicon;         /* runtime */
@@ -183,24 +186,29 @@ typedef enum eSpaceButtons_Context {
 	BCONTEXT_MODIFIER = 10,
 	BCONTEXT_CONSTRAINT = 11,
 	BCONTEXT_BONE_CONSTRAINT = 12,
+	BCONTEXT_RENDER_LAYER = 13,
 	
 	/* always as last... */
 	BCONTEXT_TOT
 } eSpaceButtons_Context;
 
 /* sbuts->flag */
-#define SB_PRV_OSA          1
-#define SB_PIN_CONTEXT      2
-//#define SB_WORLD_TEX		4	//not used anymore
-//#define SB_BRUSH_TEX		8	//not used anymore	
-#define SB_SHADING_CONTEXT  16
+typedef enum eSpaceButtons_Flag {
+	SB_PRV_OSA = (1 << 0),
+	SB_PIN_CONTEXT = (1 << 1),
+	/* SB_WORLD_TEX = (1 << 2), */ /* not used anymore */
+	/* SB_BRUSH_TEX = (1 << 3), */ /* not used anymore */
+	SB_TEX_USER_LIMITED = (1 << 3), /* Do not add materials, particles, etc. in TemplateTextureUser list. */
+	SB_SHADING_CONTEXT = (1 << 4),
+} eSpaceButtons_Flag;
 
 /* sbuts->texture_context */
 typedef enum eSpaceButtons_Texture_Context {
-	SB_TEXC_MAT_OR_LAMP = 0,
+	SB_TEXC_MATERIAL = 0,
 	SB_TEXC_WORLD = 1,
-	SB_TEXC_BRUSH = 2,
+	SB_TEXC_LAMP = 2,
 	SB_TEXC_PARTICLES = 3,
+	SB_TEXC_OTHER = 4,
 } eSpaceButtons_Texture_Context;
 
 /* sbuts->align */
@@ -211,7 +219,7 @@ typedef enum eSpaceButtons_Align {
 	BUT_AUTO = 3,
 } eSpaceButtons_Align;
 
-/* sbuts->scaflag */		
+/* sbuts->scaflag */
 #define BUTS_SENS_SEL           1
 #define BUTS_SENS_ACT           2
 #define BUTS_SENS_LINK          4
@@ -239,13 +247,23 @@ typedef struct SpaceOops {
 	View2D v2d DNA_DEPRECATED;  /* deprecated, copied to region */
 	
 	ListBase tree;
-	struct TreeStore *treestore;
+	
+	/* treestore is an ordered list of TreeStoreElem's from outliner tree;
+	 * Note that treestore may contain duplicate elements if element
+	 * is used multiple times in outliner tree (e. g. linked objects)
+	 * Also note that BLI_mempool can not be read/written in DNA directly,
+	 * therefore readfile.c/writefile.c linearize treestore into TreeStore structure
+	 */
+	struct BLI_mempool *treestore;
 	
 	/* search stuff */
 	char search_string[32];
 	struct TreeStoreElem search_tse;
 
 	short flag, outlinevis, storeflag, search_flags;
+	
+	/* pointers to treestore elements, grouped by (id, type, nr) in hashtable for faster searching */
+	void *treehash;
 } SpaceOops;
 
 
@@ -890,6 +908,7 @@ typedef struct bNodeTreePath {
 	struct bNodeTree *nodetree;
 	bNodeInstanceKey parent_key;	/* base key for nodes in this tree instance */
 	int pad;
+	float view_center[2];			/* v2d center point, so node trees can have different offsets in editors */
 	/* XXX this is not automatically updated when node names are changed! */
 	char node_name[64];		/* MAX_NAME */
 } bNodeTreePath;
@@ -1074,6 +1093,8 @@ typedef struct SpaceClip {
 
 	int around, pad4;             /* pivot point for transforms */
 
+	float cursor[2];              /* Mask editor 2d cursor */
+
 	MaskSpaceInfo mask_info;
 } SpaceClip;
 
@@ -1124,11 +1145,6 @@ typedef enum eSpaceClip_GPencil_Source {
 } eSpaceClip_GPencil_Source;
 
 /* **************** SPACE DEFINES ********************* */
-
-/* headerbuttons: 450-499 */
-#define B_IMASELHOME        451
-#define B_IMASELREMOVEBIP   452
-
 
 /* space types, moved from DNA_screen_types.h */
 /* Do NOT change order, append on end. types are hardcoded needed */

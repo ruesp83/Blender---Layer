@@ -101,7 +101,7 @@ static int wm_keymap_item_equals_result(wmKeyMapItem *a, wmKeyMapItem *b)
 	if (strcmp(a->idname, b->idname) != 0)
 		return 0;
 	
-	if (!RNA_struct_equals(a->ptr, b->ptr))
+	if (!RNA_struct_equals(a->ptr, b->ptr, true))
 		return 0;
 	
 	if ((a->flag & KMI_INACTIVE) != (b->flag & KMI_INACTIVE))
@@ -220,23 +220,12 @@ void WM_keyconfig_free(wmKeyConfig *keyconf)
 	MEM_freeN(keyconf);
 }
 
-static wmKeyConfig *wm_keyconfig_list_find(ListBase *lb, char *idname)
-{
-	wmKeyConfig *kc;
-
-	for (kc = lb->first; kc; kc = kc->next)
-		if (0 == strncmp(idname, kc->idname, KMAP_MAX_NAME))
-			return kc;
-	
-	return NULL;
-}
-
 static wmKeyConfig *WM_keyconfig_active(wmWindowManager *wm)
 {
 	wmKeyConfig *keyconf;
 
 	/* first try from preset */
-	keyconf = wm_keyconfig_list_find(&wm->keyconfigs, U.keyconfigstr);
+	keyconf = BLI_findstring(&wm->keyconfigs, U.keyconfigstr, offsetof(wmKeyConfig, idname));
 	if (keyconf)
 		return keyconf;
 	
@@ -803,9 +792,10 @@ const char *WM_key_event_string(short type)
 	return "";
 }
 
-int WM_keymap_item_to_string(wmKeyMapItem *kmi, char *str, int len)
+int WM_keymap_item_to_string(wmKeyMapItem *kmi, char *str, const int len)
 {
 	char buf[128];
+	char *p = buf;
 
 	buf[0] = 0;
 
@@ -814,28 +804,28 @@ int WM_keymap_item_to_string(wmKeyMapItem *kmi, char *str, int len)
 	    kmi->alt == KM_ANY &&
 	    kmi->oskey == KM_ANY)
 	{
-		strcat(buf, "Any ");
+		p += BLI_strcpy_rlen(p, "Any ");
 	}
 	else {
 		if (kmi->shift)
-			strcat(buf, "Shift ");
+			p += BLI_strcpy_rlen(p, "Shift ");
 
 		if (kmi->ctrl)
-			strcat(buf, "Ctrl ");
+			p += BLI_strcpy_rlen(p, "Ctrl ");
 
 		if (kmi->alt)
-			strcat(buf, "Alt ");
+			p += BLI_strcpy_rlen(p, "Alt ");
 
 		if (kmi->oskey)
-			strcat(buf, "Cmd ");
+			p += BLI_strcpy_rlen(p, "Cmd ");
 	}
 		
 	if (kmi->keymodifier) {
-		strcat(buf, WM_key_event_string(kmi->keymodifier));
-		strcat(buf, " ");
+		p += BLI_strcpy_rlen(p, WM_key_event_string(kmi->keymodifier));
+		p += BLI_strcpy_rlen(p, " ");
 	}
 
-	strcat(buf, WM_key_event_string(kmi->type));
+	p += BLI_strcpy_rlen(p, WM_key_event_string(kmi->type));
 	return BLI_strncpy_rlen(str, buf, len);
 }
 
@@ -944,9 +934,9 @@ static wmKeyMapItem *wm_keymap_item_find_props(
 
 static wmKeyMapItem *wm_keymap_item_find(
         const bContext *C, const char *opname, int opcontext,
-        IDProperty *properties, const short hotkey, const short UNUSED(sloppy), wmKeyMap **keymap_r)
+        IDProperty *properties, const short hotkey, const bool strict, wmKeyMap **keymap_r)
 {
-	wmKeyMapItem *found = wm_keymap_item_find_props(C, opname, opcontext, properties, 1, hotkey, keymap_r);
+	wmKeyMapItem *found = wm_keymap_item_find_props(C, opname, opcontext, properties, strict, hotkey, keymap_r);
 
 	if (!found && properties) {
 		wmOperatorType *ot = WM_operatortype_find(opname, TRUE);
@@ -958,8 +948,15 @@ static wmKeyMapItem *wm_keymap_item_find(
 
 			RNA_pointer_create(NULL, ot->srna, properties_default, &opptr);
 
-			if (WM_operator_properties_default(&opptr, TRUE)) {
-				found = wm_keymap_item_find_props(C, opname, opcontext, properties_default, 0, hotkey, keymap_r);
+			if (WM_operator_properties_default(&opptr, true) ||
+			    (!strict && ot->prop && RNA_property_is_set(&opptr, ot->prop)))
+			{
+				/* for operator that has enum menu, unset it so it always matches */
+				if (!strict && ot->prop) {
+					RNA_property_unset(&opptr, ot->prop);
+				}
+
+				found = wm_keymap_item_find_props(C, opname, opcontext, properties_default, false, hotkey, keymap_r);
 			}
 
 			IDP_FreeProperty(properties_default);
@@ -972,9 +969,9 @@ static wmKeyMapItem *wm_keymap_item_find(
 
 char *WM_key_event_operator_string(
         const bContext *C, const char *opname, int opcontext,
-        IDProperty *properties, const short sloppy, char *str, int len)
+        IDProperty *properties, const bool strict, char *str, int len)
 {
-	wmKeyMapItem *kmi = wm_keymap_item_find(C, opname, opcontext, properties, 0, sloppy, NULL);
+	wmKeyMapItem *kmi = wm_keymap_item_find(C, opname, opcontext, properties, 0, strict, NULL);
 	
 	if (kmi) {
 		WM_keymap_item_to_string(kmi, str, len);
@@ -988,7 +985,7 @@ int WM_key_event_operator_id(
         const bContext *C, const char *opname, int opcontext,
         IDProperty *properties, int hotkey, wmKeyMap **keymap_r)
 {
-	wmKeyMapItem *kmi = wm_keymap_item_find(C, opname, opcontext, properties, hotkey, TRUE, keymap_r);
+	wmKeyMapItem *kmi = wm_keymap_item_find(C, opname, opcontext, properties, hotkey, true, keymap_r);
 	
 	if (kmi)
 		return kmi->id;
@@ -1301,7 +1298,11 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
 		km = WM_keymap_find_all(C, "3D View", sl->spacetype, 0);
 	}
 	else if (strstr(opname, "OBJECT_OT")) {
-		km = WM_keymap_find_all(C, "Object Mode", 0, 0);
+		/* exception, this needs to work outside object mode too */
+		if (strstr(opname, "OBJECT_OT_mode_set"))
+			km = WM_keymap_find_all(C, "Object Non-modal", 0, 0);
+		else
+			km = WM_keymap_find_all(C, "Object Mode", 0, 0);
 	}
 
 	

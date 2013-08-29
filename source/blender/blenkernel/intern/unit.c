@@ -93,6 +93,12 @@ typedef struct bUnitDef {
 
 #define B_UNIT_DEF_NONE 0
 #define B_UNIT_DEF_SUPPRESS 1 /* Use for units that are not used enough to be translated into for common use */
+#define B_UNIT_DEF_TENTH 2 /* Display a unit even if its value is 0.1, eg 0.1mm instead of 100um */
+
+/* workaround encoding issue with "µm", bug [#36090] */
+#define B_UNIT_CHAR_MICRO "\xb5"
+#define UM B_UNIT_CHAR_MICRO"m"
+#define US B_UNIT_CHAR_MICRO"s"
 
 /* define a single unit */
 typedef struct bUnitCollection {
@@ -114,8 +120,8 @@ static struct bUnitDef buMetricLenDef[] = {
 	{"meter", "meters",             "m",   NULL, "Meters",     UN_SC_M, 0.0,      B_UNIT_DEF_NONE},     /* base unit */
 	{"decimeter", "decimeters",     "dm",  NULL, "10 Centimeters", UN_SC_DM, 0.0, B_UNIT_DEF_SUPPRESS},
 	{"centimeter", "centimeters",   "cm",  NULL, "Centimeters", UN_SC_CM, 0.0,    B_UNIT_DEF_NONE},
-	{"millimeter", "millimeters",   "mm",  NULL, "Millimeters", UN_SC_MM, 0.0,    B_UNIT_DEF_NONE},
-	{"micrometer", "micrometers",   "µm",  "um", "Micrometers", UN_SC_UM, 0.0,    B_UNIT_DEF_NONE},     // micron too?
+	{"millimeter", "millimeters",   "mm",  NULL, "Millimeters", UN_SC_MM, 0.0,    B_UNIT_DEF_NONE | B_UNIT_DEF_TENTH},
+	{"micrometer", "micrometers",   UM,    "um", "Micrometers", UN_SC_UM, 0.0,    B_UNIT_DEF_NONE},     // micron too?
 
 	/* These get displayed because of float precision problems in the transform header,
 	 * could work around, but for now probably people wont use these */
@@ -147,8 +153,8 @@ static struct bUnitDef buMetricAreaDef[] = {
 	{"square meter",      "square meters",      "m²",  "m2",    "Square Meters", UN_SC_M * UN_SC_M, 0.0,          B_UNIT_DEF_NONE},   /* base unit */
 	{"square decimeter",  "square decimetees",  "dm²", "dm2",   "Square Decimeters", UN_SC_DM * UN_SC_DM, 0.0,    B_UNIT_DEF_SUPPRESS},
 	{"square centimeter", "square centimeters", "cm²", "cm2",   "Square Centimeters", UN_SC_CM * UN_SC_CM, 0.0,   B_UNIT_DEF_NONE},
-	{"square millimeter", "square millimeters", "mm²", "mm2",   "Square Millimeters", UN_SC_MM * UN_SC_MM, 0.0,   B_UNIT_DEF_NONE},
-	{"square micrometer", "square micrometers", "µm²", "um2",   "Square Micrometers", UN_SC_UM * UN_SC_UM, 0.0,   B_UNIT_DEF_NONE},
+	{"square millimeter", "square millimeters", "mm²", "mm2",   "Square Millimeters", UN_SC_MM * UN_SC_MM, 0.0,   B_UNIT_DEF_NONE | B_UNIT_DEF_TENTH},
+	{"square micrometer", "square micrometers", UM"²", "um2",   "Square Micrometers", UN_SC_UM * UN_SC_UM, 0.0,   B_UNIT_DEF_NONE},
 	{NULL, NULL, NULL,  NULL, NULL, 0.0, 0.0}
 };
 static struct bUnitCollection buMetricAreaCollection = {buMetricAreaDef, 3, 0, sizeof(buMetricAreaDef) / sizeof(bUnitDef)};
@@ -173,8 +179,8 @@ static struct bUnitDef buMetricVolDef[] = {
 	{"cubic meter",      "cubic meters",      "m³",   "m3",   "Cubic Meters", UN_SC_M * UN_SC_M * UN_SC_M, 0.0,           B_UNIT_DEF_NONE}, /* base unit */
 	{"cubic decimeter",  "cubic decimeters",  "dm³",  "dm3",  "Cubic Decimeters", UN_SC_DM * UN_SC_DM * UN_SC_DM, 0.0,    B_UNIT_DEF_SUPPRESS},
 	{"cubic centimeter", "cubic centimeters", "cm³",  "cm3",  "Cubic Centimeters", UN_SC_CM * UN_SC_CM * UN_SC_CM, 0.0,   B_UNIT_DEF_NONE},
-	{"cubic millimeter", "cubic millimeters", "mm³",  "mm3",  "Cubic Millimeters", UN_SC_MM * UN_SC_MM * UN_SC_MM, 0.0,   B_UNIT_DEF_NONE},
-	{"cubic micrometer", "cubic micrometers", "µm³",  "um3",  "Cubic Micrometers", UN_SC_UM * UN_SC_UM * UN_SC_UM, 0.0,   B_UNIT_DEF_NONE},
+	{"cubic millimeter", "cubic millimeters", "mm³",  "mm3",  "Cubic Millimeters", UN_SC_MM * UN_SC_MM * UN_SC_MM, 0.0,   B_UNIT_DEF_NONE | B_UNIT_DEF_TENTH},
+	{"cubic micrometer", "cubic micrometers", UM"³",  "um3",  "Cubic Micrometers", UN_SC_UM * UN_SC_UM * UN_SC_UM, 0.0,   B_UNIT_DEF_NONE},
 	{NULL, NULL, NULL,  NULL, NULL, 0.0, 0.0}
 };
 static struct bUnitCollection buMetricVolCollection = {buMetricVolDef, 3, 0, sizeof(buMetricVolDef) / sizeof(bUnitDef)};
@@ -252,7 +258,7 @@ static struct bUnitDef buNaturalTimeDef[] = {
 	{"minute", "minutes",           "min", "m", "Minutes",      60.0, 0.0,      B_UNIT_DEF_NONE},
 	{"second", "seconds",           "sec", "s", "Seconds",      1.0, 0.0,       B_UNIT_DEF_NONE}, /* base unit */
 	{"millisecond", "milliseconds", "ms", NULL, "Milliseconds", 0.001, 0.0,     B_UNIT_DEF_NONE},
-	{"microsecond", "microseconds", "µs", "us", "Microseconds", 0.000001, 0.0,  B_UNIT_DEF_NONE},
+	{"microsecond", "microseconds", US,   "us", "Microseconds", 0.000001, 0.0,  B_UNIT_DEF_NONE},
 	{NULL, NULL, NULL, NULL, NULL, 0.0, 0.0}
 };
 static struct bUnitCollection buNaturalTimeCollection = {buNaturalTimeDef, 3, 0, sizeof(buNaturalTimeDef) / sizeof(bUnitDef)};
@@ -272,7 +278,7 @@ static struct bUnitDef buCameraLenDef[] = {
 	{"decimeter", "decimeters",     "dm",  NULL, "10 Centimeters", UN_SC_HM, 0.0, B_UNIT_DEF_SUPPRESS},
 	{"centimeter", "centimeters",   "cm",  NULL, "Centimeters", UN_SC_DAM, 0.0,    B_UNIT_DEF_SUPPRESS},
 	{"millimeter", "millimeters",   "mm",  NULL, "Millimeters", UN_SC_M, 0.0,    B_UNIT_DEF_NONE},
-	{"micrometer", "micrometers",   "µm",  "um", "Micrometers", UN_SC_MM, 0.0,    B_UNIT_DEF_SUPPRESS},     // micron too?
+	{"micrometer", "micrometers",   UM,    "um", "Micrometers", UN_SC_MM, 0.0,    B_UNIT_DEF_SUPPRESS},     // micron too?
 	{NULL, NULL, NULL,	NULL, NULL, 0.0, 0.0}
 };
 static struct bUnitCollection buCameraLenCollection = {buCameraLenDef, 3, 0, sizeof(buCameraLenDef) / sizeof(bUnitDef)};
@@ -311,8 +317,16 @@ static bUnitDef *unit_best_fit(double value, bUnitCollection *usys, bUnitDef *un
 			continue;
 
 		/* scale down scalar so 1cm doesnt convert to 10mm because of float error */
-		if (value_abs >= unit->scalar * (1.0 - EPS))
-			return unit;
+		if (UNLIKELY(unit->flag & B_UNIT_DEF_TENTH)) {
+			if (value_abs >= unit->scalar * (0.1 - EPS)) {
+				return unit;
+			}
+		}
+		else {
+			if (value_abs >= unit->scalar * (1.0 - EPS)) {
+				return unit;
+			}
+		}
 	}
 
 	return unit_default(usys);
@@ -366,12 +380,14 @@ static int unit_as_string(char *str, int len_max, double value, int prec, bUnitC
 	 * jump about while dragging */
 	i = len - 1;
 
-	while (i > 0 && str[i] == '0') { /* 4.300 -> 4.3 */
-		str[i--] = pad;
-	}
+	if (prec > 0) {
+		while (i > 0 && str[i] == '0') { /* 4.300 -> 4.3 */
+			str[i--] = pad;
+		}
 
-	if (i > 0 && str[i] == '.') { /* 10. -> 10 */
-		str[i--] = pad;
+		if (i > 0 && str[i] == '.') { /* 10. -> 10 */
+			str[i--] = pad;
+		}
 	}
 
 	/* Now add the suffix */

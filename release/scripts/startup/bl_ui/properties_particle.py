@@ -213,6 +213,9 @@ class PARTICLE_PT_emission(ParticleButtonsPanel, Panel):
 
         if part.type == 'HAIR' and not part.use_advanced_hair:
             row.prop(part, "hair_length")
+
+            row = layout.row()
+            row.prop(part, "use_modifier_stack")
             return
 
         if part.type != 'HAIR':
@@ -249,6 +252,9 @@ class PARTICLE_PT_emission(ParticleButtonsPanel, Panel):
             elif part.distribution == 'GRID':
                 row.prop(part, "grid_resolution")
                 row.prop(part, "grid_random", text="Random", slider=True)
+
+        row = layout.row()
+        row.prop(part, "use_modifier_stack")
 
 
 class PARTICLE_PT_hair_dynamics(ParticleButtonsPanel, Panel):
@@ -496,8 +502,8 @@ class PARTICLE_PT_physics(ParticleButtonsPanel, Panel):
             supports_courant = part.physics_type == 'FLUID'
             subsub = sub.row()
             subsub.enabled = supports_courant
-            subsub.prop(part, "adaptive_subframes", text="")
-            if supports_courant and part.adaptive_subframes:
+            subsub.prop(part, "use_adaptive_subframes", text="")
+            if supports_courant and part.use_adaptive_subframes:
                 col.prop(part, "courant_target", text="Threshold")
 
             row = layout.row()
@@ -536,8 +542,8 @@ class PARTICLE_PT_physics(ParticleButtonsPanel, Panel):
                 sub.prop(fluid, "factor_radius", text="")
 
                 sub = col.row()
-                sub.prop(fluid, "rest_density", slider=fluid.factor_density)
-                sub.prop(fluid, "factor_density", text="")
+                sub.prop(fluid, "rest_density", slider=fluid.use_factor_density)
+                sub.prop(fluid, "use_factor_density", text="")
 
                 if fluid.solver == 'CLASSICAL':
                     # With the classical solver, it is possible to calculate the
@@ -593,20 +599,18 @@ class PARTICLE_PT_physics(ParticleButtonsPanel, Panel):
 
             split = layout.split()
 
-            sub = split.column()
-            col = sub.column(align=True)
+            col = split.column(align=True)
             col.active = boids.use_flight
             col.prop(boids, "air_speed_max")
             col.prop(boids, "air_speed_min", slider=True)
             col.prop(boids, "air_acc_max", slider=True)
             col.prop(boids, "air_ave_max", slider=True)
             col.prop(boids, "air_personal_space")
-            row = col.row()
+            row = col.row(align=True)
             row.active = (boids.use_land or boids.use_climb) and boids.use_flight
             row.prop(boids, "land_smooth")
 
-            sub = split.column()
-            col = sub.column(align=True)
+            col = split.column(align=True)
             col.active = boids.use_land or boids.use_climb
             col.prop(boids, "land_speed_max")
             col.prop(boids, "land_jump_speed")
@@ -615,9 +619,9 @@ class PARTICLE_PT_physics(ParticleButtonsPanel, Panel):
             col.prop(boids, "land_personal_space")
             col.prop(boids, "land_stick_force")
 
-            row = layout.row()
+            split = layout.split()
 
-            col = row.column(align=True)
+            col = split.column(align=True)
             col.label(text="Battle:")
             col.prop(boids, "health")
             col.prop(boids, "strength")
@@ -625,7 +629,7 @@ class PARTICLE_PT_physics(ParticleButtonsPanel, Panel):
             col.prop(boids, "accuracy")
             col.prop(boids, "range")
 
-            col = row.column()
+            col = split.column()
             col.label(text="Misc:")
             col.prop(boids, "bank", slider=True)
             col.prop(boids, "pitch", slider=True)
@@ -1031,7 +1035,7 @@ class PARTICLE_PT_draw(ParticleButtonsPanel, Panel):
         col = row.column(align=True)
         col.label(text="Color:")
         col.prop(part, "draw_color", text="")
-        sub = col.row()
+        sub = col.row(align=True)
         sub.active = (part.draw_color in {'VELOCITY', 'ACCELERATION'})
         sub.prop(part, "color_maximum", text="Max")
 
@@ -1133,10 +1137,9 @@ class PARTICLE_PT_children(ParticleButtonsPanel, Panel):
         sub.prop(part, "kink_amplitude")
         sub.prop(part, "kink_amplitude_clump", text="Clump", slider=True)
         col.prop(part, "kink_flat", slider=True)
-        col = split.column()
-        sub = col.column(align=True)
-        sub.prop(part, "kink_frequency")
-        sub.prop(part, "kink_shape", slider=True)
+        col = split.column(align=True)
+        col.prop(part, "kink_frequency")
+        col.prop(part, "kink_shape", slider=True)
 
 
 class PARTICLE_PT_field_weights(ParticleButtonsPanel, Panel):

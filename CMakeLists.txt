@@ -118,9 +118,10 @@ mark_as_advanced(WITH_BLENDER)
 option(WITH_INTERNATIONAL "Enable I18N (International fonts and text)" ON)
 
 option(WITH_PYTHON        "Enable Embedded Python API  (only disable for development)" ON)
-option(WITH_PYTHON_SECURITY "Disables execution of scripts within blend files by default (recommend to leave off)" OFF)
+option(WITH_PYTHON_SECURITY "Disables execution of scripts within blend files by default" ON) 
 mark_as_advanced(WITH_PYTHON)  # dont want people disabling this unless they really know what they are doing.
 mark_as_advanced(WITH_PYTHON_SECURITY)  # some distributions see this as a security issue, rather than have them patch it, make a build option.
+set(WITH_PYTHON_SECURITY ON CACHE BOOL "ON" FORCE) # temp force on. 
 
 option(WITH_PYTHON_SAFETY "Enable internal API error checking to track invalid data to prevent crash on access (at the expense of some effeciency, only enable for development)." OFF)
 option(WITH_PYTHON_MODULE "Enable building as a python module which runs without a user interface, like running regular blender in background mode (experimental, only enable for development)" OFF)
@@ -156,7 +157,6 @@ mark_as_advanced(WITH_AUDASPACE)
 
 option(WITH_BOOL_COMPAT "Continue defining \"TRUE\" and \"FALSE\" until these can be replaced with \"true\" and \"false\" from stdbool.h" ON)
 mark_as_advanced(WITH_BOOL_COMPAT)
-
 
 # (unix defaults to OpenMP On)
 if((UNIX AND NOT APPLE) OR (MINGW))
@@ -240,6 +240,9 @@ option(WITH_LZMA          "Enable best LZMA compression, (used for pointcache)" 
 # Camera/motion tracking
 option(WITH_LIBMV         "Enable libmv structure from motion library" ON)
 
+# Freestyle
+option(WITH_FREESTYLE     "Enable Freestyle (advanced edges rendering)" ON)
+
 # Misc
 option(WITH_INPUT_NDOF "Enable NDOF input devices (SpaceNavigator and friends)" ON)
 option(WITH_RAYOPTIMIZATION	"Enable use of SIMD (SSE) optimizations for the raytracer" ON)
@@ -258,15 +261,17 @@ mark_as_advanced(PYTHON_NUMPY_PATH)
 
 # Cycles
 option(WITH_CYCLES					"Enable cycles Render Engine" ON)
-option(WITH_CYCLES_TEST				"Build cycles test application" OFF)
+option(WITH_CYCLES_STANDALONE		"Build cycles standalone application" OFF)
 option(WITH_CYCLES_OSL				"Build Cycles with OSL support" OFF)
 option(WITH_CYCLES_CUDA_BINARIES	"Build cycles CUDA binaries" OFF)
-set(CYCLES_CUDA_BINARIES_ARCH sm_20 sm_21 sm_30 CACHE STRING "CUDA architectures to build binaries for")
+set(CYCLES_CUDA_BINARIES_ARCH sm_20 sm_21 sm_30 sm_35 CACHE STRING "CUDA architectures to build binaries for")
 mark_as_advanced(CYCLES_CUDA_BINARIES_ARCH)
 unset(PLATFORM_DEFAULT)
 
 # LLVM
 option(WITH_LLVM					"Use LLVM" OFF)
+option(LLVM_STATIC					"Link with LLVM static libraries" ON)
+mark_as_advanced(LLVM_STATIC)
 
 # disable for now, but plan to support on all platforms eventually
 option(WITH_MEM_JEMALLOC   "Enable malloc replacement (http://www.canonware.com/jemalloc)" OFF)
@@ -275,6 +280,9 @@ mark_as_advanced(WITH_MEM_JEMALLOC)
 # Debug
 option(WITH_CXX_GUARDEDALLOC "Enable GuardedAlloc for C++ memory allocation tracking (only enable for development)" OFF)
 mark_as_advanced(WITH_CXX_GUARDEDALLOC)
+
+option(WITH_GUARDEDALLOC "Enable GuardedAlloc (DISABLE AT OWN RISK!)" ON)
+mark_as_advanced(WITH_GUARDEDALLOC)
 
 option(WITH_ASSERT_ABORT "Call abort() when raising an assertion through BLI_assert()" OFF)
 mark_as_advanced(WITH_ASSERT_ABORT)
@@ -350,7 +358,7 @@ if(APPLE)
 		# force CMAKE_OSX_DEPLOYMENT_TARGET for makefiles, will not work else ( cmake bug ? )
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
-		add_definitions ("-DMACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+		add_definitions("-DMACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}")
 	endif()
 
 	option(WITH_COCOA	  "Use Cocoa framework instead of deprecated Carbon" ON)
@@ -365,7 +373,7 @@ endif()
 #-----------------------------------------------------------------------------
 # Check for conflicting/unsupported configurations
 
-if(NOT WITH_BLENDER AND NOT WITH_PLAYER AND NOT WITH_CYCLES_TEST)
+if(NOT WITH_BLENDER AND NOT WITH_PLAYER AND NOT WITH_CYCLES_STANDALONE)
 	message(FATAL_ERROR "At least one of WITH_BLENDER or WITH_PLAYER must be enabled, nothing to do!")
 endif()
 
@@ -408,17 +416,29 @@ if(WITH_PYTHON_MODULE)
 	set(WITH_HEADLESS ON)
 endif()
 
+if(NOT WITH_PYTHON)
+	set(WITH_CYCLES OFF)
+endif()
+
 # enable boost for cycles, booleans, audaspace or i18n
 # otherwise if the user disabled
 if(NOT WITH_BOOST)
 	# Explicitly disabled. so disable all deps.
-	set(WITH_CYCLES         OFF)
-	set(WITH_MOD_BOOLEAN    OFF)
-	set(WITH_AUDASPACE      OFF)
-	set(WITH_INTERNATIONAL  OFF)
+	macro(set_and_warn
+		_setting _val)
+		if(${${_setting}})
+			message(STATUS "'WITH_BOOST' is disabled: forceing 'set(${_setting} ${_val})'")
+		endif()
+		set(${_setting} ${_val})
+	endmacro()
 
-	set(WITH_OPENAL         OFF)  # depends on AUDASPACE
-	set(WITH_GAMEENGINE     OFF)  # depends on AUDASPACE
+	set_and_warn(WITH_CYCLES         OFF)
+	set_and_warn(WITH_MOD_BOOLEAN    OFF)
+	set_and_warn(WITH_AUDASPACE      OFF)
+	set_and_warn(WITH_INTERNATIONAL  OFF)
+
+	set_and_warn(WITH_OPENAL         OFF)  # depends on AUDASPACE
+	set_and_warn(WITH_GAMEENGINE     OFF)  # depends on AUDASPACE
 elseif(WITH_CYCLES OR WITH_MOD_BOOLEAN OR WITH_AUDASPACE OR WITH_INTERNATIONAL)
 	# Keep enabled
 else()
@@ -522,9 +542,6 @@ set(PLATFORM_LINKFLAGS "")
 set(PLATFORM_LINKFLAGS_DEBUG "")
 
 
-# disabled for now, not supported
-# option(WITH_WEBPLUGIN     "Enable Web Plugin (Unix only)" OFF)
-
 # For alternate Python locations the commandline can be used to override detected/default cache settings, e.g:
 # On Unix:
 #   cmake ../blender \
@@ -546,12 +563,12 @@ set(PLATFORM_LINKFLAGS_DEBUG "")
 if(UNIX AND NOT APPLE)
 	macro(find_package_wrapper)
 		string(TOUPPER ${ARGV0} _NAME_UPPER)
-		if(${WITH_STATIC_LIBS})
+		if(WITH_STATIC_LIBS)
 			set(_cmake_find_library_suffixes_back ${CMAKE_FIND_LIBRARY_SUFFIXES})
 			set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
 		endif()
 		find_package(${ARGV})
-		if(${WITH_STATIC_LIBS})
+		if(WITH_STATIC_LIBS)
 			set(CMAKE_FIND_LIBRARY_SUFFIXES ${_cmake_find_library_suffixes_back})
 			unset(_cmake_find_library_suffixes_back)
 		endif()
@@ -691,7 +708,7 @@ if(UNIX AND NOT APPLE)
 	if(WITH_BOOST)
 		# uses in build instructions to override include and library variables
 		if(NOT BOOST_CUSTOM)
-			if(${WITH_STATIC_LIBS})
+			if(WITH_STATIC_LIBS)
 				set(Boost_USE_STATIC_LIBS ON)
 			endif()
 			set(Boost_USE_MULTITHREADED ON)
@@ -752,16 +769,16 @@ if(UNIX AND NOT APPLE)
 		if(NOT LLVM_VERSION)
 			set(LLVM_VERSION "3.0")
 		endif()
-		set(LLVM_STATIC YES)
+
 		if(LLVM_DIRECTORY)
-			FIND_PROGRAM(LLVM_CONFIG llvm-config-${LLVM_VERSION} HINTS ${LLVM_DIRECTORY}/bin NO_CMAKE_PATH)
+			find_program(LLVM_CONFIG llvm-config-${LLVM_VERSION} HINTS ${LLVM_DIRECTORY}/bin NO_CMAKE_PATH)
 			if(NOT LLVM_CONFIG)
-				FIND_PROGRAM(LLVM_CONFIG llvm-config HINTS ${LLVM_DIRECTORY}/bin NO_CMAKE_PATH)
+				find_program(LLVM_CONFIG llvm-config HINTS ${LLVM_DIRECTORY}/bin NO_CMAKE_PATH)
 			endif()
 		else()
-			FIND_PROGRAM(LLVM_CONFIG llvm-config-${LLVM_VERSION})
+			find_program(LLVM_CONFIG llvm-config-${LLVM_VERSION})
 			if(NOT LLVM_CONFIG)
-				FIND_PROGRAM(LLVM_CONFIG llvm-config)
+				find_program(LLVM_CONFIG llvm-config)
 			endif()
 		endif()
 		execute_process(COMMAND ${LLVM_CONFIG} --version
@@ -773,9 +790,17 @@ if(UNIX AND NOT APPLE)
 		execute_process(COMMAND ${LLVM_CONFIG} --libdir
 		                OUTPUT_VARIABLE LLVM_LIB_DIR
 		                OUTPUT_STRIP_TRAILING_WHITESPACE)
-		find_library(LLVM_LIBRARY
-		             NAMES LLVMAnalysis # first of a whole bunch of libs to get
-		             PATHS ${LLVM_LIB_DIR})
+
+		if(LLVM_STATIC)
+			find_library(LLVM_LIBRARY
+			             NAMES LLVMAnalysis # first of a whole bunch of libs to get
+			             PATHS ${LLVM_LIB_DIR})
+		else()
+			find_library(LLVM_LIBRARY
+			             NAMES LLVM-${LLVM_VERSION}
+			             PATHS ${LLVM_LIB_DIR})
+		endif()
+
 		message(STATUS "LLVM version  = ${LLVM_VERSION}")
 		message(STATUS "LLVM dir      = ${LLVM_DIRECTORY}")
 		message(STATUS "LLVM lib dir  = ${LLVM_LIB_DIR}")
@@ -908,28 +933,45 @@ elseif(WIN32)
 	#  include(${CMAKE_ROOT}/Modules/Platform/Windows-cl.cmake)
 
 	if(CMAKE_COMPILER_IS_GNUCC)
-		set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/mingw32)
 		include(CheckCSourceCompiles)
 		# Setup 64bit and 64bit windows systems
 		CHECK_C_SOURCE_COMPILES("
 			#ifndef __MINGW64__
 			#error
 			#endif
-			main(){}
+			int main(void) { return 0; }
 			" 
 			WITH_MINGW64)
 		
 		if(WITH_MINGW64)
-			message("Compiling for 64 bit with MinGW-w64.")
+			message(STATUS "Compiling for 64 bit with MinGW-w64.")
 			set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/mingw64)
+		else()
+			message(STATUS "Compiling for 32 bit with MinGW-w32.")
+			set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/mingw32)
+			
+			if(WITH_RAYOPTIMIZATION)
+				message(WARNING "MinGW-w32 is known to be unstable with 'WITH_RAYOPTIMIZATION' option enabled.")
+			endif()
 		endif()
 	else()
-		set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/windows)
-
 		# Setup 64bit and 64bit windows systems
 		if(CMAKE_CL_64)
-			message("64 bit compiler detected.")
-			set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/win64)
+			message(STATUS "64 bit compiler detected.")
+			if(MSVC11)
+				message(STATUS "Visual C++ 2012 detected.")
+				set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/win64_vc11)
+			else()
+				set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/win64)
+			endif()
+		else()
+		# Setup 32bit windows systems
+			if(MSVC11)
+				message(STATUS "Visual C++ 2012 detected.")
+				set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/windows_vc11)
+			else()
+				set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/windows)
+			endif()
 		endif()
 	endif()
 		
@@ -944,7 +986,11 @@ elseif(WIN32)
 	if(WITH_OPENAL)
 		set(OPENAL ${LIBDIR}/openal)
 		set(OPENAL_INCLUDE_DIR ${OPENAL}/include)
-		set(OPENAL_LIBRARY wrap_oal)
+		if(MSVC11)
+			set(OPENAL_LIBRARY openal32)
+		else()
+			set(OPENAL_LIBRARY wrap_oal)
+		endif()
 		set(OPENAL_LIBPATH ${OPENAL}/lib)
 	endif()
 
@@ -993,7 +1039,17 @@ elseif(WIN32)
 	if(MSVC)
 		set(PLATFORM_LINKLIBS ws2_32 vfw32 winmm kernel32 user32 gdi32 comdlg32 advapi32 shfolder shell32 ole32 oleaut32 uuid psapi)
 
+		# MSVC11 SDL is not hard linked to dxguid.lib
+		if(MSVC11 AND WITH_SDL)
+			set(PLATFORM_LINKLIBS ${PLATFORM_LINKLIBS} dxguid)
+		endif()
+
 		add_definitions(/D_CRT_NONSTDC_NO_DEPRECATE /D_CRT_SECURE_NO_DEPRECATE /D_SCL_SECURE_NO_DEPRECATE /D_CONSOLE /D_LIB)
+
+		# MSVC11 needs _ALLOW_KEYWORD_MACROS to build
+		if(MSVC11)
+			add_definitions(/D_ALLOW_KEYWORD_MACROS)
+		endif()
 
 		set(CMAKE_CXX_FLAGS "/nologo /J /Gd /EHsc" CACHE STRING "MSVC MT C++ flags " FORCE)
 		set(CMAKE_C_FLAGS   "/nologo /J /Gd"       CACHE STRING "MSVC MT C++ flags " FORCE)
@@ -1040,11 +1096,7 @@ elseif(WIN32)
 		set(PNG_LIBPATH ${PNG}/lib) # not cmake defined
 
 		set(ZLIB_INCLUDE_DIRS ${LIBDIR}/zlib/include)
-		if(CMAKE_CL_64)
-			set(ZLIB_LIBRARIES ${LIBDIR}/zlib/lib/libz.lib)
-		else()
-			set(ZLIB_LIBRARIES ${LIBDIR}/zlib/lib/zlib.lib)
-		endif()
+		set(ZLIB_LIBRARIES ${LIBDIR}/zlib/lib/libz_st.lib)
 
 		set(PTHREADS_INCLUDE_DIRS ${LIBDIR}/pthreads/include)
 		set(PTHREADS_LIBRARIES ${LIBDIR}/pthreads/lib/pthreadVC2.lib)
@@ -1073,26 +1125,22 @@ elseif(WIN32)
 				${OPENCOLLADA}/include/opencollada/COLLADASaxFrameworkLoader
 				${OPENCOLLADA}/include/opencollada/GeneratedSaxParser
 			)
-			set_lib_path(OPENCOLLADA_LIBPATH "opencollada")
 
 			set(OPENCOLLADA_LIBRARIES
-				${OPENCOLLADA_LIBPATH}/lib/opencollada/OpenCOLLADASaxFrameworkLoader.lib
-				${OPENCOLLADA_LIBPATH}/lib/opencollada/OpenCOLLADAFramework.lib
-				${OPENCOLLADA_LIBPATH}/lib/opencollada/OpenCOLLADABaseUtils.lib
-				${OPENCOLLADA_LIBPATH}/lib/opencollada/OpenCOLLADAStreamWriter.lib
-				${OPENCOLLADA_LIBPATH}/lib/opencollada/MathMLSolver.lib
-				${OPENCOLLADA_LIBPATH}/lib/opencollada/GeneratedSaxParser.lib
-				${OPENCOLLADA_LIBPATH}/lib/opencollada/xml.lib
-				${OPENCOLLADA_LIBPATH}/lib/opencollada/buffer.lib
-				${OPENCOLLADA_LIBPATH}/lib/opencollada/ftoa.lib
-				${OPENCOLLADA_LIBPATH}/lib/opencollada/UTF.lib
+				${OPENCOLLADA}/lib/opencollada/OpenCOLLADASaxFrameworkLoader.lib
+				${OPENCOLLADA}/lib/opencollada/OpenCOLLADAFramework.lib
+				${OPENCOLLADA}/lib/opencollada/OpenCOLLADABaseUtils.lib
+				${OPENCOLLADA}/lib/opencollada/OpenCOLLADAStreamWriter.lib
+				${OPENCOLLADA}/lib/opencollada/MathMLSolver.lib
+				${OPENCOLLADA}/lib/opencollada/GeneratedSaxParser.lib
+				${OPENCOLLADA}/lib/opencollada/xml.lib
+				${OPENCOLLADA}/lib/opencollada/buffer.lib
+				${OPENCOLLADA}/lib/opencollada/ftoa.lib
+				${OPENCOLLADA}/lib/opencollada/UTF.lib
 			)
 			set(PCRE_LIBRARIES
-				${OPENCOLLADA_LIBPATH}/lib/opencollada/pcre.lib
+				${OPENCOLLADA}/lib/opencollada/pcre.lib
 			)
-			
-			unset(OPENCOLLADA_LIBPATH)
-			
 		endif()
 
 		if(WITH_CODEC_FFMPEG)
@@ -1100,17 +1148,28 @@ elseif(WIN32)
 				${LIBDIR}/ffmpeg/include
 				${LIBDIR}/ffmpeg/include/msvc
 			)
-			set(FFMPEG_LIBRARIES
-				${LIBDIR}/ffmpeg/lib/avcodec-53.lib
-				${LIBDIR}/ffmpeg/lib/avformat-53.lib
-				${LIBDIR}/ffmpeg/lib/avdevice-53.lib
-				${LIBDIR}/ffmpeg/lib/avutil-51.lib
-				${LIBDIR}/ffmpeg/lib/swscale-2.lib
-			)
+			# MSVC11 FFMPEG libs are newer
+			if(MSVC11)
+				set(FFMPEG_LIBRARIES
+					${LIBDIR}/ffmpeg/lib/avcodec-54.lib
+					${LIBDIR}/ffmpeg/lib/avformat-54.lib
+					${LIBDIR}/ffmpeg/lib/avdevice-54.lib
+					${LIBDIR}/ffmpeg/lib/avutil-52.lib
+					${LIBDIR}/ffmpeg/lib/swscale-2.lib
+				)
+			else()
+				set(FFMPEG_LIBRARIES
+					${LIBDIR}/ffmpeg/lib/avcodec-53.lib
+					${LIBDIR}/ffmpeg/lib/avformat-53.lib
+					${LIBDIR}/ffmpeg/lib/avdevice-53.lib
+					${LIBDIR}/ffmpeg/lib/avutil-51.lib
+					${LIBDIR}/ffmpeg/lib/swscale-2.lib
+				)
+			endif()
 		endif()
 
 		if(WITH_IMAGE_OPENEXR)
-			set_lib_path(OPENEXR "openexr")
+			set(OPENEXR ${LIBDIR}/openexr)
 			set(OPENEXR_INCLUDE_DIR ${OPENEXR}/include)
 			set(OPENEXR_INCLUDE_DIRS ${OPENEXR}/include/OpenEXR)
 			set(OPENEXR_LIBPATH ${OPENEXR}/lib)
@@ -1137,21 +1196,14 @@ elseif(WIN32)
 		endif()
 
 		if(WITH_PYTHON)
-			# normally cached but not since we include them with blender
-			if(MSVC10)
-				set(PYTHON_VERSION 3.3) # CACHE STRING)
-			else()
-				set(PYTHON_VERSION 3.3) # CACHE STRING)
-			endif()
+			set(PYTHON_VERSION 3.3) # CACHE STRING)
 
-			set_lib_path(PYTHON "python")
 			string(REPLACE "." "" _PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
 			# Use shared libs for vc2008 and vc2010 until we actually have vc2010 libs
 			set(PYTHON_LIBRARY ${LIBDIR}/python/lib/python${_PYTHON_VERSION_NO_DOTS}.lib)
-			# set(PYTHON_LIBRARY ${PYTHON}/lib/python${_PYTHON_VERSION_NO_DOTS}.lib) #CACHE FILEPATH
 			unset(_PYTHON_VERSION_NO_DOTS)
 
-			#Shared includes for both vc2008 and vc2010
+			# Shared includes for both vc2008 and vc2010
 			set(PYTHON_INCLUDE_DIR ${LIBDIR}/python/include/python${PYTHON_VERSION})
 
 			# uncached vars
@@ -1162,10 +1214,10 @@ elseif(WIN32)
 		if(WITH_BOOST)
 			set(BOOST ${LIBDIR}/boost)
 			set(BOOST_INCLUDE_DIR ${BOOST}/include)
-			if(MSVC10)
-				set(BOOST_LIBPATH ${BOOST}/vc2010/lib)
-				set(BOOST_POSTFIX "vc100-mt-s-1_49.lib")
-				set(BOOST_DEBUG_POSTFIX "vc100-mt-sgd-1_49.lib")
+			if(MSVC11)
+				set(BOOST_LIBPATH ${BOOST}/lib)
+				set(BOOST_POSTFIX "vc110-mt-s-1_53.lib")
+				set(BOOST_DEBUG_POSTFIX "vc110-mt-sgd-1_53.lib")
 			else()
 				set(BOOST_LIBPATH ${BOOST}/lib)
 				set(BOOST_POSTFIX "vc90-mt-s-1_49.lib")
@@ -1202,7 +1254,6 @@ elseif(WIN32)
 		if(WITH_LLVM)
 			set(LLVM_DIRECTORY ${LIBDIR}/llvm CACHE PATH	"Path to the LLVM installation")
 			file(GLOB LLVM_LIBRARY ${LLVM_DIRECTORY}/lib/*.lib)
-			set(LLVM_STATIC YES)
 		endif()
 	
 		if(WITH_OPENCOLORIO)
@@ -1212,7 +1263,6 @@ elseif(WIN32)
 			set(OPENCOLORIO_LIBPATH ${LIBDIR}/opencolorio/lib)
 			set(OPENCOLORIO_DEFINITIONS)
 		endif()
-
 
 		set(PLATFORM_LINKFLAGS "/SUBSYSTEM:CONSOLE /STACK:2097152 /INCREMENTAL:NO /NODEFAULTLIB:msvcrt.lib /NODEFAULTLIB:msvcmrt.lib /NODEFAULTLIB:msvcurt.lib /NODEFAULTLIB:msvcrtd.lib")
 
@@ -1234,15 +1284,11 @@ elseif(WIN32)
 		set(PLATFORM_CFLAGS "-pipe -funsigned-char -fno-strict-aliasing")
 
 		if(WITH_MINGW64)
-			#We need to take care though not to have these on debug builds because they may play funky with gdb
-			if(CMAKE_BUILD_TYPE MATCHES "Release")
-				set(PLATFORM_CFLAGS "${PLATFORM_CFLAGS} -mmmx -ftree-vectorize")
-			endif()
 			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive")
 			set(PLATFORM_LINKLIBS "${PLATFORM_LINKLIBS} -lpthread")
 			
 			add_definitions(-DFREE_WINDOWS64 -DMS_WIN64)
-			#Turn off OpenMP since it causes crashes on render for subsurfed/multiresolution meshes
+			# Turn off OpenMP since it causes crashes on render for subsurfed/multiresolution meshes
 			set(WITH_OPENMP OFF)
 		endif()
 
@@ -1266,7 +1312,7 @@ elseif(WIN32)
 		set(ZLIB_LIBPATH ${ZLIB}/lib)
 		set(ZLIB_LIBRARIES z)
 
-		#comes with own pthread library
+		# comes with own pthread library
 		if(NOT WITH_MINGW64)
 			set(PTHREADS ${LIBDIR}/pthreads)
 			#set(PTHREADS_INCLUDE_DIRS ${PTHREADS}/include)
@@ -1389,7 +1435,7 @@ elseif(WIN32)
 		if(WITH_LLVM)
 			set(LLVM_DIRECTORY ${LIBDIR}/llvm CACHE PATH	"Path to the LLVM installation")
 			set(LLVM_LIB_DIR ${LLVM_DIRECTORY}/lib)
-			#Explicitly set llvm lib order.
+			# Explicitly set llvm lib order.
 			#---- WARNING ON GCC ORDER OF LIBS IS IMPORTANT, DO NOT CHANGE! ---------
 			set(LLVM_LIBRARY LLVMSelectionDAG LLVMCodeGen LLVMScalarOpts LLVMAnalysis LLVMArchive
 				LLVMAsmParser LLVMAsmPrinter
@@ -1409,9 +1455,8 @@ elseif(WIN32)
 				LLVMX86Disassembler LLVMX86Info
 				LLVMX86Utils LLVMipa
 				LLVMipo LLVMCore)
-			#imagehelp is needed by LLVM 3.1 on MinGW, check lib\Support\Windows\Signals.inc
+			# imagehelp is needed by LLVM 3.1 on MinGW, check lib\Support\Windows\Signals.inc
 			set(PLATFORM_LINKLIBS "${PLATFORM_LINKLIBS} -limagehlp")
-			set(LLVM_STATIC YES)
 		endif()
 		
 		if(WITH_OPENCOLORIO)
@@ -1553,7 +1598,7 @@ elseif(APPLE)
 			set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} -framework QTKit")
 			if(CMAKE_OSX_ARCHITECTURES MATCHES i386)
 				set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} -framework QuickTime")
-				#libSDL still needs 32bit carbon quicktime
+				# libSDL still needs 32bit carbon quicktime
 			endif()
 		elseif(WITH_CODEC_QUICKTIME)
 			set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} -framework QuickTime")
@@ -1604,7 +1649,7 @@ elseif(APPLE)
 
 		set(OPENCOLLADA_LIBPATH ${OPENCOLLADA}/lib)
 		set(OPENCOLLADA_LIBRARIES "OpenCOLLADASaxFrameworkLoader -lOpenCOLLADAFramework -lOpenCOLLADABaseUtils -lOpenCOLLADAStreamWriter -lMathMLSolver -lGeneratedSaxParser -lUTF -lxml2 -lbuffer -lftoa")
-		#pcre is bundled with openCollada
+		# pcre is bundled with openCollada
 		#set(PCRE ${LIBDIR}/pcre)
 		#set(PCRE_LIBPATH ${PCRE}/lib)
 		set(PCRE_LIBRARIES pcre)
@@ -1671,7 +1716,6 @@ elseif(APPLE)
 	if(WITH_LLVM)
 		set(LLVM_DIRECTORY ${LIBDIR}/llvm CACHE PATH	"Path to the LLVM installation")
 		set(LLVM_VERSION "3.1" CACHE STRING	"Version of LLVM to use")
-		set(LLVM_STATIC YES)
 		if(EXISTS "${LLVM_DIRECTORY}/bin/llvm-config")
 			set(LLVM_CONFIG "${LLVM_DIRECTORY}/bin/llvm-config")
 		else()
@@ -1831,16 +1875,6 @@ if(WITH_IMAGE_REDCODE)
 	set(REDCODE_INC ${REDCODE})
 endif()
 
-#-----------------------------------------------------------------------------
-# Blender WebPlugin
-
-if(WITH_WEBPLUGIN)
-	set(GECKO_DIR "${CMAKE_SOURCE_DIR}/../gecko-sdk/" CACHE PATH "Gecko SDK path")
-	set(WEBPLUGIN_SANDBOX_MODE "apparmor" CACHE STRING "WEB Plugin sandbox mode, can be apparmor, privsep, none")
-
-	set(WITH_PLAYER ON)
-endif()
-
 
 #-----------------------------------------------------------------------------
 # Configure OpenGL.
@@ -1934,6 +1968,7 @@ if(CMAKE_COMPILER_IS_GNUCC)
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_NO_NULL -Wnonnull)  # C only
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_MISSING_INCLUDE_DIRS -Wmissing-include-dirs)
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_NO_DIV_BY_ZERO -Wno-div-by-zero)
+	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_TYPE_LIMITS -Wtype-limits)
 
 	# gcc 4.2 gives annoying warnings on every file with this
 	if(NOT "${CMAKE_C_COMPILER_VERSION}" VERSION_LESS "4.3")
@@ -1960,6 +1995,7 @@ if(CMAKE_COMPILER_IS_GNUCC)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_INIT_SELF -Winit-self)  # needs -Wuninitialized
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_MISSING_INCLUDE_DIRS -Wmissing-include-dirs)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_DIV_BY_ZERO -Wno-div-by-zero)
+	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_TYPE_LIMITS -Wtype-limits)
 
 	# gcc 4.2 gives annoying warnings on every file with this
 	if(NOT "${CMAKE_C_COMPILER_VERSION}" VERSION_LESS "4.3")
@@ -2010,6 +2046,20 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 	ADD_CHECK_C_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS C_WARN_NO_UNUSED_PARAMETER -Wno-unused-parameter)
 	ADD_CHECK_C_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS C_WARN_NO_UNUSED_MACROS    -Wno-unused-macros)
 
+	ADD_CHECK_C_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS C_WARN_NO_MISSING_VARIABLE_DECLARATIONS -Wno-missing-variable-declarations)
+	ADD_CHECK_C_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS C_WARN_NO_UNUSED_FUNCTION -Wno-unused-function)
+	ADD_CHECK_C_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS C_WARN_NO_INT_TO_VOID_POINTER_CAST -Wno-int-to-void-pointer-cast)
+	ADD_CHECK_C_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS C_WARN_NO_MISSING_PROTOTYPES -Wno-missing-prototypes)
+	ADD_CHECK_C_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS C_WARN_NO_DUPLICATE_ENUM -Wno-duplicate-enum)
+	ADD_CHECK_C_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS C_WARN_NO_UNDEF -Wno-undef)
+	ADD_CHECK_C_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS C_WARN_NO_MISSING_NORETURN -Wno-missing-noreturn)
+
+	ADD_CHECK_CXX_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS CXX_WARN_NO_UNUSED_PRIVATE_FIELD -Wno-unused-private-field)
+	ADD_CHECK_CXX_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS CXX_WARN_NO_CXX11_NARROWING -Wno-c++11-narrowing)
+	ADD_CHECK_CXX_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS CXX_WARN_NO_NON_VIRTUAL_DTOR -Wno-non-virtual-dtor)
+	ADD_CHECK_CXX_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS CXX_WARN_NO_UNUSED_MACROS -Wno-unused-macros)
+	ADD_CHECK_CXX_COMPILER_FLAG(CC_REMOVE_STRICT_FLAGS CXX_WARN_NO_REORDER -Wno-reorder)
+
 elseif(CMAKE_C_COMPILER_ID MATCHES "Intel")
 
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_ALL -Wall)
@@ -2024,13 +2074,6 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "Intel")
 	set(C_WARNINGS "${C_WARNINGS} -wd188,186,144,913,556")
 	set(CXX_WARNINGS "${CXX_WARNINGS} -wd188,186,144,913,556")
 
-endif()
-
-# MSVC2010 fails to links C++ libs right
-if(MSVC10)
-	if(WITH_OPENCOLLADA)
-		message(WARNING "MSVC 2010 does not support OpenCollada, disabling WITH_OPENCOLLADA. To enable support use Use MSVC 2008")
-	endif()
 endif()
 
 # ensure python header is found since detection can fail, this could happen
@@ -2101,6 +2144,23 @@ endif()
 # eg: -Wno-uninitialized
 set(CMAKE_C_FLAGS "${C_WARNINGS} ${CMAKE_C_FLAGS} ${PLATFORM_CFLAGS}")
 set(CMAKE_CXX_FLAGS "${CXX_WARNINGS} ${CMAKE_CXX_FLAGS} ${PLATFORM_CFLAGS}")
+
+# defined above, platform spesific but shared names
+mark_as_advanced(
+	CYCLES_OSL
+	OSL_LIB_EXEC
+	OSL_COMPILER
+	OSL_LIB_COMP
+	OSL_LIB_QUERY
+	OSL_INCLUDES
+)
+
+mark_as_advanced(
+	LLVM_CONFIG
+	LLVM_DIRECTORY
+	LLVM_LIBRARY
+	LLVM_VERSION
+)
 
 #-------------------------------------------------------------------------------
 # Global Defines
@@ -2179,6 +2239,7 @@ if(FIRST_RUN)
 	info_cfg_option(WITH_INTERNATIONAL)
 	info_cfg_option(WITH_INPUT_NDOF)
 	info_cfg_option(WITH_CYCLES)
+	info_cfg_option(WITH_FREESTYLE)
 	info_cfg_option(WITH_OPENCOLORIO)
 
 	info_cfg_text("Compiler Options:")

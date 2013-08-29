@@ -41,7 +41,6 @@
 
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
-#include "BLI_rand.h"
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
 
@@ -156,13 +155,13 @@ static void operator_search_cb(const struct bContext *C, void *UNUSED(arg), cons
 {
 	GHashIterator *iter = WM_operatortype_iter();
 
-	for (; BLI_ghashIterator_notDone(iter); BLI_ghashIterator_step(iter)) {
+	for (; !BLI_ghashIterator_done(iter); BLI_ghashIterator_step(iter)) {
 		wmOperatorType *ot = BLI_ghashIterator_getValue(iter);
 
 		if (BLI_strcasestr(ot->name, str)) {
 			if (WM_operator_poll((bContext *)C, ot)) {
 				
-				if (0 == uiSearchItemAdd(items, ot->name, ot, 0))
+				if (false == uiSearchItemAdd(items, ot->name, ot, 0))
 					break;
 			}
 		}
@@ -196,7 +195,7 @@ static uiBlock *tool_search_menu(bContext *C, ARegion *ar, void *arg_listbase)
 	uiBlockSetDirection(block, UI_DOWN);
 	uiEndBlock(C, block);
 	
-	event = *(win->eventstate);  /* XXX huh huh? make api call */
+	wm_event_init_from_window(win, &event);
 	event.type = EVT_BUT_OPEN;
 	event.val = KM_PRESS;
 	event.customdata = but;
@@ -259,7 +258,7 @@ void view3d_tool_props_register(ARegionType *art)
 
 /* ********** operator to open/close toolshelf region */
 
-static int view3d_toolshelf(bContext *C, wmOperator *UNUSED(op))
+static int view3d_toolshelf_toggle_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	ScrArea *sa = CTX_wm_area(C);
 	ARegion *ar = view3d_has_tools_region(sa);
@@ -276,7 +275,7 @@ void VIEW3D_OT_toolshelf(wmOperatorType *ot)
 	ot->description = "Toggles tool shelf display";
 	ot->idname = "VIEW3D_OT_toolshelf";
 	
-	ot->exec = view3d_toolshelf;
+	ot->exec = view3d_toolshelf_toggle_exec;
 	ot->poll = ED_operator_view3d_active;
 	
 	/* flags */

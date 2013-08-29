@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 #ifndef __SVM_RAMP_H__
@@ -21,17 +19,17 @@
 
 CCL_NAMESPACE_BEGIN
 
-__device float4 rgb_ramp_lookup(KernelGlobals *kg, int offset, float f)
+__device float4 rgb_ramp_lookup(KernelGlobals *kg, int offset, float f, bool interpolate)
 {
 	f = clamp(f, 0.0f, 1.0f)*(RAMP_TABLE_SIZE-1);
 
 	/* clamp int as well in case of NaN */
-	int i = clamp((int)f, 0, RAMP_TABLE_SIZE-1);
+	int i = clamp(float_to_int(f), 0, RAMP_TABLE_SIZE-1);
 	float t = f - (float)i;
 
 	float4 a = fetch_node_float(kg, offset+i);
 
-	if(t > 0.0f)
+	if(interpolate && t > 0.0f)
 		a = (1.0f - t)*a + t*fetch_node_float(kg, offset+i+1);
 
 	return a;
@@ -39,12 +37,13 @@ __device float4 rgb_ramp_lookup(KernelGlobals *kg, int offset, float f)
 
 __device void svm_node_rgb_ramp(KernelGlobals *kg, ShaderData *sd, float *stack, uint4 node, int *offset)
 {
-	uint fac_offset = node.y;
-	uint color_offset = node.z;
-	uint alpha_offset = node.w;
+	uint fac_offset, color_offset, alpha_offset;
+	uint interpolate = node.z;
+
+	decode_node_uchar4(node.y, &fac_offset, &color_offset, &alpha_offset, NULL);
 
 	float fac = stack_load_float(stack, fac_offset);
-	float4 color = rgb_ramp_lookup(kg, *offset, fac);
+	float4 color = rgb_ramp_lookup(kg, *offset, fac, interpolate);
 
 	if(stack_valid(color_offset))
 		stack_store_float3(stack, color_offset, float4_to_float3(color));
@@ -63,9 +62,9 @@ __device void svm_node_rgb_curves(KernelGlobals *kg, ShaderData *sd, float *stac
 	float fac = stack_load_float(stack, fac_offset);
 	float3 color = stack_load_float3(stack, color_offset);
 
-	float r = rgb_ramp_lookup(kg, *offset, color.x).x;
-	float g = rgb_ramp_lookup(kg, *offset, color.y).y;
-	float b = rgb_ramp_lookup(kg, *offset, color.z).z;
+	float r = rgb_ramp_lookup(kg, *offset, color.x, true).x;
+	float g = rgb_ramp_lookup(kg, *offset, color.y, true).y;
+	float b = rgb_ramp_lookup(kg, *offset, color.z, true).z;
 
 	color = (1.0f - fac)*color + fac*make_float3(r, g, b);
 	stack_store_float3(stack, out_offset, color);
@@ -82,9 +81,9 @@ __device void svm_node_vector_curves(KernelGlobals *kg, ShaderData *sd, float *s
 	float fac = stack_load_float(stack, fac_offset);
 	float3 color = stack_load_float3(stack, color_offset);
 
-	float r = rgb_ramp_lookup(kg, *offset, (color.x + 1.0f)*0.5f).x;
-	float g = rgb_ramp_lookup(kg, *offset, (color.y + 1.0f)*0.5f).y;
-	float b = rgb_ramp_lookup(kg, *offset, (color.z + 1.0f)*0.5f).z;
+	float r = rgb_ramp_lookup(kg, *offset, (color.x + 1.0f)*0.5f, true).x;
+	float g = rgb_ramp_lookup(kg, *offset, (color.y + 1.0f)*0.5f, true).y;
+	float b = rgb_ramp_lookup(kg, *offset, (color.z + 1.0f)*0.5f, true).z;
 
 	color = (1.0f - fac)*color + fac*make_float3(r*2.0f - 1.0f, g*2.0f - 1.0f, b*2.0f - 1.0f);
 	stack_store_float3(stack, out_offset, color);

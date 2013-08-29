@@ -15,10 +15,6 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- *
  * Contributor(s): Willian P. Germano, Joseph Gilbert, Ken Hughes, Alex Fraser, Campbell Barton
  *
  * ***** END GPL LICENSE BLOCK *****
@@ -90,7 +86,7 @@ static PyObject *Vector_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		default:
 			PyErr_SetString(PyExc_TypeError,
 			                "mathutils.Vector(): "
-			                "more then a single arg given");
+			                "more than a single arg given");
 			return NULL;
 	}
 	return Vector_CreatePyObject_alloc(vec, size, type);
@@ -1169,7 +1165,7 @@ static PyObject *Vector_lerp(VectorObject *self, PyObject *args)
 PyDoc_STRVAR(Vector_rotate_doc,
 ".. function:: rotate(other)\n"
 "\n"
-"   Return vector by a rotation value.\n"
+"   Rotate the vector by a rotation value.\n"
 "\n"
 "   :arg other: rotation component of mathutils value\n"
 "   :type other: :class:`Euler`, :class:`Quaternion` or :class:`Matrix`\n"

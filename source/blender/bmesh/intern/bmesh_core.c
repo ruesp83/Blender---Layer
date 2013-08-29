@@ -30,6 +30,8 @@
 #include "BLI_math_vector.h"
 #include "BLI_listbase.h"
 #include "BLI_array.h"
+#include "BLI_alloca.h"
+#include "BLI_smallhash.h"
 
 #include "BLF_translation.h"
 
@@ -54,7 +56,8 @@
 /**
  * \brief Main function for creating a new vertex.
  */
-BMVert *BM_vert_create(BMesh *bm, const float co[3], const BMVert *example, const eBMCreateFlag create_flag)
+BMVert *BM_vert_create(BMesh *bm, const float co[3],
+                       const BMVert *v_example, const eBMCreateFlag create_flag)
 {
 	BMVert *v = BLI_mempool_calloc(bm->vpool);
 
@@ -84,10 +87,10 @@ BMVert *BM_vert_create(BMesh *bm, const float co[3], const BMVert *example, cons
 	}
 
 	if (!(create_flag & BM_CREATE_SKIP_CD)) {
-		if (example) {
+		if (v_example) {
 			int *keyi;
 
-			BM_elem_attrs_copy(bm, bm, example, v);
+			BM_elem_attrs_copy(bm, bm, v_example, v);
 
 			/* exception: don't copy the original shapekey index */
 			keyi = CustomData_bmesh_get(&bm->vdata, v->head.data, CD_SHAPE_KEYINDEX);
@@ -111,7 +114,8 @@ BMVert *BM_vert_create(BMesh *bm, const float co[3], const BMVert *example, cons
  * \note Duplicate edges are supported by the API however users should _never_ see them.
  * so unless you need a unique edge or know the edge won't exist, you should call with \a no_double = true
  */
-BMEdge *BM_edge_create(BMesh *bm, BMVert *v1, BMVert *v2, const BMEdge *example, const eBMCreateFlag create_flag)
+BMEdge *BM_edge_create(BMesh *bm, BMVert *v1, BMVert *v2,
+                       const BMEdge *e_example, const eBMCreateFlag create_flag)
 {
 	BMEdge *e;
 	
@@ -146,8 +150,8 @@ BMEdge *BM_edge_create(BMesh *bm, BMVert *v1, BMVert *v2, const BMEdge *example,
 	bmesh_disk_edge_append(e, e->v2);
 	
 	if (!(create_flag & BM_CREATE_SKIP_CD)) {
-		if (example) {
-			BM_elem_attrs_copy(bm, bm, example, e);
+		if (e_example) {
+			BM_elem_attrs_copy(bm, bm, e_example, e);
 		}
 		else {
 			CustomData_bmesh_set_default(&bm->edata, &e->head.data);
@@ -188,7 +192,8 @@ static BMLoop *bm_loop_create(BMesh *bm, BMVert *v, BMEdge *e, BMFace *f,
 	return l;
 }
 
-static BMLoop *bm_face_boundary_add(BMesh *bm, BMFace *f, BMVert *startv, BMEdge *starte, const int create_flag)
+static BMLoop *bm_face_boundary_add(BMesh *bm, BMFace *f, BMVert *startv, BMEdge *starte,
+                                    const eBMCreateFlag create_flag)
 {
 #ifdef USE_BMESH_HOLES
 	BMLoopList *lst = BLI_mempool_calloc(bm->looplistpool);
@@ -209,7 +214,7 @@ static BMLoop *bm_face_boundary_add(BMesh *bm, BMFace *f, BMVert *startv, BMEdge
 	return l;
 }
 
-BMFace *BM_face_copy(BMesh *bm, BMFace *f,
+BMFace *BM_face_copy(BMesh *bm_dst, BMesh *bm_src, BMFace *f,
                      const bool copy_verts, const bool copy_edges)
 {
 	BMVert **verts = BLI_array_alloca(verts, f->len);
@@ -220,11 +225,13 @@ BMFace *BM_face_copy(BMesh *bm, BMFace *f,
 	BMFace *f_copy;
 	int i;
 
+	BLI_assert((bm_dst == bm_src) || (copy_verts && copy_edges));
+
 	l_iter = l_first = BM_FACE_FIRST_LOOP(f);
 	i = 0;
 	do {
 		if (copy_verts) {
-			verts[i] = BM_vert_create(bm, l_iter->v->co, l_iter->v, 0);
+			verts[i] = BM_vert_create(bm_dst, l_iter->v->co, l_iter->v, BM_CREATE_NOP);
 		}
 		else {
 			verts[i] = l_iter->v;
@@ -247,7 +254,7 @@ BMFace *BM_face_copy(BMesh *bm, BMFace *f,
 				v1 = verts[(i + 1) % f->len];
 			}
 			
-			edges[i] = BM_edge_create(bm,  v1, v2, l_iter->e, 0);
+			edges[i] = BM_edge_create(bm_dst, v1, v2, l_iter->e, BM_CREATE_NOP);
 		}
 		else {
 			edges[i] = l_iter->e;
@@ -255,14 +262,14 @@ BMFace *BM_face_copy(BMesh *bm, BMFace *f,
 		i++;
 	} while ((l_iter = l_iter->next) != l_first);
 	
-	f_copy = BM_face_create(bm, verts, edges, f->len, BM_CREATE_SKIP_CD);
+	f_copy = BM_face_create(bm_dst, verts, edges, f->len, NULL, BM_CREATE_SKIP_CD);
 	
-	BM_elem_attrs_copy(bm, bm, f, f_copy);
+	BM_elem_attrs_copy(bm_src, bm_dst, f, f_copy);
 	
 	l_iter = l_first = BM_FACE_FIRST_LOOP(f);
 	l_copy = BM_FACE_FIRST_LOOP(f_copy);
 	do {
-		BM_elem_attrs_copy(bm, bm, l_iter, l_copy);
+		BM_elem_attrs_copy(bm_src, bm_dst, l_iter, l_copy);
 		l_copy = l_copy->next;
 	} while ((l_iter = l_iter->next) != l_first);
 
@@ -316,11 +323,12 @@ BLI_INLINE BMFace *bm_face_create__internal(BMesh *bm, const eBMCreateFlag creat
  * \param len  Length of the face
  * \param create_flag  Options for creating the face
  */
-BMFace *BM_face_create(BMesh *bm, BMVert **verts, BMEdge **edges, const int len, const eBMCreateFlag create_flag)
+BMFace *BM_face_create(BMesh *bm, BMVert **verts, BMEdge **edges, const int len,
+                       const BMFace *f_example, const eBMCreateFlag create_flag)
 {
 	BMFace *f = NULL;
 	BMLoop *l, *startl, *lastl;
-	int i, overlap;
+	int i;
 	
 	if (len == 0) {
 		/* just return NULL for now */
@@ -329,8 +337,8 @@ BMFace *BM_face_create(BMesh *bm, BMVert **verts, BMEdge **edges, const int len,
 
 	if (create_flag & BM_CREATE_NO_DOUBLE) {
 		/* Check if face already exists */
-		overlap = BM_face_exists(verts, len, &f);
-		if (overlap) {
+		const bool is_overlap = BM_face_exists(verts, len, &f);
+		if (is_overlap) {
 			return f;
 		}
 		else {
@@ -360,9 +368,46 @@ BMFace *BM_face_create(BMesh *bm, BMVert **verts, BMEdge **edges, const int len,
 	
 	f->len = len;
 	
+	if (!(create_flag & BM_CREATE_SKIP_CD)) {
+		if (f_example) {
+			BM_elem_attrs_copy(bm, bm, f_example, f);
+		}
+		else {
+			CustomData_bmesh_set_default(&bm->pdata, &f->head.data);
+		}
+	}
+
 	BM_CHECK_ELEMENT(f);
 
 	return f;
+}
+
+/**
+ * Wrapper for #BM_face_create when you don't have an edge array
+ */
+BMFace *BM_face_create_verts(BMesh *bm, BMVert **vert_arr, const int len,
+                             const BMFace *f_example, const eBMCreateFlag create_flag, const bool create_edges)
+{
+	BMEdge **edge_arr = BLI_array_alloca(edge_arr, len);
+	int i, i_prev = len - 1;
+
+	if (create_edges) {
+		for (i = 0; i < len; i++) {
+			edge_arr[i_prev] = BM_edge_create(bm, vert_arr[i_prev], vert_arr[i], NULL, BM_CREATE_NO_DOUBLE);
+			i_prev = i;
+		}
+	}
+	else {
+		for (i = 0; i < len; i++) {
+			edge_arr[i_prev] = BM_edge_exists(vert_arr[i_prev], vert_arr[i]);
+			if (edge_arr[i_prev] == NULL) {
+				return NULL;
+			}
+			i_prev = i;
+		}
+	}
+
+	return BM_face_create(bm, vert_arr, edge_arr, len, f_example, create_flag);
 }
 
 #ifndef NDEBUG
@@ -495,7 +540,11 @@ int bmesh_elem_check(void *element, const char htype)
 
 			if (len != f->len)
 				err |= (1 << 23);
+			break;
 		}
+		default:
+			BLI_assert(0);
+			break;
 	}
 
 	BMESH_ASSERT(err == 0);
@@ -587,7 +636,7 @@ static void bm_kill_only_loop(BMesh *bm, BMLoop *l)
  */
 void BM_face_edges_kill(BMesh *bm, BMFace *f)
 {
-	BMEdge **edges = BLI_array_alloca_and_count(edges, f->len);
+	BMEdge **edges = BLI_array_alloca(edges, f->len);
 	BMLoop *l_iter;
 	BMLoop *l_first;
 	int i = 0;
@@ -597,7 +646,7 @@ void BM_face_edges_kill(BMesh *bm, BMFace *f)
 		edges[i++] = l_iter->e;
 	} while ((l_iter = l_iter->next) != l_first);
 	
-	for (i = 0; i < BLI_array_count(edges); i++) {
+	for (i = 0; i < f->len; i++) {
 		BM_edge_kill(bm, edges[i]);
 	}
 }
@@ -608,7 +657,7 @@ void BM_face_edges_kill(BMesh *bm, BMFace *f)
  */
 void BM_face_verts_kill(BMesh *bm, BMFace *f)
 {
-	BMVert **verts = BLI_array_alloca_and_count(verts, f->len);
+	BMVert **verts = BLI_array_alloca(verts, f->len);
 	BMLoop *l_iter;
 	BMLoop *l_first;
 	int i = 0;
@@ -618,7 +667,7 @@ void BM_face_verts_kill(BMesh *bm, BMFace *f)
 		verts[i++] = l_iter->v;
 	} while ((l_iter = l_iter->next) != l_first);
 	
-	for (i = 0; i < BLI_array_count(verts); i++) {
+	for (i = 0; i < f->len; i++) {
 		BM_vert_kill(bm, verts[i]);
 	}
 }
@@ -787,7 +836,10 @@ static bool bm_loop_reverse_loop(BMesh *bm, BMFace *f
 			for (x = 0; x < sides; x++) {
 				for (y = 0; y < x; y++) {
 					swap_v3_v3(co[y * sides + x], co[sides * x + y]);
+					SWAP(float, co[y * sides + x][0], co[y * sides + x][1]);
+					SWAP(float, co[x * sides + y][0], co[x * sides + y][1]);
 				}
+				SWAP(float, co[x * sides + x][0], co[x * sides + x][1]);
 			}
 		}
 	}
@@ -1042,7 +1094,7 @@ BMFace *BM_faces_join(BMesh *bm, BMFace **faces, int totface, const bool do_del)
 	}
 
 	/* create region face */
-	f_new = tote ? BM_face_create_ngon(bm, v1, v2, edges, tote, 0) : NULL;
+	f_new = tote ? BM_face_create_ngon(bm, v1, v2, edges, tote, faces[0], BM_CREATE_NOP) : NULL;
 	if (UNLIKELY(!f_new || BMO_error_occurred(bm))) {
 		if (!BMO_error_occurred(bm))
 			err = N_("Invalid boundary region to join faces");
@@ -1069,8 +1121,6 @@ BMFace *BM_faces_join(BMesh *bm, BMFace **faces, int totface, const bool do_del)
 			BM_elem_attrs_copy(bm, bm, l2, l_iter);
 		}
 	} while ((l_iter = l_iter->next) != l_first);
-	
-	BM_elem_attrs_copy(bm, bm, faces[0], f_new);
 
 #ifdef USE_BMESH_HOLES
 	/* add holes */
@@ -1232,7 +1282,7 @@ BMFace *bmesh_sfme(BMesh *bm, BMFace *f, BMVert *v1, BMVert *v2,
 	}
 
 	/* allocate new edge between v1 and v2 */
-	e = BM_edge_create(bm, v1, v2, example, no_double ? BM_CREATE_NO_DOUBLE : 0);
+	e = BM_edge_create(bm, v1, v2, example, no_double ? BM_CREATE_NO_DOUBLE : BM_CREATE_NOP);
 
 	f2 = bm_face_create__sfme(bm, f);
 	l_f1 = bm_loop_create(bm, v2, e, f, l_v2, 0);
@@ -1358,19 +1408,23 @@ BMVert *bmesh_semv(BMesh *bm, BMVert *tv, BMEdge *e, BMEdge **r_e)
 	BMLoop *l_next;
 	BMEdge *e_new;
 	BMVert *v_new, *v_old;
-	int i, valence1 = 0, valence2 = 0;
+#ifndef NDEBUG
+	int valence1, valence2;
 	bool edok;
+	int i;
+#endif
 
 	BLI_assert(bmesh_vert_in_edge(e, tv) != false);
 
 	v_old = bmesh_edge_other_vert_get(e, tv);
 
+#ifndef NDEBUG
 	valence1 = bmesh_disk_count(v_old);
-
 	valence2 = bmesh_disk_count(tv);
+#endif
 
-	v_new = BM_vert_create(bm, tv->co, tv, 0);
-	e_new = BM_edge_create(bm, v_new, tv, e, 0);
+	v_new = BM_vert_create(bm, tv->co, tv, BM_CREATE_NOP);
+	e_new = BM_edge_create(bm, v_new, tv, e, BM_CREATE_NOP);
 
 	bmesh_disk_edge_remove(e_new, tv);
 	bmesh_disk_edge_remove(e_new, v_new);
@@ -1390,6 +1444,7 @@ BMVert *bmesh_semv(BMesh *bm, BMVert *tv, BMEdge *e, BMEdge **r_e)
 	/* add e_new to tv's disk cycle */
 	bmesh_disk_edge_append(e_new, tv);
 
+#ifndef NDEBUG
 	/* verify disk cycles */
 	edok = bmesh_disk_validate(valence1, v_old->e, v_old);
 	BMESH_ASSERT(edok != false);
@@ -1397,13 +1452,16 @@ BMVert *bmesh_semv(BMesh *bm, BMVert *tv, BMEdge *e, BMEdge **r_e)
 	BMESH_ASSERT(edok != false);
 	edok = bmesh_disk_validate(2, v_new->e, v_new);
 	BMESH_ASSERT(edok != false);
+#endif
 
 	/* Split the radial cycle if present */
 	l_next = e->l;
 	e->l = NULL;
 	if (l_next) {
 		BMLoop *l_new, *l;
+#ifndef NDEBUG
 		int radlen = bmesh_radial_length(l_next);
+#endif
 		int first1 = 0, first2 = 0;
 
 		/* Take the next loop. Remove it from radial. Split it. Append to appropriate radials */
@@ -1460,6 +1518,7 @@ BMVert *bmesh_semv(BMesh *bm, BMVert *tv, BMEdge *e, BMEdge **r_e)
 
 		}
 
+#ifndef NDEBUG
 		/* verify length of radial cycle */
 		edok = bmesh_radial_validate(radlen, e->l);
 		BMESH_ASSERT(edok != false);
@@ -1498,6 +1557,7 @@ BMVert *bmesh_semv(BMesh *bm, BMVert *tv, BMEdge *e, BMEdge **r_e)
 			BM_CHECK_ELEMENT(l->e);
 			BM_CHECK_ELEMENT(l->f);
 		}
+#endif
 	}
 
 	BM_CHECK_ELEMENT(e_new);
@@ -1545,8 +1605,8 @@ BMEdge *bmesh_jekv(BMesh *bm, BMEdge *e_kill, BMVert *v_kill, const bool check_e
 {
 	BMEdge *e_old;
 	BMVert *v_old, *tv;
-	BMLoop *l_kill, *l;
-	int len, radlen = 0, i, valence1, valence2;
+	BMLoop *l_kill;
+	int len, radlen = 0, i;
 	bool edok, halt = false;
 
 	if (bmesh_vert_in_edge(e_kill, v_kill) == 0) {
@@ -1556,6 +1616,11 @@ BMEdge *bmesh_jekv(BMesh *bm, BMEdge *e_kill, BMVert *v_kill, const bool check_e
 	len = bmesh_disk_count(v_kill);
 	
 	if (len == 2) {
+#ifndef NDEBUG
+		int valence1, valence2;
+		BMLoop *l;
+#endif
+
 		e_old = bmesh_disk_edge_next(e_kill, v_kill);
 		tv = bmesh_edge_other_vert_get(e_kill, v_kill);
 		v_old = bmesh_edge_other_vert_get(e_old, v_kill);
@@ -1567,9 +1632,11 @@ BMEdge *bmesh_jekv(BMesh *bm, BMEdge *e_kill, BMVert *v_kill, const bool check_e
 		else {
 			BMEdge *e_splice;
 
+#ifndef NDEBUG
 			/* For verification later, count valence of v_old and tv */
 			valence1 = bmesh_disk_count(v_old);
 			valence2 = bmesh_disk_count(tv);
+#endif
 
 			if (check_edge_double) {
 				e_splice = BM_edge_exists(tv, v_old);
@@ -1635,6 +1702,7 @@ BMEdge *bmesh_jekv(BMesh *bm, BMEdge *e_kill, BMVert *v_kill, const bool check_e
 			/* deallocate vertex */
 			bm_kill_only_vert(bm, v_kill);
 
+#ifndef NDEBUG
 			/* Validate disk cycle lengths of v_old, tv are unchanged */
 			edok = bmesh_disk_validate(valence1, v_old->e, v_old);
 			BMESH_ASSERT(edok != false);
@@ -1654,6 +1722,7 @@ BMEdge *bmesh_jekv(BMesh *bm, BMEdge *e_kill, BMVert *v_kill, const bool check_e
 				BM_CHECK_ELEMENT(l->e);
 				BM_CHECK_ELEMENT(l->f);
 			}
+#endif
 
 			if (check_edge_double) {
 				if (e_splice) {
@@ -1735,10 +1804,10 @@ BMFace *bmesh_jfke(BMesh *bm, BMFace *f1, BMFace *f2, BMEdge *e)
 
 	/* validate that for each face, each vertex has another edge in its disk cycle that is
 	 * not e, and not shared. */
-	if (bmesh_radial_face_find(l_f1->next->e, f2) ||
-	    bmesh_radial_face_find(l_f1->prev->e, f2) ||
-	    bmesh_radial_face_find(l_f2->next->e, f1) ||
-	    bmesh_radial_face_find(l_f2->prev->e, f1) )
+	if (BM_edge_in_face(l_f1->next->e, f2) ||
+	    BM_edge_in_face(l_f1->prev->e, f2) ||
+	    BM_edge_in_face(l_f2->next->e, f1) ||
+	    BM_edge_in_face(l_f2->prev->e, f1) )
 	{
 		return NULL;
 	}
@@ -1885,50 +1954,65 @@ bool BM_vert_splice(BMesh *bm, BMVert *v, BMVert *v_target)
  *
  * \return Success
  */
-bool bmesh_vert_separate(BMesh *bm, BMVert *v, BMVert ***r_vout, int *r_vout_len)
+void bmesh_vert_separate(BMesh *bm, BMVert *v, BMVert ***r_vout, int *r_vout_len,
+                         const bool copy_select)
 {
-	BMEdge **stack = NULL;
-	BLI_array_staticdeclare(stack, BM_DEFAULT_ITER_STACK_SIZE);
+	const int v_edgetot = BM_vert_face_count(v);
+	BMEdge **stack = BLI_array_alloca(stack, v_edgetot);
+	STACK_DECLARE(stack);
+
+	SmallHash visithash;
 	BMVert **verts = NULL;
-	GHash *visithash;
 	BMIter eiter, liter;
 	BMLoop *l;
 	BMEdge *e;
 	int i, maxindex;
 	BMLoop *l_new;
 
-	visithash = BLI_ghash_ptr_new(__func__);
+	BLI_smallhash_init(&visithash);
+
+	STACK_INIT(stack);
 
 	maxindex = 0;
 	BM_ITER_ELEM (e, &eiter, v, BM_EDGES_OF_VERT) {
-		if (BLI_ghash_haskey(visithash, e)) {
+		if (BLI_smallhash_haskey(&visithash, (uintptr_t)e)) {
 			continue;
 		}
 
-		/* Prime the stack with this unvisited edge */
-		BLI_array_append(stack, e);
-
 		/* Considering only edges and faces incident on vertex v, walk
 		 * the edges & faces and assign an index to each connected set */
-		while ((e = BLI_array_pop(stack))) {
-			BLI_ghash_insert(visithash, e, SET_INT_IN_POINTER(maxindex));
+		do {
+			BLI_smallhash_insert(&visithash, (uintptr_t)e, SET_INT_IN_POINTER(maxindex));
 
-			BM_ITER_ELEM (l, &liter, e, BM_LOOPS_OF_EDGE) {
-				l_new = (l->v == v) ? l->prev : l->next;
-				if (!BLI_ghash_haskey(visithash, l_new->e)) {
-					BLI_array_append(stack, l_new->e);
-				}
+			if (e->l) {
+				BMLoop *l_iter, *l_first;
+				l_iter = l_first = e->l;
+				do {
+					l_new = (l_iter->v == v) ? l_iter->prev : l_iter->next;
+					if (!BLI_smallhash_haskey(&visithash, (uintptr_t)l_new->e)) {
+						STACK_PUSH(stack, l_new->e);
+					}
+				} while ((l_iter = l_iter->radial_next) != l_first);
 			}
-		}
+		} while ((e = STACK_POP(stack)));
 
 		maxindex++;
 	}
 
 	/* Make enough verts to split v for each group */
-	verts = MEM_callocN(sizeof(BMVert *) * maxindex, __func__);
+	if (r_vout != NULL) {
+		verts = MEM_callocN(sizeof(BMVert *) * maxindex, __func__);
+	}
+	else {
+		verts = BLI_array_alloca(verts, maxindex);
+	}
+
 	verts[0] = v;
 	for (i = 1; i < maxindex; i++) {
-		verts[i] = BM_vert_create(bm, v->co, v, 0);
+		verts[i] = BM_vert_create(bm, v->co, v, BM_CREATE_NOP);
+		if (copy_select) {
+			BM_elem_select_copy(bm, bm, verts[i], v);
+		}
 	}
 
 	/* Replace v with the new verts in each group */
@@ -1958,23 +2042,23 @@ bool bmesh_vert_separate(BMesh *bm, BMVert *v, BMVert ***r_vout, int *r_vout_len
 	 * by modifying data it loops over [#30632], this re-uses the 'stack' variable which is a bit
 	 * bad practice but save alloc'ing a new array - note, the comment above is useful, keep it
 	 * if you are tidying up code - campbell */
-	BLI_array_empty(stack);
+	STACK_INIT(stack);
 	BM_ITER_ELEM (l, &liter, v, BM_LOOPS_OF_VERT) {
 		if (l->v == v) {
-			BLI_array_append(stack, (BMEdge *)l);
+			STACK_PUSH(stack, (BMEdge *)l);
 		}
 	}
-	while ((l = (BMLoop *)(BLI_array_pop(stack)))) {
-		if ((i = GET_INT_FROM_POINTER(BLI_ghash_lookup(visithash, l->e)))) {
+	while ((l = (BMLoop *)(STACK_POP(stack)))) {
+		if ((i = GET_INT_FROM_POINTER(BLI_smallhash_lookup(&visithash, (uintptr_t)l->e)))) {
 			l->v = verts[i];
 		}
 	}
 #endif
 
-	BLI_array_free(stack);
+	STACK_FREE(stack);
 
 	BM_ITER_ELEM (e, &eiter, v, BM_EDGES_OF_VERT) {
-		i = GET_INT_FROM_POINTER(BLI_ghash_lookup(visithash, e));
+		i = GET_INT_FROM_POINTER(BLI_smallhash_lookup(&visithash, (uintptr_t)e));
 		if (i == 0) {
 			continue;
 		}
@@ -1985,7 +2069,7 @@ bool bmesh_vert_separate(BMesh *bm, BMVert *v, BMVert ***r_vout, int *r_vout_len
 		bmesh_disk_edge_append(e, verts[i]);
 	}
 
-	BLI_ghash_free(visithash, NULL, NULL);
+	BLI_smallhash_release(&visithash);
 
 	for (i = 0; i < maxindex; i++) {
 		BM_CHECK_ELEMENT(verts[i]);
@@ -1998,17 +2082,12 @@ bool bmesh_vert_separate(BMesh *bm, BMVert *v, BMVert ***r_vout, int *r_vout_len
 	if (r_vout != NULL) {
 		*r_vout = verts;
 	}
-	else {
-		MEM_freeN(verts);
-	}
-
-	return true;
 }
 
 /**
  * High level function which wraps both #bmesh_vert_separate and #bmesh_edge_separate
  */
-bool BM_vert_separate(BMesh *bm, BMVert *v, BMVert ***r_vout, int *r_vout_len,
+void BM_vert_separate(BMesh *bm, BMVert *v, BMVert ***r_vout, int *r_vout_len,
                      BMEdge **e_in, int e_in_len)
 {
 	int i;
@@ -2016,11 +2095,11 @@ bool BM_vert_separate(BMesh *bm, BMVert *v, BMVert ***r_vout, int *r_vout_len,
 	for (i = 0; i < e_in_len; i++) {
 		BMEdge *e = e_in[i];
 		if (e->l && BM_vert_in_edge(e, v)) {
-			bmesh_edge_separate(bm, e, e->l);
+			bmesh_edge_separate(bm, e, e->l, false);
 		}
 	}
 
-	return bmesh_vert_separate(bm, v, r_vout, r_vout_len);
+	bmesh_vert_separate(bm, v, r_vout, r_vout_len, false);
 }
 
 /**
@@ -2076,36 +2155,40 @@ bool BM_edge_splice(BMesh *bm, BMEdge *e, BMEdge *e_target)
  * \note Does nothing if \a l_sep is already the only loop in the
  * edge radial.
  */
-bool bmesh_edge_separate(BMesh *bm, BMEdge *e, BMLoop *l_sep)
+void bmesh_edge_separate(BMesh *bm, BMEdge *e, BMLoop *l_sep,
+                         const bool copy_select)
 {
 	BMEdge *e_new;
-	int radlen;
+#ifndef NDEBUG
+	const int radlen = bmesh_radial_length(e->l);
+#endif
 
 	BLI_assert(l_sep->e == e);
 	BLI_assert(e->l);
 	
-	radlen = bmesh_radial_length(e->l);
-	if (radlen < 2) {
+	if (BM_edge_is_boundary(e)) {
 		/* no cut required */
-		return true;
+		return;
 	}
 
 	if (l_sep == e->l) {
 		e->l = l_sep->radial_next;
 	}
 
-	e_new = BM_edge_create(bm, e->v1, e->v2, e, 0);
+	e_new = BM_edge_create(bm, e->v1, e->v2, e, BM_CREATE_NOP);
 	bmesh_radial_loop_remove(l_sep, e);
 	bmesh_radial_append(e_new, l_sep);
 	l_sep->e = e_new;
+
+	if (copy_select) {
+		BM_elem_select_copy(bm, bm, e_new, e);
+	}
 
 	BLI_assert(bmesh_radial_length(e->l) == radlen - 1);
 	BLI_assert(bmesh_radial_length(e_new->l) == 1);
 
 	BM_CHECK_ELEMENT(e_new);
 	BM_CHECK_ELEMENT(e);
-
-	return true;
 }
 
 /**
@@ -2124,8 +2207,8 @@ BMVert *bmesh_urmv_loop(BMesh *bm, BMLoop *l_sep)
 
 	/* peel the face from the edge radials on both sides of the
 	 * loop vert, disconnecting the face from its fan */
-	bmesh_edge_separate(bm, l_sep->e, l_sep);
-	bmesh_edge_separate(bm, l_sep->prev->e, l_sep->prev);
+	bmesh_edge_separate(bm, l_sep->e, l_sep, false);
+	bmesh_edge_separate(bm, l_sep->prev->e, l_sep->prev, false);
 
 	if (bmesh_disk_count(v_sep) == 2) {
 		/* If there are still only two edges out of v_sep, then
@@ -2143,7 +2226,7 @@ BMVert *bmesh_urmv_loop(BMesh *bm, BMLoop *l_sep)
 
 	/* Split all fans connected to the vert, duplicating it for
 	 * each fans. */
-	bmesh_vert_separate(bm, v_sep, &vtar, &len);
+	bmesh_vert_separate(bm, v_sep, &vtar, &len, false);
 
 	/* There should have been at least two fans cut apart here,
 	 * otherwise the early exit would have kicked in. */

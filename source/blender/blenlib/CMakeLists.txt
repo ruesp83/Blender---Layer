@@ -25,11 +25,10 @@
 
 # XXX allowing blenkernel and RNA includes in blenlib is a hack,
 # but needed in a few places atm (bpath.c for instance)
-set(INC 
+set(INC
 	.
 	# ../blenkernel  # dont add this back!
 	../makesdna
-	../makesrna
 	../../../intern/ghost
 	../../../intern/guardedalloc
 	../../../extern/wcwidth
@@ -70,6 +69,7 @@ set(SRC
 	intern/math_base.c
 	intern/math_base_inline.c
 	intern/math_color.c
+	intern/math_color_blend_inline.c
 	intern/math_color_inline.c
 	intern/math_geom.c
 	intern/math_geom_inline.c
@@ -86,6 +86,7 @@ set(SRC
 	intern/rct.c
 	intern/scanfill.c
 	intern/smallhash.c
+	intern/sort.c
 	intern/stack.c
 	intern/storage.c
 	intern/string.c
@@ -99,6 +100,7 @@ set(SRC
 	intern/winstuff.c
 
 	BLI_args.h
+	BLI_alloca.h
 	BLI_array.h
 	BLI_bitmap.h
 	BLI_blenlib.h
@@ -124,10 +126,12 @@ set(SRC
 	BLI_kdtree.h
 	BLI_lasso.h
 	BLI_linklist.h
+	BLI_linklist_stack.h
 	BLI_listbase.h
 	BLI_math.h
 	BLI_math_base.h
 	BLI_math_color.h
+	BLI_math_color_blend.h
 	BLI_math_geom.h
 	BLI_math_inline.h
 	BLI_math_interp.h
@@ -144,10 +148,12 @@ set(SRC
 	BLI_rect.h
 	BLI_scanfill.h
 	BLI_smallhash.h
+	BLI_sort.h
 	BLI_stack.h
 	BLI_string.h
 	BLI_string_cursor_utf8.h
 	BLI_string_utf8.h
+	BLI_sys_types.h
 	BLI_threads.h
 	BLI_utildefines.h
 	BLI_uvproject.h
@@ -163,10 +169,6 @@ if(WITH_BINRELOC)
 		${BINRELOC_INCLUDE_DIRS}
 	)
 	add_definitions(-DWITH_BINRELOC)
-endif()
-
-if(WITH_OPENMP)
-	add_definitions(-DPARALLEL=1)
 endif()
 
 if(WIN32)

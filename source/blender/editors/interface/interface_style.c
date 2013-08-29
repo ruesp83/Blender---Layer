@@ -162,7 +162,7 @@ void uiStyleFontDrawExt(uiFontStyle *fs, const rcti *rect, const char *str,
 		}
 	}
 	else if (fs->align == UI_STYLE_TEXT_RIGHT) {
-		xofs = BLI_rcti_size_x(rect) - BLF_width(fs->uifont_id, str) - 1;
+		xofs = BLI_rcti_size_x(rect) - BLF_width(fs->uifont_id, str) - 0.1f * U.widget_unit;
 	}
 	
 	/* clip is very strict, so we give it some space */
@@ -270,9 +270,9 @@ uiStyle *UI_GetStyleDraw(void)
 	_style = *style;
 	
 	_style.paneltitle.shadx = (short)(UI_DPI_FAC * _style.paneltitle.shadx);
-	_style.paneltitle.shady = (short)(UI_DPI_FAC * _style.grouplabel.shady);
+	_style.paneltitle.shady = (short)(UI_DPI_FAC * _style.paneltitle.shady);
 	_style.grouplabel.shadx = (short)(UI_DPI_FAC * _style.grouplabel.shadx);
-	_style.grouplabel.shady = (short)(UI_DPI_FAC * _style.paneltitle.shady);
+	_style.grouplabel.shady = (short)(UI_DPI_FAC * _style.grouplabel.shady);
 	_style.widgetlabel.shadx = (short)(UI_DPI_FAC * _style.widgetlabel.shadx);
 	_style.widgetlabel.shady = (short)(UI_DPI_FAC * _style.widgetlabel.shady);
 	
@@ -336,7 +336,7 @@ void uiStyleInit(void)
 	/* recover from uninitialized dpi */
 	if (U.dpi == 0)
 		U.dpi = 72;
-	CLAMP(U.dpi, 48, 128);
+	CLAMP(U.dpi, 48, 144);
 	
 	/* default builtin */
 	if (font == NULL) {

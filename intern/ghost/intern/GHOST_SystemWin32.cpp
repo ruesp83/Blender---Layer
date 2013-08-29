@@ -47,14 +47,6 @@
 #include <shlobj.h>
 #include <tlhelp32.h>
 
-// win64 doesn't define GWL_USERDATA
-#ifdef WIN32
-#  ifndef GWL_USERDATA
-#    define GWL_USERDATA GWLP_USERDATA
-#    define GWL_WNDPROC GWLP_WNDPROC
-#  endif
-#endif
-
 #include "utfconv.h"
 
 #include "GHOST_DisplayManagerWin32.h"
@@ -400,7 +392,7 @@ GHOST_TSuccess GHOST_SystemWin32::init()
 	}
 
 	if (success) {
-		WNDCLASSW wc;
+		WNDCLASSW wc = {0};
 		wc.style = CS_HREDRAW | CS_VREDRAW;
 		wc.lpfnWndProc = s_wndProc;
 		wc.cbClsExtra = 0;
@@ -412,7 +404,7 @@ GHOST_TSuccess GHOST_SystemWin32::init()
 			::LoadIcon(NULL, IDI_APPLICATION);
 		}
 		wc.hCursor = ::LoadCursor(0, IDC_ARROW);
-		wc.hbrBackground = (HBRUSH) ::GetStockObject(BLACK_BRUSH);
+		wc.hbrBackground = 0;
 		wc.lpszMenuName = 0;
 		wc.lpszClassName = L"GHOST_WindowClass";
 
@@ -607,7 +599,17 @@ GHOST_TKey GHOST_SystemWin32::convertKey(GHOST_IWindow *window, short vKey, shor
 			case VK_GR_LESS:        key = GHOST_kKeyGrLess;         break;
 
 			case VK_SHIFT:
-				key = (scanCode == 0x36) ? GHOST_kKeyRightShift : GHOST_kKeyLeftShift;
+					/* Check single shift presses */
+					if (scanCode == 0x36) {
+						key = GHOST_kKeyRightShift;
+					} else if (scanCode == 0x2a) {
+						key = GHOST_kKeyLeftShift;
+					} else {
+						/* Must be a combination SHIFT (Left or Right) + a Key 
+						 * Ignore this as the next message will contain
+						 * the desired "Key" */
+						key = GHOST_kKeyUnknown;
+					}
 				break;
 			case VK_CONTROL:
 				key = (extend) ? GHOST_kKeyRightControl : GHOST_kKeyLeftControl;
@@ -894,7 +896,7 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
 	GHOST_ASSERT(system, "GHOST_SystemWin32::s_wndProc(): system not initialized");
 
 	if (hwnd) {
-		GHOST_WindowWin32 *window = (GHOST_WindowWin32 *)::GetWindowLong(hwnd, GWL_USERDATA);
+		GHOST_WindowWin32 *window = (GHOST_WindowWin32 *)::GetWindowLongPtr(hwnd, GWLP_USERDATA);
 		if (window) {
 			switch (msg) {
 				// we need to check if new key layout has AltGr
@@ -979,7 +981,10 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
 					 * maximize, minimize  or close the window are triggered. Also it is sent when ALT 
 					 * button is press for menu. To prevent this we must return preventing DefWindowProc.
 					 */
-					if (wParam == SC_KEYMENU) return 0;
+					if (wParam == SC_KEYMENU) 
+					{
+						eventHandled = true;
+					}
 					break;
 				////////////////////////////////////////////////////////////////////////
 				// Tablet events, processed
@@ -1105,9 +1110,25 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
 					event = processWindowEvent(LOWORD(wParam) ? GHOST_kEventWindowActivate : GHOST_kEventWindowDeactivate, window);
 					/* WARNING: Let DefWindowProc handle WM_ACTIVATE, otherwise WM_MOUSEWHEEL
 					 * will not be dispatched to OUR active window if we minimize one of OUR windows. */
+					if (LOWORD(wParam)==WA_INACTIVE)
+						window->lostMouseCapture();
+
 					lResult = ::DefWindowProc(hwnd, msg, wParam, lParam);
 					break;
 				}
+				case WM_ENTERSIZEMOVE:
+					/* The WM_ENTERSIZEMOVE message is sent one time to a window after it enters the moving 
+					 * or sizing modal loop. The window enters the moving or sizing modal loop when the user 
+					 * clicks the window's title bar or sizing border, or when the window passes the 
+					 * WM_SYSCOMMAND message to the DefWindowProc function and the wParam parameter of the 
+					 * message specifies the SC_MOVE or SC_SIZE value. The operation is complete when 
+					 * DefWindowProc returns. 
+					 */
+					window->m_inLiveResize = 1;
+					break;
+				case WM_EXITSIZEMOVE:
+					window->m_inLiveResize = 0;
+					break;
 				case WM_PAINT:
 					/* An application sends the WM_PAINT message when the system or another application 
 					 * makes a request to paint a portion of an application's window. The message is sent
@@ -1115,8 +1136,13 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
 					 * function when the application obtains a WM_PAINT message by using the GetMessage or 
 					 * PeekMessage function. 
 					 */
-					event = processWindowEvent(GHOST_kEventWindowUpdate, window);
-					::ValidateRect(hwnd, NULL);
+					if (!window->m_inLiveResize) {
+						event = processWindowEvent(GHOST_kEventWindowUpdate, window);
+						::ValidateRect(hwnd, NULL);
+					}
+					else {
+						eventHandled = true;
+					}
 					break;
 				case WM_GETMINMAXINFO:
 					/* The WM_GETMINMAXINFO message is sent to a window when the size or 
@@ -1127,6 +1153,7 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
 					processMinMaxInfo((MINMAXINFO *) lParam);
 					/* Let DefWindowProc handle it. */
 					break;
+				case WM_SIZING:
 				case WM_SIZE:
 					/* The WM_SIZE message is sent to a window after its size has changed.
 					 * The WM_SIZE and WM_MOVE messages are not sent if an application handles the 
@@ -1134,23 +1161,38 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
 					 * to perform any move or size change processing during the WM_WINDOWPOSCHANGED 
 					 * message without calling DefWindowProc.
 					 */
-					event = processWindowEvent(GHOST_kEventWindowSize, window);
+					/* we get first WM_SIZE before we fully init. So, do not dispatch before we continiously resizng */
+					if(window->m_inLiveResize) {
+						system->pushEvent(processWindowEvent(GHOST_kEventWindowSize, window));
+						system->dispatchEvents();
+					}
+					else {
+						event = processWindowEvent(GHOST_kEventWindowSize, window);
+					}
 					break;
 				case WM_CAPTURECHANGED:
 					window->lostMouseCapture();
 					break;
 				case WM_MOVING:
-				/* The WM_MOVING message is sent to a window that the user is moving. By processing
-				 * this message, an application can monitor the size and position of the drag rectangle
-				 * and, if needed, change its size or position.
-				 */
+					/* The WM_MOVING message is sent to a window that the user is moving. By processing
+					 * this message, an application can monitor the size and position of the drag rectangle
+					 * and, if needed, change its size or position.
+					 */
 				case WM_MOVE:
 					/* The WM_SIZE and WM_MOVE messages are not sent if an application handles the 
 					 * WM_WINDOWPOSCHANGED message without calling DefWindowProc. It is more efficient
 					 * to perform any move or size change processing during the WM_WINDOWPOSCHANGED 
 					 * message without calling DefWindowProc. 
 					 */
-					event = processWindowEvent(GHOST_kEventWindowMove, window);
+					/* see WM_SIZE comment*/
+					if (window->m_inLiveResize) {
+						system->pushEvent(processWindowEvent(GHOST_kEventWindowMove, window));
+						system->dispatchEvents();
+					}
+					else {
+						event = processWindowEvent(GHOST_kEventWindowMove, window);
+					}
+
 					break;
 				////////////////////////////////////////////////////////////////////////
 				// Window events, ignored
@@ -1202,14 +1244,6 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
 				 */
 				case WM_SETFOCUS:
 				/* The WM_SETFOCUS message is sent to a window after it has gained the keyboard focus. */
-				case WM_ENTERSIZEMOVE:
-					/* The WM_ENTERSIZEMOVE message is sent one time to a window after it enters the moving 
-					 * or sizing modal loop. The window enters the moving or sizing modal loop when the user 
-					 * clicks the window's title bar or sizing border, or when the window passes the 
-					 * WM_SYSCOMMAND message to the DefWindowProc function and the wParam parameter of the 
-					 * message specifies the SC_MOVE or SC_SIZE value. The operation is complete when 
-					 * DefWindowProc returns. 
-					 */
 					break;
 				////////////////////////////////////////////////////////////////////////
 				// Other events
@@ -1235,6 +1269,7 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
 					 * In GHOST, we let DefWindowProc call the timer callback.
 					 */
 					break;
+
 			}
 		}
 		else {

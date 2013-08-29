@@ -50,6 +50,7 @@ class IMAGE_MT_view(Menu):
         toolsettings = context.tool_settings
 
         show_uvedit = sima.show_uvedit
+        show_render = sima.show_render
 
         layout.operator("image.properties", icon='MENU_PANEL')
         layout.operator("image.scopes", icon='MENU_PANEL')
@@ -83,6 +84,11 @@ class IMAGE_MT_view(Menu):
 
         layout.separator()
 
+        if show_render:
+            layout.operator("image.cycle_render_slot", text="Render Slot Cycle Next")
+            layout.operator("image.cycle_render_slot", text="Render Slot Cycle Previous").reverse = True
+            layout.separator()
+
         layout.operator("screen.area_dupli")
         layout.operator("screen.screen_full_area")
 
@@ -100,12 +106,17 @@ class IMAGE_MT_select(Menu):
 
         layout.operator("uv.select_all").action = 'TOGGLE'
         layout.operator("uv.select_all", text="Inverse").action = 'INVERT'
-        layout.operator("uv.unlink_selected")
+        layout.operator("uv.select_split")
 
         layout.separator()
 
         layout.operator("uv.select_pinned")
         layout.operator("uv.select_linked")
+
+        layout.separator()
+
+        layout.operator("uv.select_less", text="Less")
+        layout.operator("uv.select_more", text="More")
 
         layout.separator()
 
@@ -210,8 +221,26 @@ class IMAGE_MT_color(Menu):
         layout = self.layout
 
         layout.operator("image.bright_contrast", text="Bright/Contrast")
+        layout.operator("image.exposure", text="Exposure")
         layout.separator()
+        layout.operator("image.colorize", text="Colorize")
+        layout.menu("IMAGE_MT_image_desaturate")
+        layout.separator()
+        layout.operator("image.threshold", text="Threshold")
+        layout.operator("image.posterize", text="Posterize")
         layout.menu("IMAGE_MT_image_invert")
+        layout.operator("image.invert_value", text="Invert Value")
+
+
+class IMAGE_MT_image_desaturate(Menu):
+    bl_label = "Desaturate"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("image.desaturate", text="Lightness").type = 'LIGHT'
+        layout.operator("image.desaturate", text="Luminosity").type = 'LUM'
+        layout.operator("image.desaturate", text="Average").type = 'AVG'
 
 
 class IMAGE_MT_image_invert(Menu):
@@ -227,17 +256,10 @@ class IMAGE_MT_image_invert(Menu):
 
         layout.separator()
 
-        props = layout.operator("image.invert", text="Invert Red Channel")
-        props.invert_r = True
-
-        props = layout.operator("image.invert", text="Invert Green Channel")
-        props.invert_g = True
-
-        props = layout.operator("image.invert", text="Invert Blue Channel")
-        props.invert_b = True
-
-        props = layout.operator("image.invert", text="Invert Alpha Channel")
-        props.invert_a = True
+        layout.operator("image.invert", text="Invert Red Channel").invert_r = True
+        layout.operator("image.invert", text="Invert Green Channel").invert_g = True
+        layout.operator("image.invert", text="Invert Blue Channel").invert_b = True
+        layout.operator("image.invert", text="Invert Alpha Channel").invert_a = True
 
 
 class IMAGE_MT_layers(Menu):
@@ -380,6 +402,7 @@ class IMAGE_MT_uvs_snap(Menu):
 
         layout.operator("uv.snap_selected", text="Selected to Pixels").target = 'PIXELS'
         layout.operator("uv.snap_selected", text="Selected to Cursor").target = 'CURSOR'
+        layout.operator("uv.snap_selected", text="Selected to Cursor (Offset)").target = 'CURSOR_OFFSET'
         layout.operator("uv.snap_selected", text="Selected to Adjacent Unselected").target = 'ADJACENT_UNSELECTED'
 
         layout.separator()
@@ -531,6 +554,8 @@ class IMAGE_HT_header(Header):
 
             if show_uvedit:
                 sub.menu("IMAGE_MT_select")
+            if show_maskedit:
+                sub.menu("MASK_MT_select")
 
             if ima and ima.is_dirty:
                 sub.menu("IMAGE_MT_file", text="File*")
@@ -546,6 +571,8 @@ class IMAGE_HT_header(Header):
 
             if show_uvedit:
                 sub.menu("IMAGE_MT_uvs")
+            if show_maskedit:
+                sub.menu("MASK_MT_mask")
 
         layout.template_ID(sima, "image", new="image.new")
 
@@ -926,8 +953,10 @@ class IMAGE_PT_paint(Panel, ImagePaintPanel):
 
         if brush:
             col = layout.column()
-            col.template_color_picker(brush, "color", value_slider=True)
-            col.prop(brush, "color", text="")
+
+            if brush.image_tool == 'DRAW' and brush.blend not in ('ERASE_ALPHA', 'ADD_ALPHA'):
+                col.template_color_picker(brush, "color", value_slider=True)
+                col.prop(brush, "color", text="")
 
             row = col.row(align=True)
             self.prop_unified_size(row, context, brush, "size", slider=True, text="Radius")
@@ -936,8 +965,6 @@ class IMAGE_PT_paint(Panel, ImagePaintPanel):
             row = col.row(align=True)
             self.prop_unified_strength(row, context, brush, "strength", slider=True, text="Strength")
             self.prop_unified_strength(row, context, brush, "use_pressure_strength")
-
-            row = col.row(align=True)
 
             col.prop(brush, "blend", text="Blend")
 
@@ -956,6 +983,7 @@ class IMAGE_PT_tools_brush_texture(BrushButtonsPanel, Panel):
 
         toolsettings = context.tool_settings.image_paint
         brush = toolsettings.brush
+        tex_slot = brush.texture_slot
 
         col = layout.column()
         col.template_ID_preview(brush, "texture", new="texture.new", rows=3, cols=8)
@@ -967,13 +995,16 @@ class IMAGE_PT_tools_brush_texture(BrushButtonsPanel, Panel):
         col.active = brush.brush_capabilities.has_overlay
         col.label(text="Overlay:")
 
-        row = col.row()
-        if brush.use_texture_overlay:
-            row.prop(brush, "use_texture_overlay", toggle=True, text="", icon='RESTRICT_VIEW_OFF')
-        else:
-            row.prop(brush, "use_texture_overlay", toggle=True, text="", icon='RESTRICT_VIEW_ON')
-        sub = row.row()
+        row = col.row(align=True)
+        if tex_slot.map_mode != 'STENCIL':
+            if brush.use_primary_overlay:
+                row.prop(brush, "use_primary_overlay", toggle=True, text="", icon='RESTRICT_VIEW_OFF')
+            else:
+                row.prop(brush, "use_primary_overlay", toggle=True, text="", icon='RESTRICT_VIEW_ON')
+
+        sub = row.row(align=True)
         sub.prop(brush, "texture_overlay_alpha", text="Alpha")
+        sub.prop(brush, "use_primary_overlay_override", toggle=True, text="", icon='BRUSH_DATA')
 
 
 class IMAGE_PT_tools_mask_texture(BrushButtonsPanel, Panel):
@@ -991,6 +1022,21 @@ class IMAGE_PT_tools_mask_texture(BrushButtonsPanel, Panel):
         col.template_ID_preview(brush, "mask_texture", new="texture.new", rows=3, cols=8)
 
         brush_mask_texture_settings(col, brush)
+
+        col = layout.column(align=True)
+        col.active = brush.brush_capabilities.has_overlay
+        col.label(text="Overlay:")
+
+        row = col.row(align=True)
+        if tex_slot_alpha.map_mode != 'STENCIL':
+            if brush.use_secondary_overlay:
+                row.prop(brush, "use_secondary_overlay", toggle=True, text="", icon='RESTRICT_VIEW_OFF')
+            else:
+                row.prop(brush, "use_secondary_overlay", toggle=True, text="", icon='RESTRICT_VIEW_ON')
+
+        sub = row.row(align=True)
+        sub.prop(brush, "mask_overlay_alpha", text="Alpha")
+        sub.prop(brush, "use_secondary_overlay_override", toggle=True, text="", icon='BRUSH_DATA')
 
 
 class IMAGE_PT_tools_brush_tool(BrushButtonsPanel, Panel):
@@ -1027,7 +1073,7 @@ class IMAGE_PT_paint_stroke(BrushButtonsPanel, Panel):
         col = layout.column()
 
         col.label(text="Stroke Method:")
-        
+
         col.prop(brush, "stroke_method", text="")
 
         if brush.use_anchor:
@@ -1044,7 +1090,6 @@ class IMAGE_PT_paint_stroke(BrushButtonsPanel, Panel):
             row.active = brush.use_space
             row.prop(brush, "spacing", text="Spacing")
             row.prop(brush, "use_pressure_spacing", toggle=True, text="")
-
 
         col = layout.column()
         col.separator()
@@ -1089,6 +1134,35 @@ class IMAGE_PT_paint_curve(BrushButtonsPanel, Panel):
         row.operator("brush.curve_preset", icon='SHARPCURVE', text="").shape = 'SHARP'
         row.operator("brush.curve_preset", icon='LINCURVE', text="").shape = 'LINE'
         row.operator("brush.curve_preset", icon='NOCURVE', text="").shape = 'MAX'
+
+
+class IMAGE_PT_tools_brush_appearance(BrushButtonsPanel, Panel):
+    bl_label = "Appearance"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+
+        toolsettings = context.tool_settings.image_paint
+        brush = toolsettings.brush
+
+        if brush is None:  # unlikely but can happen
+            layout.label(text="Brush Unset")
+            return
+
+        col = layout.column()
+        col.prop(toolsettings, "show_brush")
+
+        col = col.column()
+        col.prop(brush, "cursor_color_add", text="")
+        col.active = toolsettings.show_brush
+
+        layout.separator()
+
+        col = layout.column(align=True)
+        col.prop(brush, "use_custom_icon")
+        if brush.use_custom_icon:
+            col.prop(brush, "icon_filepath", text="")
 
 
 class IMAGE_UV_sculpt_curve(Panel):

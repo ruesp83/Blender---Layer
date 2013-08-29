@@ -63,8 +63,8 @@
 
 
 // Blender GameObject type
-BlendType<KX_GameObject> gameObjectType ("KX_GameObject");
-BlendType<KX_LightObject> lightObjectType ("KX_LightObject");
+static BlendType<KX_GameObject> gameObjectType ("KX_GameObject");
+static BlendType<KX_LightObject> lightObjectType ("KX_LightObject");
 
 
 // load texture
@@ -381,7 +381,7 @@ static PyObject *Texture_refresh(Texture *self, PyObject *args)
 						texture = self->m_scaledImg;
 					}
 					// load texture for rendering
-					loadTexture (self->m_actTex, texture, size, self->m_mipmap);
+					loadTexture(self->m_actTex, texture, size, self->m_mipmap);
 
 					// refresh texture source, if required
 					if (refreshSource) self->m_source->m_image->refresh();

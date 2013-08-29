@@ -248,7 +248,7 @@ void ExecutionGroup::execute(ExecutionSystem *graph)
 	OrderOfChunks chunkorder = COM_ORDER_OF_CHUNKS_DEFAULT;
 
 	if (operation->isViewerOperation()) {
-		ViewerBaseOperation *viewer = (ViewerBaseOperation *)operation;
+		ViewerOperation *viewer = (ViewerOperation *)operation;
 		centerX = viewer->getCenterX();
 		centerY = viewer->getCenterY();
 		chunkorder = viewer->getChunkOrder();
@@ -288,8 +288,8 @@ void ExecutionGroup::execute(ExecutionSystem *graph)
 
 			delete hotspots[0];
 			MEM_freeN(chunkOrders);
+			break;
 		}
-		break;
 		case COM_TO_RULE_OF_THIRDS:
 		{
 			ChunkOrderHotspot *hotspots[9];
@@ -336,8 +336,8 @@ void ExecutionGroup::execute(ExecutionSystem *graph)
 			delete hotspots[7];
 			delete hotspots[8];
 			MEM_freeN(chunkOrders);
+			break;
 		}
-		break;
 		case COM_TO_TOP_DOWN:
 		default:
 			break;
@@ -638,8 +638,27 @@ void ExecutionGroup::setRenderBorder(float xmin, float xmax, float ymin, float y
 {
 	NodeOperation *operation = this->getOutputNodeOperation();
 
-	if (operation->isOutputOperation(true) && !(operation->isViewerOperation() || operation->isPreviewOperation())) {
-		BLI_rcti_init(&this->m_viewerBorder, xmin * this->m_width, xmax * this->m_width,
-		              ymin * this->m_height, ymax * this->m_height);
+	if (operation->isOutputOperation(true)) {
+		/* Basically, setting border need to happen for only operatoins
+		 * which operates in render resolution buffers (like compositor
+		 * output nodes).
+		 *
+		 * In this cases adding border will lead to mapping coordinates
+		 * from output buffer space to input buffer spaces when executing
+		 * operation.
+		 *
+		 * But nodes like viewer and file output just shall display or
+		 * safe the same exact buffer which goes to their input, no need
+		 * in any kind of coordinates mapping.
+		 */
+
+		bool operationNeedsBorder = !(operation->isViewerOperation() ||
+		                              operation->isPreviewOperation() ||
+		                              operation->isFileOutputOperation());
+
+		if (operationNeedsBorder) {
+			BLI_rcti_init(&this->m_viewerBorder, xmin * this->m_width, xmax * this->m_width,
+			              ymin * this->m_height, ymax * this->m_height);
+		}
 	}
 }

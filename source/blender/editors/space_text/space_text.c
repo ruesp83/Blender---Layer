@@ -116,7 +116,7 @@ static SpaceLink *text_duplicate(SpaceLink *sl)
 	return (SpaceLink *)stextn;
 }
 
-static void text_listener(ScrArea *sa, wmNotifier *wmn)
+static void text_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn)
 {
 	SpaceText *st = sa->spacedata.first;
 
@@ -149,7 +149,7 @@ static void text_listener(ScrArea *sa, wmNotifier *wmn)
 					}
 
 					ED_area_tag_redraw(sa);
-				/* no break -- fall down to tag redraw */
+					/* fall-through */  /* fall down to tag redraw */
 				case NA_ADDED:
 				case NA_REMOVED:
 					ED_area_tag_redraw(sa);
@@ -242,7 +242,7 @@ static void text_keymap(struct wmKeyConfig *keyconf)
 	
 	keymap = WM_keymap_find(keyconf, "Text", SPACE_TEXT, 0);
 	
-	#ifdef __APPLE__
+#ifdef __APPLE__
 	RNA_enum_set(WM_keymap_add_item(keymap, "TEXT_OT_move", LEFTARROWKEY, KM_PRESS, KM_OSKEY, 0)->ptr, "type", LINE_BEGIN);
 	RNA_enum_set(WM_keymap_add_item(keymap, "TEXT_OT_move", RIGHTARROWKEY, KM_PRESS, KM_OSKEY, 0)->ptr, "type", LINE_END);
 	RNA_enum_set(WM_keymap_add_item(keymap, "TEXT_OT_move", LEFTARROWKEY, KM_PRESS, KM_ALT, 0)->ptr, "type", PREV_WORD);
@@ -268,7 +268,7 @@ static void text_keymap(struct wmKeyConfig *keyconf)
 	WM_keymap_add_item(keymap, "TEXT_OT_find", GKEY, KM_PRESS, KM_OSKEY, 0);
 	WM_keymap_add_item(keymap, "TEXT_OT_select_all", AKEY, KM_PRESS, KM_OSKEY, 0);
 	WM_keymap_add_item(keymap, "TEXT_OT_select_line", AKEY, KM_PRESS, KM_SHIFT | KM_OSKEY, 0);
-	#endif
+#endif
 	
 	kmi = WM_keymap_add_item(keymap, "WM_OT_context_cycle_int", WHEELUPMOUSE, KM_PRESS, KM_CTRL, 0);
 	RNA_string_set(kmi->ptr, "data_path", "space_data.font_size");

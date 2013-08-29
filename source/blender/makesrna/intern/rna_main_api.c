@@ -76,6 +76,7 @@
 #include "BKE_movieclip.h"
 #include "BKE_mask.h"
 #include "BKE_gpencil.h"
+#include "BKE_linestyle.h"
 
 #include "DNA_armature_types.h"
 #include "DNA_camera_types.h"
@@ -197,7 +198,7 @@ static Object *rna_Main_objects_new(Main *bmain, ReportList *reports, const char
 	id_us_min(&ob->id);
 
 	ob->data = data;
-	test_object_materials(ob->data);
+	test_object_materials(bmain, ob->data);
 	
 	return ob;
 }
@@ -275,7 +276,7 @@ static Mesh *rna_Main_meshes_new(Main *bmain, const char *name)
 /* settings: 1 - preview, 2 - render */
 Mesh *rna_Main_meshes_new_from_object(
         Main *bmain, ReportList *reports, Scene *sce,
-        Object *ob, int apply_modifiers, int settings, int calc_tessface)
+        Object *ob, int apply_modifiers, int settings, int calc_tessface, int calc_undeformed)
 {
 	Mesh *tmpmesh;
 	Curve *tmpcu = NULL, *copycu;
@@ -312,7 +313,7 @@ Mesh *rna_Main_meshes_new_from_object(
 			copycu->editnurb = tmpcu->editnurb;
 
 			/* get updated display list, and convert to a mesh */
-			BKE_displist_make_curveTypes_forRender(sce, tmpobj, &dispbase, &derivedFinal, FALSE);
+			BKE_displist_make_curveTypes_forRender(sce, tmpobj, &dispbase, &derivedFinal, FALSE, render);
 
 			copycu->editfont = NULL;
 			copycu->editnurb = NULL;
@@ -333,6 +334,8 @@ Mesh *rna_Main_meshes_new_from_object(
 				BKE_report(reports, RPT_ERROR, "Cannot convert curve to mesh (does the curve have any segments?)");
 				return NULL;
 			}
+
+			BKE_mesh_texspace_copy_from_object(tmpmesh, ob);
 
 			BKE_libblock_free_us(&bmain->object, tmpobj);
 			break;
@@ -358,8 +361,15 @@ Mesh *rna_Main_meshes_new_from_object(
 				BKE_mesh_from_metaball(&disp, tmpmesh);
 				BKE_displist_free(&disp);
 			}
-			else
-				BKE_mesh_from_metaball(&ob->disp, tmpmesh);
+			else {
+				ListBase disp = {NULL, NULL};
+				if (ob->curve_cache) {
+					disp = ob->curve_cache->disp;
+				}
+				BKE_mesh_from_metaball(&disp, tmpmesh);
+			}
+
+			BKE_mesh_texspace_copy_from_object(tmpmesh, ob);
 
 			break;
 
@@ -378,6 +388,9 @@ Mesh *rna_Main_meshes_new_from_object(
 				CustomDataMask mask = CD_MASK_MESH; /* this seems more suitable, exporter,
 			                                         * for example, needs CD_MASK_MDEFORMVERT */
 
+				if (calc_undeformed)
+					mask |= CD_MASK_ORCO;
+
 				/* Write the display mesh into the dummy mesh */
 				if (render)
 					dm = mesh_create_derived_render(sce, ob, mask);
@@ -385,7 +398,7 @@ Mesh *rna_Main_meshes_new_from_object(
 					dm = mesh_create_derived_view(sce, ob, mask);
 
 				tmpmesh = BKE_mesh_add(bmain, "Mesh");
-				DM_to_mesh(dm, tmpmesh, ob);
+				DM_to_mesh(dm, tmpmesh, ob, mask);
 				dm->release(dm);
 			}
 
@@ -464,7 +477,7 @@ Mesh *rna_Main_meshes_new_from_object(
 	}
 
 	/* make sure materials get updated in objects */
-	test_object_materials(&tmpmesh->id);
+	test_object_materials(bmain, &tmpmesh->id);
 
 	return tmpmesh;
 }
@@ -721,12 +734,12 @@ static void rna_Main_texts_remove(Main *bmain, PointerRNA *text_ptr)
 	RNA_POINTER_INVALIDATE(text_ptr);
 }
 
-static Text *rna_Main_texts_load(Main *bmain, ReportList *reports, const char *filepath)
+static Text *rna_Main_texts_load(Main *bmain, ReportList *reports, const char *filepath, int is_internal)
 {
 	Text *txt;
 
 	errno = 0;
-	txt = BKE_text_load(bmain, filepath, bmain->name);
+	txt = BKE_text_load_ex(bmain, filepath, bmain->name, is_internal);
 
 	if (!txt)
 		BKE_reportf(reports, RPT_ERROR, "Cannot read '%s': %s", filepath,
@@ -845,6 +858,24 @@ static void rna_Main_grease_pencil_remove(Main *bmain, ReportList *reports, Poin
 		            gpd->id.name + 2, ID_REAL_USERS(gpd));
 }
 
+FreestyleLineStyle *rna_Main_linestyles_new(Main *bmain, const char *name)
+{
+	FreestyleLineStyle *linestyle = BKE_new_linestyle(name, bmain);
+	id_us_min(&linestyle->id);
+	return linestyle;
+}
+
+void rna_Main_linestyles_remove(Main *bmain, ReportList *reports, FreestyleLineStyle *linestyle)
+{
+	if (ID_REAL_USERS(linestyle) <= 0)
+		BKE_libblock_free(&bmain->linestyle, linestyle);
+	else
+		BKE_reportf(reports, RPT_ERROR, "Line style '%s' must have zero users to be removed, found %d",
+		            linestyle->id.name + 2, ID_REAL_USERS(linestyle));
+
+	/* XXX python now has invalid pointer? */
+}
+
 /* tag functions, all the same */
 static void rna_Main_cameras_tag(Main *bmain, int value) { tag_main_lb(&bmain->camera, value); }
 static void rna_Main_scenes_tag(Main *bmain, int value) { tag_main_lb(&bmain->scene, value); }
@@ -876,6 +907,7 @@ static void rna_Main_particles_tag(Main *bmain, int value) { tag_main_lb(&bmain-
 static void rna_Main_gpencil_tag(Main *bmain, int value) { tag_main_lb(&bmain->gpencil, value); }
 static void rna_Main_movieclips_tag(Main *bmain, int value) { tag_main_lb(&bmain->movieclip, value); }
 static void rna_Main_masks_tag(Main *bmain, int value) { tag_main_lb(&bmain->mask, value); }
+static void rna_Main_linestyle_tag(Main *bmain, int value) { tag_main_lb(&bmain->linestyle, value); }
 
 static int rna_Main_cameras_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_CA); }
 static int rna_Main_scenes_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_SCE); }
@@ -1152,6 +1184,7 @@ void RNA_def_main_meshes(BlenderRNA *brna, PropertyRNA *cprop)
 	parm = RNA_def_enum(func, "settings", mesh_type_items, 0, "", "Modifier settings to apply");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 	RNA_def_boolean(func, "calc_tessface", true, "Calculate Tessellation", "Calculate tessellation faces");
+	RNA_def_boolean(func, "calc_undeformed", false, "Calculate Undeformed", "Calculate undeformed vertex coordinates");
 	parm = RNA_def_pointer(func, "mesh", "Mesh", "",
 	                       "Mesh created from object, remove it if it is only used for export");
 	RNA_def_function_return(func, parm);
@@ -1677,6 +1710,7 @@ void RNA_def_main_texts(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_function_ui_description(func, "Add a new text to the main database from a file");
 	parm = RNA_def_string_file_path(func, "filepath", "Path", FILE_MAX, "", "path for the datablock");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
+	parm = RNA_def_boolean(func, "internal", 0, "Make internal", "Make text file internal after loading");
 	/* return type */
 	parm = RNA_def_pointer(func, "text", "Text", "", "New text datablock");
 	RNA_def_function_return(func, parm);
@@ -1916,6 +1950,36 @@ void RNA_def_main_masks(BlenderRNA *brna, PropertyRNA *cprop)
 	parm = RNA_def_pointer(func, "mask", "Mask", "", "Mask to remove");
 	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL | PROP_RNAPTR);
 	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
+}
+
+void RNA_def_main_linestyles(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	FunctionRNA *func;
+	PropertyRNA *parm;
+
+	RNA_def_property_srna(cprop, "BlendDataLineStyles");
+	srna = RNA_def_struct(brna, "BlendDataLineStyles", NULL);
+	RNA_def_struct_sdna(srna, "Main");
+	RNA_def_struct_ui_text(srna, "Main Line Styles", "Collection of line styles");
+
+	func = RNA_def_function(srna, "tag", "rna_Main_linestyle_tag");
+	parm = RNA_def_boolean(func, "value", 0, "Value", "");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+
+	func = RNA_def_function(srna, "new", "rna_Main_linestyles_new");
+	RNA_def_function_ui_description(func, "Add a new line style instance to the main database");
+	parm = RNA_def_string(func, "name", "FreestyleLineStyle", 0, "", "New name for the datablock");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+	/* return type */
+	parm = RNA_def_pointer(func, "linestyle", "FreestyleLineStyle", "", "New line style datablock");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_Main_linestyles_remove");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS);
+	RNA_def_function_ui_description(func, "Remove a line style instance from the current blendfile");
+	parm = RNA_def_pointer(func, "linestyle", "FreestyleLineStyle", "", "Line style to remove");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
 }
 
 #endif

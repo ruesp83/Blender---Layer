@@ -45,15 +45,17 @@
 #include "BKE_modifier.h"
 #include "BKE_object.h"
 #include "BKE_particle.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
 
 #include "MOD_modifiertypes.h"
 #include "MOD_util.h"
 
 #include "ONL_opennl.h"
 
+#if 0
 #define MOD_LAPLACIANSMOOTH_MAX_EDGE_PERCENTAGE 1.8f
 #define MOD_LAPLACIANSMOOTH_MIN_EDGE_PERCENTAGE 0.02f
+#endif
 
 struct BLaplacianSystem {
 	float *eweights;        /* Length weights per Edge */
@@ -80,8 +82,8 @@ struct BLaplacianSystem {
 };
 typedef struct BLaplacianSystem LaplacianSystem;
 
-static CustomDataMask required_data_mask(Object *UNUSED(ob), ModifierData *md);
-static int is_disabled(ModifierData *md, int UNUSED(useRenderParams));
+static CustomDataMask required_data_mask(Object *ob, ModifierData *md);
+static bool is_disabled(ModifierData *md, int useRenderParams);
 static float average_area_quad_v3(float *v1, float *v2, float *v3, float *v4);
 static float compute_volume(float (*vertexCos)[3], MFace *mfaces, int numFaces);
 static float cotan_weight(float *v1, float *v2, float *v3);
@@ -215,7 +217,7 @@ static void copy_data(ModifierData *md, ModifierData *target)
 	BLI_strncpy(tsmd->defgrp_name, smd->defgrp_name, sizeof(tsmd->defgrp_name));
 }
 
-static int is_disabled(ModifierData *md, int UNUSED(useRenderParams))
+static bool is_disabled(ModifierData *md, int UNUSED(useRenderParams))
 {
 	LaplacianSmoothModifierData *smd = (LaplacianSmoothModifierData *) md;
 	short flag;
@@ -364,7 +366,7 @@ static void init_laplacian_matrix(LaplacianSystem *sys)
 		v1 = sys->vertexCos[idv1];
 		v2 = sys->vertexCos[idv2];
 		v3 = sys->vertexCos[idv3];
-		v4 = has_4_vert ? sys->vertexCos[idv4] : 0;
+		v4 = has_4_vert ? sys->vertexCos[idv4] : NULL;
 
 		if (has_4_vert) {
 			areaf = area_quad_v3(v1, v2, v3, sys->vertexCos[sys->mfaces[i].v4]);
@@ -667,7 +669,7 @@ static void laplaciansmoothModifier_do(
 static void deformVerts(ModifierData *md, Object *ob, DerivedMesh *derivedData,
                         float (*vertexCos)[3], int numVerts, ModifierApplyFlag UNUSED(flag))
 {
-	DerivedMesh *dm = get_dm(ob, NULL, derivedData, NULL, 0);
+	DerivedMesh *dm = get_dm(ob, NULL, derivedData, NULL, false, false);
 
 	laplaciansmoothModifier_do((LaplacianSmoothModifierData *)md, ob, dm,
 	                           vertexCos, numVerts);
@@ -680,7 +682,7 @@ static void deformVertsEM(
         ModifierData *md, Object *ob, struct BMEditMesh *editData,
         DerivedMesh *derivedData, float (*vertexCos)[3], int numVerts)
 {
-	DerivedMesh *dm = get_dm(ob, editData, derivedData, NULL, 0);
+	DerivedMesh *dm = get_dm(ob, editData, derivedData, NULL, false, false);
 
 	laplaciansmoothModifier_do((LaplacianSmoothModifierData *)md, ob, dm,
 	                           vertexCos, numVerts);

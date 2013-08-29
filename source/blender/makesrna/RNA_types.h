@@ -25,7 +25,7 @@
  */
 
 
-#include "BLO_sys_types.h"
+#include "../blenlib/BLI_sys_types.h"
 
 #ifndef __RNA_TYPES_H__
 #define __RNA_TYPES_H__
@@ -146,7 +146,7 @@ typedef enum PropertySubType {
 } PropertySubType;
 
 /* Make sure enums are updated with thses */
-/* HIGHEST FLAG IN USE: 1 << 28 */
+/* HIGHEST FLAG IN USE: 1 << 30 */
 typedef enum PropertyFlag {
 	/* editable means the property is editable in the user
 	 * interface, properties are editable by default except
@@ -172,10 +172,16 @@ typedef enum PropertyFlag {
 	/* do not write in presets */
 	PROP_SKIP_SAVE = (1 << 28),
 
-	/* function paramater flags */
+	/* function parameter flags */
 	PROP_REQUIRED = (1 << 2),
 	PROP_OUTPUT = (1 << 3),
 	PROP_RNAPTR = (1 << 11),
+	/* This allows for non-breaking API updates, when adding non-critical new parameter to a callback function.
+	 * This way, old py code defining funcs without that parameter would still work.
+	 * WARNING: any parameter after the first PYFUNC_OPTIONAL one will be considered as optional!
+	 * NOTE: only for input parameters!
+	 */
+	PROP_PYFUNC_OPTIONAL = (1 << 30),
 	/* registering */
 	PROP_REGISTER = (1 << 4),
 	PROP_REGISTER_OPTIONAL = (1 << 4) | (1 << 5),
@@ -226,7 +232,8 @@ typedef enum PropertyFlag {
 	PROP_RAW_ARRAY = (1 << 14),
 	PROP_FREE_POINTERS = (1 << 15),
 	PROP_DYNAMIC = (1 << 17), /* for dynamic arrays, and retvals of type string */
-	PROP_ENUM_NO_CONTEXT = (1 << 24) /* for enum that shouldn't be contextual */
+	PROP_ENUM_NO_CONTEXT = (1 << 24), /* for enum that shouldn't be contextual */
+	PROP_ENUM_NO_TRANSLATE = (1 << 29), /* for enums that shouldn't be translated (e.g. renderlayers' names in nodes) */
 } PropertyFlag;
 
 typedef struct CollectionPropertyIterator {

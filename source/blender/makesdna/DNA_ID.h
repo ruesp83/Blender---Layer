@@ -213,6 +213,7 @@ typedef struct PreviewImage {
 #define ID_WM		MAKE_ID2('W', 'M') /* WindowManager */
 #define ID_MC		MAKE_ID2('M', 'C') /* MovieClip */
 #define ID_MSK		MAKE_ID2('M', 'S') /* Mask */
+#define ID_LS		MAKE_ID2('L', 'S') /* FreestyleLineStyle */
 
 	/* NOTE! Fake IDs, needed for g.sipo->blocktype or outliner */
 #define ID_SEQ		MAKE_ID2('S', 'Q')
@@ -235,7 +236,7 @@ typedef struct PreviewImage {
 #  undef GS
 #endif
 // #define GS(a)	(*((short *)(a)))
-#define GS(a)	(CHECK_TYPE_INLINE(a, const char), (*((short *)(a))))
+#define GS(a)	(CHECK_TYPE_INLINE(a, const char *), (*((short *)(a))))
 
 #define ID_NEW(a)		if (      (a) && (a)->id.newid ) (a) = (void *)(a)->id.newid
 #define ID_NEW_US(a)	if (      (a)->id.newid)       { (a) = (void *)(a)->id.newid;       (a)->id.us++; }

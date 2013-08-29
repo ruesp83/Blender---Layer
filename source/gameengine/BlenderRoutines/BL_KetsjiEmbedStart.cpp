@@ -182,7 +182,7 @@ static int BL_KetsjiNextFrame(KX_KetsjiEngine *ketsjiengine, bContext *C, wmWind
 	return exitrequested;
 }
 
-struct BL_KetsjiNextFrameState {
+static struct BL_KetsjiNextFrameState {
 	class KX_KetsjiEngine* ketsjiengine;
 	struct bContext *C;
 	struct wmWindow* win;
@@ -210,6 +210,7 @@ static int BL_KetsjiPyNextFrame(void *state0)
 extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *cam_frame, int always_use_expand_framing)
 {
 	/* context values */
+	struct wmWindowManager *wm= CTX_wm_manager(C);
 	struct wmWindow *win= CTX_wm_window(C);
 	struct Scene *startscene= CTX_data_scene(C);
 	struct Main* maggie1= CTX_data_main(C);
@@ -276,22 +277,32 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 		if (animation_record) usefixed= false; /* override since you don't want to run full-speed for sim recording */
 
 		// create the canvas, rasterizer and rendertools
-		RAS_ICanvas* canvas = new KX_BlenderCanvas(win, area_rect, ar);
+		RAS_ICanvas* canvas = new KX_BlenderCanvas(wm, win, area_rect, ar);
 		
 		// default mouse state set on render panel
 		if (mouse_state)
 			canvas->SetMouseState(RAS_ICanvas::MOUSE_NORMAL);
 		else
 			canvas->SetMouseState(RAS_ICanvas::MOUSE_INVISIBLE);
+
+		// Setup vsync
+		int previous_vsync = canvas->GetSwapInterval();
+		if (startscene->gm.vsync == VSYNC_ADAPTIVE)
+			canvas->SetSwapInterval(-1);
+		else
+			canvas->SetSwapInterval((startscene->gm.vsync == VSYNC_ON) ? 1 : 0);
+
 		RAS_IRenderTools* rendertools = new KX_BlenderRenderTools();
 		RAS_IRasterizer* rasterizer = NULL;
-		
 		//Don't use displaylists with VBOs
 		//If auto starts using VBOs, make sure to check for that here
 		if (displaylists && startscene->gm.raster_storage != RAS_STORE_VBO)
 			rasterizer = new RAS_ListRasterizer(canvas, true, startscene->gm.raster_storage);
 		else
 			rasterizer = new RAS_OpenGLRasterizer(canvas, startscene->gm.raster_storage);
+
+		RAS_IRasterizer::MipmapOption mipmapval = rasterizer->GetMipmapping();
+
 		
 		// create the inputdevices
 		KX_BlenderKeyboardDevice* keyboarddevice = new KX_BlenderKeyboardDevice();
@@ -368,7 +379,7 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 			// to the original file working directory
 
 			if (exitstring != "")
-				strcpy(basedpath, exitstring.Ptr());
+				BLI_strncpy(basedpath, exitstring.ReadPtr(), sizeof(basedpath));
 
 			// load relative to the last loaded file, this used to be relative
 			// to the first file but that makes no sense, relative paths in
@@ -381,9 +392,8 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 			if (!bfd)
 			{
 				// just add "//" in front of it
-				char temppath[242];
-				strcpy(temppath, "//");
-				strcat(temppath, basedpath);
+				char temppath[FILE_MAX] = "//";
+				BLI_strncpy(temppath + 2, basedpath, FILE_MAX - 2);
 				
 				BLI_path_abs(temppath, pathname);
 				bfd = load_game_data(temppath);
@@ -618,6 +628,9 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 		{
 			// set the cursor back to normal
 			canvas->SetMouseState(RAS_ICanvas::MOUSE_NORMAL);
+
+			// set mipmap setting back to its original value
+			rasterizer->SetMipmapping(mipmapval);
 		}
 		
 		// clean up some stuff
@@ -658,6 +671,7 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 		}
 		if (canvas)
 		{
+			canvas->SetSwapInterval(previous_vsync); // Set the swap interval back
 			delete canvas;
 			canvas = NULL;
 		}

@@ -116,7 +116,7 @@ static void bm_decim_build_quadrics(BMesh *bm, Quadric *vquadrics)
 static void bm_decim_calc_target_co(BMEdge *e, float optimize_co[3],
                                     const Quadric *vquadrics)
 {
-	/* compute an edge contration target for edge 'e'
+	/* compute an edge contraction target for edge 'e'
 	 * this is computed by summing it's vertices quadrics and
 	 * optimizing the result. */
 	Quadric q;
@@ -345,7 +345,7 @@ static bool bm_decim_triangulate_begin(BMesh *bm)
 			}
 
 #ifdef USE_SAFETY_CHECKS
-			if (BM_edge_exists(l_a->v, l_b->v) == false)
+			if (BM_edge_exists(l_a->v, l_b->v) == NULL)
 #endif
 			{
 				BMFace *f_new;
@@ -682,7 +682,7 @@ static bool bm_edge_collapse_is_degenerate_topology(BMEdge *e_first)
 
 /**
  * special, highly limited edge collapse function
- * intended for speed over flexibiliy.
+ * intended for speed over flexibility.
  * can only collapse edges connected to (1, 2) tris.
  *
  * Important - dont add vert/edge/face data on collapsing!
@@ -735,9 +735,6 @@ static bool bm_edge_collapse(BMesh *bm, BMEdge *e_clear, BMVert *v_clear, int r_
 			e_b_other[0] = l_b->next->e;
 		}
 
-		BLI_assert(BM_edge_share_vert(e_a_other[0], e_b_other[0]));
-		BLI_assert(BM_edge_share_vert(e_a_other[1], e_b_other[1]));
-
 		/* we could assert this case, but better just bail out */
 #if 0
 		BLI_assert(e_a_other[0] != e_b_other[0]);
@@ -751,6 +748,9 @@ static bool bm_edge_collapse(BMesh *bm, BMEdge *e_clear, BMVert *v_clear, int r_
 		{
 			return false;
 		}
+
+		BLI_assert(BM_edge_share_vert(e_a_other[0], e_b_other[0]));
+		BLI_assert(BM_edge_share_vert(e_a_other[1], e_b_other[1]));
 
 		r_e_clear_other[0] = BM_elem_index_get(e_a_other[0]);
 		r_e_clear_other[1] = BM_elem_index_get(e_b_other[0]);

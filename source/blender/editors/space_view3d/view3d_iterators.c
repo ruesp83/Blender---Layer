@@ -30,6 +30,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_armature_types.h"
 #include "DNA_object_types.h"
+#include "DNA_scene_types.h"
 
 #include "BLI_utildefines.h"
 #include "BLI_listbase.h"
@@ -112,6 +113,8 @@ void meshobject_foreachScreenVert(
 	foreachScreenObjectVert_userData data;
 	DerivedMesh *dm = mesh_get_derived_deform(vc->scene, vc->obact, CD_MASK_BAREMESH);
 
+	ED_view3d_check_mats_rv3d(vc->rv3d);
+
 	data.vc = *vc;
 	data.func = func;
 	data.userData = userData;
@@ -121,7 +124,7 @@ void meshobject_foreachScreenVert(
 		ED_view3d_clipping_local(vc->rv3d, vc->obedit->obmat);  /* for local clipping lookups */
 	}
 
-	dm->foreachMappedVert(dm, meshobject_foreachScreenVert__mapFunc, &data);
+	dm->foreachMappedVert(dm, meshobject_foreachScreenVert__mapFunc, &data, DM_FOREACH_NOP);
 
 	dm->release(dm);
 }
@@ -151,6 +154,8 @@ void mesh_foreachScreenVert(
 	foreachScreenVert_userData data;
 	DerivedMesh *dm = editbmesh_get_derived_cage(vc->scene, vc->obedit, vc->em, CD_MASK_BAREMESH);
 
+	ED_view3d_check_mats_rv3d(vc->rv3d);
+
 	data.vc = *vc;
 	data.func = func;
 	data.userData = userData;
@@ -161,7 +166,7 @@ void mesh_foreachScreenVert(
 	}
 
 	EDBM_index_arrays_ensure(vc->em, BM_VERT);
-	dm->foreachMappedVert(dm, mesh_foreachScreenVert__mapFunc, &data);
+	dm->foreachMappedVert(dm, mesh_foreachScreenVert__mapFunc, &data, DM_FOREACH_NOP);
 
 	dm->release(dm);
 }
@@ -203,6 +208,8 @@ void mesh_foreachScreenEdge(
 	foreachScreenEdge_userData data;
 	DerivedMesh *dm = editbmesh_get_derived_cage(vc->scene, vc->obedit, vc->em, CD_MASK_BAREMESH);
 
+	ED_view3d_check_mats_rv3d(vc->rv3d);
+
 	data.vc = *vc;
 
 	data.win_rect.xmin = 0;
@@ -231,7 +238,7 @@ static void mesh_foreachScreenFace__mapFunc(void *userData, int index, const flo
 	foreachScreenFace_userData *data = userData;
 	BMFace *efa = EDBM_face_at_index(data->vc.em, index);
 
-	if (efa && !BM_elem_flag_test(efa, BM_ELEM_HIDDEN)) {
+	if (!BM_elem_flag_test(efa, BM_ELEM_HIDDEN)) {
 		float screen_co[2];
 		if (ED_view3d_project_float_object(data->vc.ar, cent, screen_co, data->clip_flag) == V3D_PROJ_RET_OK) {
 			data->func(data->userData, efa, screen_co, index);
@@ -247,15 +254,15 @@ void mesh_foreachScreenFace(
 	foreachScreenFace_userData data;
 	DerivedMesh *dm = editbmesh_get_derived_cage(vc->scene, vc->obedit, vc->em, CD_MASK_BAREMESH);
 
+	ED_view3d_check_mats_rv3d(vc->rv3d);
+
 	data.vc = *vc;
 	data.func = func;
 	data.userData = userData;
 	data.clip_flag = clip_flag;
 
-	ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
-
 	EDBM_index_arrays_ensure(vc->em, BM_FACE);
-	dm->foreachMappedFaceCenter(dm, mesh_foreachScreenFace__mapFunc, &data);
+	dm->foreachMappedFaceCenter(dm, mesh_foreachScreenFace__mapFunc, &data, DM_FOREACH_NOP);
 
 	dm->release(dm);
 }
@@ -271,6 +278,8 @@ void nurbs_foreachScreenVert(
 	Nurb *nu;
 	int i;
 	ListBase *nurbs = BKE_curve_editNurbs_get(cu);
+
+	ED_view3d_check_mats_rv3d(vc->rv3d);
 
 	if (clip_flag & V3D_PROJ_TEST_CLIP_BB) {
 		ED_view3d_clipping_local(vc->rv3d, vc->obedit->obmat); /* for local clipping lookups */
@@ -339,6 +348,8 @@ void mball_foreachScreenElem(
 	MetaBall *mb = (MetaBall *)vc->obedit->data;
 	MetaElem *ml;
 
+	ED_view3d_check_mats_rv3d(vc->rv3d);
+
 	for (ml = mb->editelems->first; ml; ml = ml->next) {
 		float screen_co[2];
 		if (ED_view3d_project_float_object(vc->ar, &ml->x, screen_co, clip_flag) == V3D_PROJ_RET_OK) {
@@ -357,9 +368,11 @@ void lattice_foreachScreenVert(
 	Object *obedit = vc->obedit;
 	Lattice *lt = obedit->data;
 	BPoint *bp = lt->editlatt->latt->def;
-	DispList *dl = BKE_displist_find(&obedit->disp, DL_VERTS);
+	DispList *dl = obedit->curve_cache ? BKE_displist_find(&obedit->curve_cache->disp, DL_VERTS) : NULL;
 	float *co = dl ? dl->verts : NULL;
 	int i, N = lt->editlatt->latt->pntsu * lt->editlatt->latt->pntsv * lt->editlatt->latt->pntsw;
+
+	ED_view3d_check_mats_rv3d(vc->rv3d);
 
 	if (clip_flag & V3D_PROJ_TEST_CLIP_BB) {
 		ED_view3d_clipping_local(vc->rv3d, obedit->obmat); /* for local clipping lookups */
@@ -385,6 +398,8 @@ void armature_foreachScreenBone(
 {
 	bArmature *arm = vc->obedit->data;
 	EditBone *ebone;
+
+	ED_view3d_check_mats_rv3d(vc->rv3d);
 
 	for (ebone = arm->edbo->first; ebone; ebone = ebone->next) {
 		if (EBONE_VISIBLE(arm, ebone)) {
@@ -428,6 +443,8 @@ void pose_foreachScreenBone(
 	bArmature *arm = vc->obact->data;
 	bPose *pose = vc->obact->pose;
 	bPoseChannel *pchan;
+
+	ED_view3d_check_mats_rv3d(vc->rv3d);
 
 	for (pchan = pose->chanbase.first; pchan; pchan = pchan->next) {
 		if (PBONE_VISIBLE(arm, pchan->bone)) {

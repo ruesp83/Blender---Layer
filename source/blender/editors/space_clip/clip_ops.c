@@ -50,6 +50,7 @@
 #include "BLI_math.h"
 #include "BLI_rect.h"
 #include "BLI_threads.h"
+#include "BLI_string.h"
 
 #include "BLF_translation.h"
 
@@ -250,13 +251,13 @@ static int open_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event)
 		clip = ED_space_clip_get_clip(sc);
 
 	if (clip) {
-		strncpy(path, clip->name, sizeof(path));
+		BLI_strncpy(path, clip->name, sizeof(path));
 
 		BLI_path_abs(path, G.main->name);
 		BLI_parent_dir(path);
 	}
 	else {
-		strncpy(path, U.textudir, sizeof(path));
+		BLI_strncpy(path, U.textudir, sizeof(path));
 	}
 
 	if (RNA_struct_property_is_set(op->ptr, "files"))
@@ -781,6 +782,8 @@ static int view_all_exec(bContext *C, wmOperator *op)
 
 void CLIP_OT_view_all(wmOperatorType *ot)
 {
+	PropertyRNA *prop;
+
 	/* identifiers */
 	ot->name = "View All";
 	ot->idname = "CLIP_OT_view_all";
@@ -791,7 +794,8 @@ void CLIP_OT_view_all(wmOperatorType *ot)
 	ot->poll = ED_space_clip_view_clip_poll;
 
 	/* properties */
-	RNA_def_boolean(ot->srna, "fit_view", 0, "Fit View", "Fit frame to the viewport");
+	prop = RNA_def_boolean(ot->srna, "fit_view", 0, "Fit View", "Fit frame to the viewport");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 /********************** view selected operator *********************/
@@ -1376,6 +1380,127 @@ void CLIP_OT_view_ndof(wmOperatorType *ot)
 
 	/* api callbacks */
 	ot->invoke = clip_view_ndof_invoke;
+}
+
+/********************** Prefetch operator *********************/
+
+static int clip_prefetch_modal(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
+{
+	/* no running blender, remove handler and pass through */
+	if (0 == WM_jobs_test(CTX_wm_manager(C), CTX_wm_area(C), WM_JOB_TYPE_CLIP_PREFETCH))
+		return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
+
+	/* running render */
+	switch (event->type) {
+		case ESCKEY:
+			return OPERATOR_RUNNING_MODAL;
+			break;
+	}
+
+	return OPERATOR_PASS_THROUGH;
+}
+
+static int clip_prefetch_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(_event))
+{
+	clip_start_prefetch_job(C);
+
+	/* add modal handler for ESC */
+	WM_event_add_modal_handler(C, op);
+
+	return OPERATOR_RUNNING_MODAL;
+}
+
+void CLIP_OT_prefetch(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Prefetch Frames";
+	ot->idname = "CLIP_OT_prefetch";
+	ot->description = "Prefetch frames from disk for faster playback/tracking";
+
+	/* api callbacks */
+	ot->poll = ED_space_clip_view_clip_poll;
+	ot->invoke = clip_prefetch_invoke;
+	ot->modal = clip_prefetch_modal;
+}
+
+/********************** Set scene frames *********************/
+
+static int clip_set_scene_frames_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	MovieClip *clip = CTX_data_edit_movieclip(C);
+	Scene *scene = CTX_data_scene(C);
+	int clip_length;
+
+	if (ELEM(NULL, scene, clip))
+		return OPERATOR_CANCELLED;
+
+	clip_length = BKE_movieclip_get_duration(clip);
+
+	scene->r.sfra = clip->start_frame;
+	scene->r.efra = scene->r.sfra + clip_length - 1;
+
+	scene->r.efra = max_ii(scene->r.sfra, scene->r.efra);
+
+	WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
+
+	return OPERATOR_FINISHED;
+}
+
+void CLIP_OT_set_scene_frames(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Set Scene Frames";
+	ot->idname = "CLIP_OT_set_scene_frames";
+	ot->description = "Set scene's start and end frame to match clip's start frame and length";
+
+	/* api callbacks */
+	ot->poll = ED_space_clip_view_clip_poll;
+	ot->exec = clip_set_scene_frames_exec;
+}
+
+/******************** set 3d cursor operator ********************/
+
+static int clip_set_2d_cursor_exec(bContext *C, wmOperator *op)
+{
+	SpaceClip *sclip = CTX_wm_space_clip(C);
+
+	RNA_float_get_array(op->ptr, "location", sclip->cursor);
+
+	WM_event_add_notifier(C, NC_SPACE | ND_SPACE_CLIP, NULL);
+
+	return OPERATOR_FINISHED;
+}
+
+static int clip_set_2d_cursor_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+	ARegion *ar = CTX_wm_region(C);
+	SpaceClip *sclip = CTX_wm_space_clip(C);
+	float location[2];
+
+	ED_clip_mouse_pos(sclip, ar, event->mval, location);
+	RNA_float_set_array(op->ptr, "location", location);
+
+	return clip_set_2d_cursor_exec(C, op);
+}
+
+void CLIP_OT_cursor_set(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Set 2D Cursor";
+	ot->description = "Set 2D cursor location";
+	ot->idname = "CLIP_OT_cursor_set";
+
+	/* api callbacks */
+	ot->exec = clip_set_2d_cursor_exec;
+	ot->invoke = clip_set_2d_cursor_invoke;
+	ot->poll = ED_space_clip_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	/* properties */
+	RNA_def_float_vector(ot->srna, "location", 2, NULL, -FLT_MAX, FLT_MAX, "Location",
+	                     "Cursor location in normalized clip coordinates", -10.0f, 10.0f);
 }
 
 /********************** macroses *********************/

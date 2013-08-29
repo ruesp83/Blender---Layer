@@ -39,7 +39,6 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
-#include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_context.h"
@@ -206,6 +205,9 @@ static void nla_channel_area_init(wmWindowManager *wm, ARegion *ar)
 {
 	wmKeyMap *keymap;
 	
+	/* ensure the 2d view sync works - main region has bottom scroller */
+	ar->v2d.scroll = V2D_SCROLL_BOTTOM;
+	
 	UI_view2d_region_reinit(&ar->v2d, V2D_COMMONVIEW_LIST, ar->winx, ar->winy);
 	
 	/* own keymap */
@@ -284,6 +286,8 @@ static void nla_main_area_draw(const bContext *C, ARegion *ar)
 	UI_view2d_grid_draw(v2d, grid, V2D_GRIDLINES_ALL);
 	UI_view2d_grid_free(grid);
 	
+	ED_region_draw_cb_draw(C, ar, REGION_DRAW_PRE_VIEW);
+
 	/* data */
 	if (ANIM_animdata_get_context(C, &ac)) {
 		/* strips and backdrops */
@@ -306,8 +310,12 @@ static void nla_main_area_draw(const bContext *C, ARegion *ar)
 	
 	/* preview range */
 	UI_view2d_view_ortho(v2d);
-	ANIM_draw_previewrange(C, v2d);
+	ANIM_draw_previewrange(C, v2d, 0);
 	
+	/* callback */
+	UI_view2d_view_ortho(v2d);
+	ED_region_draw_cb_draw(C, ar, REGION_DRAW_POST_VIEW);
+
 	/* reset view matrix */
 	UI_view2d_view_restore(C);
 	
@@ -345,7 +353,7 @@ static void nla_buttons_area_draw(const bContext *C, ARegion *ar)
 	ED_region_panels(C, ar, 1, NULL, -1);
 }
 
-static void nla_region_listener(ARegion *ar, wmNotifier *wmn)
+static void nla_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -378,7 +386,7 @@ static void nla_region_listener(ARegion *ar, wmNotifier *wmn)
 }
 
 
-static void nla_main_area_listener(ARegion *ar, wmNotifier *wmn)
+static void nla_main_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -419,10 +427,11 @@ static void nla_main_area_listener(ARegion *ar, wmNotifier *wmn)
 		default:
 			if (wmn->data == ND_KEYS)
 				ED_region_tag_redraw(ar);
+			break;
 	}
 }
 
-static void nla_channel_area_listener(ARegion *ar, wmNotifier *wmn)
+static void nla_channel_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -449,15 +458,15 @@ static void nla_channel_area_listener(ARegion *ar, wmNotifier *wmn)
 			if (wmn->action == NA_RENAME)
 				ED_region_tag_redraw(ar);
 			break;
-
 		default:
 			if (wmn->data == ND_KEYS)
 				ED_region_tag_redraw(ar);
+			break;
 	}
 }
 
 /* editor level listener */
-static void nla_listener(ScrArea *sa, wmNotifier *wmn)
+static void nla_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn)
 {
 	/* context changes */
 	switch (wmn->category) {

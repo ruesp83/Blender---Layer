@@ -33,6 +33,7 @@
 #include "BLI_utildefines.h"
 
 #include "DNA_object_types.h"
+#include "DNA_scene_types.h"
 #include "DNA_windowmanager_types.h"
 
 
@@ -149,6 +150,8 @@ void ED_spacetypes_init(void)
 			type->dropboxes();
 	}
 	
+	/* register internal render callbacks */
+	ED_render_internal_init();
 }
 
 /* called in wm.c */

@@ -163,6 +163,7 @@ author_name_mapping = {
     "bjornmose": "Jens Ole Wund",
     "blendix": "Brecht Van Lommel",
     "briggs": "Geoffrey Bantle",
+    "brita_": "Inês Almeida",
     "broadstu": "Stuart Broadfoot",
     "broken": "Matt Ebb",
     "campbellbarton": "Campbell Barton",
@@ -199,6 +200,7 @@ author_name_mapping = {
     "ianwill": "Willian Padovani Germano",
     "imbusy": "Lukas Steiblys",
     "intrr": "Alexander Ewering",
+    "irie": "Irie Shinsuke",
     "jaguarandi": "Andre Susano Pinto",
     "jandro": "Alejandro Conty Estevez",
     "jason_hays22": "Jason Hays",
@@ -216,6 +218,7 @@ author_name_mapping = {
     "keir": "Keir Mierle",
     "kester": "Kester Maddock",
     "khughes": "Ken Hughes",
+    "kjym3": "Tamito Kajiyama",
     "kupoman": "Daniel Stokes",
     "kwk": "Konrad Kleine",
     "larstiq": "Wouter van Heyst",
@@ -260,6 +263,7 @@ author_name_mapping = {
     "scourage": "Robert Holcomb",
     "sergof": "Sergej Reich",
     "sgefant": "Stefan Gartner",
+    "shadowrom": "Jürgen Herrmann",
     "shul": "Shaul Kedem",
     "sirdude": "Kent Mein",
     "smerch": "Alex Sytnik",
@@ -319,6 +323,7 @@ author_name_mapping = {
     "mauriceraybaud": "Maurice Raybaud",
     "meta-androcto": "Brendon Murphy",
     "michaelw": "Michael Williamson",
+    "mifth": "Paul Geraskin",
     "muraj": "Cory Perry",
     "paulo_gomes": "Paulo Gomes",
     "plasmasolutions": "Thomas Beck",
@@ -327,6 +332,7 @@ author_name_mapping = {
     "spudmn": "Aaron Keith",
     "testscreenings": "Florian Meyer",
     "tetron": "Peter Amstutz",
+    "thefallenweeble": "Jason van Gumster",
     "thomasl": "Thomas Larsson",
     "vencax": "Vaclav Klecanda",
     "venomgfx": "Pablo Vazquez",
@@ -589,7 +595,7 @@ def main_credits(min_rev_bfb=0, min_rev_ext=0):
     else:
         filename = "credits_release.html"
 
-    file = open(filename, 'w', encoding="utf-8")
+    file = open(filename, 'w', encoding="ascii", errors='xmlcharrefreplace')
 
     file.write("<h3>Individual Contributors</h3>\n\n")
 
@@ -663,7 +669,7 @@ def main_credits(min_rev_bfb=0, min_rev_ext=0):
 
 def main():
     main_credits()
-    main_credits(min_rev_bfb=52851, min_rev_ext=4072)
+    main_credits(min_rev_bfb=56533, min_rev_ext=4511)
 
 if __name__ == "__main__":
     main()

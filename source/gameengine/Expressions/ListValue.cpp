@@ -25,7 +25,7 @@
 #include <algorithm>
 #include "BoolValue.h"
 
-#include "BLO_sys_types.h" /* for intptr_t support */
+#include "BLI_sys_types.h" /* for intptr_t support */
 
 
 //////////////////////////////////////////////////////////////////////
@@ -293,7 +293,7 @@ static PyObject *listvalue_buffer_item(PyObject *self, Py_ssize_t index)
 	CValue *cval;
 	
 	if (list==NULL) {
-		PyErr_SetString(PyExc_SystemError, "val = CList[i], "BGE_PROXY_ERROR_MSG);
+		PyErr_SetString(PyExc_SystemError, "val = CList[i], " BGE_PROXY_ERROR_MSG);
 		return NULL;
 	}
 	
@@ -350,7 +350,7 @@ static PyObject *listvalue_mapping_subscript(PyObject *self, PyObject *key)
 {
 	CListValue *list= static_cast<CListValue *>(BGE_PROXY_REF(self));
 	if (list==NULL) {
-		PyErr_SetString(PyExc_SystemError, "value = CList[i], "BGE_PROXY_ERROR_MSG);
+		PyErr_SetString(PyExc_SystemError, "value = CList[i], " BGE_PROXY_ERROR_MSG);
 		return NULL;
 	}
 	
@@ -398,7 +398,7 @@ static PyObject *listvalue_buffer_concat(PyObject *self, PyObject *other)
 	Py_ssize_t i, numitems, numitems_orig;
 	
 	if (listval==NULL) {
-		PyErr_SetString(PyExc_SystemError, "CList+other, "BGE_PROXY_ERROR_MSG);
+		PyErr_SetString(PyExc_SystemError, "CList+other, " BGE_PROXY_ERROR_MSG);
 		return NULL;
 	}
 	
@@ -425,7 +425,7 @@ static PyObject *listvalue_buffer_concat(PyObject *self, PyObject *other)
 		
 		for (i=0;i<numitems;i++)
 		{
-			listitemval = listval->ConvertPythonToValue(PyList_GetItem(other,i), "cList + pyList: CListValue, ");
+			listitemval = listval->ConvertPythonToValue(PyList_GetItem(other,i), true, "cList + pyList: CListValue, ");
 			
 			if (listitemval) {
 				listval_new->SetValue(i+numitems_orig, listitemval);
@@ -447,7 +447,7 @@ static PyObject *listvalue_buffer_concat(PyObject *self, PyObject *other)
 		CListValue* otherval = static_cast<CListValue *>(BGE_PROXY_REF(other));
 		if (otherval==NULL) {
 			listval_new->Release();
-			PyErr_SetString(PyExc_SystemError, "CList+other, "BGE_PROXY_ERROR_MSG);
+			PyErr_SetString(PyExc_SystemError, "CList+other, " BGE_PROXY_ERROR_MSG);
 			return NULL;
 		}
 		
@@ -471,7 +471,7 @@ static int listvalue_buffer_contains(PyObject *self_v, PyObject *value)
 	CListValue *self = static_cast<CListValue *>(BGE_PROXY_REF(self_v));
 	
 	if (self == NULL) {
-		PyErr_SetString(PyExc_SystemError, "val in CList, "BGE_PROXY_ERROR_MSG);
+		PyErr_SetString(PyExc_SystemError, "val in CList, " BGE_PROXY_ERROR_MSG);
 		return -1;
 	}
 	
@@ -570,7 +570,7 @@ PyAttributeDef CListValue::Attributes[] = {
 
 PyObject *CListValue::Pyappend(PyObject *value)
 {
-	CValue* objval = ConvertPythonToValue(value, "CList.append(i): CValueList, ");
+	CValue *objval = ConvertPythonToValue(value, true, "CList.append(i): CValueList, ");
 
 	if (!objval) /* ConvertPythonToValue sets the error */
 		return NULL;
@@ -595,7 +595,7 @@ PyObject *CListValue::Pyindex(PyObject *value)
 {
 	PyObject *result = NULL;
 
-	CValue* checkobj = ConvertPythonToValue(value, "val = cList[i]: CValueList, ");
+	CValue *checkobj = ConvertPythonToValue(value, true, "val = cList[i]: CValueList, ");
 	if (checkobj==NULL)
 		return NULL; /* ConvertPythonToValue sets the error */
 
@@ -624,7 +624,7 @@ PyObject *CListValue::Pycount(PyObject *value)
 {
 	int numfound = 0;
 
-	CValue* checkobj = ConvertPythonToValue(value, ""); /* error ignored */
+	CValue *checkobj = ConvertPythonToValue(value, false, ""); /* error ignored */
 
 	if (checkobj==NULL) { /* in this case just return that there are no items in the list */
 		PyErr_Clear();

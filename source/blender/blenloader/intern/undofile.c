@@ -30,7 +30,6 @@
  *  \ingroup blenloader
  */
 
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -40,13 +39,10 @@
 
 #include "DNA_listBase.h"
 
-
-#include "BLO_undofile.h"
-
 #include "BLI_blenlib.h"
 #include "BLI_linklist.h"
 
-
+#include "BLO_undofile.h"
 
 /* **************** support for memory-write, for undo buffers *************** */
 
@@ -55,9 +51,9 @@ void BLO_free_memfile(MemFile *memfile)
 {
 	MemFileChunk *chunk;
 	
-	while ( (chunk = (memfile->chunks.first) ) ) {
-		if (chunk->ident == 0) MEM_freeN(chunk->buf);
-		BLI_remlink(&memfile->chunks, chunk);
+	while ((chunk = BLI_pophead(&memfile->chunks))) {
+		if (chunk->ident == 0)
+			MEM_freeN(chunk->buf);
 		MEM_freeN(chunk);
 	}
 	memfile->size = 0;

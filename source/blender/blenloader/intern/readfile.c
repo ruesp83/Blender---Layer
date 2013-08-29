@@ -74,6 +74,7 @@
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
 #include "DNA_lamp_types.h"
+#include "DNA_linestyle_types.h"
 #include "DNA_meta_types.h"
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
@@ -109,6 +110,8 @@
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
 #include "BLI_edgehash.h"
+#include "BLI_threads.h"
+#include "BLI_mempool.h"
 
 #include "BLF_translation.h"
 
@@ -151,6 +154,7 @@
 #include "BKE_text.h" // for txt_extended_ascii_as_utf8
 #include "BKE_texture.h"
 #include "BKE_tracking.h"
+#include "BKE_treehash.h"
 #include "BKE_sound.h"
 
 #include "IMB_imbuf.h"  // for proxy / timecode versioning stuff
@@ -328,7 +332,7 @@ void blo_do_versions_oldnewmap_insert(OldNewMap *onm, void *oldaddr, void *newad
 	oldnewmap_insert(onm, oldaddr, newaddr, nr);
 }
 
-static void *oldnewmap_lookup_and_inc(OldNewMap *onm, void *addr) 
+static void *oldnewmap_lookup_and_inc(OldNewMap *onm, void *addr, bool increase_users) 
 {
 	int i;
 	
@@ -338,7 +342,8 @@ static void *oldnewmap_lookup_and_inc(OldNewMap *onm, void *addr)
 		OldNew *entry = &onm->entries[++onm->lasthit];
 		
 		if (entry->old == addr) {
-			entry->nr++;
+			if (increase_users)
+				entry->nr++;
 			return entry->newp;
 		}
 	}
@@ -349,7 +354,8 @@ static void *oldnewmap_lookup_and_inc(OldNewMap *onm, void *addr)
 		if (entry->old == addr) {
 			onm->lasthit = i;
 			
-			entry->nr++;
+			if (increase_users)
+				entry->nr++;
 			return entry->newp;
 		}
 	}
@@ -1201,34 +1207,39 @@ int BLO_is_a_library(const char *path, char *dir, char *group)
 
 static void *newdataadr(FileData *fd, void *adr)		/* only direct databocks */
 {
-	return oldnewmap_lookup_and_inc(fd->datamap, adr);
+	return oldnewmap_lookup_and_inc(fd->datamap, adr, true);
+}
+
+static void *newdataadr_no_us(FileData *fd, void *adr)		/* only direct databocks */
+{
+	return oldnewmap_lookup_and_inc(fd->datamap, adr, false);
 }
 
 static void *newglobadr(FileData *fd, void *adr)	    /* direct datablocks with global linking */
 {
-	return oldnewmap_lookup_and_inc(fd->globmap, adr);
+	return oldnewmap_lookup_and_inc(fd->globmap, adr, true);
 }
 
 static void *newimaadr(FileData *fd, void *adr)		    /* used to restore image data after undo */
 {
 	if (fd->imamap && adr)
-		return oldnewmap_lookup_and_inc(fd->imamap, adr);
+		return oldnewmap_lookup_and_inc(fd->imamap, adr, true);
 	return NULL;
 }
 
 static void *newmclipadr(FileData *fd, void *adr)      /* used to restore movie clip data after undo */
 {
 	if (fd->movieclipmap && adr)
-		return oldnewmap_lookup_and_inc(fd->movieclipmap, adr);
+		return oldnewmap_lookup_and_inc(fd->movieclipmap, adr, true);
 	return NULL;
 }
 
 static void *newpackedadr(FileData *fd, void *adr)      /* used to restore packed data after undo */
 {
 	if (fd->packedmap && adr)
-		return oldnewmap_lookup_and_inc(fd->packedmap, adr);
+		return oldnewmap_lookup_and_inc(fd->packedmap, adr, true);
 	
-	return oldnewmap_lookup_and_inc(fd->datamap, adr);
+	return oldnewmap_lookup_and_inc(fd->datamap, adr, true);
 }
 
 
@@ -1317,6 +1328,8 @@ void blo_make_image_pointer_map(FileData *fd, Main *oldmain)
 			oldnewmap_insert(fd->imamap, ibuf, ibuf, 0);
 		if (ima->gputexture)
 			oldnewmap_insert(fd->imamap, ima->gputexture, ima->gputexture, 0);
+		if (ima->rr)
+			oldnewmap_insert(fd->imamap, ima->rr, ima->rr, 0);
 		for (a=0; a < IMA_MAX_RENDER_SLOT; a++)
 			if (ima->renders[a])
 				oldnewmap_insert(fd->imamap, ima->renders[a], ima->renders[a], 0);
@@ -1358,12 +1371,14 @@ void blo_end_image_pointer_map(FileData *fd, Main *oldmain)
 				ima->bindcode = 0;
 				ima->tpageflag &= ~IMA_GLBIND_IS_DATA;
 				ima->gputexture = NULL;
+				ima->rr = NULL;
 			}
 		}
 		for (i = 0; i < IMA_MAX_RENDER_SLOT; i++)
 			ima->renders[i] = newimaadr(fd, ima->renders[i]);
 		
 		ima->gputexture = newimaadr(fd, ima->gputexture);
+		ima->rr = newimaadr(fd, ima->rr);
 	}
 	for (; sce; sce = sce->id.next) {
 		if (sce->nodetree && sce->nodetree->previews) {
@@ -2363,6 +2378,21 @@ static void lib_link_nodetree(FileData *fd, Main *main)
 	}
 }
 
+/* get node tree stored locally in other IDs */
+static bNodeTree *nodetree_from_id(ID *id)
+{
+	if (!id)
+		return NULL;
+	switch (GS(id->name)) {
+		case ID_SCE: return ((Scene *)id)->nodetree;
+		case ID_MA: return ((Material *)id)->nodetree;
+		case ID_WO: return ((World *)id)->nodetree;
+		case ID_LA: return ((Lamp *)id)->nodetree;
+		case ID_TE: return ((Tex *)id)->nodetree;
+	}
+	return NULL;
+}
+
 /* updates group node socket identifier so that
  * external links to/from the group node are preserved.
  */
@@ -2508,9 +2538,11 @@ static void lib_verify_nodetree(Main *main, int UNUSED(open))
 							link->fromsock = node_group_input_find_socket(input_node, link->fromsock->identifier);
 							++num_inputs;
 							
-							if (input_locx > link->tonode->locx - offsetx)
-								input_locx = link->tonode->locx - offsetx;
-							input_locy += link->tonode->locy;
+							if (link->tonode) {
+								if (input_locx > link->tonode->locx - offsetx)
+									input_locx = link->tonode->locx - offsetx;
+								input_locy += link->tonode->locy;
+							}
 						}
 						else
 							free_link = TRUE;
@@ -2522,9 +2554,11 @@ static void lib_verify_nodetree(Main *main, int UNUSED(open))
 							link->tosock = node_group_output_find_socket(output_node, link->tosock->identifier);
 							++num_outputs;
 							
-							if (output_locx < link->fromnode->locx + offsetx)
-								output_locx = link->fromnode->locx + offsetx;
-							output_locy += link->fromnode->locy;
+							if (link->fromnode) {
+								if (output_locx < link->fromnode->locx + offsetx)
+									output_locx = link->fromnode->locx + offsetx;
+								output_locy += link->fromnode->locy;
+							}
 						}
 						else
 							free_link = TRUE;
@@ -2561,8 +2595,7 @@ static void lib_verify_nodetree(Main *main, int UNUSED(open))
 	{
 		FOREACH_NODETREE(main, ntree, id) {
 			/* make an update call for the tree */
-			if (ntree->update)
-				ntreeUpdateTree(ntree);
+			ntreeUpdateTree(main, ntree);
 		} FOREACH_NODETREE_END
 	}
 }
@@ -2946,8 +2979,10 @@ static void lib_link_lamp(FileData *fd, Main *main)
 			
 			la->ipo = newlibadr_us(fd, la->id.lib, la->ipo); // XXX deprecated - old animation system
 			
-			if (la->nodetree)
+			if (la->nodetree) {
 				lib_link_ntree(fd, &la->id, la->nodetree);
+				la->nodetree->id.lib = la->id.lib;
+			}
 			
 			la->id.flag -= LIB_NEED_LINK;
 		}
@@ -3092,7 +3127,6 @@ static void direct_link_mball(FileData *fd, MetaBall *mb)
 	
 	mb->disp.first = mb->disp.last = NULL;
 	mb->editelems = NULL;
-	mb->bb = NULL;
 /*	mb->edit_elems.first= mb->edit_elems.last= NULL;*/
 	mb->lastelem = NULL;
 }
@@ -3119,8 +3153,10 @@ static void lib_link_world(FileData *fd, Main *main)
 				}
 			}
 			
-			if (wrld->nodetree)
+			if (wrld->nodetree) {
 				lib_link_ntree(fd, &wrld->id, wrld->nodetree);
+				wrld->nodetree->id.lib = wrld->id.lib;
+			}
 			
 			wrld->id.flag -= LIB_NEED_LINK;
 		}
@@ -3268,10 +3304,10 @@ static void direct_link_image(FileData *fd, Image *ima)
 		ima->bindcode = 0;
 		ima->tpageflag &= ~IMA_GLBIND_IS_DATA;
 		ima->gputexture = NULL;
+		ima->rr = NULL;
 	}
 	
 	ima->anim = NULL;
-	ima->rr = NULL;
 	ima->repbind = NULL;
 	
 	/* undo system, try to restore render buffers */
@@ -3381,11 +3417,9 @@ static void direct_link_curve(FileData *fd, Curve *cu)
 		if (cu->wordspace == 0.0f) cu->wordspace = 1.0f;
 	}
 
-	cu->bev.first = cu->bev.last = NULL;
 	cu->disp.first = cu->disp.last = NULL;
 	cu->editnurb = NULL;
 	cu->lastsel = NULL;
-	cu->path = NULL;
 	cu->editfont = NULL;
 	
 	for (nu = cu->nurb.first; nu; nu = nu->next) {
@@ -3423,8 +3457,10 @@ static void lib_link_texture(FileData *fd, Main *main)
 			if (tex->ot)
 				tex->ot->object = newlibadr(fd, tex->id.lib, tex->ot->object);
 			
-			if (tex->nodetree)
+			if (tex->nodetree) {
 				lib_link_ntree(fd, &tex->id, tex->nodetree);
+				tex->nodetree->id.lib = tex->id.lib;
+			}
 			
 			tex->id.flag -= LIB_NEED_LINK;
 		}
@@ -3505,8 +3541,10 @@ static void lib_link_material(FileData *fd, Main *main)
 				}
 			}
 			
-			if (ma->nodetree)
+			if (ma->nodetree) {
 				lib_link_ntree(fd, &ma->id, ma->nodetree);
+				ma->nodetree->id.lib = ma->id.lib;
+			}
 			
 			ma->id.flag -= LIB_NEED_LINK;
 		}
@@ -4134,6 +4172,11 @@ static void direct_link_mesh(FileData *fd, Mesh *mesh)
 	mesh->bb = NULL;
 	mesh->edit_btmesh = NULL;
 	
+	/* happens with old files */
+	if (mesh->mselect == NULL) {
+		mesh->totselect = 0;
+	}
+
 	/* Multires data */
 	mesh->mr= newdataadr(fd, mesh->mr);
 	if (mesh->mr) {
@@ -4318,7 +4361,7 @@ static void lib_link_object(FileData *fd, Main *main)
 				/* Only expand so as not to loose any object materials that might be set. */
 				if (totcol_data && (*totcol_data > ob->totcol)) {
 					/* printf("'%s' %d -> %d\n", ob->id.name, ob->totcol, *totcol_data); */
-					resize_object_material(ob, *totcol_data);
+					BKE_material_resize_object(ob, *totcol_data, false);
 				}
 			}
 			
@@ -4594,6 +4637,7 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb)
 				smd->domain->smd = smd;
 				
 				smd->domain->fluid = NULL;
+				smd->domain->fluid_mutex = BLI_rw_mutex_alloc();
 				smd->domain->wt = NULL;
 				smd->domain->shadow = NULL;
 				smd->domain->tex = NULL;
@@ -4801,8 +4845,6 @@ static void direct_link_object(FileData *fd, Object *ob)
 		ob->mode &= ~(OB_MODE_EDIT | OB_MODE_PARTICLE_EDIT);
 	}
 	
-	ob->disp.first = ob->disp.last = NULL;
-	
 	ob->adt = newdataadr(fd, ob->adt);
 	direct_link_animdata(fd, ob->adt);
 	
@@ -4997,6 +5039,9 @@ static void direct_link_object(FileData *fd, Object *ob)
 	ob->gpulamp.first= ob->gpulamp.last = NULL;
 	link_list(fd, &ob->pc_ids);
 
+	/* Runtime curve data  */
+	ob->curve_cache = NULL;
+
 	/* in case this value changes in future, clamp else we get undefined behavior */
 	CLAMP(ob->rotmode, ROT_MODE_MIN, ROT_MODE_MAX);
 
@@ -5043,6 +5088,8 @@ static void lib_link_scene(FileData *fd, Main *main)
 	Sequence *seq;
 	SceneRenderLayer *srl;
 	TimeMarker *marker;
+	FreestyleModuleConfig *fmc;
+	FreestyleLineSet *fls;
 	
 	for (sce = main->scene.first; sce; sce = sce->id.next) {
 		if (sce->id.flag & LIB_NEED_LINK) {
@@ -5151,12 +5198,20 @@ static void lib_link_scene(FileData *fd, Main *main)
 			
 			if (sce->nodetree) {
 				lib_link_ntree(fd, &sce->id, sce->nodetree);
+				sce->nodetree->id.lib = sce->id.lib;
 				composite_patch(sce->nodetree, sce);
 			}
 			
 			for (srl = sce->r.layers.first; srl; srl = srl->next) {
 				srl->mat_override = newlibadr_us(fd, sce->id.lib, srl->mat_override);
 				srl->light_override = newlibadr_us(fd, sce->id.lib, srl->light_override);
+				for (fmc = srl->freestyleConfig.modules.first; fmc; fmc = fmc->next) {
+					fmc->script = newlibadr(fd, sce->id.lib, fmc->script);
+				}
+				for (fls = srl->freestyleConfig.linesets.first; fls; fls = fls->next) {
+					fls->linestyle = newlibadr_us(fd, sce->id.lib, fls->linestyle);
+					fls->group = newlibadr_us(fd, sce->id.lib, fls->group);
+				}
 			}
 			/*Game Settings: Dome Warp Text*/
 			sce->gm.dome.warptext = newlibadr(fd, sce->id.lib, sce->gm.dome.warptext);
@@ -5226,6 +5281,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	Sequence *seq;
 	MetaStack *ms;
 	RigidBodyWorld *rbw;
+	SceneRenderLayer *srl;
 	
 	sce->theDag = NULL;
 	sce->obedit = NULL;
@@ -5403,6 +5459,13 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	link_list(fd, &(sce->markers));
 	link_list(fd, &(sce->transform_spaces));
 	link_list(fd, &(sce->r.layers));
+
+	for (srl = sce->r.layers.first; srl; srl = srl->next) {
+		link_list(fd, &(srl->freestyleConfig.modules));
+	}
+	for (srl = sce->r.layers.first; srl; srl = srl->next) {
+		link_list(fd, &(srl->freestyleConfig.linesets));
+	}
 	
 	sce->nodetree = newdataadr(fd, sce->nodetree);
 	if (sce->nodetree) {
@@ -5646,24 +5709,45 @@ static void lib_link_screen(FileData *fd, Main *main)
 					}
 					else if (sl->spacetype == SPACE_OUTLINER) {
 						SpaceOops *so= (SpaceOops *)sl;
-						TreeStoreElem *tselem;
-						int a;
-						
 						so->search_tse.id = newlibadr(fd, NULL, so->search_tse.id);
 						
 						if (so->treestore) {
-							tselem = so->treestore->data;
-							for (a=0; a < so->treestore->usedelem; a++, tselem++) {
+							TreeStoreElem *tselem;
+							BLI_mempool_iter iter;
+
+							BLI_mempool_iternew(so->treestore, &iter);
+							while ((tselem = BLI_mempool_iterstep(&iter))) {
 								tselem->id = newlibadr(fd, NULL, tselem->id);
+							}
+							if (so->treehash) {
+								/* rebuild hash table, because it depends on ids too */
+								BKE_treehash_rebuild_from_treestore(so->treehash, so->treestore);
 							}
 						}
 					}
 					else if (sl->spacetype == SPACE_NODE) {
 						SpaceNode *snode = (SpaceNode *)sl;
 						bNodeTreePath *path, *path_next;
+						bNodeTree *ntree;
 						
-						for (path=snode->treepath.first; path; path=path->next) {
-							path->nodetree = newlibadr(fd, sc->id.lib, path->nodetree);
+						/* node tree can be stored locally in id too, link this first */
+						snode->id = newlibadr(fd, sc->id.lib, snode->id);
+						snode->from = newlibadr(fd, sc->id.lib, snode->from);
+						
+						ntree = nodetree_from_id(snode->id);
+						if (ntree)
+							snode->nodetree = ntree;
+						else {
+							snode->nodetree = newlibadr_us(fd, sc->id.lib, snode->nodetree);
+						}
+						
+						for (path = snode->treepath.first; path; path = path->next) {
+							if (path == snode->treepath.first) {
+								/* first nodetree in path is same as snode->nodetree */
+								path->nodetree = snode->nodetree;
+							}
+							else
+								path->nodetree = newlibadr_us(fd, sc->id.lib, path->nodetree);
 							
 							if (!path->nodetree)
 								break;
@@ -5677,7 +5761,6 @@ static void lib_link_screen(FileData *fd, Main *main)
 							MEM_freeN(path);
 						}
 						
-						snode->nodetree = newlibadr(fd, sc->id.lib, snode->nodetree);
 						/* edittree is just the last in the path,
 						 * set this directly since the path may have been shortened above */
 						if (snode->treepath.last) {
@@ -5686,8 +5769,6 @@ static void lib_link_screen(FileData *fd, Main *main)
 						}
 						else
 							snode->edittree = NULL;
-						snode->id = newlibadr(fd, sc->id.lib, snode->id);
-						snode->from = newlibadr(fd, sc->id.lib, snode->from);
 					}
 					else if (sl->spacetype == SPACE_CLIP) {
 						SpaceClip *sclip = (SpaceClip *)sl;
@@ -5736,52 +5817,38 @@ static bool restore_pointer(ID *id, ID *newid, int user)
 static void *restore_pointer_by_name(Main *mainp, ID *id, int user)
 {
 	if (id) {
-		/* node trees can be stored locally in other IDs, needs special handling ... */
-		if (GS(id->name) == ID_NT) {
-			ID *idn = NULL;
+		ListBase *lb = which_libbase(mainp, GS(id->name));
+		if (lb) {	// there's still risk of checking corrupt mem (freed Ids in oops)
+			ID *idn = lb->first;
 			
-			FOREACH_NODETREE(mainp, ntree, owner_id) {
-				if (restore_pointer(id, &ntree->id, user)) {
-					idn = &ntree->id;
+			for (; idn; idn = idn->next) {
+				if (restore_pointer(id, idn, user))
 					break;
-				}
 			}
-			FOREACH_NODETREE_END
 			
 			return idn;
-		}
-		else {
-			ListBase *lb = which_libbase(mainp, GS(id->name));
-			if (lb) {	// there's still risk of checking corrupt mem (freed Ids in oops)
-				ID *idn = lb->first;
-				
-				for (; idn; idn = idn->next) {
-					if (restore_pointer(id, idn, user))
-						break;
-				}
-				
-				return idn;
-			}
 		}
 	}
 	return NULL;
 }
 
+static void lib_link_seq_clipboard_pt_restore(ID *id, Main *newmain)
+{
+	if (id) {
+		/* clipboard must ensure this */
+		BLI_assert(id->newid != NULL);
+		id->newid = restore_pointer_by_name(newmain, (ID *)id->newid, 1);
+	}
+}
 static int lib_link_seq_clipboard_cb(Sequence *seq, void *arg_pt)
 {
 	Main *newmain = (Main *)arg_pt;
-	
-	if (seq->sound) {
-		seq->sound = restore_pointer_by_name(newmain, (ID *)seq->sound, 0);
-		seq->sound->id.us++;
-	}
-	
-	if (seq->scene)
-		seq->scene = restore_pointer_by_name(newmain, (ID *)seq->scene, 1);
-	
-	if (seq->scene_camera)
-		seq->scene_camera = restore_pointer_by_name(newmain, (ID *)seq->scene_camera, 1);
-	
+
+	lib_link_seq_clipboard_pt_restore((ID *)seq->scene, newmain);
+	lib_link_seq_clipboard_pt_restore((ID *)seq->scene_camera, newmain);
+	lib_link_seq_clipboard_pt_restore((ID *)seq->clip, newmain);
+	lib_link_seq_clipboard_pt_restore((ID *)seq->mask, newmain);
+	lib_link_seq_clipboard_pt_restore((ID *)seq->sound, newmain);
 	return 1;
 }
 
@@ -5978,24 +6045,45 @@ void blo_lib_link_screen_restore(Main *newmain, bScreen *curscreen, Scene *cursc
 				}
 				else if (sl->spacetype == SPACE_OUTLINER) {
 					SpaceOops *so= (SpaceOops *)sl;
-					int a;
 					
 					so->search_tse.id = restore_pointer_by_name(newmain, so->search_tse.id, 0);
 					
 					if (so->treestore) {
-						TreeStore *ts = so->treestore;
-						TreeStoreElem *tselem = ts->data;
-						for (a = 0; a < ts->usedelem; a++, tselem++) {
+						TreeStoreElem *tselem;
+						BLI_mempool_iter iter;
+
+						BLI_mempool_iternew(so->treestore, &iter);
+						while ((tselem = BLI_mempool_iterstep(&iter))) {
 							tselem->id = restore_pointer_by_name(newmain, tselem->id, 0);
+						}
+						if (so->treehash) {
+							/* rebuild hash table, because it depends on ids too */
+							BKE_treehash_rebuild_from_treestore(so->treehash, so->treestore);
 						}
 					}
 				}
 				else if (sl->spacetype == SPACE_NODE) {
 					SpaceNode *snode= (SpaceNode *)sl;
 					bNodeTreePath *path, *path_next;
+					bNodeTree *ntree;
 					
-					for (path=snode->treepath.first; path; path=path->next) {
-						path->nodetree= restore_pointer_by_name(newmain, (ID*)path->nodetree, 0);
+					/* node tree can be stored locally in id too, link this first */
+					snode->id = restore_pointer_by_name(newmain, snode->id, 1);
+					snode->from = restore_pointer_by_name(newmain, snode->from, 0);
+					
+					ntree = nodetree_from_id(snode->id);
+					if (ntree)
+						snode->nodetree = ntree;
+					else
+						snode->nodetree = restore_pointer_by_name(newmain, (ID*)snode->nodetree, 0);
+					
+					for (path = snode->treepath.first; path; path = path->next) {
+						if (path == snode->treepath.first) {
+							/* first nodetree in path is same as snode->nodetree */
+							path->nodetree = snode->nodetree;
+						}
+						else
+							path->nodetree= restore_pointer_by_name(newmain, (ID*)path->nodetree, 2);
 						
 						if (!path->nodetree)
 							break;
@@ -6009,7 +6097,6 @@ void blo_lib_link_screen_restore(Main *newmain, bScreen *curscreen, Scene *cursc
 						MEM_freeN(path);
 					}
 					
-					snode->nodetree = restore_pointer_by_name(newmain, (ID*)snode->nodetree, 0);
 					/* edittree is just the last in the path,
 					 * set this directly since the path may have been shortened above */
 					if (snode->treepath.last) {
@@ -6018,8 +6105,6 @@ void blo_lib_link_screen_restore(Main *newmain, bScreen *curscreen, Scene *cursc
 					}
 					else
 						snode->edittree = NULL;
-					snode->id = restore_pointer_by_name(newmain, snode->id, 1);
-					snode->from = restore_pointer_by_name(newmain, snode->from, 0);
 				}
 				else if (sl->spacetype == SPACE_CLIP) {
 					SpaceClip *sclip = (SpaceClip *)sl;
@@ -6060,22 +6145,32 @@ static void direct_link_region(FileData *fd, ARegion *ar, int spacetype)
 
 	for (ui_list = ar->ui_lists.first; ui_list; ui_list = ui_list->next) {
 		ui_list->type = NULL;
+		ui_list->dyn_data = NULL;
+		ui_list->properties = newdataadr(fd, ui_list->properties);
+		if (ui_list->properties)
+			IDP_DirectLinkProperty(ui_list->properties, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
 	}
 
-	ar->regiondata = newdataadr(fd, ar->regiondata);
-	if (ar->regiondata) {
-		if (spacetype == SPACE_VIEW3D) {
-			RegionView3D *rv3d = ar->regiondata;
-			
-			rv3d->localvd = newdataadr(fd, rv3d->localvd);
-			rv3d->clipbb = newdataadr(fd, rv3d->clipbb);
-			
-			rv3d->depths = NULL;
-			rv3d->gpuoffscreen = NULL;
-			rv3d->ri = NULL;
-			rv3d->render_engine = NULL;
-			rv3d->sms = NULL;
-			rv3d->smooth_timer = NULL;
+	if (spacetype == SPACE_EMPTY) {
+		/* unkown space type, don't leak regiondata */
+		ar->regiondata = NULL;
+	}
+	else {
+		ar->regiondata = newdataadr(fd, ar->regiondata);
+		if (ar->regiondata) {
+			if (spacetype == SPACE_VIEW3D) {
+				RegionView3D *rv3d = ar->regiondata;
+
+				rv3d->localvd = newdataadr(fd, rv3d->localvd);
+				rv3d->clipbb = newdataadr(fd, rv3d->clipbb);
+
+				rv3d->depths = NULL;
+				rv3d->gpuoffscreen = NULL;
+				rv3d->ri = NULL;
+				rv3d->render_engine = NULL;
+				rv3d->sms = NULL;
+				rv3d->smooth_timer = NULL;
+			}
 		}
 	}
 	
@@ -6118,11 +6213,12 @@ void blo_do_versions_view3d_split_250(View3D *v3d, ListBase *regions)
 		v3d->twtype = V3D_MANIP_TRANSLATE;
 }
 
-static void direct_link_screen(FileData *fd, bScreen *sc)
+static bool direct_link_screen(FileData *fd, bScreen *sc)
 {
 	ScrArea *sa;
 	ScrVert *sv;
 	ScrEdge *se;
+	bool wrong_id = false;
 	
 	link_list(fd, &(sc->vertbase));
 	link_list(fd, &(sc->edgebase));
@@ -6144,8 +6240,9 @@ static void direct_link_screen(FileData *fd, bScreen *sc)
 		}
 		
 		if (se->v1 == NULL) {
-			printf("error reading screen... file corrupt\n");
-			se->v1 = se->v2;
+			printf("Error reading Screen %s... removing it.\n", sc->id.name+2);
+			BLI_remlink(&sc->edgebase, se);
+			wrong_id = true;
 		}
 	}
 	
@@ -6160,6 +6257,11 @@ static void direct_link_screen(FileData *fd, bScreen *sc)
 		sa->handlers.first = sa->handlers.last = NULL;
 		sa->type = NULL;	/* spacetype callbacks */
 		sa->region_active_win = -1;
+
+		/* if we do not have the spacetype registered (game player), we cannot
+		 * free it, so don't allocate any new memory for such spacetypes. */
+		if (!BKE_spacetype_exists(sa->spacetype))
+			sa->spacetype = SPACE_EMPTY;
 		
 		for (ar = sa->regionbase.first; ar; ar = ar->next)
 			direct_link_region(fd, ar, sa->spacetype);
@@ -6177,7 +6279,12 @@ static void direct_link_screen(FileData *fd, bScreen *sc)
 		
 		for (sl = sa->spacedata.first; sl; sl = sl->next) {
 			link_list(fd, &(sl->regionbase));
-			
+
+			/* if we do not have the spacetype registered (game player), we cannot
+			 * free it, so don't allocate any new memory for such spacetypes. */
+			if (!BKE_spacetype_exists(sl->spacetype))
+				sl->spacetype = SPACE_EMPTY;
+
 			for (ar = sl->regionbase.first; ar; ar = ar->next)
 				direct_link_region(fd, ar, sl->spacetype);
 			
@@ -6210,9 +6317,9 @@ static void direct_link_screen(FileData *fd, bScreen *sc)
 				v3d->properties_storage = NULL;
 				v3d->defmaterial = NULL;
 				
-				/* render can be quite heavy, set to wire on load */
+				/* render can be quite heavy, set to solid on load */
 				if (v3d->drawtype == OB_RENDER)
-					v3d->drawtype = OB_WIRE;
+					v3d->drawtype = OB_SOLID;
 				
 				blo_do_versions_view3d_split_250(v3d, &sl->regionbase);
 			}
@@ -6230,13 +6337,28 @@ static void direct_link_screen(FileData *fd, bScreen *sc)
 			else if (sl->spacetype == SPACE_OUTLINER) {
 				SpaceOops *soops = (SpaceOops *) sl;
 				
-				soops->treestore = newdataadr(fd, soops->treestore);
-				if (soops->treestore) {
-					soops->treestore->data = newdataadr(fd, soops->treestore->data);
+				/* use newdataadr_no_us and do not free old memory avoiding double
+				 * frees and use of freed memory. this could happen because of a
+				 * bug fixed in revision 58959 where the treestore memory address
+				 * was not unique */
+				TreeStore *ts = newdataadr_no_us(fd, soops->treestore);
+				soops->treestore = NULL;
+				if (ts) {
+					TreeStoreElem *elems = newdataadr_no_us(fd, ts->data);
+					
+					soops->treestore = BLI_mempool_create(sizeof(TreeStoreElem), ts->usedelem,
+					                                      512, BLI_MEMPOOL_ALLOW_ITER);
+					if (ts->usedelem && elems) {
+						int i;
+						for (i = 0; i < ts->usedelem; i++) {
+							TreeStoreElem *new_elem = BLI_mempool_alloc(soops->treestore);
+							*new_elem = elems[i];
+						}
+					}
 					/* we only saved what was used */
-					soops->treestore->totelem = soops->treestore->usedelem;
 					soops->storeflag |= SO_TREESTORE_CLEANUP;	// at first draw
 				}
+				soops->treehash = NULL;
 				soops->tree.first = soops->tree.last= NULL;
 			}
 			else if (sl->spacetype == SPACE_IMAGE) {
@@ -6379,6 +6501,8 @@ static void direct_link_screen(FileData *fd, bScreen *sc)
 		sa->v3 = newdataadr(fd, sa->v3);
 		sa->v4 = newdataadr(fd, sa->v4);
 	}
+	
+	return wrong_id;
 }
 
 /* ********** READ LIBRARY *************** */
@@ -6576,6 +6700,28 @@ static void direct_link_movieTracks(FileData *fd, ListBase *tracksbase)
 	}
 }
 
+static void direct_link_moviePlaneTracks(FileData *fd, ListBase *plane_tracks_base)
+{
+	MovieTrackingPlaneTrack *plane_track;
+
+	link_list(fd, plane_tracks_base);
+
+	for (plane_track = plane_tracks_base->first;
+	     plane_track;
+	     plane_track = plane_track->next)
+	{
+		int i;
+
+		plane_track->point_tracks = newdataadr(fd, plane_track->point_tracks);
+
+		for (i = 0; i < plane_track->point_tracksnr; i++) {
+			plane_track->point_tracks[i] = newdataadr(fd, plane_track->point_tracks[i]);
+		}
+
+		plane_track->markers = newdataadr(fd, plane_track->markers);
+	}
+}
+
 static void direct_link_movieclip(FileData *fd, MovieClip *clip)
 {
 	MovieTracking *tracking = &clip->tracking;
@@ -6590,28 +6736,28 @@ static void direct_link_movieclip(FileData *fd, MovieClip *clip)
 	else clip->tracking.camera.intrinsics = NULL;
 
 	direct_link_movieTracks(fd, &tracking->tracks);
+	direct_link_moviePlaneTracks(fd, &tracking->plane_tracks);
 	direct_link_movieReconstruction(fd, &tracking->reconstruction);
 
 	clip->tracking.act_track = newdataadr(fd, clip->tracking.act_track);
+	clip->tracking.act_plane_track = newdataadr(fd, clip->tracking.act_plane_track);
 
 	clip->anim = NULL;
 	clip->tracking_context = NULL;
 	clip->tracking.stats = NULL;
 
 	clip->tracking.stabilization.ok = 0;
-	clip->tracking.stabilization.scaleibuf = NULL;
 	clip->tracking.stabilization.rot_track = newdataadr(fd, clip->tracking.stabilization.rot_track);
 
 	clip->tracking.dopesheet.ok = 0;
 	clip->tracking.dopesheet.channels.first = clip->tracking.dopesheet.channels.last = NULL;
 	clip->tracking.dopesheet.coverage_segments.first = clip->tracking.dopesheet.coverage_segments.last = NULL;
 
-	clip->prefetch_ok = FALSE;
-
 	link_list(fd, &tracking->objects);
 	
 	for (object = tracking->objects.first; object; object = object->next) {
 		direct_link_movieTracks(fd, &object->tracks);
+		direct_link_moviePlaneTracks(fd, &object->plane_tracks);
 		direct_link_movieReconstruction(fd, &object->reconstruction);
 	}
 }
@@ -6740,6 +6886,179 @@ static void lib_link_mask(FileData *fd, Main *main)
 	}
 }
 
+/* ************ READ LINE STYLE ***************** */
+
+static void lib_link_linestyle(FileData *fd, Main *main)
+{
+	FreestyleLineStyle *linestyle;
+	LineStyleModifier *m;
+
+	linestyle = main->linestyle.first;
+	while (linestyle) {
+		if (linestyle->id.flag & LIB_NEED_LINK) {
+			linestyle->id.flag -= LIB_NEED_LINK;
+
+			if (linestyle->id.properties)
+				IDP_LibLinkProperty(linestyle->id.properties, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
+			if (linestyle->adt)
+				lib_link_animdata(fd, &linestyle->id, linestyle->adt);
+			for (m = linestyle->color_modifiers.first; m; m = m->next) {
+				switch (m->type) {
+				case LS_MODIFIER_DISTANCE_FROM_OBJECT:
+					{
+						LineStyleColorModifier_DistanceFromObject *cm = (LineStyleColorModifier_DistanceFromObject *)m;
+						cm->target = newlibadr(fd, linestyle->id.lib, cm->target);
+					}
+					break;
+				}
+			}
+			for (m = linestyle->alpha_modifiers.first; m; m = m->next) {
+				switch (m->type) {
+				case LS_MODIFIER_DISTANCE_FROM_OBJECT:
+					{
+						LineStyleAlphaModifier_DistanceFromObject *am = (LineStyleAlphaModifier_DistanceFromObject *)m;
+						am->target = newlibadr(fd, linestyle->id.lib, am->target);
+					}
+					break;
+				}
+			}
+			for (m = linestyle->thickness_modifiers.first; m; m = m->next) {
+				switch (m->type) {
+				case LS_MODIFIER_DISTANCE_FROM_OBJECT:
+					{
+						LineStyleThicknessModifier_DistanceFromObject *tm = (LineStyleThicknessModifier_DistanceFromObject *)m;
+						tm->target = newlibadr(fd, linestyle->id.lib, tm->target);
+					}
+					break;
+				}
+			}
+		}
+		linestyle = linestyle->id.next;
+	}
+}
+
+static void direct_link_linestyle_color_modifier(FileData *fd, LineStyleModifier *modifier)
+{
+	switch (modifier->type) {
+	case LS_MODIFIER_ALONG_STROKE:
+		{
+			LineStyleColorModifier_AlongStroke *m = (LineStyleColorModifier_AlongStroke *)modifier;
+			m->color_ramp = newdataadr(fd, m->color_ramp);
+		}
+		break;
+	case LS_MODIFIER_DISTANCE_FROM_CAMERA:
+		{
+			LineStyleColorModifier_DistanceFromCamera *m = (LineStyleColorModifier_DistanceFromCamera *)modifier;
+			m->color_ramp = newdataadr(fd, m->color_ramp);
+		}
+		break;
+	case LS_MODIFIER_DISTANCE_FROM_OBJECT:
+		{
+			LineStyleColorModifier_DistanceFromObject *m = (LineStyleColorModifier_DistanceFromObject *)modifier;
+			m->color_ramp = newdataadr(fd, m->color_ramp);
+		}
+		break;
+	case LS_MODIFIER_MATERIAL:
+		{
+			LineStyleColorModifier_Material *m = (LineStyleColorModifier_Material *)modifier;
+			m->color_ramp = newdataadr(fd, m->color_ramp);
+		}
+		break;
+	}
+}
+
+static void direct_link_linestyle_alpha_modifier(FileData *fd, LineStyleModifier *modifier)
+{
+	switch (modifier->type) {
+	case LS_MODIFIER_ALONG_STROKE:
+		{
+			LineStyleAlphaModifier_AlongStroke *m = (LineStyleAlphaModifier_AlongStroke *)modifier;
+			m->curve = newdataadr(fd, m->curve);
+			direct_link_curvemapping(fd, m->curve);
+		}
+		break;
+	case LS_MODIFIER_DISTANCE_FROM_CAMERA:
+		{
+			LineStyleAlphaModifier_DistanceFromCamera *m = (LineStyleAlphaModifier_DistanceFromCamera *)modifier;
+			m->curve = newdataadr(fd, m->curve);
+			direct_link_curvemapping(fd, m->curve);
+		}
+		break;
+	case LS_MODIFIER_DISTANCE_FROM_OBJECT:
+		{
+			LineStyleAlphaModifier_DistanceFromObject *m = (LineStyleAlphaModifier_DistanceFromObject *)modifier;
+			m->curve = newdataadr(fd, m->curve);
+			direct_link_curvemapping(fd, m->curve);
+		}
+		break;
+	case LS_MODIFIER_MATERIAL:
+		{
+			LineStyleAlphaModifier_Material *m = (LineStyleAlphaModifier_Material *)modifier;
+			m->curve = newdataadr(fd, m->curve);
+			direct_link_curvemapping(fd, m->curve);
+		}
+		break;
+	}
+}
+
+static void direct_link_linestyle_thickness_modifier(FileData *fd, LineStyleModifier *modifier)
+{
+	switch (modifier->type) {
+	case LS_MODIFIER_ALONG_STROKE:
+		{
+			LineStyleThicknessModifier_AlongStroke *m = (LineStyleThicknessModifier_AlongStroke *)modifier;
+			m->curve = newdataadr(fd, m->curve);
+			direct_link_curvemapping(fd, m->curve);
+		}
+		break;
+	case LS_MODIFIER_DISTANCE_FROM_CAMERA:
+		{
+			LineStyleThicknessModifier_DistanceFromCamera *m = (LineStyleThicknessModifier_DistanceFromCamera *)modifier;
+			m->curve = newdataadr(fd, m->curve);
+			direct_link_curvemapping(fd, m->curve);
+		}
+		break;
+	case LS_MODIFIER_DISTANCE_FROM_OBJECT:
+		{
+			LineStyleThicknessModifier_DistanceFromObject *m = (LineStyleThicknessModifier_DistanceFromObject *)modifier;
+			m->curve = newdataadr(fd, m->curve);
+			direct_link_curvemapping(fd, m->curve);
+		}
+		break;
+	case LS_MODIFIER_MATERIAL:
+		{
+			LineStyleThicknessModifier_Material *m = (LineStyleThicknessModifier_Material *)modifier;
+			m->curve = newdataadr(fd, m->curve);
+			direct_link_curvemapping(fd, m->curve);
+		}
+		break;
+	}
+}
+
+static void direct_link_linestyle_geometry_modifier(FileData *UNUSED(fd), LineStyleModifier *UNUSED(modifier))
+{
+}
+
+static void direct_link_linestyle(FileData *fd, FreestyleLineStyle *linestyle)
+{
+	LineStyleModifier *modifier;
+
+	linestyle->adt= newdataadr(fd, linestyle->adt);
+	direct_link_animdata(fd, linestyle->adt);
+	link_list(fd, &linestyle->color_modifiers);
+	for (modifier = linestyle->color_modifiers.first; modifier; modifier = modifier->next)
+		direct_link_linestyle_color_modifier(fd, modifier);
+	link_list(fd, &linestyle->alpha_modifiers);
+	for (modifier = linestyle->alpha_modifiers.first; modifier; modifier = modifier->next)
+		direct_link_linestyle_alpha_modifier(fd, modifier);
+	link_list(fd, &linestyle->thickness_modifiers);
+	for (modifier = linestyle->thickness_modifiers.first; modifier; modifier = modifier->next)
+		direct_link_linestyle_thickness_modifier(fd, modifier);
+	link_list(fd, &linestyle->geometry_modifiers);
+	for (modifier = linestyle->geometry_modifiers.first; modifier; modifier = modifier->next)
+		direct_link_linestyle_geometry_modifier(fd, modifier);
+}
+
 /* ************** GENERAL & MAIN ******************** */
 
 
@@ -6774,6 +7093,7 @@ static const char *dataname(short id_code)
 		case ID_PA: return "Data from PA";
 		case ID_GD: return "Data from GD";
 		case ID_MC: return "Data from MC";
+		case ID_LS: return "Data from LS";
 	}
 	return "Data from Lib Block";
 	
@@ -6814,6 +7134,7 @@ static BHead *read_libblock(FileData *fd, Main *main, BHead *bhead, int flag, ID
 	ID *id;
 	ListBase *lb;
 	const char *allocname;
+	bool wrong_id = false;
 	
 	/* read libblock */
 	id = read_struct(fd, bhead, "lib block");
@@ -6861,7 +7182,7 @@ static BHead *read_libblock(FileData *fd, Main *main, BHead *bhead, int flag, ID
 			direct_link_windowmanager(fd, (wmWindowManager *)id);
 			break;
 		case ID_SCR:
-			direct_link_screen(fd, (bScreen *)id);
+			wrong_id = direct_link_screen(fd, (bScreen *)id);
 			break;
 		case ID_SCE:
 			direct_link_scene(fd, (Scene *)id);
@@ -6950,10 +7271,17 @@ static BHead *read_libblock(FileData *fd, Main *main, BHead *bhead, int flag, ID
 		case ID_MSK:
 			direct_link_mask(fd, (Mask *)id);
 			break;
+		case ID_LS:
+			direct_link_linestyle(fd, (FreestyleLineStyle *)id);
+			break;
 	}
 	
 	oldnewmap_free_unused(fd->datamap);
 	oldnewmap_clear(fd->datamap);
+	
+	if (wrong_id) {
+		BKE_libblock_free(lb, id);
+	}
 	
 	return (bhead);
 }
@@ -7012,7 +7340,7 @@ static void link_global(FileData *fd, BlendFileData *bfd)
 	}
 }
 
-void convert_tface_mt(FileData *fd, Main *main)
+static void convert_tface_mt(FileData *fd, Main *main)
 {
 	Main *gmain;
 	
@@ -7190,7 +7518,6 @@ static void do_versions_nodetree_multi_file_output_format_2_62_1(Scene *sce, bNo
 			bNodeSocket *old_image = BLI_findlink(&node->inputs, 0);
 			bNodeSocket *old_z = BLI_findlink(&node->inputs, 1);
 			bNodeSocket *sock;
-			char basepath[FILE_MAXDIR];
 			char filename[FILE_MAXFILE];
 			
 			/* ugly, need to remove the old inputs list to avoid bad pointer checks when adding new sockets.
@@ -7202,6 +7529,8 @@ static void do_versions_nodetree_multi_file_output_format_2_62_1(Scene *sce, bNo
 			
 			/* looks like storage data can be messed up somehow, stupid check here */
 			if (old_data) {
+				char basepath[FILE_MAXDIR];
+
 				/* split off filename from the old path, to be used as socket sub-path */
 				BLI_split_dirfile(old_data->name, basepath, filename, sizeof(basepath), sizeof(filename));
 				
@@ -7209,7 +7538,6 @@ static void do_versions_nodetree_multi_file_output_format_2_62_1(Scene *sce, bNo
 				nimf->format = old_data->im_format;
 			}
 			else {
-				basepath[0] = '\0';
 				BLI_strncpy(filename, old_image->name, sizeof(filename));
 			}
 			
@@ -7457,31 +7785,38 @@ static const char *node_get_static_idname(int type, int treetype)
 static const char *node_socket_get_static_idname(bNodeSocket *sock)
 {
 	switch (sock->type) {
-	case SOCK_FLOAT: {
-		bNodeSocketValueFloat *dval = sock->default_value;
-		return nodeStaticSocketType(SOCK_FLOAT, dval->subtype);
-	}
-	case SOCK_INT: {
-		bNodeSocketValueInt *dval = sock->default_value;
-		return nodeStaticSocketType(SOCK_INT, dval->subtype);
-	}
-	case SOCK_BOOLEAN: {
-		return nodeStaticSocketType(SOCK_BOOLEAN, PROP_NONE);
-	}
-	case SOCK_VECTOR: {
-		bNodeSocketValueVector *dval = sock->default_value;
-		return nodeStaticSocketType(SOCK_VECTOR, dval->subtype);
-	}
-	case SOCK_RGBA: {
-		return nodeStaticSocketType(SOCK_RGBA, PROP_NONE);
-	}
-	case SOCK_STRING: {
-		bNodeSocketValueString *dval = sock->default_value;
-		return nodeStaticSocketType(SOCK_STRING, dval->subtype);
-	}
-	case SOCK_SHADER: {
-		return nodeStaticSocketType(SOCK_SHADER, PROP_NONE);
-	}
+		case SOCK_FLOAT:
+		{
+			bNodeSocketValueFloat *dval = sock->default_value;
+			return nodeStaticSocketType(SOCK_FLOAT, dval->subtype);
+		}
+		case SOCK_INT:
+		{
+			bNodeSocketValueInt *dval = sock->default_value;
+			return nodeStaticSocketType(SOCK_INT, dval->subtype);
+		}
+		case SOCK_BOOLEAN:
+		{
+			return nodeStaticSocketType(SOCK_BOOLEAN, PROP_NONE);
+		}
+		case SOCK_VECTOR:
+		{
+			bNodeSocketValueVector *dval = sock->default_value;
+			return nodeStaticSocketType(SOCK_VECTOR, dval->subtype);
+		}
+		case SOCK_RGBA:
+		{
+			return nodeStaticSocketType(SOCK_RGBA, PROP_NONE);
+		}
+		case SOCK_STRING:
+		{
+			bNodeSocketValueString *dval = sock->default_value;
+			return nodeStaticSocketType(SOCK_STRING, dval->subtype);
+		}
+		case SOCK_SHADER:
+		{
+			return nodeStaticSocketType(SOCK_SHADER, PROP_NONE);
+		}
 	}
 	return "";
 }
@@ -7553,27 +7888,27 @@ static void do_versions_nodetree_customnodes(bNodeTree *ntree, int UNUSED(is_gro
 		for (node=ntree->nodes.first; node; node=node->next) {
 			for (sock = node->inputs.first; sock; sock = sock->next) {
 				BLI_strncpy(sock->identifier, sock->name, sizeof(sock->identifier));
-				BLI_uniquename(&node->inputs, sock, sock->identifier, '.', offsetof(bNodeSocket, identifier), sizeof(sock->identifier));
+				BLI_uniquename(&node->inputs, sock, "socket", '.', offsetof(bNodeSocket, identifier), sizeof(sock->identifier));
 			}
 			for (sock = node->outputs.first; sock; sock = sock->next) {
 				BLI_strncpy(sock->identifier, sock->name, sizeof(sock->identifier));
-				BLI_uniquename(&node->outputs, sock, sock->identifier, '.', offsetof(bNodeSocket, identifier), sizeof(sock->identifier));
+				BLI_uniquename(&node->outputs, sock, "socket", '.', offsetof(bNodeSocket, identifier), sizeof(sock->identifier));
 			}
 		}
 		for (sock = ntree->inputs.first; sock; sock = sock->next) {
 			BLI_strncpy(sock->identifier, sock->name, sizeof(sock->identifier));
-			BLI_uniquename(&ntree->inputs, sock, sock->identifier, '.', offsetof(bNodeSocket, identifier), sizeof(sock->identifier));
+			BLI_uniquename(&ntree->inputs, sock, "socket", '.', offsetof(bNodeSocket, identifier), sizeof(sock->identifier));
 		}
 		for (sock = ntree->outputs.first; sock; sock = sock->next) {
 			BLI_strncpy(sock->identifier, sock->name, sizeof(sock->identifier));
-			BLI_uniquename(&ntree->outputs, sock, sock->identifier, '.', offsetof(bNodeSocket, identifier), sizeof(sock->identifier));
+			BLI_uniquename(&ntree->outputs, sock, "socket", '.', offsetof(bNodeSocket, identifier), sizeof(sock->identifier));
 		}
 	}
 }
 
 /* initialize userdef with non-UI dependency stuff */
 /* other initializers (such as theme color defaults) go to resources.c */
-static void do_versions_userdef(FileData *fd, BlendFileData *bfd)
+static void do_versions_userdef(FileData *UNUSED(fd), BlendFileData *bfd)
 {
 	Main *bmain = bfd->main;
 	UserDef *user = bfd->user;
@@ -7589,14 +7924,8 @@ static void do_versions_userdef(FileData *fd, BlendFileData *bfd)
 			copy_v4_v4_char(btheme->tseq.grid, btheme->tseq.back);
 		}
 	}
-	
-	if (bmain->versionfile < 267) {
-	
-		if (!DNA_struct_elem_find(fd->filesdna, "UserDef", "short", "image_gpubuffer_limit"))
-			user->image_gpubuffer_limit = 20;
-		
-	}
 }
+
 static void do_versions(FileData *fd, Library *lib, Main *main)
 {
 	/* WATCH IT!!!: pointers from libdata have not been converted */
@@ -7907,12 +8236,7 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 			for (ob = main->object.first; ob; ob = ob->id.next) {
 				bConstraint *con;
 				for (con = ob->constraints.first; con; con = con->next) {
-					bConstraintTypeInfo *cti = BKE_constraint_get_typeinfo(con);
-					
-					if (!cti)
-						continue;
-					
-					if (cti->type == CONSTRAINT_TYPE_OBJECTSOLVER) {
+					if (con->type == CONSTRAINT_TYPE_OBJECTSOLVER) {
 						bObjectSolverConstraint *data = (bObjectSolverConstraint *)con->data;
 						
 						if (data->invmat[3][3] == 0.0f)
@@ -9091,11 +9415,27 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 		Brush *brush;
 		for (brush = main->brush.first; brush; brush = brush->id.next) {
 			default_mtex(&brush->mask_mtex);
+
+			if (brush->ob_mode & OB_MODE_TEXTURE_PAINT) {
+				brush->spacing /= 2;
+			}
 		}
 	}
 
+	if (!MAIN_VERSION_ATLEAST(main, 266, 6)) {
+		Brush *brush;
+		#define BRUSH_TEXTURE_OVERLAY (1 << 21)
+
+		for (brush = main->brush.first; brush; brush = brush->id.next) {
+			brush->overlay_flags = 0;
+			if (brush->flag & BRUSH_TEXTURE_OVERLAY)
+				brush->overlay_flags |= (BRUSH_OVERLAY_PRIMARY | BRUSH_OVERLAY_CURSOR);
+		}
+		#undef BRUSH_TEXTURE_OVERLAY
+	}
+
 	if (main->versionfile < 267) {
-		//if(!DNA_struct_elem_find(fd->filesdna, "Brush", "int", "stencil_pos")) {
+		//if (!DNA_struct_elem_find(fd->filesdna, "Brush", "int", "stencil_pos")) {
 		Brush *brush;
 
 		for (brush = main->brush.first; brush; brush = brush->id.next) {
@@ -9105,17 +9445,201 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 				brush->stencil_pos[0] = 256;
 				brush->stencil_pos[1] = 256;
 			}
+			if (brush->mask_stencil_dimension[0] == 0) {
+				brush->mask_stencil_dimension[0] = 256;
+				brush->mask_stencil_dimension[1] = 256;
+				brush->mask_stencil_pos[0] = 256;
+				brush->mask_stencil_pos[1] = 256;
+			}
 		}
 
 		/* TIP: to initialize new variables added, use the new function
-		   DNA_struct_elem_find(fd->filesdna, "structname", "typename", "varname")
-		   example: 
-				if (!DNA_struct_elem_find(fd->filesdna, "UserDef", "short", "image_gpubuffer_limit"))
-					user->image_gpubuffer_limit = 10;
+		 * DNA_struct_elem_find(fd->filesdna, "structname", "typename", "varname")
+		 * example:
+		 * if (!DNA_struct_elem_find(fd->filesdna, "UserDef", "short", "image_gpubuffer_limit"))
+		 *     user->image_gpubuffer_limit = 10;
 		 */
 		
 	}
 	
+	/* default values in Freestyle settings */
+	if (main->versionfile < 267) {
+		Scene *sce;
+		SceneRenderLayer *srl;
+		FreestyleLineStyle *linestyle;
+
+		for (sce = main->scene.first; sce; sce = sce->id.next) {
+			if (sce->r.line_thickness_mode == 0) {
+				sce->r.line_thickness_mode = R_LINE_THICKNESS_ABSOLUTE;
+				sce->r.unit_line_thickness = 1.0f;
+			}
+			for (srl = sce->r.layers.first; srl; srl = srl->next) {
+				if (srl->freestyleConfig.mode == 0)
+					srl->freestyleConfig.mode = FREESTYLE_CONTROL_EDITOR_MODE;
+				if (srl->freestyleConfig.raycasting_algorithm == FREESTYLE_ALGO_CULLED_ADAPTIVE_CUMULATIVE ||
+				    srl->freestyleConfig.raycasting_algorithm == FREESTYLE_ALGO_CULLED_ADAPTIVE_TRADITIONAL) {
+					srl->freestyleConfig.raycasting_algorithm = 0; /* deprecated */
+					srl->freestyleConfig.flags |= FREESTYLE_CULLING;
+				}
+			}
+
+			/* not freestyle */
+			{
+				MeshStatVis *statvis = &sce->toolsettings->statvis;
+				if (statvis->thickness_samples == 0) {
+					statvis->overhang_axis = OB_NEGZ;
+					statvis->overhang_min = 0;
+					statvis->overhang_max = DEG2RADF(45.0f);
+
+					statvis->thickness_max = 0.1f;
+					statvis->thickness_samples = 1;
+
+					statvis->distort_min = DEG2RADF(5.0f);
+					statvis->distort_max = DEG2RADF(45.0f);
+
+					statvis->sharp_min = DEG2RADF(90.0f);
+					statvis->sharp_max = DEG2RADF(180.0f);
+				}
+			}
+
+		}
+		for (linestyle = main->linestyle.first; linestyle; linestyle = linestyle->id.next) {
+#if 1
+			/* disable the Misc panel for now */
+			if (linestyle->panel == LS_PANEL_MISC) {
+				linestyle->panel = LS_PANEL_STROKES;
+			}
+#endif
+			if (linestyle->thickness_position == 0) {
+				linestyle->thickness_position = LS_THICKNESS_CENTER;
+				linestyle->thickness_ratio = 0.5f;
+			}
+			if (linestyle->chaining == 0)
+				linestyle->chaining = LS_CHAINING_PLAIN;
+			if (linestyle->rounds == 0)
+				linestyle->rounds = 3;
+		}
+	}
+
+	if (main->versionfile < 267) {
+		/* Initialize the active_viewer_key for compositing */
+		bScreen *screen;
+		Scene *scene;
+		bNodeInstanceKey active_viewer_key = {0};
+		/* simply pick the first node space and use that for the active viewer key */
+		for (screen = main->screen.first; screen; screen = screen->id.next) {
+			ScrArea *sa;
+			for (sa = screen->areabase.first; sa; sa = sa->next) {
+				SpaceLink *sl;
+				for (sl = sa->spacedata.first; sl; sl= sl->next) {
+					if (sl->spacetype == SPACE_NODE) {
+						SpaceNode *snode = (SpaceNode *)sl;
+						bNodeTreePath *path = snode->treepath.last;
+						if (!path)
+							continue;
+						
+						active_viewer_key = path->parent_key;
+						break;
+					}
+				}
+				if (active_viewer_key.value != 0)
+					break;
+			}
+			if (active_viewer_key.value != 0)
+				break;
+		}
+		
+		for (scene = main->scene.first; scene; scene = scene->id.next) {
+			/* NB: scene->nodetree is a local ID block, has been direct_link'ed */
+			if (scene->nodetree)
+				scene->nodetree->active_viewer_key = active_viewer_key;
+		}
+	}
+
+	if (MAIN_VERSION_OLDER(main, 267, 1))
+	{
+		Object *ob;
+
+		for (ob = main->object.first; ob; ob = ob->id.next) {
+			ModifierData *md;
+			for (md = ob->modifiers.first; md; md = md->next) {
+				if (md->type == eModifierType_Smoke) {
+					SmokeModifierData *smd = (SmokeModifierData *)md;
+					if ((smd->type & MOD_SMOKE_TYPE_DOMAIN) && smd->domain) {
+						if (smd->domain->flags & MOD_SMOKE_HIGH_SMOOTH) {
+							smd->domain->highres_sampling = SM_HRES_LINEAR;
+						}
+						else {
+							smd->domain->highres_sampling = SM_HRES_NEAREST;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if (!MAIN_VERSION_ATLEAST(main, 268, 1)) {
+		Brush *brush;
+		for (brush = main->brush.first; brush; brush = brush->id.next) {
+			brush->spacing = MAX2(1, brush->spacing);
+		}
+	}
+
+	if (!MAIN_VERSION_ATLEAST(main, 268, 2)) {
+		Brush *brush;
+		#define BRUSH_FIXED (1 << 6)
+		for (brush = main->brush.first; brush; brush = brush->id.next) {
+			brush->flag &= ~BRUSH_FIXED;
+
+			if (brush->cursor_overlay_alpha < 2)
+				brush->cursor_overlay_alpha = 33;
+			if (brush->texture_overlay_alpha < 2)
+				brush->texture_overlay_alpha = 33;
+			if (brush->mask_overlay_alpha <2)
+				brush->mask_overlay_alpha = 33;
+		}
+		#undef BRUSH_FIXED
+	}
+	
+	{
+		bScreen *sc;
+		Object *ob;
+
+		for (ob = main->object.first; ob; ob = ob->id.next) {
+			ModifierData *md;
+			for (md = ob->modifiers.first; md; md = md->next) {
+				if (md->type == eModifierType_Smoke) {
+					SmokeModifierData *smd = (SmokeModifierData *)md;
+					if ((smd->type & MOD_SMOKE_TYPE_FLOW) && smd->flow) {
+						if (!smd->flow->particle_size) {
+							smd->flow->particle_size = 1.0f;
+						}
+					}
+				}
+			}
+		}
+
+		/*
+		 * FIX some files have a zoom level of 0, and was checked during the drawing of the node space
+		 *
+		 * We moved this check to the do versions to be sure the value makes any sense.
+		 */
+		for (sc = main->screen.first; sc; sc = sc->id.next) {
+			ScrArea *sa;
+			for (sa = sc->areabase.first; sa; sa = sa->next) {
+				SpaceLink *sl;
+				for (sl = sa->spacedata.first; sl; sl = sl->next) {
+					if (sl->spacetype == SPACE_NODE) {
+						SpaceNode *snode = (SpaceNode *)sl;
+						if (snode->zoom < 0.02f) {
+							snode->zoom = 1.0;
+						}
+					}
+				}
+			}
+		}
+	}
+
 	/* WATCH IT!!!: pointers from libdata have not been converted yet here! */
 	/* WATCH IT 2!: Userdef struct init see do_versions_userdef() above! */
 
@@ -9165,6 +9689,7 @@ static void lib_link_all(FileData *fd, Main *main)
 	lib_link_particlesettings(fd, main);
 	lib_link_movieclip(fd, main);
 	lib_link_mask(fd, main);
+	lib_link_linestyle(fd, main);
 
 	lib_link_mesh(fd, main);		/* as last: tpage images with users at zero */
 	
@@ -9206,6 +9731,7 @@ static BHead *read_userdef(BlendFileData *bfd, FileData *fd, BHead *bhead)
 	link_list(fd, &user->themes);
 	link_list(fd, &user->user_keymaps);
 	link_list(fd, &user->addons);
+	link_list(fd, &user->autoexec_paths);
 	
 	for (keymap=user->user_keymaps.first; keymap; keymap=keymap->next) {
 		keymap->modal_items= NULL;
@@ -9700,6 +10226,7 @@ static void expand_texture(FileData *fd, Main *mainvar, Tex *tex)
 static void expand_brush(FileData *fd, Main *mainvar, Brush *brush)
 {
 	expand_doit(fd, mainvar, brush->mtex.tex);
+	expand_doit(fd, mainvar, brush->mask_mtex.tex);
 	expand_doit(fd, mainvar, brush->clone.image);
 }
 
@@ -10107,6 +10634,8 @@ static void expand_scene(FileData *fd, Main *mainvar, Scene *sce)
 {
 	Base *base;
 	SceneRenderLayer *srl;
+	FreestyleModuleConfig *module;
+	FreestyleLineSet *lineset;
 	
 	for (base = sce->base.first; base; base = base->next) {
 		expand_doit(fd, mainvar, base->object);
@@ -10127,6 +10656,15 @@ static void expand_scene(FileData *fd, Main *mainvar, Scene *sce)
 	for (srl = sce->r.layers.first; srl; srl = srl->next) {
 		expand_doit(fd, mainvar, srl->mat_override);
 		expand_doit(fd, mainvar, srl->light_override);
+		for (module = srl->freestyleConfig.modules.first; module; module = module->next) {
+			if (module->script)
+				expand_doit(fd, mainvar, module->script);
+		}
+		for (lineset = srl->freestyleConfig.linesets.first; lineset; lineset = lineset->next) {
+			if (lineset->group)
+				expand_doit(fd, mainvar, lineset->group);
+			expand_doit(fd, mainvar, lineset->linestyle);
+		}
 	}
 	
 	if (sce->r.dometext)
@@ -10225,6 +10763,26 @@ static void expand_mask(FileData *fd, Main *mainvar, Mask *mask)
 	}
 }
 
+static void expand_linestyle(FileData *fd, Main *mainvar, FreestyleLineStyle *linestyle)
+{
+	LineStyleModifier *m;
+
+	if (linestyle->adt)
+		expand_animdata(fd, mainvar, linestyle->adt);
+	for (m = linestyle->color_modifiers.first; m; m = m->next) {
+		if (m->type == LS_MODIFIER_DISTANCE_FROM_OBJECT)
+			expand_doit(fd, mainvar, ((LineStyleColorModifier_DistanceFromObject *)m)->target);
+	}
+	for (m = linestyle->alpha_modifiers.first; m; m = m->next) {
+		if (m->type == LS_MODIFIER_DISTANCE_FROM_OBJECT)
+			expand_doit(fd, mainvar, ((LineStyleAlphaModifier_DistanceFromObject *)m)->target);
+	}
+	for (m = linestyle->thickness_modifiers.first; m; m = m->next) {
+		if (m->type == LS_MODIFIER_DISTANCE_FROM_OBJECT)
+			expand_doit(fd, mainvar, ((LineStyleThicknessModifier_DistanceFromObject *)m)->target);
+	}
+}
+
 void BLO_main_expander(void (*expand_doit_func)(void *, Main *, void *))
 {
 	expand_doit = expand_doit_func;
@@ -10314,6 +10872,9 @@ void BLO_expand_main(void *fdhandle, Main *mainvar)
 						break;
 					case ID_MSK:
 						expand_mask(fd, mainvar, (Mask *)id);
+						break;
+					case ID_LS:
+						expand_linestyle(fd, mainvar, (FreestyleLineStyle *)id);
 						break;
 					}
 					

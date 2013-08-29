@@ -179,8 +179,20 @@ struct ImBuf *IMB_rotation(struct ImBuf *ibuf, float x, float y, float angle, in
 		maxx = MAX2(p1x, MAX2(p2x, p3x));
 		maxy = MAX2(p1y, MAX2(p2y, p3y));
 
-		h = (int)floor(fabs(maxy) - miny); 
-		w = (int)floor(fabs(maxx) - minx);
+		if (RAD2DEGF(angle) <= -0.0f) {
+			if ((RAD2DEGF(angle) >= -90.0f) && (RAD2DEGF(angle) <= -0.0f))
+				h = (int)floor(fabs(maxy) - miny);
+			else
+				h = (int)floor(- miny);
+			w = (int)floor(fabs(maxx) - minx);
+		}
+		else {
+			if ((RAD2DEGF(angle) >= 0.0f) && (RAD2DEGF(angle) <= 90.0f))
+				w = (int)floor(fabs(maxx) - minx);
+			else
+				w = (int)floor(- minx);
+			h = (int)floor(fabs(maxy) - miny);
+		}
 
 		if (ibuf->rect) flags |= IB_rect;
 		if (ibuf->rect_float) flags |= IB_rectfloat;

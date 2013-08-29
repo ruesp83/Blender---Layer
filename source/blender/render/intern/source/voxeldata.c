@@ -42,6 +42,7 @@
 
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
+#include "BLI_threads.h"
 #include "BLI_voxel.h"
 #include "BLI_utildefines.h"
 
@@ -155,7 +156,7 @@ static void load_frame_image_sequence(VoxelData *vd, Tex *tex)
 	int x = 0, y = 0, z = 0;
 	float *rf;
 
-	if (!ima || !tiuser) return;
+	if (!ima) return;
 	if (iuser.frames == 0) return;
 	
 	ima->source = IMA_SRC_SEQUENCE;
@@ -223,7 +224,7 @@ static int read_voxeldata_header(FILE *fp, struct VoxelData *vd)
 	return 1;
 }
 
-static void init_frame_smoke(VoxelData *vd, float cfra)
+static void init_frame_smoke(VoxelData *vd, int cfra)
 {
 #ifdef WITH_SMOKE
 	Object *ob;
@@ -239,6 +240,13 @@ static void init_frame_smoke(VoxelData *vd, float cfra)
 		SmokeDomainSettings *sds = smd->domain;
 		
 		if (sds && sds->fluid) {
+			BLI_rw_mutex_lock(sds->fluid_mutex, THREAD_LOCK_READ);
+
+			if (!sds->fluid) {
+				BLI_rw_mutex_unlock(sds->fluid_mutex);
+				return;
+			}
+
 			if (cfra < sds->point_cache[0]->startframe)
 				;  /* don't show smoke before simulation starts, this could be made an option in the future */
 			else if (vd->smoked_type == TEX_VD_SMOKEHEAT) {
@@ -246,7 +254,10 @@ static void init_frame_smoke(VoxelData *vd, float cfra)
 				size_t i;
 				float *heat;
 
-				if (!smoke_has_heat(sds->fluid)) return;
+				if (!smoke_has_heat(sds->fluid)) {
+					BLI_rw_mutex_unlock(sds->fluid_mutex);
+					return;
+				}
 
 				copy_v3_v3_int(vd->resol, sds->res);
 				totRes = vd_resol_size(vd);
@@ -283,12 +294,18 @@ static void init_frame_smoke(VoxelData *vd, float cfra)
 				float *flame;
 
 				if (sds->flags & MOD_SMOKE_HIGHRES) {
-					if (!smoke_turbulence_has_fuel(sds->wt)) return;
+					if (!smoke_turbulence_has_fuel(sds->wt)) {
+						BLI_rw_mutex_unlock(sds->fluid_mutex);
+						return;
+					}
 					smoke_turbulence_get_res(sds->wt, vd->resol);
 					flame = smoke_turbulence_get_flame(sds->wt);
 				}
 				else {
-					if (!smoke_has_fuel(sds->fluid)) return;
+					if (!smoke_has_fuel(sds->fluid)) {
+						BLI_rw_mutex_unlock(sds->fluid_mutex);
+						return;
+					}
 					copy_v3_v3_int(vd->resol, sds->res);
 					flame = smoke_get_flame(sds->fluid);
 				}
@@ -333,6 +350,8 @@ static void init_frame_smoke(VoxelData *vd, float cfra)
 					}
 				}
 			}  /* end of fluid condition */
+
+			BLI_rw_mutex_unlock(sds->fluid_mutex);
 		}
 	}
 	

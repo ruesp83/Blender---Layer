@@ -78,16 +78,16 @@ static void copyData(ModifierData *md, ModifierData *target)
 	BLI_strncpy(tcmd->defgrp_name, cmd->defgrp_name, sizeof(tcmd->defgrp_name));
 }
 
-static int isDisabled(ModifierData *md, int UNUSED(useRenderParams))
+static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
 {
 	CastModifierData *cmd = (CastModifierData *) md;
 	short flag;
 	
 	flag = cmd->flag & (MOD_CAST_X | MOD_CAST_Y | MOD_CAST_Z);
 
-	if ((cmd->fac == 0.0f) || flag == 0) return 1;
+	if ((cmd->fac == 0.0f) || flag == 0) return true;
 
-	return 0;
+	return false;
 }
 
 static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
@@ -158,7 +158,7 @@ static void sphere_do(
 	if (ctrl_ob) {
 		if (flag & MOD_CAST_USE_OB_TRANSFORM) {
 			invert_m4_m4(ctrl_ob->imat, ctrl_ob->obmat);
-			mult_m4_m4m4(mat, ctrl_ob->imat, ob->obmat);
+			mul_m4_m4m4(mat, ctrl_ob->imat, ob->obmat);
 			invert_m4_m4(imat, mat);
 		}
 
@@ -282,7 +282,7 @@ static void cuboid_do(
 	if (ctrl_ob) {
 		if (flag & MOD_CAST_USE_OB_TRANSFORM) {
 			invert_m4_m4(ctrl_ob->imat, ctrl_ob->obmat);
-			mult_m4_m4m4(mat, ctrl_ob->imat, ob->obmat);
+			mul_m4_m4m4(mat, ctrl_ob->imat, ob->obmat);
 			invert_m4_m4(imat, mat);
 		}
 
@@ -453,7 +453,7 @@ static void deformVerts(ModifierData *md, Object *ob,
 	DerivedMesh *dm = NULL;
 	CastModifierData *cmd = (CastModifierData *)md;
 
-	dm = get_dm(ob, NULL, derivedData, NULL, 0);
+	dm = get_dm(ob, NULL, derivedData, NULL, false, false);
 
 	if (cmd->type == MOD_CAST_TYPE_CUBOID) {
 		cuboid_do(cmd, ob, dm, vertexCos, numVerts);
@@ -470,7 +470,7 @@ static void deformVertsEM(
         ModifierData *md, Object *ob, struct BMEditMesh *editData,
         DerivedMesh *derivedData, float (*vertexCos)[3], int numVerts)
 {
-	DerivedMesh *dm = get_dm(ob, editData, derivedData, NULL, 0);
+	DerivedMesh *dm = get_dm(ob, editData, derivedData, NULL, false, false);
 	CastModifierData *cmd = (CastModifierData *)md;
 
 	if (cmd->type == MOD_CAST_TYPE_CUBOID) {

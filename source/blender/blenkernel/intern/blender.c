@@ -146,13 +146,9 @@ void initglobals(void)
 	else
 		BLI_snprintf(versionstr, sizeof(versionstr), "v%d.%02d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
 
-#ifdef _WIN32   // FULLSCREEN
-	G.windowstate = G_WINDOWSTATE_USERDEF;
+#ifdef _WIN32
+	G.windowstate = 0;
 #endif
-
-	G.charstart = 0x0000;
-	G.charmin = 0x0000;
-	G.charmax = 0xffff;
 
 #ifndef WITH_PYTHON_SECURITY /* default */
 	G.f |= G_SCRIPT_AUTOEXEC;
@@ -174,11 +170,11 @@ static void clear_global(void)
 	G.main = NULL;
 }
 
-static int clean_paths_visit_cb(void *UNUSED(userdata), char *path_dst, const char *path_src)
+static bool clean_paths_visit_cb(void *UNUSED(userdata), char *path_dst, const char *path_src)
 {
 	strcpy(path_dst, path_src);
 	BLI_clean(path_dst);
-	return (strcmp(path_dst, path_src) == 0) ? FALSE : TRUE;
+	return !STREQ(path_dst, path_src);
 }
 
 /* make sure path names are correct for OS */
@@ -419,6 +415,8 @@ void BKE_userdef_free(void)
 		}
 		MEM_freeN(addon);
 	}
+
+	BLI_freelistN(&U.autoexec_paths);
 
 	BLI_freelistN(&U.uistyles);
 	BLI_freelistN(&U.uifonts);
@@ -796,25 +794,6 @@ const char *BKE_undo_get_name(int nr, int *active)
 	return NULL;
 }
 
-char *BKE_undo_menu_string(void)
-{
-	UndoElem *uel;
-	DynStr *ds = BLI_dynstr_new();
-	char *menu;
-
-	BLI_dynstr_append(ds, "Global Undo History %t");
-	
-	for (uel = undobase.first; uel; uel = uel->next) {
-		BLI_dynstr_append(ds, "|");
-		BLI_dynstr_append(ds, uel->name);
-	}
-
-	menu = BLI_dynstr_get_cstring(ds);
-	BLI_dynstr_free(ds);
-
-	return menu;
-}
-
 /* saves .blend using undo buffer, returns 1 == success */
 int BKE_undo_save_file(const char *filename)
 {
@@ -837,7 +816,7 @@ int BKE_undo_save_file(const char *filename)
 	 * to avoid writing to a symlink - use 'O_EXCL' (CVE-2008-1103) */
 	errno = 0;
 	file = BLI_open(filename, flag, 0666);
-	if (file == -1) {
+	if (file < 0) {
 		if (errno == EEXIST) {
 			errno = 0;
 			file = BLI_open(filename, flag & ~O_CREAT, 0666);
@@ -945,9 +924,7 @@ int BKE_copybuffer_save(const char *filename, ReportList *reports)
 		ID *id;
 		ListBase *lb1 = lbarray[a], *lb2 = fromarray[a];
 		
-		while (lb2->first) {
-			id = lb2->first;
-			BLI_remlink(lb2, id);
+		while ((id = BLI_pophead(lb2))) {
 			BLI_addtail(lb1, id);
 			id_sort_by_name(lb1, id);
 		}

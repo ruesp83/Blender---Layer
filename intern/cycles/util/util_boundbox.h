@@ -1,19 +1,17 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
  */
 
 #ifndef __UTIL_BOUNDBOX_H__
@@ -69,7 +67,7 @@ public:
 
 	__forceinline void grow(const float3& pt, float border)  
 	{
-		float3 shift = {border, border, border, 0.0f};
+		float3 shift = make_float3(border, border, border);
 		min = ccl::min(pt - shift, min);
 		max = ccl::max(pt + shift, max);
 	}
@@ -78,6 +76,31 @@ public:
 	{
 		grow(bbox.min);
 		grow(bbox.max);
+	}
+
+	__forceinline void grow_safe(const float3& pt)  
+	{
+		/* the order of arguments to min is such that if pt is nan, it will not
+		 * influence the resulting bounding box */
+		if(isfinite(pt.x) && isfinite(pt.y) && isfinite(pt.z)) {
+			min = ccl::min(pt, min);
+			max = ccl::max(pt, max);
+		}
+	}
+
+	__forceinline void grow_safe(const float3& pt, float border)  
+	{
+		if(isfinite(pt.x) && isfinite(pt.y) && isfinite(pt.z) && isfinite(border)) {
+			float3 shift = make_float3(border, border, border);
+			min = ccl::min(pt - shift, min);
+			max = ccl::max(pt + shift, max);
+		}
+	}
+
+	__forceinline void grow_safe(const BoundBox& bbox)
+	{
+		grow_safe(bbox.min);
+		grow_safe(bbox.max);
 	}
 
 	__forceinline void intersect(const BoundBox& bbox) 
@@ -120,7 +143,7 @@ public:
 	{
 		return max - min;
 	}
-	
+
 	__forceinline bool valid() const
 	{
 		return (min.x <= max.x) && (min.y <= max.y) && (min.z <= max.z) &&

@@ -32,8 +32,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_cloth.h"
-
 #include "DNA_cloth_types.h"
 #include "DNA_group_types.h"
 #include "DNA_mesh_types.h"
@@ -52,11 +50,12 @@
 #include "BLI_rand.h"
 
 #include "BKE_DerivedMesh.h"
+#include "BKE_cloth.h"
 #include "BKE_global.h"
-#include "BKE_scene.h"
 #include "BKE_mesh.h"
-#include "BKE_object.h"
 #include "BKE_modifier.h"
+#include "BKE_object.h"
+#include "BKE_scene.h"
 
 #include "BKE_DerivedMesh.h"
 #ifdef WITH_BULLET
@@ -165,6 +164,9 @@ Collision modifier code end
 // w3 is not perfect
 static void collision_compute_barycentric ( float pv[3], float p1[3], float p2[3], float p3[3], float *w1, float *w2, float *w3 )
 {
+	/* dot_v3v3 */
+#define INPR(v1, v2) ( (v1)[0] * (v2)[0] + (v1)[1] * (v2)[1] + (v1)[2] * (v2)[2])
+
 	double	tempV1[3], tempV2[3], tempV4[3];
 	double	a, b, c, d, e, f;
 
@@ -196,6 +198,8 @@ static void collision_compute_barycentric ( float pv[3], float p1[3], float p2[3
 		w2[0] = 0;
 
 	w3[0] = 1.0f - w1[0] - w2[0];
+
+#undef INPR
 }
 
 #ifdef __GNUC__
@@ -861,8 +865,7 @@ int cloth_bvh_objcollision(Object *ob, ClothModifierData *clmd, float step, floa
 	
 						if ( ( ABS ( temp[0] ) > mindistance ) || ( ABS ( temp[1] ) > mindistance ) || ( ABS ( temp[2] ) > mindistance ) ) continue;
 	
-						// check for adjacent points (i must be smaller j)
-						if ( BLI_edgehash_haskey ( cloth->edgehash, MIN2(i, j), MAX2(i, j) ) ) {
+						if (BLI_edgehash_haskey(cloth->edgehash, i, j)) {
 							continue;
 						}
 	

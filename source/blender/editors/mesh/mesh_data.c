@@ -37,8 +37,8 @@
 #include "DNA_view3d_types.h"
 
 #include "BLI_utildefines.h"
+#include "BLI_alloca.h"
 #include "BLI_path_util.h"
-#include "BLI_array.h"
 #include "BLI_math.h"
 
 #include "BKE_context.h"
@@ -48,7 +48,7 @@
 #include "BKE_main.h"
 #include "BKE_mesh.h"
 #include "BKE_report.h"
-#include "BKE_tessmesh.h"
+#include "BKE_editmesh.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -116,6 +116,7 @@ static CustomData *mesh_customdata_get_type(Mesh *me, const char htype, int *r_t
 			BLI_assert(0);
 			tot = 0;
 			data = NULL;
+			break;
 	}
 
 	*r_tot = tot;
@@ -125,218 +126,136 @@ static CustomData *mesh_customdata_get_type(Mesh *me, const char htype, int *r_t
 #define GET_CD_DATA(me, data) (me->edit_btmesh ? &me->edit_btmesh->bm->data : &me->data)
 static void delete_customdata_layer(Mesh *me, CustomDataLayer *layer)
 {
+	const int type = layer->type;
 	CustomData *data;
-	void *actlayerdata, *rndlayerdata, *clonelayerdata, *stencillayerdata, *layerdata = layer->data;
-	int type = layer->type;
-	int index;
-	int i, actindex, rndindex, cloneindex, stencilindex, tot;
+	int layer_index, tot, n;
 
-	if (layer->type == CD_MLOOPCOL || layer->type == CD_MLOOPUV) {
-		data = mesh_customdata_get_type(me, BM_LOOP, &tot);
-	}
-	else {
-		data = mesh_customdata_get_type(me, BM_FACE, &tot);
-	}
-	
-	index = CustomData_get_layer_index(data, type);
-
-	/* ok, deleting a non-active layer needs to preserve the active layer indices.
-	 * to do this, we store a pointer to the .data member of both layer and the active layer,
-	 * (to detect if we're deleting the active layer or not), then use the active
-	 * layer data pointer to find where the active layer has ended up.
-	 *
-	 * this is necessary because the deletion functions only support deleting the active
-	 * layer. */
-	actlayerdata = data->layers[CustomData_get_active_layer_index(data, type)].data;
-	rndlayerdata = data->layers[CustomData_get_render_layer_index(data, type)].data;
-	clonelayerdata = data->layers[CustomData_get_clone_layer_index(data, type)].data;
-	stencillayerdata = data->layers[CustomData_get_stencil_layer_index(data, type)].data;
-	CustomData_set_layer_active(data, type, layer - &data->layers[index]);
+	data = mesh_customdata_get_type(me, (ELEM(type, CD_MLOOPUV, CD_MLOOPCOL)) ? BM_LOOP : BM_FACE, &tot);
+	layer_index = CustomData_get_layer_index(data, type);
+	n = (layer - &data->layers[layer_index]);
+	BLI_assert(n >= 0 && (n + layer_index) < data->totlayer);
 
 	if (me->edit_btmesh) {
-		BM_data_layer_free(me->edit_btmesh->bm, data, type);
+		BM_data_layer_free_n(me->edit_btmesh->bm, data, type, n);
 	}
 	else {
-		CustomData_free_layer_active(data, type, tot);
+		CustomData_free_layer(data, type, tot, layer_index + n);
 		BKE_mesh_update_customdata_pointers(me, true);
-	}
-
-	/* reconstruct active layer */
-	if (actlayerdata != layerdata) {
-		/* find index */
-		actindex = CustomData_get_layer_index(data, type);
-		for (i = actindex; i < data->totlayer; i++) {
-			if (data->layers[i].data == actlayerdata) {
-				actindex = i - actindex;
-				break;
-			}
-		}
-		
-		/* set index */
-		CustomData_set_layer_active(data, type, actindex);
-	}
-	
-	if (rndlayerdata != layerdata) {
-		/* find index */
-		rndindex = CustomData_get_layer_index(data, type);
-		for (i = rndindex; i < data->totlayer; i++) {
-			if (data->layers[i].data == rndlayerdata) {
-				rndindex = i - rndindex;
-				break;
-			}
-		}
-		
-		/* set index */
-		CustomData_set_layer_render(data, type, rndindex);
-	}
-	
-	if (clonelayerdata != layerdata) {
-		/* find index */
-		cloneindex = CustomData_get_layer_index(data, type);
-		for (i = cloneindex; i < data->totlayer; i++) {
-			if (data->layers[i].data == clonelayerdata) {
-				cloneindex = i - cloneindex;
-				break;
-			}
-		}
-		
-		/* set index */
-		CustomData_set_layer_clone(data, type, cloneindex);
-	}
-	
-	if (stencillayerdata != layerdata) {
-		/* find index */
-		stencilindex = CustomData_get_layer_index(data, type);
-		for (i = stencilindex; i < data->totlayer; i++) {
-			if (data->layers[i].data == stencillayerdata) {
-				stencilindex = i - stencilindex;
-				break;
-			}
-		}
-		
-		/* set index */
-		CustomData_set_layer_stencil(data, type, stencilindex);
 	}
 }
 
+static void mesh_uv_reset_array(float **fuv, const int len)
+{
+	if (len == 3) {
+		fuv[0][0] = 0.0;
+		fuv[0][1] = 0.0;
+
+		fuv[1][0] = 1.0;
+		fuv[1][1] = 0.0;
+
+		fuv[2][0] = 1.0;
+		fuv[2][1] = 1.0;
+	}
+	else if (len == 4) {
+		fuv[0][0] = 0.0;
+		fuv[0][1] = 0.0;
+
+		fuv[1][0] = 1.0;
+		fuv[1][1] = 0.0;
+
+		fuv[2][0] = 1.0;
+		fuv[2][1] = 1.0;
+
+		fuv[3][0] = 0.0;
+		fuv[3][1] = 1.0;
+		/*make sure we ignore 2-sided faces*/
+	}
+	else if (len > 2) {
+		float fac = 0.0f, dfac = 1.0f / (float)len;
+		int i;
+
+		dfac *= (float)M_PI * 2.0f;
+
+		for (i = 0; i < len; i++) {
+			fuv[i][0] = 0.5f * sinf(fac) + 0.5f;
+			fuv[i][1] = 0.5f * cosf(fac) + 0.5f;
+
+			fac += dfac;
+		}
+	}
+}
+
+static void mesh_uv_reset_bmface(BMFace *f, const int cd_loop_uv_offset)
+{
+	float **fuv = BLI_array_alloca(fuv, f->len);
+	BMIter liter;
+	BMLoop *l;
+	int i;
+
+	BM_ITER_ELEM_INDEX (l, &liter, f, BM_LOOPS_OF_FACE, i) {
+		fuv[i] = ((MLoopUV *)BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset))->uv;
+	}
+
+	mesh_uv_reset_array(fuv, f->len);
+}
+
+static void mesh_uv_reset_mface(MPoly *mp, MLoopUV *mloopuv)
+{
+	float **fuv = BLI_array_alloca(fuv, mp->totloop);
+	int i;
+
+	for (i = 0; i < mp->totloop; i++) {
+		fuv[i] = mloopuv[mp->loopstart + i].uv;
+	}
+
+	mesh_uv_reset_array(fuv, mp->totloop);
+}
+
 /* without bContext, called in uvedit */
-int ED_mesh_uv_loop_reset_ex(struct Mesh *me, const int layernum)
+void ED_mesh_uv_loop_reset_ex(struct Mesh *me, const int layernum)
 {
 	BMEditMesh *em = me->edit_btmesh;
-	MLoopUV *luv;
-	BLI_array_declare(polylengths);
-	int *polylengths = NULL;
-	BLI_array_declare(uvs);
-	float **uvs = NULL;
-	float **fuvs = NULL;
-	int i, j;
 
 	if (em) {
 		/* Collect BMesh UVs */
+		const int cd_loop_uv_offset = CustomData_get_n_offset(&em->bm->ldata, CD_MLOOPUV, layernum);
 
 		BMFace *efa;
-		BMLoop *l;
-		BMIter iter, liter;
+		BMIter iter;
 
-		BLI_assert(CustomData_has_layer(&em->bm->ldata, CD_MLOOPUV));
+		BLI_assert(cd_loop_uv_offset != -1);
 
 		BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
 			if (!BM_elem_flag_test(efa, BM_ELEM_SELECT))
 				continue;
 
-			i = 0;
-			BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
-				luv = CustomData_bmesh_get_n(&em->bm->ldata, l->head.data, CD_MLOOPUV, layernum);
-				BLI_array_append(uvs, luv->uv);
-				i++;
-			}
-
-			BLI_array_append(polylengths, efa->len);
+			mesh_uv_reset_bmface(efa, cd_loop_uv_offset);
 		}
 	}
 	else {
 		/* Collect Mesh UVs */
-
-		MPoly *mp;
-		MLoopUV *mloouv;
+		MLoopUV *mloopuv;
+		int i;
 
 		BLI_assert(CustomData_has_layer(&me->ldata, CD_MLOOPUV));
-		mloouv = CustomData_get_layer_n(&me->ldata, CD_MLOOPUV, layernum);
+		mloopuv = CustomData_get_layer_n(&me->ldata, CD_MLOOPUV, layernum);
 
-		for (j = 0; j < me->totpoly; j++) {
-			mp = &me->mpoly[j];
-
-			for (i = 0; i < mp->totloop; i++) {
-				luv = &mloouv[mp->loopstart + i];
-				BLI_array_append(uvs, luv->uv);
-			}
-
-			BLI_array_append(polylengths, mp->totloop);
+		for (i = 0; i < me->totpoly; i++) {
+			mesh_uv_reset_mface(&me->mpoly[i], mloopuv);
 		}
 	}
-
-	fuvs = uvs;
-	for (j = 0; j < BLI_array_count(polylengths); j++) {
-		int len = polylengths[j];
-
-		if (len == 3) {
-			fuvs[0][0] = 0.0;
-			fuvs[0][1] = 0.0;
-			
-			fuvs[1][0] = 1.0;
-			fuvs[1][1] = 0.0;
-
-			fuvs[2][0] = 1.0;
-			fuvs[2][1] = 1.0;
-		}
-		else if (len == 4) {
-			fuvs[0][0] = 0.0;
-			fuvs[0][1] = 0.0;
-			
-			fuvs[1][0] = 1.0;
-			fuvs[1][1] = 0.0;
-
-			fuvs[2][0] = 1.0;
-			fuvs[2][1] = 1.0;
-
-			fuvs[3][0] = 0.0;
-			fuvs[3][1] = 1.0;
-			/*make sure we ignore 2-sided faces*/
-		}
-		else if (len > 2) {
-			float fac = 0.0f, dfac = 1.0f / (float)len;
-
-			dfac *= (float)M_PI * 2.0f;
-
-			for (i = 0; i < len; i++) {
-				fuvs[i][0] = 0.5f * sinf(fac) + 0.5f;
-				fuvs[i][1] = 0.5f * cosf(fac) + 0.5f;
-
-				fac += dfac;
-			}
-		}
-
-		fuvs += len;
-	}
-
-	BLI_array_free(uvs);
-	BLI_array_free(polylengths);
 
 	DAG_id_tag_update(&me->id, 0);
-
-	return 1;
 }
 
-int ED_mesh_uv_loop_reset(struct bContext *C, struct Mesh *me)
+void ED_mesh_uv_loop_reset(struct bContext *C, struct Mesh *me)
 {
 	/* could be ldata or pdata */
 	CustomData *pdata = GET_CD_DATA(me, pdata);
 	const int layernum = CustomData_get_active_layer_index(pdata, CD_MTEXPOLY);
-	int retval = ED_mesh_uv_loop_reset_ex(me, layernum);
+	ED_mesh_uv_loop_reset_ex(me, layernum);
 	
 	WM_event_add_notifier(C, NC_GEOM | ND_DATA, me);
-	
-	return retval;
 }
 
 /* note: keep in sync with ED_mesh_color_add */
@@ -648,7 +567,7 @@ static int drop_named_image_invoke(bContext *C, wmOperator *op, const wmEvent *e
 	obedit = base->object;
 	me = obedit->data;
 	if (me->edit_btmesh == NULL) {
-		EDBM_mesh_make(scene->toolsettings, scene, obedit);
+		EDBM_mesh_make(scene->toolsettings, obedit);
 		exitmode = 1;
 	}
 	if (me->edit_btmesh == NULL)
@@ -902,8 +821,6 @@ void MESH_OT_customdata_clear_skin(wmOperatorType *ot)
 
 void ED_mesh_update(Mesh *mesh, bContext *C, int calc_edges, int calc_tessface)
 {
-	int *polyindex = NULL;
-	float (*face_nors)[3];
 	bool tessface_input = false;
 
 	if (mesh->totface > 0 && mesh->totpoly == 0) {
@@ -926,28 +843,7 @@ void ED_mesh_update(Mesh *mesh, bContext *C, int calc_edges, int calc_tessface)
 		BKE_mesh_tessface_clear(mesh);
 	}
 
-	/* note on this if/else - looks like these layers are not needed
-	 * so rather then add poly-index layer and calculate normals for it
-	 * calculate normals only for the mvert's. - campbell */
-#ifdef USE_BMESH_MPOLY_NORMALS
-	polyindex = CustomData_get_layer(&mesh->fdata, CD_ORIGINDEX);
-	/* add a normals layer for tessellated faces, a tessface normal will
-	 * contain the normal of the poly the face was tessellated from. */
-	face_nors = CustomData_add_layer(&mesh->fdata, CD_NORMAL, CD_CALLOC, NULL, mesh->totface);
-
-	BKE_mesh_calc_normals_mapping_ex(mesh->mvert, mesh->totvert,
-	                                 mesh->mloop, mesh->mpoly,
-	                                 mesh->totloop, mesh->totpoly,
-	                                 NULL /* polyNors_r */,
-	                                 mesh->mface, mesh->totface,
-	                                 polyindex, face_nors, false);
-#else
-	BKE_mesh_calc_normals(mesh->mvert, mesh->totvert,
-	                      mesh->mloop, mesh->mpoly, mesh->totloop, mesh->totpoly,
-	                      NULL);
-	(void)polyindex;
-	(void)face_nors;
-#endif
+	BKE_mesh_calc_normals(mesh);
 
 	DAG_id_tag_update(&mesh->id, 0);
 	WM_event_add_notifier(C, NC_GEOM | ND_DATA, mesh);
@@ -1263,25 +1159,40 @@ void ED_mesh_polys_add(Mesh *mesh, ReportList *reports, int count)
 	mesh_add_polys(mesh, count);
 }
 
-void ED_mesh_calc_normals(Mesh *mesh)
-{
-#ifdef USE_BMESH_MPOLY_NORMALS
-	BKE_mesh_calc_normals_mapping_ex(mesh->mvert, mesh->totvert,
-	                                 mesh->mloop, mesh->mpoly, mesh->totloop, mesh->totpoly,
-	                                 NULL, NULL, 0, NULL, NULL, false);
-#else
-	BKE_mesh_calc_normals(mesh->mvert, mesh->totvert,
-	                      mesh->mloop, mesh->mpoly, mesh->totloop, mesh->totpoly,
-	                      NULL);
-#endif
-}
-
 void ED_mesh_calc_tessface(Mesh *mesh)
 {
 	if (mesh->edit_btmesh) {
-		BMEdit_RecalcTessellation(mesh->edit_btmesh);
+		BKE_editmesh_tessface_calc(mesh->edit_btmesh);
 	}
 	else {
 		BKE_mesh_tessface_calc(mesh);
 	}
+}
+
+void ED_mesh_report_mirror_ex(wmOperator *op, int totmirr, int totfail,
+                              char selectmode)
+{
+	const char *elem_type;
+
+	if (selectmode & SCE_SELECT_VERTEX) {
+		elem_type = "vertices";
+	}
+	else if (selectmode & SCE_SELECT_EDGE) {
+		elem_type = "edges";
+	}
+	else {
+		elem_type = "faces";
+	}
+
+	if (totfail) {
+		BKE_reportf(op->reports, RPT_WARNING, "%d %s mirrored, %d failed", totmirr, elem_type, totfail);
+	}
+	else {
+		BKE_reportf(op->reports, RPT_INFO, "%d %s mirrored", totmirr, elem_type);
+	}
+}
+
+void ED_mesh_report_mirror(wmOperator *op, int totmirr, int totfail)
+{
+	ED_mesh_report_mirror_ex(op, totmirr, totfail, SCE_SELECT_VERTEX);
 }

@@ -72,9 +72,9 @@ static void texture_get_from_context(const bContext *C, bNodeTreeType *UNUSED(tr
 			tx = give_current_object_texture(ob);
 			if (tx) {
 				if (ob->type == OB_LAMP)
-					*r_from = (ID*)ob->data;
+					*r_from = (ID *)ob->data;
 				else
-					*r_from = (ID*)give_current_material(ob, ob->actcol);
+					*r_from = (ID *)give_current_material(ob, ob->actcol);
 				
 				/* from is not set fully for material nodes, should be ID + Node then */
 				*r_id = &tx->id;
@@ -96,9 +96,9 @@ static void texture_get_from_context(const bContext *C, bNodeTreeType *UNUSED(tr
 		struct Brush *brush = NULL;
 		
 		if (ob && (ob->mode & OB_MODE_SCULPT))
-			brush = paint_brush(&scene->toolsettings->sculpt->paint);
+			brush = BKE_paint_brush(&scene->toolsettings->sculpt->paint);
 		else
-			brush = paint_brush(&scene->toolsettings->imapaint.paint);
+			brush = BKE_paint_brush(&scene->toolsettings->imapaint.paint);
 
 		if (brush) {
 			*r_from = (ID *)brush;
@@ -169,8 +169,8 @@ void register_node_tree_type_tex(void)
 	tt->type = NTREE_TEXTURE;
 	strcpy(tt->idname, "TextureNodeTree");
 	strcpy(tt->ui_name, "Texture");
-	tt->ui_icon = 0;	/* defined in drawnode.c */
-	strcpy(tt->ui_description, "");
+	tt->ui_icon = 0;    /* defined in drawnode.c */
+	strcpy(tt->ui_description, "Texture nodes");
 	
 	tt->foreach_nodeclass = foreach_nodeclass;
 	tt->update = update;
@@ -283,10 +283,12 @@ void ntreeTexEndExecTree_internal(bNodeTreeExec *exec)
 void ntreeTexEndExecTree(bNodeTreeExec *exec)
 {
 	if (exec) {
+		/* exec may get freed, so assign ntree */
+		bNodeTree *ntree = exec->nodetree;
 		ntreeTexEndExecTree_internal(exec);
 		
 		/* XXX clear nodetree backpointer to exec data, same problem as noted in ntreeBeginExecTree */
-		exec->nodetree->execdata = NULL;
+		ntree->execdata = NULL;
 	}
 }
 
