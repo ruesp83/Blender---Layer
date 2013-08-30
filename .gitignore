@@ -1,9 +1,7 @@
 .svn
-vs2010
+patch-layer
 addons_contrib
 *.pyc
-user-config.py
 user-cycles.py
 user-linux.py
-
 .DS_Store
