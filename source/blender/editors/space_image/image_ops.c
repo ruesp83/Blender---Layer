@@ -2063,8 +2063,6 @@ static int image_invert_value_exec(bContext *C, wmOperator *op)
 
 void IMAGE_OT_invert_value(wmOperatorType *ot)
 {
-	PropertyRNA *prop;
-
 	/* identifiers */
 	ot->name = "Invert Value";
 	ot->idname = "IMAGE_OT_invert_value";
@@ -2720,8 +2718,6 @@ static int image_arbitrary_rot_exec(bContext *C, wmOperator *op)
 	ImageLayer *layer;
 	ImBuf *ibuf, *ibuf_l;
 	float angle;
-	static float alpha_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-	static float white_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 	float col[4];
 	
 	if (!ima)
@@ -2792,8 +2788,6 @@ static int image_offset_exec(bContext *C, wmOperator *op)
 	ImageLayer *layer;
 	struct ImBuf *ibuf, *ibuf_l;
 	int x, y, half, wrap;
-	static float alpha_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-	static float white_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 	float col[4];
 	
 	if (!ima)
@@ -2940,7 +2934,6 @@ void IMAGE_OT_scale(wmOperatorType *ot)
 static int image_merge_exec(bContext *C, wmOperator *op)
 {
 	Image *ima = CTX_data_edit_image(C);
-	ImageLayer *layer;
 	int type;
  
 	if (!ima)
@@ -2948,7 +2941,7 @@ static int image_merge_exec(bContext *C, wmOperator *op)
   
 	type = RNA_enum_get(op->ptr, "type");
 
-	BKE_report(op->reports, RPT_WARNING, "ToDo!!");
+	BKE_report(op->reports, RPT_WARNING, "Fabio - ToDo!!");
 
 	WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
  
@@ -3704,8 +3697,6 @@ static int image_layer_rotate_exec(bContext *C, wmOperator *op)
 	ImageLayer *layer;
 	ImBuf *ibuf;
 	int type;
-	static float alpha_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-	static float white_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 	float col[4];
  
 	if (!ima)
@@ -3772,8 +3763,6 @@ static int image_layer_arbitrary_rot_exec(bContext *C, wmOperator *op)
 	ImageLayer *layer;
 	ImBuf *ibuf;
 	float angle;
-	static float alpha_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-	static float white_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 	float col[4];
 	
 	if (!ima)

@@ -862,7 +862,7 @@ static int paint_2d_op(void *state, ImBuf *ibufb, unsigned short *maskb, const f
 
 	/* lift from canvas */
 	if (s->tool == PAINT_TOOL_SOFTEN) {
-		paint_2d_lift_soften(s->canvas, ibufb, bpos, torus, ((ImageLayer *)imalayer_get_current(s->image))->locked);
+		paint_2d_lift_soften(s->canvas, ibufb, bpos, torus);
 	}
 	else if (s->tool == PAINT_TOOL_SMEAR) {
 		if (lastpos[0] == pos[0] && lastpos[1] == pos[1])
