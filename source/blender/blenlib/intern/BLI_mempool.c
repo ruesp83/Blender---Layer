@@ -31,25 +31,18 @@
  * Simple, fast memory allocator for allocating many elements of the same size.
  */
 
+#include <string.h>
+#include <stdlib.h>
+
 #include "BLI_utildefines.h"
 #include "BLI_listbase.h"
+#include "BLI_strict_flags.h"
 
 #include "BLI_mempool.h" /* own include */
 
 #include "DNA_listBase.h"
 
 #include "MEM_guardedalloc.h"
-
-#include <string.h>
-#include <stdlib.h>
-
-#ifdef __GNUC__
-#  pragma GCC diagnostic error "-Wsign-conversion"
-#  if (__GNUC__ * 100 + __GNUC_MINOR__) >= 406  /* gcc4.6+ only */
-#    pragma GCC diagnostic error "-Wsign-compare"
-#    pragma GCC diagnostic error "-Wconversion"
-#  endif
-#endif
 
 /* note: copied from BLO_blend_defs.h, don't use here because we're in BLI */
 #ifdef __BIG_ENDIAN__
@@ -177,7 +170,7 @@ static BLI_freenode *mempool_chunk_add(BLI_mempool *pool, BLI_mempool_chunk *mpc
 	}
 
 	/* loop through the allocated data, building the pointer structures */
-	for (addr = CHUNK_DATA(mpchunk), j = 0; j <= pchunk_last; j++) {
+	for (addr = CHUNK_DATA(mpchunk), j = 0; j != pchunk_last; j++) {
 		curnode = ((BLI_freenode *)addr);
 		addr += pool->esize;
 		curnode->next = (BLI_freenode *)addr;
@@ -478,7 +471,7 @@ static void *bli_mempool_iternext(BLI_mempool_iter *iter)
 
 	iter->curindex++;
 
-	if (iter->curindex >= iter->pool->pchunk) {
+	if (iter->curindex == iter->pool->pchunk) {
 		iter->curchunk = iter->curchunk->next;
 		iter->curindex = 0;
 	}
@@ -516,7 +509,7 @@ void *BLI_mempool_iterstep(BLI_mempool_iter *iter)
 			return NULL;
 		}
 
-		if (UNLIKELY(++iter->curindex >= iter->pool->pchunk)) {
+		if (UNLIKELY(++iter->curindex == iter->pool->pchunk)) {
 			iter->curindex = 0;
 			iter->curchunk = iter->curchunk->next;
 		}
