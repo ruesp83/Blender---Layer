@@ -2934,13 +2934,18 @@ void IMAGE_OT_scale(wmOperatorType *ot)
 static int image_merge_exec(bContext *C, wmOperator *op)
 {
 	Image *ima = CTX_data_edit_image(C);
+<<<<<<< HEAD
 	ImageLayer *layer, *prec;
 	int flag = 0;
 	int discard;
+=======
+	int type;
+>>>>>>> 603e6217d0722f3929876cf1e411fefbcc04bdf7
  
 	if (!ima)
 		return OPERATOR_CANCELLED;
 
+<<<<<<< HEAD
 	discard = RNA_boolean_get(op->ptr, "discard");
 
 	for (layer = (ImageLayer *)ima->imlayers.first; layer; layer = layer->next) {
@@ -2985,6 +2990,9 @@ static int image_merge_exec(bContext *C, wmOperator *op)
 	}
 	else
 		BKE_report(op->reports, RPT_INFO, "It can not merge the layers, because the layers are hidden");
+=======
+	BKE_report(op->reports, RPT_WARNING, "Fabio - ToDo!!");
+>>>>>>> 603e6217d0722f3929876cf1e411fefbcc04bdf7
 
 	WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
  
