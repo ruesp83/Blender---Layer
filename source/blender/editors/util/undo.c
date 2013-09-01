@@ -161,6 +161,7 @@ static int ed_undo_step(bContext *C, int step, const char *undoname)
 					WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, CTX_data_scene(C));
 				}
 			}
+
 			WM_event_add_notifier(C, NC_WINDOW, NULL);
 			return OPERATOR_FINISHED;
 		}
@@ -219,7 +220,7 @@ static int ed_undo_step(bContext *C, int step, const char *undoname)
 			WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, CTX_data_scene(C));
 		}
 	}
-	
+
 	WM_event_add_notifier(C, NC_WINDOW, NULL);
 	
 	return OPERATOR_FINISHED;

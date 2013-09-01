@@ -841,7 +841,7 @@ static int imlayer_find_name_dupe(const char *name, ImageLayer *iml, Image *ima)
 	return 0;
 }
 
-static int imlayer_unique_check(void *arg, const char *name)
+static bool imlayer_unique_check(void *arg, const char *name)
 {
 	struct {Image *ima; void *iml;} *data= arg;
 	return imlayer_find_name_dupe(name, data->iml, data->ima);

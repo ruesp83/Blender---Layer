@@ -726,7 +726,7 @@ ImageLayer *BKE_add_image_file_as_layer(Image *ima, const char *name)
 }
 
 ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type,
-                            const float color[4], ColorManagedColorspaceSettings *colorspace_settings)
+                     const float color[4], ColorManagedColorspaceSettings *colorspace_settings)
 {
 	ImBuf *ibuf;
 	unsigned char *rect = NULL;

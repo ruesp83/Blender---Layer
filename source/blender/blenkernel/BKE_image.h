@@ -165,7 +165,7 @@ struct Image *BKE_image_load(struct Main *bmain, const char *filepath);
 /* returns existing Image when filename/type is same (frame optional) */
 struct Image *BKE_image_load_exists(const char *filepath);
 struct ImageLayer *BKE_add_image_file_as_layer(struct Image *ima, const char *name);
-struct ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, float color[4],struct ColorManagedColorspaceSettings *colorspace_settings);
+struct ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, const float color[4],struct ColorManagedColorspaceSettings *colorspace_settings);
 
 /* adds image, adds ibuf, generates color or pattern */
 struct Image *BKE_image_add_generated(struct Main *bmain, unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, const float color[4]);

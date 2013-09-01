@@ -2063,8 +2063,6 @@ static int image_invert_value_exec(bContext *C, wmOperator *op)
 
 void IMAGE_OT_invert_value(wmOperatorType *ot)
 {
-	PropertyRNA *prop;
-
 	/* identifiers */
 	ot->name = "Invert Value";
 	ot->idname = "IMAGE_OT_invert_value";
@@ -2720,8 +2718,6 @@ static int image_arbitrary_rot_exec(bContext *C, wmOperator *op)
 	ImageLayer *layer;
 	ImBuf *ibuf, *ibuf_l;
 	float angle;
-	static float alpha_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-	static float white_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 	float col[4];
 	
 	if (!ima)
@@ -2792,8 +2788,6 @@ static int image_offset_exec(bContext *C, wmOperator *op)
 	ImageLayer *layer;
 	struct ImBuf *ibuf, *ibuf_l;
 	int x, y, half, wrap;
-	static float alpha_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-	static float white_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 	float col[4];
 	
 	if (!ima)
@@ -2940,15 +2934,57 @@ void IMAGE_OT_scale(wmOperatorType *ot)
 static int image_merge_exec(bContext *C, wmOperator *op)
 {
 	Image *ima = CTX_data_edit_image(C);
-	ImageLayer *layer;
-	int type;
+	ImageLayer *layer, *prec;
+	int flag = 0;
+	int discard;
  
 	if (!ima)
 		return OPERATOR_CANCELLED;
-  
-	type = RNA_enum_get(op->ptr, "type");
 
-	BKE_report(op->reports, RPT_WARNING, "ToDo!!");
+	discard = RNA_boolean_get(op->ptr, "discard");
+
+	for (layer = (ImageLayer *)ima->imlayers.first; layer; layer = layer->next) {
+		if (layer->visible & IMA_LAYER_VISIBLE) {
+			flag = 1;
+			break;
+		}
+	}
+	if (flag == 1) {
+		prec = NULL;
+		for (layer = (ImageLayer *)ima->imlayers.first; layer; layer = layer->next) {
+			if (layer->visible & IMA_LAYER_VISIBLE) {
+				if (prec == NULL) {
+					prec = layer;
+				}
+				else {
+					layer = merge_layers(ima, prec, layer);
+					ima->Count_Layers--;
+					prec = layer;
+				}
+				
+			}
+			else {
+				if (discard) {
+					BLI_remlink(&ima->imlayers, layer);
+					free_image_layer(layer);
+					if (ima->imlayers.first) {
+						if (imalayer_get_current_act(ima) != 1)
+							imalayer_set_current_act(ima, imalayer_get_current_act(ima));
+						else
+							imalayer_set_current_act(ima, imalayer_get_current_act(ima) - 1);
+					}
+					ima->Count_Layers -= 1;
+				}
+			}
+		}
+		if (discard)
+			ima->Act_Layers = 0;
+		else
+			ima->Act_Layers = ima->Count_Layers -1;
+		imalayer_set_current_act(ima, ima->Act_Layers);
+	}
+	else
+		BKE_report(op->reports, RPT_INFO, "It can not merge the layers, because the layers are hidden");
 
 	WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
  
@@ -2957,13 +2993,6 @@ static int image_merge_exec(bContext *C, wmOperator *op)
 
 void IMAGE_OT_merge(wmOperatorType *ot)
 {
-	static EnumPropertyItem slot_merge[] = {
-		{1, "DOWN", 0, "Down", ""},
-		{2, "VISIBLE", 0, "Visible", ""},
-		{3, "ONE", 0, "One", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
- 
 	/* identifiers */
 	ot->name = "Merge Layer";
 	ot->idname = "IMAGE_OT_merge";
@@ -2972,12 +3001,13 @@ void IMAGE_OT_merge(wmOperatorType *ot)
 	/* api callbacks */
 	ot->exec = image_merge_exec;
 	ot->poll = image_operator_poll;
+	ot->invoke = image_op_layer_invoke;
  
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
  
 	/* properties */
-	RNA_def_enum(ot->srna, "type", slot_merge, 0, "Type", "");
+	RNA_def_boolean(ot->srna, "discard", 0, "Del invisible layers", "Discard invisible layers");
 }
 
 static int image_flatten_exec(bContext *C, wmOperator *op)
@@ -3704,8 +3734,6 @@ static int image_layer_rotate_exec(bContext *C, wmOperator *op)
 	ImageLayer *layer;
 	ImBuf *ibuf;
 	int type;
-	static float alpha_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-	static float white_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 	float col[4];
  
 	if (!ima)
@@ -3772,8 +3800,6 @@ static int image_layer_arbitrary_rot_exec(bContext *C, wmOperator *op)
 	ImageLayer *layer;
 	ImBuf *ibuf;
 	float angle;
-	static float alpha_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-	static float white_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 	float col[4];
 	
 	if (!ima)
