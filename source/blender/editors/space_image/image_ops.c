@@ -3038,7 +3038,7 @@ void IMAGE_OT_flatten(wmOperatorType *ot)
 
 /********************** New Image Layer Operators *********************/
 
-int image_layer_poll(bContext *C)
+static int image_layer_poll(bContext *C)
 {	
 	SpaceImage *sima = CTX_wm_space_image(C);
 	return ED_space_image_show_paint(sima);
@@ -3053,7 +3053,6 @@ static int image_layer_add_exec(bContext *C, wmOperator *op)
 	Image *ima = CTX_data_edit_image(C);
 	ImageLayer *iml;
 
-	sima = CTX_wm_space_image(C);
 	scene = (Scene*)CTX_data_scene(C);
 
 	if (strcmp(op->idname, "IMAGE_OT_layer_add_default") != 0) {

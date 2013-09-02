@@ -980,7 +980,7 @@ void draw_image_main(const bContext *C, ARegion *ar)
 					glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 					glColor4f(1.0f, 1.0f, 1.0f, layer->opacity);
-					draw_layer_buffer(C, sima, ar, scene, ima, result_ibuf, sp_x, sp_y, zoomx, zoomy);
+					draw_layer_buffer(C, sima, ar, scene, result_ibuf, sp_x, sp_y, zoomx, zoomy);
 					glDisable(GL_BLEND);
 
 					if (result_ibuf)
