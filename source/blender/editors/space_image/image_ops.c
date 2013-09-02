@@ -3861,8 +3861,6 @@ static int image_layer_offset_exec(bContext *C, wmOperator *op)
 	ImageLayer *layer;
 	struct ImBuf *ibuf;
 	int x, y, half, wrap;
-	static float alpha_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-	static float white_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 	float col[4];
 	
 	if (!ima)
