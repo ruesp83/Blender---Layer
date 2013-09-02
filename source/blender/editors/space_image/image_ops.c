@@ -3052,7 +3052,6 @@ static int image_layer_add_exec(bContext *C, wmOperator *op)
 	Scene *scene;
 	Image *ima = CTX_data_edit_image(C);
 	ImageLayer *iml;
-	SpaceImage *sima;
 
 	sima = CTX_wm_space_image(C);
 	scene = (Scene*)CTX_data_scene(C);
@@ -3324,7 +3323,7 @@ static int image_layer_move_exec(bContext *C, wmOperator *op)
 		}
 		else if (type == 3) {  /* Move direction: Invert */
 			int i = 0, lim;
-			ImageLayer *tmp1, *tmp2, *next, *prev, *tmp_up, *tmp_down;
+			ImageLayer *tmp, *next, *prev, *tmp_up, *tmp_down;
 			if (ima->Count_Layers > 2) {
 				if (ima->Count_Layers % 2 == 0)
 					lim = (ima->Count_Layers / 2);
@@ -3334,19 +3333,18 @@ static int image_layer_move_exec(bContext *C, wmOperator *op)
 				tmp_up = (ImageLayer *)ima->imlayers.first;
 				tmp_down = ((ImageLayer *)ima->imlayers.last)->prev;
 				while ((i<lim) && (tmp_up != tmp_down)) {
-					tmp1 = tmp_down;
-					tmp2 = tmp_up;
+					tmp = tmp_up;
 
 					next = tmp_down->next;
 					prev = tmp_down->prev;
 					
-					tmp_down->next = tmp2->next;
-					tmp_down->prev = tmp2->prev;
-					if (tmp2->prev)
-						tmp2->prev->next = tmp_down;
+					tmp_down->next = tmp->next;
+					tmp_down->prev = tmp->prev;
+					if (tmp->prev)
+						tmp->prev->next = tmp_down;
 					else
 						ima->imlayers.first = tmp_down;
-					tmp2->next->prev = tmp_down;
+					tmp->next->prev = tmp_down;
 
 					tmp_up->next = next;
 					tmp_up->prev = prev;

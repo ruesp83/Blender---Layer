@@ -508,7 +508,7 @@ static void sima_draw_zbuffloat_pixels(Scene *scene, float x1, float y1, int rec
 	MEM_freeN(rectf);
 }
 
-static void draw_layer_buffer(const bContext *C, SpaceImage *sima, ARegion *ar, Scene *scene, Image *ima, ImBuf *ibuf, float fx, float fy, float zoomx, float zoomy)
+static void draw_layer_buffer(const bContext *C, SpaceImage *sima, ARegion *ar, Scene *scene, ImBuf *ibuf, float fx, float fy, float zoomx, float zoomy)
 {
 	int x, y;
 

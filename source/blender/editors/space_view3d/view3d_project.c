@@ -410,7 +410,7 @@ void ED_view3d_win_to_3d(const ARegion *ar, const float depth_pt[3], const float
 		ED_view3d_win_to_vector(ar, mval, mousevec);
 		add_v3_v3v3(line_end, line_sta, mousevec);
 
-		if (isect_line_plane_v3(out, line_sta, line_end, depth_pt, rv3d->viewinv[2], true) == 0) {
+		if (isect_line_plane_v3(out, line_sta, line_end, depth_pt, rv3d->viewinv[2]) == 0) {
 			/* highly unlikely to ever happen, mouse vector parallel with view plane */
 			zero_v3(out);
 		}
