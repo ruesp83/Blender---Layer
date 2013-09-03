@@ -183,7 +183,7 @@ void *image_undo_find_tile(Image *ima, ImBuf *ibuf, int x_tile, int y_tile, unsi
 			}
 		}
 	}
-
+	
 	return NULL;
 }
 
@@ -222,7 +222,7 @@ void *image_undo_push_tile(Image *ima, ImBuf *ibuf, ImBuf **tmpibuf, int x_tile,
 	undo_paint_push_count_alloc(UNDO_PAINT_IMAGE, allocsize);
 
 	BLI_addtail(lb, tile);
-
+	
 	return tile->rect.pt;
 }
 

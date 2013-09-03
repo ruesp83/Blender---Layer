@@ -245,7 +245,7 @@ int ED_undo_paint_step(bContext *C, int type, int step, const char *name)
 		return undo_stack_step(C, &ImageUndoStack, step, name);
 	else if (type == UNDO_PAINT_MESH)
 		return undo_stack_step(C, &MeshUndoStack, step, name);
-
+	
 	return 0;
 }
 

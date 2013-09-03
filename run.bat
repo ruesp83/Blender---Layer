@@ -5,8 +5,8 @@ IF "%1"=="32" GOTO DUE
 
 :UNO
 ECHO 64
-layer-64.bat
+run-layer-64.bat
 
 :DUE
 ECHO 32
-layer-32.bat
+run-layer-32.bat
