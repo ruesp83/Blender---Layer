@@ -3012,9 +3012,80 @@ void IMAGE_OT_merge(wmOperatorType *ot)
 
 static int image_flatten_exec(bContext *C, wmOperator *op)
 {
+	SpaceImage *sima = CTX_wm_space_image(C);
 	Image *ima = CTX_data_edit_image(C);
+	ImageLayer *layer, *prec;
+	ImBuf *ibuf;
+	float col[4];
+	int flag = 0;
 
-	BKE_report(op->reports, RPT_WARNING, "ToDo!!");
+	if (!ima)
+		return OPERATOR_CANCELLED;
+
+	for (layer = (ImageLayer *)ima->imlayers.first; layer; layer = layer->next) {
+		if (layer->visible & IMA_LAYER_VISIBLE) {
+			flag = 1;
+			break;
+		}
+	}
+	if (flag == 1) {
+		prec = NULL;
+		for (layer = (ImageLayer *)ima->imlayers.first; layer; layer = layer->next) {
+			if (layer->visible & IMA_LAYER_VISIBLE) {
+				if (prec == NULL) {
+					prec = layer;
+				}
+				else {
+					layer = merge_layers(ima, prec, layer);
+					ima->Count_Layers--;
+					prec = layer;
+				}
+				
+			}
+			else {
+				BLI_remlink(&ima->imlayers, layer);
+				free_image_layer(layer);
+				if (ima->imlayers.first) {
+					if (imalayer_get_current_act(ima) != 1)
+						imalayer_set_current_act(ima, imalayer_get_current_act(ima));
+					else
+						imalayer_set_current_act(ima, imalayer_get_current_act(ima) - 1);
+				}
+				ima->Count_Layers -= 1;
+			}
+		}
+
+		ima->Act_Layers = 0;
+		imalayer_set_current_act(ima, ima->Act_Layers);
+		
+		get_color_background_layer(col, prec);
+
+		ima->use_layers = FALSE;
+		if (sima->mode == SI_MODE_PAINT)
+			ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_LAYER);
+		else 
+			ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
+		ima->use_layers = TRUE;
+
+		if (ibuf->rect)
+			IMB_alpha_under_color_byte((unsigned char *)ibuf->rect, ibuf->x, ibuf->y, col);
+		else if (ibuf->rect_float)
+			IMB_alpha_under_color_float(ibuf->rect_float, ibuf->x, ibuf->y, col);
+		if (sima->mode != SI_MODE_PAINT) {
+			ImBuf *ibuf_l;
+
+			ibuf_l = (ImBuf *)prec->ibufs.first;
+			if (ibuf_l->rect)
+				IMB_alpha_under_color_byte((unsigned char *)ibuf_l->rect, ibuf_l->x, ibuf_l->y, col);
+			else if (ibuf_l->rect_float)
+				IMB_alpha_under_color_float(ibuf_l->rect_float, ibuf_l->x, ibuf_l->y, col);
+		}
+
+		ibuf->userflags |= IB_BITMAPDIRTY;
+		BKE_image_release_ibuf(ima, ibuf, NULL);
+	}
+	else
+		BKE_report(op->reports, RPT_INFO, "It can not merge the layers, because the layers are hidden");
 
 	WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, ima);
 	return OPERATOR_FINISHED;

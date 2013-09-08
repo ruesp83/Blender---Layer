@@ -594,7 +594,7 @@ ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode)
 
 	case IMA_LAYER_AVERAGE:
 		blend_callback = blend_average;
-		break;       
+		break;
 
 	case IMA_LAYER_ADD:
 		blend_callback = blend_add;
@@ -602,7 +602,7 @@ ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode)
 
 	case IMA_LAYER_SUBTRACT:
 		blend_callback = blend_subtract;
-		break;       
+		break;
 
 	case IMA_LAYER_DIFFERENCE:
 		blend_callback = blend_difference;
@@ -610,7 +610,7 @@ ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode)
 	
 	case IMA_LAYER_LIGHTEN:
 		blend_callback = blend_lighten;
-		break;       
+		break;
 
 	case IMA_LAYER_DARKEN:
 		blend_callback = blend_darken;
@@ -618,7 +618,7 @@ ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode)
 	
 	case IMA_LAYER_NEGATION:
 		blend_callback = blend_negation;
-		break;       
+		break;
 
 	case IMA_LAYER_EXCLUSION:
 		blend_callback = blend_exclusion;
@@ -626,7 +626,7 @@ ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode)
 	
 	case IMA_LAYER_LINEAR_LIGHT:
 		blend_callback = blend_linear_light;
-		break;       
+		break;
 
 	case IMA_LAYER_VIVID_LIGHT:
 		blend_callback = blend_vivid_light;
@@ -634,7 +634,7 @@ ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode)
 	
 	case IMA_LAYER_PIN_LIGHT:
 		blend_callback = blend_pin_light;
-		break;       
+		break;
 
 	case IMA_LAYER_HARD_MIX:
 		blend_callback = blend_hard_mix;
@@ -929,6 +929,7 @@ void image_add_image_layer_base(Image *ima)
 void get_color_background_layer(float col[4], ImageLayer *layer)
 {
 	static float alpha_color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+	static float black_color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 	static float white_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 
 	if (layer->background & IMA_LAYER_BG_WHITE)
@@ -938,5 +939,7 @@ void get_color_background_layer(float col[4], ImageLayer *layer)
 	else {
 		if (layer->default_color[0] != -1)
 			copy_v4_v4(col, layer->default_color);
+		else
+			copy_v4_v4(col, black_color);
 	}
 }
