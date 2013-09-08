@@ -274,8 +274,10 @@ void image_undo_restore(bContext *C, ListBase *lb)
 		}
 
 		if (!ima || !ibuf || !(ibuf->rect || ibuf->rect_float)) {
-			if (ibuf->rect || ibuf->rect_float)
-				BKE_image_release_ibuf(ima, ibuf, NULL);
+			if (ibuf) {
+				if (ibuf->rect || ibuf->rect_float)
+					BKE_image_release_ibuf(ima, ibuf, NULL);
+			}
 			continue;
 		}
 
