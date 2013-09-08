@@ -246,7 +246,7 @@ static void image_view_pan_init(bContext *C, wmOperator *op, const wmEvent *even
 	ViewPanData *vpd;
 
 	op->customdata = vpd = MEM_callocN(sizeof(ViewPanData), "ImageViewPanData");
-	WM_cursor_modal(CTX_wm_window(C), BC_NSEW_SCROLLCURSOR);
+	WM_cursor_modal_set(CTX_wm_window(C), BC_NSEW_SCROLLCURSOR);
 
 	vpd->x = event->x;
 	vpd->y = event->y;
@@ -268,7 +268,7 @@ static void image_view_pan_exit(bContext *C, wmOperator *op, int cancel)
 		ED_region_tag_redraw(CTX_wm_region(C));
 	}
 
-	WM_cursor_restore(CTX_wm_window(C));
+	WM_cursor_modal_restore(CTX_wm_window(C));
 	MEM_freeN(op->customdata);
 }
 
@@ -392,7 +392,7 @@ static void image_view_zoom_init(bContext *C, wmOperator *op, const wmEvent *eve
 	ViewZoomData *vpd;
 
 	op->customdata = vpd = MEM_callocN(sizeof(ViewZoomData), "ImageViewZoomData");
-	WM_cursor_modal(CTX_wm_window(C), BC_NSEW_SCROLLCURSOR);
+	WM_cursor_modal_set(CTX_wm_window(C), BC_NSEW_SCROLLCURSOR);
 
 	vpd->origx = event->x;
 	vpd->origy = event->y;
@@ -426,7 +426,7 @@ static void image_view_zoom_exit(bContext *C, wmOperator *op, int cancel)
 	if (vpd->timer)
 		WM_event_remove_timer(CTX_wm_manager(C), vpd->timer->win, vpd->timer);
 
-	WM_cursor_restore(CTX_wm_window(C));
+	WM_cursor_modal_restore(CTX_wm_window(C));
 	MEM_freeN(op->customdata);
 }
 
@@ -1383,7 +1383,7 @@ static void save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 		const char *relbase = ID_BLEND_PATH(CTX_data_main(C), &ima->id);
 		const short relative = (RNA_struct_find_property(op->ptr, "relative_path") && RNA_boolean_get(op->ptr, "relative_path"));
 		const short save_copy = (RNA_struct_find_property(op->ptr, "copy") && RNA_boolean_get(op->ptr, "copy"));
-		const short save_as_render = (RNA_struct_find_property(op->ptr, "save_as_render") && RNA_boolean_get(op->ptr, "save_as_render"));
+		const bool save_as_render = (RNA_struct_find_property(op->ptr, "save_as_render") && RNA_boolean_get(op->ptr, "save_as_render"));
 		ImageFormatData *imf = &simopts->im_format;
 		short ok = FALSE;
 
@@ -1409,7 +1409,7 @@ static void save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			}
 		}
 
-		colormanaged_ibuf = IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, TRUE, &imf->view_settings, &imf->display_settings, imf);
+		colormanaged_ibuf = IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, true, &imf->view_settings, &imf->display_settings, imf);
 
 		if (simopts->im_format.imtype == R_IMF_IMTYPE_MULTILAYER) {
 			Scene *scene = CTX_data_scene(C);
@@ -4719,7 +4719,7 @@ static void image_record_composite_exit(bContext *C, wmOperator *op)
 
 	scene->r.cfra = rcd->old_cfra;
 
-	WM_cursor_restore(CTX_wm_window(C));
+	WM_cursor_modal_restore(CTX_wm_window(C));
 
 	if (rcd->timer)
 		WM_event_remove_timer(CTX_wm_manager(C), CTX_wm_window(C), rcd->timer);

@@ -4385,12 +4385,8 @@ static void lib_link_object(FileData *fd, Main *main)
 			for (sens = ob->sensors.first; sens; sens = sens->next) {
 				for (a = 0; a < sens->totlinks; a++)
 					sens->links[a] = newglobadr(fd, sens->links[a]);
-				
-				if (sens->type == SENS_TOUCH) {
-					bTouchSensor *ts = sens->data;
-					ts->ma = newlibadr(fd, ob->id.lib, ts->ma);
-				}
-				else if (sens->type == SENS_MESSAGE) {
+
+				if (sens->type == SENS_MESSAGE) {
 					bMessageSensor *ms = sens->data;
 					ms->fromObject =
 						newlibadr(fd, ob->id.lib, ms->fromObject);
@@ -9552,8 +9548,7 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 		}
 	}
 
-	if (MAIN_VERSION_OLDER(main, 267, 1))
-	{
+	if (MAIN_VERSION_OLDER(main, 267, 1)) {
 		Object *ob;
 
 		for (ob = main->object.first; ob; ob = ob->id.next) {
@@ -9597,9 +9592,23 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 		#undef BRUSH_FIXED
 	}
 	
-	{
+
+	if (!MAIN_VERSION_ATLEAST(main, 268, 4)) {
 		bScreen *sc;
 		Object *ob;
+
+		for (ob = main->object.first; ob; ob = ob->id.next) {
+			bConstraint *con;
+			for (con = ob->constraints.first; con; con = con->next) {
+				if (con->type == CONSTRAINT_TYPE_SHRINKWRAP) {
+					bShrinkwrapConstraint *data = (bShrinkwrapConstraint *)con->data;
+					if      (data->projAxis & MOD_SHRINKWRAP_PROJECT_OVER_X_AXIS) data->projAxis = OB_POSX;
+					else if (data->projAxis & MOD_SHRINKWRAP_PROJECT_OVER_Y_AXIS) data->projAxis = OB_POSY;
+					else                                                          data->projAxis = OB_POSZ;
+					data->projAxisSpace = CONSTRAINT_SPACE_LOCAL;
+				}
+			}
+		}
 
 		for (ob = main->object.first; ob; ob = ob->id.next) {
 			ModifierData *md;
@@ -9631,6 +9640,32 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 							snode->zoom = 1.0;
 						}
 					}
+				}
+			}
+		}
+
+		for (ob = main->object.first; ob; ob = ob->id.next) {
+			bSensor *sens;
+			bTouchSensor *ts;
+			bCollisionSensor *cs;
+			Material *ma;
+
+			for (sens = ob->sensors.first; sens; sens = sens->next) {
+				if (sens->type == SENS_TOUCH) {
+					ts = sens->data;
+					cs = MEM_callocN(sizeof(bCollisionSensor), "touch -> collision sensor do_version");
+
+					if (ts->ma) {
+						ma = blo_do_versions_newlibadr(fd, ob->id.lib, ts->ma);
+						BLI_strncpy(cs->materialName, ma->id.name+2, sizeof(cs->materialName));
+					}
+
+					cs->mode = SENS_COLLISION_MATERIAL;
+
+					MEM_freeN(ts);
+
+					sens->data = cs;
+					sens->type = sens->otype = SENS_COLLISION;
 				}
 			}
 		}
@@ -10535,11 +10570,7 @@ static void expand_object(FileData *fd, Main *mainvar, Object *ob)
 		expand_doit(fd, mainvar, psys->part);
 	
 	for (sens = ob->sensors.first; sens; sens = sens->next) {
-		if (sens->type == SENS_TOUCH) {
-			bTouchSensor *ts = sens->data;
-			expand_doit(fd, mainvar, ts->ma);
-		}
-		else if (sens->type == SENS_MESSAGE) {
+		if (sens->type == SENS_MESSAGE) {
 			bMessageSensor *ms = sens->data;
 			expand_doit(fd, mainvar, ms->fromObject);
 		}

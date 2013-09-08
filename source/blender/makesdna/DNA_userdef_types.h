@@ -291,6 +291,8 @@ typedef struct ThemeSpace {
 	char col1_boundary_layer[4];
 	char col2_boundary_layer[4];
 	
+	char uv_shadow[4];
+	char uv_others[4];
 
 	char match[4];				/* outliner - filter match */
 	char selected_highlight[4];	/* outliner - selected item */
