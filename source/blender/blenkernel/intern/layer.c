@@ -310,7 +310,7 @@ int image_remove_layer(Image *ima, const int action)
 	 
 	if (ima == NULL)
 		return FALSE;
- 
+
 	if (action & IMA_LAYER_DEL_SELECTED) {
 		if (ima->Count_Layers > 1) {
 			layer = imalayer_get_current(ima);

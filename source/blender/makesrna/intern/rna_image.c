@@ -363,7 +363,6 @@ static void rna_Image_active_image_layer_set(PointerRNA *ptr, PointerRNA value)
 	const int index = BLI_findindex(&ima->imlayers, layer);
 	if (index != -1)
 		imalayer_set_current_act(ima, index);
-		//ima->Act_Layers = index;
 }
 
 static void rna_Image_layers_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)

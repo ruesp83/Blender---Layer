@@ -295,9 +295,9 @@ static ImBuf *image_get_ibuf(Image *ima, int index, int frame)
 			//ima->use_layers = FALSE;
 			if (ima->imlayers.first) {
 				BLI_lock_thread(LOCK_IMAGE);
-				
+
 					merge_layers_visible_nd(ima);
-				
+
 				BLI_unlock_thread(LOCK_IMAGE);
 			}
 		//}
@@ -350,7 +350,7 @@ static void image_assign_ibuf(Image *ima, ImBuf *ibuf, int index, int frame)
 
 		if ((ima->source == IMA_SRC_FILE) || (ima->source == IMA_SRC_GENERATED)) {
 			image_add_image_layer_base(ima);
-			if (strlen(ima->name) != 0) {
+			if (ima->source == IMA_SRC_FILE) {
 				((ImageLayer *)ima->imlayers.last)->background = IMA_LAYER_BG_IMAGE;
 				strcpy(((ImageLayer *)ima->imlayers.last)->file_path, ima->name);
 			}

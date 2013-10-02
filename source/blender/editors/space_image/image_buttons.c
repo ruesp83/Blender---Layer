@@ -663,9 +663,10 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 			}
 			else if (ima->source != IMA_SRC_GENERATED) {
 				if (compact == 0) {
-					ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock, IMA_IBUF_IMA);
+					ImBuf *ibuf_l = BKE_image_acquire_ibuf(ima, iuser, &lock, IMA_IBUF_LAYER);
+					ImBuf *ibuf = ima->ibufs.first;
 					image_info(scene, iuser, ima, ibuf, str, MAX_INFO_LEN);
-					BKE_image_release_ibuf(ima, ibuf, lock);
+					BKE_image_release_ibuf(ima, ibuf_l, lock);
 					uiItemL(layout, str, ICON_NONE);
 				}
 			}
@@ -681,7 +682,8 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 
 			if (ima->source != IMA_SRC_GENERATED) {
 				if (compact == 0) { /* background image view doesnt need these */
-					ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, NULL, IMA_IBUF_IMA);
+					ImBuf *ibuf_l = BKE_image_acquire_ibuf(ima, iuser, NULL, IMA_IBUF_LAYER);
+					ImBuf *ibuf = ima->ibufs.first;
 					int has_alpha = TRUE;
 
 					if (ibuf) {
@@ -690,7 +692,7 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 
 						has_alpha = valid_channels & IMA_CHAN_FLAG_ALPHA;
 
-						BKE_image_release_ibuf(ima, ibuf, NULL);
+						BKE_image_release_ibuf(ima, ibuf_l, NULL);
 					}
 
 					if (has_alpha) {
