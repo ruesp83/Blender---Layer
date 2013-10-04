@@ -1,0 +1,7 @@
+1) I layer dovrebbero essere trascinabili per poterli ordinare
+2) I flag blocca e rendi visibili dei layer dovrebbero avere degli shortcuts
+3) Aggiungere ALT + clic per creare un livello subito con le impostazioni predefinite. (nessun popup per il nome, etc)
+	Dovrebbe funzionare anche con shourtcuts, ad esempio:
+	Se Create layer = CTRL + SHIFT + N
+	Allora: ALT + CTRL + SHIFT + N creerebbe la witout popup strato
+4)Sarebbe fantastico se ci date la possibilità di avere un shourtcut far apparire l'intero pannello il cursore si trova ovunque, nello stile di "Paint Texture Plus"

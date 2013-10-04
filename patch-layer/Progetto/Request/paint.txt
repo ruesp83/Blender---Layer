@@ -1,0 +1,30 @@
+Texturing:
+- Overlays
+- Layers (like in photoshop, with blending and combining. Just let me use the damn texture node stuff in painting.)
+- multiple textures at once (bump+paint)
+- better brushes (what happened to mypaint brush integration?)
+- normal painting
+- cavity modulation
+- modulation with any custom (GLSL?) shader
+- I could go on and on...
+
+Texture Paint:
+Paint layers (like MikeW's addon)
+preview of a texture brush on the mesh and the ability to rotate it and set the center
+Improve texture management. It's horrible not to be able to load a texture as brush directly in paint mode and discard it once you're done.
+
+Texture paint - photoshop (gimp) layers, like mudbox, maxon bodypaint 3D 
+
+Paint Texturing - especially layer support, saving as psd
+
+Texture paint - texure layers, brush size independent of zoom (5px brush is always 5px brush), saving of images/layers when you save the blend file (at the moment you need to save the images separately), brush textures used only as alpha value, straight line painting, eraser tool.
+
+1. More advanced texture painting with layers and stuff like 3dcoat. And with a better performance (it is really slow right now)
+
+Textures / Images: Import multi-layer .xcf or .psd files and use each layer as it's appropriate map i.e. diffuse color / bump / spec. map / etc ... .... Would allow saving ALL parts of a map-set in one file.
+
+Texturing - set realtime texture filtering in viewports eg. turn mip maps on/off
+
+colaboration with GIMP i.e. so blender can use GIMPS filters...... 
+
+http://blenderartists.org/forum/showthread.php?247490-GSoC-Wishlist/page6

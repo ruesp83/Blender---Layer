@@ -1,0 +1,161 @@
+Phase 1:
+    Stage    : Management
+    Target   : Gestione e comuni operazioni per organizzare i Layer
+    Deadline : 15/04/2012
+    Amount   : 500€
+    Info     : 
+        * 1) Operazioni per la gestione dei layer.
+            Menu Layer
+            *    |-> Add
+            *        |-> New Layer
+            *        |-> ------------------
+            *        |-> Above active layer
+            *        |-> Below active layer
+            *    |-> Duplicate Layer
+            *    |-> Pulisci Layer
+            *    |-> Remove Layer
+            *        |-> Livello
+            *        |-> Livelli Nascosti
+            *    |-> Unisci
+            *        |-> Unisci Livelli
+            *        |-> Unisci Visibili
+            *        |-> Unico Livello
+            *    |-> ------------------
+            *    |-> Seleziona
+            *        |-> Seleziona il livello precedente
+            *        |-> Seleziona il livello successivo
+            *        |-> Seleziona il livello in cima
+            *        |-> Seleziona il livello in fondo
+            *    |-> Ordina //icon='SORTALPHA'
+            *        |-> Porta in primo piano
+            *        |-> Porta Avanti
+            *        |-> Porta Dietro
+            *        |-> Porta Sotto
+            *        |-> Inverti Ordine livelli
+        * 2) Inserire immagine come layer.
+        * 3) Undo & Redo Layer.
+        * 4) Lock Layer.
+        * 5) Lettura e salvataggio file .Blend.
+        * 6) Bordo Tratteggiato Layer.
+        * 7) Miglioramento e aggiunta di qualche altro Blend Mode.
+
+
+Phase 2:
+    Stage    : Transform
+    Target   : Semplici operazione per modificare il layer selezionato.
+    Deadline : 18/05/2012
+    Amount   : 800€
+    Info     : 
+        * 1) Operazioni per la modifica dei layer.
+            Menu Layer
+                |-> Ordina ...
+                |-> Trasforma
+                *    |-> Rifletti Orizzontalmente
+                *    |-> Rifletti Verticalmente
+                *    |-> ------------------
+                *    |-> Ruota di 90° in senso orario
+                *    |-> Ruota di 90° in senso antiorario
+                *    |-> Ruota di 180°
+                *    |-> Rotazione Arbitraria
+                *    |-> ------------------
+                *    |-> Spostamento
+                * |-> Scala
+                *    |-> Dimensioni Margini del livello
+                #    |-> Livello a dimensione immagine (Possibile se si ha la possibilità dei layer di dimensioni differenti)
+                *    |-> Scala livello
+        * 2) Iniziare integrazione dei layer con Blender.
+        * 3) Salvataggio di un'immagine in un unico layer (Save, Save As...).
+
+
+Phase 3:
+    Stage    : Color
+    Target   : Operazione per la gestione del colore.
+    Deadline : Defined after phase 2
+    Amount   : 1200€
+    Info     : 
+        * 1) Operazioni per la modifica dei Colori
+			Menu Color
+				* |-> Luminosità - Contrasto
+				* |-> Esposizione
+				* |-> ------------------
+				|-> Tonalità - Saturazione (hue - saturation)
+				# |-> Tinta
+				# |-> Temperatura di colore e tinta
+				# |-> Nitidezza (Sharpness - Filtro)
+				* |-> Colora
+				* |-> Desaturazione
+				* |-> ------------------
+				* |-> Soglia
+				* |-> Posterizza
+				* |-> Inverti ...
+				* |-> Inverti Valore
+        * 2) Aggiungere GrayScale per il Color Space.
+        3) Integrazione dei layer con Blender.
+			3.1) Node Editor:
+				 - Il Node Image deve avere la possibilità di poter selezionare
+				   tutti i layer o il singolo layer. Es.: Render Layer.
+			3.2) Cycles Render:
+				 - Il node Image Texture deve essere simile al node Image
+				   implementato sopra.
+			3.3) Properties Textures:
+				 - Se una texture è il risultato di più layer, si deve avere la
+				   possibilità di poter applicare al singolo layer tutte le
+				   proprietà di una texture(Bump, Normal, Emit, Color, ...)
+			3.4) Texture Paint:
+				 - Possibilità di poter dipingere con i layer anche nella vista
+				   3D. Applicando le proprietà delle texture sul singolo layer.
+			3.5) Bake:
+				 - Si può avere la possibilità di scegliere quali modalità di
+				   Bake fare e portarli tutti in un layer diverso.
+		4) Operazioni per la modifica delle immagini.
+			Menu Image
+				* |-> Color Space
+				*	|-> GrayScale
+				*	|-> RGB
+				* |-> ------------------
+				* |-> Duplicate
+				* |-> Trasforma
+                *    |-> Rifletti Orizzontalmente
+                *    |-> Rifletti Verticalmente
+                *    |-> ------------------
+                *    |-> Ruota di 90° in senso orario
+                *    |-> Ruota di 90° in senso antiorario
+                *    |-> Ruota di 180°
+                *    |-> Rotazione Arbitraria
+                *    |-> ------------------
+                *    |-> Spostamento
+                * |-> Scala Immagine
+                * |-> ------------------
+				* |-> Fonde livelli visibili (http://docs.gimp.org/it/gimp-image-merge-layers.html) (Possibile se si ha la possibilità dei layer di dimensioni differenti)
+				* |-> Appiattisci Immagine (http://docs.gimp.org/it/gimp-image-flatten.html)
+
+Phase 4:
+    Stage    : Import & Export
+    Target   : Permettere d'importare ed esportare i layer nei formati più
+			   comunemente utilizzati.
+    Deadline : Defined after phase 3
+    Amount   : 2000€
+    Info     : Esportazione e importazione in ora, xcf, ...
+
+
+Phase 5: 
+    Stage    : Tools
+    Target   : Paint Tools, Selection Tools, Generic Tools
+    Deadline : Defined after phase 4
+    Amount   : 2500€
+    Info     : 
+        1) Paint Tools: Color Picker, Text Tool, Bucket Fill, Forme.
+        2) Selection Tools: Rectangle, Ellipse, Free, Poligonale.
+        3) Generic Tools: Griglia, Strumento Mano, ...
+
+
+Phase 6: 
+    Stage    : Brush
+    Target   : Miglioramento Brush 
+    Deadline : Defined after phase 5
+    Amount   : 3000€
+    Info     :
+        1) Importare miglioramenti di Jason Wilkins svolti GSOC 2011 nel trunk
+		   onion per i Pennelli.
+        2) Aggiungere Blend Mode per i Pennelli.
+        3) Da definire ancora!!

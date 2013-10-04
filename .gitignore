@@ -1,5 +1,13 @@
 .svn
-patch-layer
+patch-layer/e-mail
+patch-layer/File Reference
+patch-layer/Info
+patch-layer/Striscia Donazioni
+patch-layer/*.py
+patch-layer/*.bat
+patch-layer/*.rar
+patch-layer/*.blend
+patch-layer/*.patch
 *.pyc
 user-cycles.py
 user-linux.py

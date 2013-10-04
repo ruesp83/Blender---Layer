@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?taskcoach release="1.3.29" tskversion="37"?>
+
+<tasks>
+<category creationDateTime="2013-06-27 00:35:38.963000" icon="bug_icon" id="b9ef8a30-deb0-11e2-96e1-1c7508f47af3" modificationDateTime="2013-06-27 00:35:50.308000" selectedIcon="bug_icon" status="1" subject="BUG" />
+<category creationDateTime="2013-06-26 23:46:18.092000" expandedContexts="('categoryviewer',)" icon="symbol_plus_icon" id="d51e7ac0-dea9-11e2-89b8-1c7508f47af3" modificationDateTime="2013-06-26 23:53:51.509000" selectedIcon="symbol_plus_icon" status="1" subject="Features">
+<description>
+Nuove caratteristiche aggiunte nel Image Layer
+</description>
+<category creationDateTime="2013-06-26 23:53:51.509000" id="e3606c4f-deaa-11e2-800b-1c7508f47af3" modificationDateTime="2013-06-27 00:28:45.585000" status="1" subject="UI" />
+</category>
+<syncmlconfig>
+<TaskCoach-0000013f82733a0a90fec89d00c000a800010022>
+<spds>
+<sources>
+<TaskCoach-0000013f82733a0a90fec89d00c000a800010022.Tasks />
+<TaskCoach-0000013f82733a0a90fec89d00c000a800010022.Notes />
+</sources>
+<syncml>
+<Auth />
+<Conn />
+</syncml>
+</spds>
+</TaskCoach-0000013f82733a0a90fec89d00c000a800010022>
+</syncmlconfig>
+<guid>
+0000013f82733a0a90fec89d00c000a800010022
+</guid>
+</tasks>

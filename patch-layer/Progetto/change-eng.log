@@ -1,0 +1,100 @@
+Layers v0.2.1 fixed bug for Phase 2. Completed: 14\11\2012:
+	 1. FIX: I solved the problem of the black border around the brush.
+	 2. FIX: Forgot IMA_IBUF_IMA in ImageExporter.cpp.
+	 3. DEL: Deleted unused variavbles.
+
+Layers v0.2 beta6 new features and fixed bug for Phase 2. Completed: 28\09\2012:
+     1. FIX: If there is only one layer and you try to delete it, Blender crashes.
+     2. FIX: You create a layer only if it is an image of a file or if it is a generated image.
+             In this way you avoid several crashes.
+     3. FIX: Fixed a display issue of the border around the image.
+     4. FIX: When you render a scene, Blender does not lock.
+     5. FIX: If it is invisible Baselayer and remove layers invisible, Blender crashes.
+     6. FIX: Quando applicavo Merge All con foto in un layer si verificava un crash.
+     7. UPD: When does the "Merge All" and is also deleted the "Background", the last layer is
+             renamed "Background".
+     8. UPD: In the "Merge All" when you delete the "Background", the "default_color" is set in 
+             white, the property "Background" in "IMA_LAYER_BG_WHITE".
+     9. UPD: Updated "startup.blend" with the properties of the dashed border to the image.
+    10. UPD: In the panel Image Layers when you create a layer is created with the default settings.
+    11. UPD: Modified functions "BKE_image_get_ibuf" and "BKE_image_acquire_ibuf" in order to allow
+             the integration of layers in Blender.
+    12. UPD: Modified "IMB_imbuf_types.h" in "DNA_imbuf_types.h", so you can save the ImBuf within 
+             files ".Blend".
+    13. UPD: Modified "image_get_ibuf" so you can return a layer or merge layers.
+             Useful for integration.
+    14. UPD: Updated Blending layers but the problem of the black border around the stroke has not
+             been resolved.
+    15. UPD: Changed the way you view an image in the "View" and for Render. 
+             Now uses the "glaDrawPixelsTexScaled".
+    16. UPD: In the structure "Image" is connected to ibufs the resulting image of the union of
+             all layers.
+    17. ADD: Added menu "Transform".
+    18. ADD: Added menu "Scale".
+    19. ADD: Added "Open Image" in the header of the Space Image.
+    20. ADD: Ability to save layers and images in the file. "Blend".
+    21. ADD: Now you can choose the layer to be used within the node "Image".
+    22. ADD: Now it is possible to save an image composed of several layers.
+
+
+Layers v0.1 beta2 new features and fixed bug for Phase 1. Completed: 15\04\2012:
+     1. FIX: Fixed many memory problems.
+     2. FIX: Increased the range of parameters of the function "sdrawbox" in "glutil.c". When you 
+             have a zomm very excessive, the dashed border of the layer changed direction.
+     3. FIX: Almost solved the problem of the black border, when you paint on a layer.
+     4. UPD: The layers are handled by the bottom to the top, as in GIMP e PS.
+     5. UPD: Improved UI.
+     6. UPD: Layer names are handled by the API of Blender
+     7. UPD: The BaseLayer if it is not a layer, it can not be moved.
+     8. UPD: Added control to manage operations on layers only when it is in the "Painting mode".
+     9. ADD: Added Menu for the management of the layers.
+    10. ADD: Added the ability to create layers above or below a selected layer.
+    11. ADD: For some operations have been associated keyboard shortcuts.
+    12. ADD: Added the Menu "Select".
+    13. ADD: Added the dotted border around the layer. With the ability to change color at the 
+             dotted line in the Theme Manager. In addition there is also the possibility to 
+             disable it.
+    14. ADD: Now you see a cursor in the Image Space more inherent, which is disabled if you can
+             not draw.
+    15. ADD: When you invoke the Color Sample in paint mode, you see a box at the bottom left with 
+             the selected color.
+    16. ADD: Added the ability to clear a layer, even if the layer is loaded a photo.
+    17. ADD: The Color Picker in the Image Editor, in Vertex Paint and Texture Paint change to 
+             reflect your choices nell'User Preferences.
+    18. ADD: You can add an image as a layer.
+    19. ADD: Added the Menu "Order".
+    20. ADD: Added the Menu "Merge".
+    21. ADD: Ability to lock a layer.
+
+
+Layers v0.1 beta1 new features and fixed bug 02\03\2012:
+    1. FIX: Fixed many bugs from the patch of KWK.
+    2. UPD: Improved UI.
+    3. ADD: With the creation of a new image now you can choose the background color: Transparent, 
+            White, RGB.
+    4. ADD: Ability to duplicate a layer.
+    5. ADD: Blend Modes: Normal, Multiply, Screen, Overlay, Soft Light, Hard Light, Color Dodge, 
+            Linear Dodge, Color Burn, Linear Burn, Average, Add, Subtract, Difference, Lighten, 
+            Darken, Negation, Exclusion, Linear Light, Vivid Light, Pin Light, Hard Light.
+
+GIT:
+
+    ...
+
+TODO:
+
+    - ALTA  :
+        ...
+
+    - MEDIA :
+        ...
+
+Video 02\03\2012:
+1) https://vimeo.com/37814580
+
+Builds 02\03\2012:
+32: ...
+64: ...
+
+Patch 02\03\2012:
+- ...

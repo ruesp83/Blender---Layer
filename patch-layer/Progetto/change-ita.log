@@ -1,0 +1,140 @@
+Layers v0.2.3 fixed bug for Phase 2. Completed: __\__\201_:
+      1. FIX: Mancata assegnazione del nome alla creazione di un layer di
+              default.
+      2. FIX: Nello Space Image se passo nella modalità paint senza un'immagine,
+              Blender crash.
+      3. FIX: Nello Space Image prodotto da un render o dal Composite se si
+              passa nella modalità paint, Blender crash.
+      4. FIX: BUG danxsy: Crash quando aggiungo un layer mentre eseguo l'unwrap.
+      5. FIX: Reload e Replace Image non funzionavano correttamente.
+      6. FIX: Open as Layer non visualizzava il layer con l'immagine.
+      7. FIX: Risolto problemi di inizializzazione dell'ImBuf dei layer.
+      8. FIX: Le dimensioni di un'immagine ruotata ora vengono calcolate
+              correttamente.
+      9. FIX: Risolti problemi con i seguenti Blend Mode: Color Dodge,
+              Color Burn, Vivid Light e Hard Mix.
+     10. UPD: Anche i layer ora sono Thread Safe.
+     11. UPD: Aggiornati i layer con la nuova gestione dell'Image Thread.
+     12. UPD: Aggiunto shortcut: ALT + LeftClick per creare un layer di default.
+     13. UPD: Il Panel "Image Layer" è visualizzato solo se esiste un immagine
+              e se ci si trova nella modalità "Paint".
+     14. ADD: Aggiunta la possibilità di utilizzare la modalità di Color Space:
+              GrayScale.
+     15. ADD: Aggiunto il menù "Image".
+     16. ADD: Aggiunto il menù "Color".
+     17. ADD: Aggiunta la possibilità di bloccare l'alpha mentre si dipinge.
+     18. ADD: Aggiunti i seguenti Blend Mode: Inverse Color Burn, Soft Burn.
+	 19. ADD: Aggiunta possibilità di utilizzare l'undo con le operazioni sui
+	          layer.
+
+Layers v0.2.1 fixed bug for Phase 2. Completed: 14\11\2012:
+     1. FIX: Risolo il problema del bordino nero intorno alla pennellata.
+     2. FIX: Dimenticato un IMA_IBUF_IMA in ImageExporter.cpp.
+     3. DEL: Cancellate alcune variabili inutilizzate.
+
+Layers v0.2 beta6 new features and fixed bug for Phase 2. Completed: 28\09\2012:
+     1. FIX: Se era presente solo un layer e si tentava di cancellarlo, Blender 
+             cresciava.
+     2. FIX: Creazione di layer solo se è un immagine di un file o se è
+             generata, così si evitano parecchi crash.
+     3. FIX: Risolto il problema di visualizzazione del contorno dell'immagine.
+     4. FIX: Ora quando si renderizza una scena, Blender non si blocca.
+     5. FIX: Se rendevo invisibile il baselayer e rimuovevo i layer invisibili
+             Blender si bloccava.
+     6. FIX: Quando applicavo Merge All con foto in un layer si verificava un
+             crash.
+     7. UPD: Quando si fa "Merge All" ed il "Background" viene cancellato
+             l'ultimo layer viene chiamato "Background".
+     8. UPD: Nella modalità "Merge All" nel caso in cui si cancella il
+             "Background", viene settato il "default_color" a bianco e la
+             proprietà "Background" a "IMA_LAYER_BG_WHITE".
+     9. UPD: Aggiornato "startup.blend" con le propriètà del bordo tratteggiato
+             per l'immagine.
+    10. UPD: Nel pannello "Image Layers" quando si crea un layer viene creato
+             uno con le impostazioni di default.
+    11. UPD: Modificate le funzioni "BKE_image_get_ibuf" e
+             "BKE_image_acquire_ibuf" in modo da permettere l'integrazione dei
+             layer in Blender.
+    12. UPD: Convertito "IMB_imbuf_types.h" in "DNA_imbuf_types.h" così da
+             permettere il salvataggio dell'ImBuf all'interno dei file ".blend".
+    13. UPD: Modificata la funzione "image_get_ibuf" così da poter restituire un
+             layer o il merge dei layer. Utile per l'integrazione.
+    14. UPD: Aggiornato il Blending dei layer ma il problema della pennellata
+             non è stata risolta.
+    15. UPD: Cambiato il modo di visualizzare un'immagine nella modalità "View"
+             e per i Render.
+             Ora viene utilizzata la funzione "glaDrawPixelsTexScaled".
+    16. UPD: Nell'ibufs della struttura "Image", viene memorizzata l'immagine
+             risultante dall'unione di tutti i layer.
+    17. ADD: Aggiunto il menu "Transform".
+    18. ADD: Aggiunto il menu "Scale".
+    19. ADD: Aggiunto "Open Image" nell'header dello Space Image.
+    20. ADD: Possibilità di salvare i layer e le immagini all'interno del file
+             ".blend".
+    21. ADD: Ora è possibile scegliere il layer da utilizzare all'interno del
+             nodo "Image".
+    22. ADD: Ora c'è la possibilità di salvare un'immagine composta da più
+             layer.
+
+Layers v0.1 beta2 new features and fixed bug for Phase 1. Completed: 15\04\2012:
+     1. FIX: Risolti molti problemi di memoria.
+     2. FIX: Aumentato il range dei parametri della funzione "sdrawbox" in
+             "glutil.c". Quando si ha un zoom molto eccessivo il bordo
+             tratteggiato del layer cambiava direzione.
+     3. FIX: Quasi risolto il problema del bordo nero, quando si dipinge su un
+             layer.
+     4. UPD: I layer vengono gestiti dal basso verso l'alto, come in GIMP e PS.
+     5. UPD: Migliorata la UI.
+     6. UPD: Per controllare se il nome del layer è unico, si usano le API di
+             Blender.
+     7. UPD: Il BaseLayer se non è un layer non può essere spostato.
+     8. UPD: Aggiunto controllo per gestire le operazioni sui layer solo quando
+             si è nella modalità "Painting mode".
+     9. ADD: Aggiunto Menu per la gestione dei layer.
+    10. ADD: Aggiunta la possibilità di creare layer sopra o sotto un layer
+             selezionato.
+    11. ADD: Per alcune operazioni sono stati associate le scorciatoie da
+             tastiera.
+    12. ADD: Aggiunto il menù Select.
+    13. ADD: Aggiunto il bordo tratteggiato intorno al layer. Con la possibilità
+             di cambiare colore al tratteggio nel Theme Manager. Inoltre c'è
+             anche la possibilità di disattivarlo.
+    14. ADD: Ora si visualizza nello Space Image un cursore più inerente per
+             pittare, il quale viene disattivato nel caso in cui non è possibile
+             disegnare.
+    15. ADD: Quando si richiama il Sample Color nella modalità per disegnare si
+             visualizzare un riquadro in basso a sinistra con il colore
+             selezionato.
+    16. ADD: Aggiunto la possibilità di pulire un layer anche se nel layer è
+             caricata una foto.
+    17. ADD: Ora il Color Picker nell'Image Editor, nel Vertex Paint e nel
+             Texture Paint cambiano in base alla modalità scelta nell'User
+             Preferences.
+    18. ADD: Si può aggiungere un'immagine come layer.
+    19. ADD: Aggiunto il menù "Ordina".
+    20. ADD: Aggiunto il menù "Unisci".
+    21. ADD: Possibilità di bloccare un layer.
+
+Layers v0.1 beta1 new features and fixed bug 02\03\2012:
+    1. FIX: Risolti molti bug dalla patch di KWK.
+    2. UPD: Migliorata la UI.
+    3. ADD: Creando una nuova immagine ora si può scegliere il colore di
+            background: Trasparente, Bianco, RGB.
+    4. ADD: Possibilità di duplicare un layer.
+    5. ADD: Blend Modes: Normal, Multiply, Screen, Overlay, Soft Light,
+            Hard Light, Color Dodge, Linear Dodge, Color Burn, Linear Burn,
+            Average, Add, Subtract, Difference, Lighten, Darken, Negation,
+            Exclusion, Linear Light, Vivid Light, Pin Light, Hard Light.
+
+GIT:
+    https://github.com/ruesp83/Blender---Layer
+
+Video 02\03\2012:
+1) https://vimeo.com/37814580
+
+Builds 02\03\2012:
+32: ...
+64: ...
+
+Patch 02\03\2012:
+- ...
