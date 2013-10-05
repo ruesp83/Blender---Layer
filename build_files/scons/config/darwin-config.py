@@ -42,6 +42,12 @@ XCODE_CUR_VER=cmd_xcode[6:][:3] # truncate output to major.minor version
 cmd = 'xcodebuild -showsdks'
 cmd_sdk=commands.getoutput(cmd)
 MACOSX_SDK_CHECK=cmd_sdk
+cmd = 'xcode-select --print-path'
+XCODE_SELECT_PATH=commands.getoutput(cmd)
+if XCODE_SELECT_PATH.endswith("/Contents/Developer"):
+	XCODE_BUNDLE=XCODE_SELECT_PATH[:-19]
+else:
+	XCODE_BUNDLE=XCODE_SELECT_PATH
 
 if MACOSX_ARCHITECTURE == 'x86_64' or MACOSX_ARCHITECTURE == 'ppc64':
     USE_QTKIT=True # Carbon quicktime is not available for 64bit
@@ -99,7 +105,7 @@ else :
 LIBDIR = '${LCGDIR}'
 
 if XCODE_CUR_VER >= '4.3':  ## since version 4.3, XCode and developer dir are bundled ##
-	MACOSX_SDK = '/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform' + MACOSX_SDK
+	MACOSX_SDK = XCODE_BUNDLE + '/Contents/Developer/Platforms/MacOSX.platform' + MACOSX_SDK
 
 #############################################################################
 ###################          Dependency settings           ##################
@@ -107,7 +113,7 @@ if XCODE_CUR_VER >= '4.3':  ## since version 4.3, XCode and developer dir are bu
 
 #Defaults openMP to true if compiler handles it ( only gcc 4.6.1 and newer )
 # if your compiler does not have accurate suffix you may have to enable it by hand !
-if CC[:-2].endswith('4.6'):
+if CC[:-2].endswith('4.6') or CC[:-2].endswith('4.8'):
     WITH_BF_OPENMP = True  # multithreading for fluids, cloth, sculpt and smoke
 else:
     WITH_BF_OPENMP = False
@@ -349,6 +355,7 @@ else:
 CFLAGS = []
 CXXFLAGS = []
 CCFLAGS = ['-pipe','-funsigned-char']
+
 
 CPPFLAGS = list(ARCH_FLAGS)
 

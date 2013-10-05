@@ -1779,6 +1779,27 @@ static void IDP_DirectLinkProperty(IDProperty *prop, int switch_endian, FileData
 	}
 }
 
+#define IDP_DirectLinkGroup_OrFree(prop, switch_endian, fd) \
+       _IDP_DirectLinkGroup_OrFree(prop, switch_endian, fd, __func__)
+
+static void _IDP_DirectLinkGroup_OrFree(IDProperty **prop, int switch_endian, FileData *fd,
+                                        const char *caller_func_id)
+{
+	if (*prop) {
+		if ((*prop)->type == IDP_GROUP) {
+			IDP_DirectLinkGroup(*prop, switch_endian, fd);
+		}
+		else {
+			/* corrupt file! */
+			printf("%s: found non group data, freeing type %d!\n",
+			       caller_func_id, (*prop)->type);
+			/* don't risk id, data's likely corrupt. */
+			// IDP_FreeProperty(*prop);
+			*prop = NULL;
+		}
+	}
+}
+
 /* stub function */
 static void IDP_LibLinkProperty(IDProperty *UNUSED(prop), int UNUSED(switch_endian), FileData *UNUSED(fd))
 {
@@ -1791,9 +1812,8 @@ static void direct_link_id(FileData *fd, ID *id)
 	/*link direct data of ID properties*/
 	if (id->properties) {
 		id->properties = newdataadr(fd, id->properties);
-		if (id->properties) { /* this case means the data was written incorrectly, it should not happen */
-			IDP_DirectLinkProperty(id->properties, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
-		}
+		/* this case means the data was written incorrectly, it should not happen */
+		IDP_DirectLinkGroup_OrFree(&id->properties, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
 	}
 }
 
@@ -2044,7 +2064,7 @@ static void direct_link_fmodifiers(FileData *fd, ListBase *list)
 				FMod_Python *data = (FMod_Python *)fcm->data;
 				
 				data->prop = newdataadr(fd, data->prop);
-				IDP_DirectLinkProperty(data->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
+				IDP_DirectLinkGroup_OrFree(&data->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
 			}
 				break;
 		}
@@ -2599,8 +2619,7 @@ static void lib_verify_nodetree(Main *main, int UNUSED(open))
 static void direct_link_node_socket(FileData *fd, bNodeSocket *sock)
 {
 	sock->prop = newdataadr(fd, sock->prop);
-	if (sock->prop)
-		IDP_DirectLinkProperty(sock->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
+	IDP_DirectLinkGroup_OrFree(&sock->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
 	
 	sock->link = newdataadr(fd, sock->link);
 	sock->typeinfo = NULL;
@@ -2638,8 +2657,7 @@ static void direct_link_nodetree(FileData *fd, bNodeTree *ntree)
 		link_list(fd, &node->outputs);
 		
 		node->prop = newdataadr(fd, node->prop);
-		if (node->prop)
-			IDP_DirectLinkProperty(node->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
+		IDP_DirectLinkGroup_OrFree(&node->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
 		
 		link_list(fd, &node->internal_links);
 		for (link = node->internal_links.first; link; link = link->next) {
@@ -2797,8 +2815,7 @@ static void direct_link_constraints(FileData *fd, ListBase *lb)
 				link_list(fd, &data->targets);
 				
 				data->prop = newdataadr(fd, data->prop);
-				if (data->prop)
-					IDP_DirectLinkProperty(data->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
+				IDP_DirectLinkGroup_OrFree(&data->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
 				break;
 			}
 			case CONSTRAINT_TYPE_SPLINEIK:
@@ -2897,8 +2914,7 @@ static void direct_link_bones(FileData *fd, Bone *bone)
 	
 	bone->parent = newdataadr(fd, bone->parent);
 	bone->prop = newdataadr(fd, bone->prop);
-	if (bone->prop)
-		IDP_DirectLinkProperty(bone->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
+	IDP_DirectLinkGroup_OrFree(&bone->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
 		
 	bone->flag &= ~BONE_DRAW_ACTIVE;
 	
@@ -4118,6 +4134,8 @@ static void direct_link_customdata(FileData *fd, CustomData *data, int count)
 		
 		if (layer->flag & CD_FLAG_EXTERNAL)
 			layer->flag &= ~CD_FLAG_IN_MEMORY;
+
+		layer->flag &= ~CD_FLAG_NOFREE;
 		
 		if (CustomData_verify_versions(data, i)) {
 			layer->data = newdataadr(fd, layer->data);
@@ -4165,6 +4183,12 @@ static void direct_link_mesh(FileData *fd, Mesh *mesh)
 	direct_link_customdata(fd, &mesh->ldata, mesh->totloop);
 	direct_link_customdata(fd, &mesh->pdata, mesh->totpoly);
 	
+	if (mesh->mloopuv || mesh->mtpoly) {
+		/* for now we have to ensure texpoly and mloopuv layers are aligned
+		 * in the future we may allow non-aligned layers */
+		BKE_mesh_cd_validate(mesh);
+	}
+
 	mesh->bb = NULL;
 	mesh->edit_btmesh = NULL;
 	
@@ -4544,8 +4568,7 @@ static void direct_link_pose(FileData *fd, bPose *pose)
 		direct_link_constraints(fd, &pchan->constraints);
 		
 		pchan->prop = newdataadr(fd, pchan->prop);
-		if (pchan->prop)
-			IDP_DirectLinkProperty(pchan->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
+		IDP_DirectLinkGroup_OrFree(&pchan->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
 		
 		pchan->mpath = newdataadr(fd, pchan->mpath);
 		if (pchan->mpath)
@@ -5442,10 +5465,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	}
 	if (sce->r.ffcodecdata.properties) {
 		sce->r.ffcodecdata.properties = newdataadr(fd, sce->r.ffcodecdata.properties);
-		if (sce->r.ffcodecdata.properties) {
-			IDP_DirectLinkProperty(sce->r.ffcodecdata.properties, 
-				(fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
-		}
+		IDP_DirectLinkGroup_OrFree(&sce->r.ffcodecdata.properties, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
 	}
 	
 	link_list(fd, &(sce->markers));
@@ -6139,8 +6159,7 @@ static void direct_link_region(FileData *fd, ARegion *ar, int spacetype)
 		ui_list->type = NULL;
 		ui_list->dyn_data = NULL;
 		ui_list->properties = newdataadr(fd, ui_list->properties);
-		if (ui_list->properties)
-			IDP_DirectLinkProperty(ui_list->properties, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
+		IDP_DirectLinkGroup_OrFree(&ui_list->properties, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
 	}
 
 	if (spacetype == SPACE_EMPTY) {
@@ -7084,7 +7103,9 @@ static const char *dataname(short id_code)
 		case ID_BR: return "Data from BR";
 		case ID_PA: return "Data from PA";
 		case ID_GD: return "Data from GD";
+		case ID_WM: return "Data from WM";
 		case ID_MC: return "Data from MC";
+		case ID_MSK: return "Data from MSK";
 		case ID_LS: return "Data from LS";
 	}
 	return "Data from Lib Block";
@@ -9671,6 +9692,40 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 		}
 	}
 
+	if (!MAIN_VERSION_ATLEAST(main, 268, 5)) {
+		bScreen *sc;
+		ScrArea *sa;
+
+		/* add missing (+) expander in node editor */
+		for (sc = main->screen.first; sc; sc = sc->id.next) {
+			for (sa = sc->areabase.first; sa; sa = sa->next) {
+				ARegion *ar, *arnew;
+
+				if (sa->spacetype == SPACE_NODE) {
+					ar = BKE_area_find_region_type(sa, RGN_TYPE_TOOLS);
+
+					if (ar)
+						continue;
+
+					/* add subdiv level; after header */
+					ar = BKE_area_find_region_type(sa, RGN_TYPE_HEADER);
+					
+					/* is error! */
+					if (ar == NULL)
+						continue;
+
+					arnew = MEM_callocN(sizeof(ARegion), "node tools");
+					
+					BLI_insertlinkafter(&sa->regionbase, ar, arnew);
+					arnew->regiontype = RGN_TYPE_TOOLS;
+					arnew->alignment = RGN_ALIGN_LEFT;
+					
+					arnew->flag = RGN_FLAG_HIDDEN;
+				}
+			}
+		}
+	}
+
 	/* WATCH IT!!!: pointers from libdata have not been converted yet here! */
 	/* WATCH IT 2!: Userdef struct init see do_versions_userdef() above! */
 
@@ -9730,8 +9785,7 @@ static void lib_link_all(FileData *fd, Main *main)
 static void direct_link_keymapitem(FileData *fd, wmKeyMapItem *kmi)
 {
 	kmi->properties = newdataadr(fd, kmi->properties);
-	if (kmi->properties)
-		IDP_DirectLinkProperty(kmi->properties, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
+	IDP_DirectLinkGroup_OrFree(&kmi->properties, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
 	kmi->ptr = NULL;
 	kmi->flag &= ~KMI_UPDATE;
 }
@@ -9788,9 +9842,7 @@ static BHead *read_userdef(BlendFileData *bfd, FileData *fd, BHead *bhead)
 
 	for (addon = user->addons.first; addon; addon = addon->next) {
 		addon->prop = newdataadr(fd, addon->prop);
-		if (addon->prop) {
-			IDP_DirectLinkProperty(addon->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
-		}
+		IDP_DirectLinkGroup_OrFree(&addon->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
 	}
 
 	// XXX

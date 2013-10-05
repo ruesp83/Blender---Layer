@@ -351,18 +351,29 @@ def blen_read_geom_array_mapped_edge(
     fbx_layer_data, fbx_layer_index,
     fbx_layer_mapping, fbx_layer_ref,
     stride, item_size, descr,
+    xform=None,
     ):
 
     if fbx_layer_mapping == b'ByEdge':
         if fbx_layer_ref == b'Direct':
             if stride == 1:
-                for i, blen_data_item in enumerate(blen_data):
-                    setattr(blen_data_item, blend_attr,
-                            fbx_layer_data[i])
+                if xform is None:
+                    for i, blen_data_item in enumerate(blen_data):
+                        setattr(blen_data_item, blend_attr,
+                                fbx_layer_data[i])
+                else:
+                    for i, blen_data_item in enumerate(blen_data):
+                        setattr(blen_data_item, blend_attr,
+                                xform(fbx_layer_data[i]))
             else:
-                for i, blen_data_item in enumerate(blen_data):
-                    setattr(blen_data_item, blend_attr,
-                            fbx_layer_data[(i * stride): (i * stride) + item_size])
+                if xform is None:
+                    for i, blen_data_item in enumerate(blen_data):
+                        setattr(blen_data_item, blend_attr,
+                                fbx_layer_data[(i * stride): (i * stride) + item_size])
+                else:
+                    for i, blen_data_item in enumerate(blen_data):
+                        setattr(blen_data_item, blend_attr,
+                                xform(fbx_layer_data[(i * stride): (i * stride) + item_size]))
             return True
         else:
             print("warning layer %r ref type unsupported: %r" % (descr, fbx_layer_ref))
@@ -377,6 +388,7 @@ def blen_read_geom_array_mapped_polygon(
     fbx_layer_data, fbx_layer_index,
     fbx_layer_mapping, fbx_layer_ref,
     stride, item_size, descr,
+    xform=None,
     ):
 
     if fbx_layer_mapping == b'ByPolygon':
@@ -393,8 +405,12 @@ def blen_read_geom_array_mapped_polygon(
         elif fbx_layer_ref == b'Direct':
             # looks like direct may have different meanings!
             assert(stride == 1)
-            for i in fbx_layer_data:
-                setattr(blen_data[i - 1], blend_attr, True)
+            if xform is None:
+                for i in range(len(fbx_layer_data)):
+                    setattr(blen_data[i], blend_attr, fbx_layer_data[i])
+            else:
+                for i in range(len(fbx_layer_data)):
+                    setattr(blen_data[i], blend_attr, xform(fbx_layer_data[i]))
             return True
         else:
             print("warning layer %r ref type unsupported: %r" % (descr, fbx_layer_ref))
@@ -543,11 +559,8 @@ def blen_read_geom_layer_smooth(fbx_obj, mesh):
             fbx_layer_data, None,
             fbx_layer_mapping, fbx_layer_ref,
             1, 1, layer_id,
+            xform=lambda s: not s,
             )
-        if ok_smooth:
-            # ugh, need to negate
-            for e in mesh.edges:
-                e.use_edge_sharp = not e.use_edge_sharp
         return ok_smooth
     elif fbx_layer_mapping == b'ByPolygon':
         blen_data = mesh.polygons
@@ -556,6 +569,7 @@ def blen_read_geom_layer_smooth(fbx_obj, mesh):
             fbx_layer_data, None,
             fbx_layer_mapping, fbx_layer_ref,
             1, 1, layer_id,
+            xform=lambda s: (s != 0),  # smoothgroup bitflags, treat as booleans for now
             )
     else:
         print("warning layer %r mapping type unsupported: %r" % (fbx_layer.id, fbx_layer_mapping))
@@ -828,6 +842,17 @@ def blen_read_light(fbx_tmpl, fbx_obj, global_scale):
     return lamp
 
 
+def is_ascii(filepath, size):
+    with open(filepath, 'r', encoding="utf-8") as f:
+        try:
+            f.read(size)
+            return True
+        except UnicodeDecodeError:
+            pass
+
+    return False
+
+
 def load(operator, context, filepath="",
          global_matrix=None,
          use_cycles=True,
@@ -842,6 +867,11 @@ def load(operator, context, filepath="",
 
     import os
     from . import parse_fbx
+
+    # detect ascii files
+    if is_ascii(filepath, 24):
+        operator.report({'ERROR'}, "ASCII FBX files are not supported %r" % filepath)
+        return {'CANCELLED'}
 
     try:
         elem_root, version = parse_fbx.parse(filepath)
@@ -1151,7 +1181,8 @@ def load(operator, context, filepath="",
             return (elem_props_get_vector_3d(fbx_props, b'Translation', (0.0, 0.0, 0.0)),
                     elem_props_get_vector_3d(fbx_props, b'Rotation', (0.0, 0.0, 0.0)),
                     elem_props_get_vector_3d(fbx_props, b'Scaling', (1.0, 1.0, 1.0)),
-                    )
+                    (bool(elem_props_get_enum(fbx_props, b'WrapModeU', 0)),
+                     bool(elem_props_get_enum(fbx_props, b'WrapModeV', 0))))
 
         if not use_cycles:
             # Simple function to make a new mtex and set defaults
@@ -1188,15 +1219,17 @@ def load(operator, context, filepath="",
                         tex_map = texture_mapping_get(fbx_lnk)
                         if (tex_map[0] == (0.0, 0.0, 0.0) and
                             tex_map[1] == (0.0, 0.0, 0.0) and
-                            tex_map[2] == (1.0, 1.0, 1.0)):
+                            tex_map[2] == (1.0, 1.0, 1.0) and
+                            tex_map[3] == (False, False)):
 
                             use_mapping = False
                         else:
                             use_mapping = True
                             tex_map_kw = {
                                 "translation": tex_map[0],
-                                "rotation": tex_map[1],
-                                "scale": tex_map[2],
+                                "rotation": [-i for i in tex_map[1]],
+                                "scale": [((1.0 / i) if i != 0.0 else 1.0) for i in tex_map[2]],
+                                "clamp": tex_map[3],
                                 }
 
                         if lnk_type == b'DiffuseColor':
@@ -1307,6 +1340,11 @@ def load(operator, context, filepath="",
                         material.alpha = 0.0
                         mtex.use_map_alpha = True
                         mtex.alpha_factor = 1.0
+
+            # propagate mapping from diffuse to all other channels which have none defined.
+            if use_cycles:
+                ma_wrap = cycles_material_wrap_map[material]
+                ma_wrap.mapping_set_from_diffuse()
 
     _(); del _
 

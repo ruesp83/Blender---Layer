@@ -1739,7 +1739,7 @@ static void write_grid_paint_mask(WriteData *wd, int count, GridPaintMask *grid_
 		for (i = 0; i < count; ++i) {
 			GridPaintMask *gpm = &grid_paint_mask[i];
 			if (gpm->data) {
-				const int gridsize = ccg_gridsize(gpm->level);
+				const int gridsize = BKE_ccg_gridsize(gpm->level);
 				writedata(wd, DATA,
 				          sizeof(*gpm->data) * gridsize * gridsize,
 				          gpm->data);
@@ -1750,16 +1750,26 @@ static void write_grid_paint_mask(WriteData *wd, int count, GridPaintMask *grid_
 
 static void write_customdata(WriteData *wd, ID *id, int count, CustomData *data, int partial_type, int partial_count)
 {
+	CustomData data_tmp;
 	int i;
 
+	/* This copy will automatically ignore/remove layers set as NO_COPY (and TEMPORARY). */
+	CustomData_copy(data, &data_tmp, CD_MASK_EVERYTHING, CD_REFERENCE, count);
+
 	/* write external customdata (not for undo) */
-	if (data->external && !wd->current)
-		CustomData_external_write(data, id, CD_MASK_MESH, count, 0);
+	if (data_tmp.external && !wd->current)
+		CustomData_external_write(&data_tmp, id, CD_MASK_MESH, count, 0);
 
-	writestruct(wd, DATA, "CustomDataLayer", data->maxlayer, data->layers);
+	for (i = 0; i < data_tmp.totlayer; i++)
+		data_tmp.layers[i].flag &= ~CD_FLAG_NOFREE;
 
-	for (i=0; i<data->totlayer; i++) {
-		CustomDataLayer *layer= &data->layers[i];
+	writestruct_at_address(wd, DATA, "CustomDataLayer", data_tmp.maxlayer, data->layers, data_tmp.layers);
+ 
+	for (i = 0; i < data_tmp.totlayer; i++)
+		data_tmp.layers[i].flag |= CD_FLAG_NOFREE;
+
+	for (i = 0; i < data_tmp.totlayer; i++) {
+		CustomDataLayer *layer= &data_tmp.layers[i];
 		const char *structname;
 		int structnum, datasize;
 
@@ -1795,11 +1805,13 @@ static void write_customdata(WriteData *wd, ID *id, int count, CustomData *data,
 		}
 	}
 
-	if (data->external)
-		writestruct(wd, DATA, "CustomDataExternal", 1, data->external);
+	if (data_tmp.external)
+		writestruct_at_address(wd, DATA, "CustomDataExternal", 1, data->external, data_tmp.external);
+
+	CustomData_free(&data_tmp, count);
 }
 
-static void write_meshs(WriteData *wd, ListBase *idbase)
+static void write_meshes(WriteData *wd, ListBase *idbase)
 {
 	Mesh *mesh;
 	int save_for_old_blender= 0;
@@ -2464,7 +2476,8 @@ static void write_soops(WriteData *wd, SpaceOops *so, LinkNode **tmp_mem_list)
 
 		/* restore old treestore */
 		so->treestore = ts;
-	} else {
+	}
+	else {
 		writestruct(wd, DATA, "SpaceOops", 1, so);
 	}
 }
@@ -3380,7 +3393,7 @@ static int write_file_handle(Main *mainvar, int handle, MemFile *compare, MemFil
 	write_objects  (wd, &mainvar->object);
 	write_materials(wd, &mainvar->mat);
 	write_textures (wd, &mainvar->tex);
-	write_meshs    (wd, &mainvar->mesh);
+	write_meshes   (wd, &mainvar->mesh);
 	write_particlesettings(wd, &mainvar->particle);
 	write_nodetrees(wd, &mainvar->nodetree);
 	write_brushes  (wd, &mainvar->brush);

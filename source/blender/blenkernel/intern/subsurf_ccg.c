@@ -1064,8 +1064,8 @@ void subsurf_copy_grid_hidden(DerivedMesh *dm, const MPoly *mpoly,
 
 		for (j = 0; j < mpoly[i].totloop; j++) {
 			const MDisps *md = &mdisps[mpoly[i].loopstart + j];
-			int hidden_gridsize = ccg_gridsize(md->level);
-			int factor = ccg_factor(level, md->level);
+			int hidden_gridsize = BKE_ccg_gridsize(md->level);
+			int factor = BKE_ccg_factor(level, md->level);
 			
 			if (!md->hidden)
 				continue;
@@ -1107,8 +1107,8 @@ void subsurf_copy_grid_paint_mask(DerivedMesh *dm, const MPoly *mpoly,
 			if (!gpm->data)
 				continue;
 
-			factor = ccg_factor(level, gpm->level);
-			gpm_gridsize = ccg_gridsize(gpm->level);
+			factor = BKE_ccg_factor(level, gpm->level);
+			gpm_gridsize = BKE_ccg_gridsize(gpm->level);
 			
 			for (y = 0; y < gridSize; y++) {
 				for (x = 0; x < gridSize; x++) {
@@ -3573,6 +3573,8 @@ struct DerivedMesh *subsurf_make_derived_from_derived(
 	int drawInteriorEdges = !(smd->flags & eSubsurfModifierFlag_ControlEdges);
 	CCGDerivedMesh *result;
 
+	/* note: editmode calculation can only run once per
+	 * modifier stack evaluation (uses freed cache) [#36299] */
 	if (flags & SUBSURF_FOR_EDIT_MODE) {
 		int levels = (smd->modifier.scene) ? get_render_subsurf_level(&smd->modifier.scene->r, smd->levels) : smd->levels;
 

@@ -123,6 +123,20 @@
 #include "transform.h"
 #include "bmesh.h"
 
+/**
+ * Transforming around ourselves is no use, fallback to individual origins,
+ * useful for curve/armatures.
+ */
+static void transform_around_single_fallback(TransInfo *t)
+{
+	if ((t->total == 1) &&
+	    (ELEM3(t->around, V3D_CENTER, V3D_CENTROID, V3D_ACTIVE)) &&
+	    (ELEM3(t->mode, TFM_RESIZE, TFM_ROTATION, TFM_TRACKBALL)))
+	{
+		t->around = V3D_LOCAL;
+	}
+}
+
 /* when transforming islands */
 struct TransIslandData {
 	float co[3];
@@ -1084,6 +1098,8 @@ static void createTransArmatureVerts(TransInfo *t)
 
 	if (!t->total) return;
 
+	transform_around_single_fallback(t);
+
 	copy_m3_m4(mtx, t->obedit->obmat);
 	pseudoinverse_m3_m3(smtx, mtx, PSEUDOINVERSE_EPSILON);
 
@@ -1408,6 +1424,8 @@ static void createTransCurveVerts(TransInfo *t)
 	else t->total = countsel;
 	t->data = MEM_callocN(t->total * sizeof(TransData), "TransObData(Curve EditMode)");
 
+	transform_around_single_fallback(t);
+
 	copy_m3_m4(mtx, t->obedit->obmat);
 	pseudoinverse_m3_m3(smtx, mtx, PSEUDOINVERSE_EPSILON);
 
@@ -1443,7 +1461,9 @@ static void createTransCurveVerts(TransInfo *t)
 					{
 						copy_v3_v3(td->iloc, bezt->vec[0]);
 						td->loc = bezt->vec[0];
-						copy_v3_v3(td->center, bezt->vec[(hide_handles || bezt->f2 & SELECT) ? 1 : 0]);
+						copy_v3_v3(td->center, bezt->vec[(hide_handles ||
+						                                  (t->around == V3D_LOCAL) ||
+						                                  (bezt->f2 & SELECT)) ? 1 : 0]);
 						if (hide_handles) {
 							if (bezt->f2 & SELECT) td->flag = TD_SELECTED;
 							else td->flag = 0;
@@ -1511,7 +1531,9 @@ static void createTransCurveVerts(TransInfo *t)
 					{
 						copy_v3_v3(td->iloc, bezt->vec[2]);
 						td->loc = bezt->vec[2];
-						copy_v3_v3(td->center, bezt->vec[(hide_handles || bezt->f2 & SELECT) ? 1 : 2]);
+						copy_v3_v3(td->center, bezt->vec[(hide_handles ||
+						                                  (t->around == V3D_LOCAL) ||
+						                                  (bezt->f2 & SELECT)) ? 1 : 2]);
 						if (hide_handles) {
 							if (bezt->f2 & SELECT) td->flag = TD_SELECTED;
 							else td->flag = 0;
@@ -1552,7 +1574,7 @@ static void createTransCurveVerts(TransInfo *t)
 			 * but for now just don't change handle types */
 			if (ELEM(t->mode, TFM_CURVE_SHRINKFATTEN, TFM_TILT) == 0) {
 				/* sets the handles based on their selection, do this after the data is copied to the TransData */
-				BKE_nurb_handles_test(nu);
+				BKE_nurb_handles_test(nu, !hide_handles);
 			}
 		}
 		else {
@@ -2127,7 +2149,7 @@ static void createTransEditVerts(TransInfo *t)
 	BMVert *eve;
 	BMIter iter;
 	BMVert *eve_act = NULL;
-	float *mappedcos = NULL, *quats = NULL;
+	float (*mappedcos)[3] = NULL, (*quats)[4] = NULL;
 	float mtx[3][3], smtx[3][3], (*defmats)[3][3] = NULL, (*defcos)[3] = NULL;
 	float *dists = NULL;
 	int a;
@@ -2216,30 +2238,34 @@ static void createTransEditVerts(TransInfo *t)
 		island_info = editmesh_islands_info_calc(em, &island_info_tot, &island_vert_map);
 	}
 
-	/* BMESH_TODO, crazy-space writing into the index values is BAD!, means we cant
-	 * use the values for vertex mirror - campbell */
-
 	/* detect CrazySpace [tm] */
 	if (modifiers_getCageIndex(t->scene, t->obedit, NULL, 1) >= 0) {
-		if (modifiers_isCorrectableDeformed(t->obedit)) {
-			int totleft;
+		int totleft = -1;
+		if (modifiers_isCorrectableDeformed(t->scene, t->obedit)) {
 			/* check if we can use deform matrices for modifier from the
 			 * start up to stack, they are more accurate than quats */
 			totleft = editbmesh_get_first_deform_matrices(t->scene, t->obedit, em, &defmats, &defcos);
+		}
 
-			/* if we still have more modifiers, also do crazyspace
-			 * correction with quats, relative to the coordinates after
-			 * the modifiers that support deform matrices (defcos) */
-			if (totleft > 0) {
-				mappedcos = crazyspace_get_mapped_editverts(t->scene, t->obedit);
-				quats = MEM_mallocN((t->total) * sizeof(float) * 4, "crazy quats");
-				crazyspace_set_quats_editmesh(em, (float *)defcos, mappedcos, quats); /* BMESH_TODO, abuses vertex index, should use an int array */
-				if (mappedcos)
-					MEM_freeN(mappedcos);
-			}
+		/* if we still have more modifiers, also do crazyspace
+		 * correction with quats, relative to the coordinates after
+		 * the modifiers that support deform matrices (defcos) */
 
-			if (defcos)
-				MEM_freeN(defcos);
+#if 0	/* TODO, fix crazyspace+extrude so it can be enabled for general use - campbell */
+		if ((totleft > 0) || (totleft == -1))
+#else
+		if (totleft > 0)
+#endif
+		{
+			mappedcos = crazyspace_get_mapped_editverts(t->scene, t->obedit);
+			quats = MEM_mallocN(em->bm->totvert * sizeof(*quats), "crazy quats");
+			crazyspace_set_quats_editmesh(em, defcos, mappedcos, quats);
+			if (mappedcos)
+				MEM_freeN(mappedcos);
+		}
+
+		if (defcos) {
+			MEM_freeN(defcos);
 		}
 	}
 
@@ -2285,12 +2311,12 @@ static void createTransEditVerts(TransInfo *t)
 				}
 
 				/* CrazySpace */
-				if (defmats || (quats && BM_elem_index_get(eve) != -1)) {
+				if (defmats || (quats && BM_elem_flag_test(eve, BM_ELEM_TAG))) {
 					float mat[3][3], qmat[3][3], imat[3][3];
 
 					/* use both or either quat and defmat correction */
-					if (quats && BM_elem_index_get(eve) != -1) {
-						quat_to_mat3(qmat, quats + 4 * BM_elem_index_get(eve));
+					if (quats && BM_elem_flag_test(eve, BM_ELEM_TAG)) {
+						quat_to_mat3(qmat, quats[BM_elem_index_get(eve)]);
 
 						if (defmats)
 							mul_serie_m3(mat, mtx, qmat, defmats[a],
@@ -3868,7 +3894,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 					}
 					
 					/* if handles were not selected, store their selection status */
-					if (!(sel1) && !(sel3)) {
+					if (!(sel1) || !(sel3)) {
 						if (hdata == NULL)
 							hdata = initTransDataCurveHandles(td, bezt);
 					}
@@ -5250,6 +5276,48 @@ void autokeyframe_pose_cb_func(bContext *C, Scene *scene, View3D *v3d, Object *o
 	}
 }
 
+static void special_aftertrans_update__movieclip(bContext *C, TransInfo *t)
+{
+	SpaceClip *sc = t->sa->spacedata.first;
+	MovieClip *clip = ED_space_clip_get_clip(sc);
+	MovieTrackingPlaneTrack *plane_track;
+	ListBase *plane_tracks_base = BKE_tracking_get_active_plane_tracks(&clip->tracking);
+	int framenr = ED_space_clip_get_clip_frame_number(sc);
+
+	for (plane_track = plane_tracks_base->first;
+	     plane_track;
+	     plane_track = plane_track->next)
+	{
+		bool do_update = false;
+
+		do_update |= (plane_track->flag & SELECT) != 0;
+		if (do_update == false) {
+			if ((plane_track->flag & PLANE_TRACK_AUTOKEY) == 0) {
+				int i;
+				for (i = 0; i < plane_track->point_tracksnr; i++) {
+					MovieTrackingTrack *track = plane_track->point_tracks[i];
+
+					if (TRACK_VIEW_SELECTED(sc, track)) {
+						do_update = true;
+						break;
+					}
+				}
+			}
+		}
+
+		if (do_update) {
+			BKE_tracking_track_plane_from_existing_motion(plane_track, framenr);
+		}
+	}
+
+	if (t->scene->nodetree) {
+		/* tracks can be used for stabilization nodes,
+		 * flush update for such nodes */
+		nodeUpdateID(t->scene->nodetree, &clip->id);
+		WM_event_add_notifier(C, NC_SCENE | ND_NODES, NULL);
+	}
+}
+
 static void special_aftertrans_update__mask(bContext *C, TransInfo *t)
 {
 	Mask *mask = NULL;
@@ -5280,6 +5348,25 @@ static void special_aftertrans_update__mask(bContext *C, TransInfo *t)
 		Scene *scene = t->scene;
 
 		ED_mask_layer_shape_auto_key_select(mask, CFRA);
+	}
+}
+
+static void special_aftertrans_update__node(bContext *UNUSED(C), TransInfo *t)
+{
+	int canceled = (t->state == TRANS_CANCEL);
+	
+	if (canceled && t->remove_on_cancel) {
+		/* remove selected nodes on cancel */
+		SpaceNode *snode = (SpaceNode *)t->sa->spacedata.first;
+		bNodeTree *ntree = snode->edittree;
+		if (ntree) {
+			bNode *node, *node_next;
+			for (node = ntree->nodes.first; node; node = node_next) {
+				node_next = node->next;
+				if (node->flag & NODE_SELECT)
+					nodeFreeNode(ntree, node);
+			}
+		}
 	}
 }
 
@@ -5394,6 +5481,7 @@ void special_aftertrans_update(bContext *C, TransInfo *t)
 	}
 	else if (t->spacetype == SPACE_NODE) {
 		SpaceNode *snode = (SpaceNode *)t->sa->spacedata.first;
+		special_aftertrans_update__node(C, t);
 		if (canceled == 0) {
 			ED_node_post_apply_transform(C, snode->edittree);
 			
@@ -5405,15 +5493,7 @@ void special_aftertrans_update(bContext *C, TransInfo *t)
 	}
 	else if (t->spacetype == SPACE_CLIP) {
 		if (t->options & CTX_MOVIECLIP) {
-			SpaceClip *sc = t->sa->spacedata.first;
-			MovieClip *clip = ED_space_clip_get_clip(sc);
-
-			if (t->scene->nodetree) {
-				/* tracks can be used for stabilization nodes,
-				 * flush update for such nodes */
-				nodeUpdateID(t->scene->nodetree, &clip->id);
-				WM_event_add_notifier(C, NC_SCENE | ND_NODES, NULL);
-			}
+			special_aftertrans_update__movieclip(C, t);
 		}
 		else if (t->options & CTX_MASK) {
 			special_aftertrans_update__mask(C, t);
@@ -6522,29 +6602,40 @@ typedef struct TransDataMasking {
 	float handle[2], orig_handle[2];
 	float vec[3][3];
 	MaskSplinePoint *point;
+	float parent_matrix[3][3];
+	float parent_inverse_matrix[3][3];
 } TransDataMasking;
 
-static void MaskPointToTransData(MaskSplinePoint *point,
+static void MaskPointToTransData(Scene *scene, MaskSplinePoint *point,
                                  TransData *td, TransData2D *td2d, TransDataMasking *tdm,
                                  const int propmode, const float asp[2])
 {
 	BezTriple *bezt = &point->bezt;
 	short is_sel_point = MASKPOINT_ISSEL_KNOT(point);
 	short is_sel_any = MASKPOINT_ISSEL_ANY(point);
+	float parent_matrix[3][3], parent_inverse_matrix[3][3];
 
 	tdm->point = point;
 	copy_m3_m3(tdm->vec, bezt->vec);
 
+	BKE_mask_point_parent_matrix_get(point, CFRA, parent_matrix);
+	invert_m3_m3(parent_inverse_matrix, parent_matrix);
+
 	if (propmode || is_sel_point) {
 		int i;
 		for (i = 0; i < 3; i++) {
+			copy_m3_m3(tdm->parent_matrix, parent_matrix);
+			copy_m3_m3(tdm->parent_inverse_matrix, parent_inverse_matrix);
+
 			/* CV coords are scaled by aspects. this is needed for rotations and
 			 * proportional editing to be consistent with the stretched CV coords
 			 * that are displayed. this also means that for display and numinput,
 			 * and when the the CV coords are flushed, these are converted each time */
-			td2d->loc[0] = bezt->vec[i][0] * asp[0];
-			td2d->loc[1] = bezt->vec[i][1] * asp[1];
+			mul_v2_m3v2(td2d->loc, parent_matrix, bezt->vec[i]);
+			td2d->loc[0] *= asp[0];
+			td2d->loc[1] *= asp[1];
 			td2d->loc[2] = 0.0f;
+
 			td2d->loc2d = bezt->vec[i];
 
 			td->flag = 0;
@@ -6576,18 +6667,23 @@ static void MaskPointToTransData(MaskSplinePoint *point,
 
 			td++;
 			td2d++;
+			tdm++;
 		}
 	}
 	else {
 		tdm->is_handle = TRUE;
+		copy_m3_m3(tdm->parent_matrix, parent_matrix);
+		copy_m3_m3(tdm->parent_inverse_matrix, parent_inverse_matrix);
 
 		BKE_mask_point_handle(point, tdm->handle);
 
 		copy_v2_v2(tdm->orig_handle, tdm->handle);
 
-		td2d->loc[0] = tdm->handle[0] * asp[0];
-		td2d->loc[1] = tdm->handle[1] * asp[1];
+		mul_v2_m3v2(td2d->loc, parent_matrix, tdm->handle);
+		td2d->loc[0] *= asp[0];
+		td2d->loc[1] *= asp[1];
 		td2d->loc[2] = 0.0f;
+
 		td2d->loc2d = tdm->handle;
 
 		td->flag = 0;
@@ -6617,6 +6713,7 @@ static void MaskPointToTransData(MaskSplinePoint *point,
 
 static void createTransMaskingData(bContext *C, TransInfo *t)
 {
+	Scene *scene = CTX_data_scene(C);
 	Mask *mask = CTX_data_edit_mask(C);
 	MaskLayer *masklay;
 	TransData *td = NULL;
@@ -6689,7 +6786,7 @@ static void createTransMaskingData(bContext *C, TransInfo *t)
 				MaskSplinePoint *point = &spline->points[i];
 
 				if (propmode || MASKPOINT_ISSEL_ANY(point)) {
-					MaskPointToTransData(point, td, td2d, tdm, propmode, asp);
+					MaskPointToTransData(scene, point, td, td2d, tdm, propmode, asp);
 
 					if (propmode || MASKPOINT_ISSEL_KNOT(point)) {
 						td += 3;
@@ -6722,6 +6819,7 @@ void flushTransMasking(TransInfo *t)
 	for (a = 0, td = t->data2d, tdm = t->customData; a < t->total; a++, td++, tdm++) {
 		td->loc2d[0] = td->loc[0] * inv[0];
 		td->loc2d[1] = td->loc[1] * inv[1];
+		mul_m3_v2(tdm->parent_inverse_matrix, td->loc2d);
 
 		if (tdm->is_handle)
 			BKE_mask_point_set_handle(tdm->point, td->loc2d, t->flag & T_ALT_TRANSFORM, tdm->orig_handle, tdm->vec);

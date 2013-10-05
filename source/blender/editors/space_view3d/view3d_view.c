@@ -153,8 +153,9 @@ static void view3d_smooth_view_state_restore(const struct SmoothView3DState *sms
 
 /* will start timer if appropriate */
 /* the arguments are the desired situation */
-void view3d_smooth_view(bContext *C, View3D *v3d, ARegion *ar, Object *oldcamera, Object *camera,
-                        float *ofs, float *quat, float *dist, float *lens)
+void ED_view3d_smooth_view(bContext *C, View3D *v3d, ARegion *ar, Object *oldcamera, Object *camera,
+                           float *ofs, float *quat, float *dist, float *lens,
+                           const int smooth_viewtx)
 {
 	wmWindowManager *wm = CTX_wm_manager(C);
 	wmWindow *win = CTX_wm_window(C);
@@ -203,7 +204,7 @@ void view3d_smooth_view(bContext *C, View3D *v3d, ARegion *ar, Object *oldcamera
 	}
 	
 	/* skip smooth viewing for render engine draw */
-	if (U.smooth_viewtx && v3d->drawtype != OB_RENDER) {
+	if (smooth_viewtx && v3d->drawtype != OB_RENDER) {
 		bool changed = false; /* zero means no difference */
 		
 		if (oldcamera != camera)
@@ -232,7 +233,7 @@ void view3d_smooth_view(bContext *C, View3D *v3d, ARegion *ar, Object *oldcamera
 				rv3d->view = RV3D_VIEW_USER;
 			}
 
-			sms.time_allowed = (double)U.smooth_viewtx / 1000.0;
+			sms.time_allowed = (double)smooth_viewtx / 1000.0;
 			
 			/* if this is view rotation only
 			 * we can decrease the time allowed by
@@ -377,12 +378,15 @@ void VIEW3D_OT_smoothview(wmOperatorType *ot)
 	
 	/* identifiers */
 	ot->name = "Smooth View";
+	ot->description = "";
 	ot->idname = "VIEW3D_OT_smoothview";
-	ot->description = "The time to animate the change of view (in milliseconds)";
 	
 	/* api callbacks */
 	ot->invoke = view3d_smoothview_invoke;
 	
+	/* flags */
+	ot->flag = OPTYPE_INTERNAL;
+
 	ot->poll = ED_operator_view3d_active;
 }
 
@@ -506,7 +510,7 @@ void VIEW3D_OT_camera_to_view_selected(wmOperatorType *ot)
 }
 
 
-static int view3d_setobjectascamera_exec(bContext *C, wmOperator *UNUSED(op))
+static int view3d_setobjectascamera_exec(bContext *C, wmOperator *op)
 {	
 	View3D *v3d;
 	ARegion *ar;
@@ -514,6 +518,8 @@ static int view3d_setobjectascamera_exec(bContext *C, wmOperator *UNUSED(op))
 
 	Scene *scene = CTX_data_scene(C);
 	Object *ob = CTX_data_active_object(C);
+
+	const int smooth_viewtx = WM_operator_smooth_viewtx_get(op);
 
 	/* no NULL check is needed, poll checks */
 	ED_view3d_context_user_region(C, &v3d, &ar);
@@ -526,8 +532,11 @@ static int view3d_setobjectascamera_exec(bContext *C, wmOperator *UNUSED(op))
 		if (v3d->scenelock)
 			scene->camera = ob;
 
-		if (camera_old != ob) /* unlikely but looks like a glitch when set to the same */
-			view3d_smooth_view(C, v3d, ar, camera_old, v3d->camera, rv3d->ofs, rv3d->viewquat, &rv3d->dist, &v3d->lens);
+		if (camera_old != ob) {  /* unlikely but looks like a glitch when set to the same */
+			ED_view3d_smooth_view(C, v3d, ar, camera_old, v3d->camera,
+			                      rv3d->ofs, rv3d->viewquat, &rv3d->dist, &v3d->lens,
+			                      smooth_viewtx);
+		}
 
 		WM_event_add_notifier(C, NC_SCENE | ND_RENDER_OPTIONS | NC_OBJECT | ND_DRAW, CTX_data_scene(C));
 	}
@@ -1171,7 +1180,7 @@ static bool view3d_localview_init(Main *bmain, Scene *scene, ScrArea *sa, Report
 	return ok;
 }
 
-static void restore_localviewdata(ScrArea *sa, int free)
+static void restore_localviewdata(Main *bmain, ScrArea *sa, int free)
 {
 	ARegion *ar;
 	View3D *v3d = sa->spacedata.first;
@@ -1208,12 +1217,7 @@ static void restore_localviewdata(ScrArea *sa, int free)
 				}
 			}
 
-			if (v3d->drawtype != OB_RENDER) {
-				if (rv3d->render_engine) {
-					RE_engine_free(rv3d->render_engine);
-					rv3d->render_engine = NULL;
-				}
-			}
+			ED_view3d_shade_update(bmain, v3d, sa);
 		}
 	}
 }
@@ -1228,7 +1232,7 @@ static bool view3d_localview_exit(Main *bmain, Scene *scene, ScrArea *sa)
 		
 		locallay = v3d->lay & 0xFF000000;
 		
-		restore_localviewdata(sa, 1); /* 1 = free */
+		restore_localviewdata(bmain, sa, 1); /* 1 = free */
 
 		/* for when in other window the layers have changed */
 		if (v3d->scenelock) v3d->lay = scene->lay;

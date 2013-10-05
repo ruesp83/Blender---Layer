@@ -643,7 +643,9 @@ void BKE_object_unlink(Object *ob)
 				for (lineset = (FreestyleLineSet *)srl->freestyleConfig.linesets.first;
 				     lineset; lineset = lineset->next)
 				{
-					BKE_unlink_linestyle_target_object(lineset->linestyle, ob);
+					if (lineset->linestyle) {
+						BKE_unlink_linestyle_target_object(lineset->linestyle, ob);
+					}
 				}
 			}
 		}
@@ -2835,21 +2837,20 @@ void BKE_object_handle_update_ex(Scene *scene, Object *ob,
 			/* quick cache removed */
 		}
 
-		/* the no-group proxy case, we call update */
-		if (ob->proxy && ob->proxy_group == NULL) {
-			/* set pointer in library proxy target, for copying, but restore it */
-			ob->proxy->proxy_from = ob;
-			// printf("call update, lib ob %s proxy %s\n", ob->proxy->id.name, ob->id.name);
-			BKE_object_handle_update(scene, ob->proxy);
-		}
-	
 		ob->recalc &= ~OB_RECALC_ALL;
 	}
 
 	/* the case when this is a group proxy, object_update is called in group.c */
 	if (ob->proxy) {
+		/* set pointer in library proxy target, for copying, but restore it */
 		ob->proxy->proxy_from = ob;
 		// printf("set proxy pointer for later group stuff %s\n", ob->id.name);
+
+		/* the no-group proxy case, we call update */
+		if (ob->proxy_group == NULL) {
+			// printf("call update, lib ob %s proxy %s\n", ob->proxy->id.name, ob->id.name);
+			BKE_object_handle_update(scene, ob->proxy);
+		}
 	}
 }
 /* WARNING: "scene" here may not be the scene object actually resides in. 
@@ -3261,7 +3262,7 @@ void BKE_object_relink(Object *ob)
 	ID_NEW(ob->proxy_group);
 }
 
-MovieClip *BKE_object_movieclip_get(Scene *scene, Object *ob, int use_default)
+MovieClip *BKE_object_movieclip_get(Scene *scene, Object *ob, bool use_default)
 {
 	MovieClip *clip = use_default ? scene->clip : NULL;
 	bConstraint *con = ob->constraints.first, *scon = NULL;
@@ -3449,7 +3450,6 @@ KDTree *BKE_object_as_kdtree(Object *ob, int *r_tot)
 {
 	KDTree *tree = NULL;
 	unsigned int tot = 0;
-	float co[3];
 
 	switch (ob->type) {
 		case OB_MESH:
@@ -3471,6 +3471,7 @@ KDTree *BKE_object_as_kdtree(Object *ob, int *r_tot)
 				/* we don't how how many verts from the DM we can use */
 				for (i = 0; i < totvert; i++) {
 					if (index[i] != ORIGINDEX_NONE) {
+						float co[3];
 						mul_v3_m4v3(co, ob->obmat, mvert[i].co);
 						BLI_kdtree_insert(tree, index[i], co, NULL);
 						tot++;
@@ -3484,6 +3485,7 @@ KDTree *BKE_object_as_kdtree(Object *ob, int *r_tot)
 				tree = BLI_kdtree_new(tot);
 
 				for (i = 0; i < tot; i++) {
+					float co[3];
 					mul_v3_m4v3(co, ob->obmat, mvert[i].co);
 					BLI_kdtree_insert(tree, i, co, NULL);
 				}
@@ -3513,6 +3515,7 @@ KDTree *BKE_object_as_kdtree(Object *ob, int *r_tot)
 					bezt = nu->bezt;
 					a = nu->pntsu;
 					while (a--) {
+						float co[3];
 						mul_v3_m4v3(co, ob->obmat, bezt->vec[1]);
 						BLI_kdtree_insert(tree, i++, co, NULL);
 						bezt++;
@@ -3524,6 +3527,7 @@ KDTree *BKE_object_as_kdtree(Object *ob, int *r_tot)
 					bp = nu->bp;
 					a = nu->pntsu * nu->pntsv;
 					while (a--) {
+						float co[3];
 						mul_v3_m4v3(co, ob->obmat, bp->vec);
 						BLI_kdtree_insert(tree, i++, co, NULL);
 						bp++;

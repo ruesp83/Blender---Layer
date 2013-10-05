@@ -317,8 +317,6 @@ def write_file(filepath, objects, scene,
 
     face_vert_index = 1
 
-    globalNormals = {}
-
     # A Dict of Materials
     # (material.name, image.name):matname_imagename # matname_imagename has gaps removed.
     mtl_dict = {}
@@ -352,6 +350,7 @@ def write_file(filepath, objects, scene,
             obs = [(ob_main, ob_main.matrix_world)]
 
         for ob, ob_mat in obs:
+            uv_unique_count = no_unique_count = 0
 
             # Nurbs curve support
             if EXPORT_CURVE_AS_NURBS and test_nurbs_compat(ob):
@@ -401,7 +400,11 @@ def write_file(filepath, objects, scene,
                 continue  # dont bother with this mesh.
 
             if EXPORT_NORMALS and face_index_pairs:
-                me.calc_normals()
+                me.calc_normals_split()
+                # No need to call me.free_normals_split later, as this mesh is deleted anyway!
+                loops = me.loops
+            else:
+                loops = []
 
             if (EXPORT_SMOOTH_GROUPS or EXPORT_SMOOTH_GROUPS_BITFLAGS) and face_index_pairs:
                 smooth_groups, smooth_groups_tot = me.calc_smooth_groups(EXPORT_SMOOTH_GROUPS_BITFLAGS)
@@ -474,47 +477,45 @@ def write_file(filepath, objects, scene,
             # UV
             if faceuv:
                 # in case removing some of these dont get defined.
-                uv = uvkey = uv_dict = f_index = uv_index = uv_ls = uv_k = None
+                uv = f_index = uv_index = uv_key = uv_val = uv_ls = None
 
                 uv_face_mapping = [None] * len(face_index_pairs)
 
-                uv_dict = {}  # could use a set() here
+                uv_dict = {}
+                uv_get = uv_dict.get
                 for f, f_index in face_index_pairs:
                     uv_ls = uv_face_mapping[f_index] = []
                     for uv_index, l_index in enumerate(f.loop_indices):
                         uv = uv_layer[l_index].uv
-
-                        uvkey = veckey2d(uv)
-                        try:
-                            uv_k = uv_dict[uvkey]
-                        except:
-                            uv_k = uv_dict[uvkey] = len(uv_dict)
+                        uv_key = veckey2d(uv)
+                        uv_val = uv_get(uv_key)
+                        if uv_val is None:
+                            uv_val = uv_dict[uv_key] = uv_unique_count
                             fw('vt %.6f %.6f\n' % uv[:])
-                        uv_ls.append(uv_k)
+                            uv_unique_count += 1
+                        uv_ls.append(uv_val)
 
-                uv_unique_count = len(uv_dict)
-
-                del uv, uvkey, uv_dict, f_index, uv_index, uv_ls, uv_k
+                del uv_dict, uv, f_index, uv_index, uv_ls, uv_get, uv_key, uv_val
                 # Only need uv_unique_count and uv_face_mapping
 
             # NORMAL, Smooth/Non smoothed.
             if EXPORT_NORMALS:
+                no_key = no_val = None
+                normals_to_idx = {}
+                no_get = normals_to_idx.get
+                loops_to_normals = [0] * len(loops)
                 for f, f_index in face_index_pairs:
-                    if f.use_smooth:
-                        for v_idx in f.vertices:
-                            v = me_verts[v_idx]
-                            noKey = veckey3d(v.normal)
-                            if noKey not in globalNormals:
-                                globalNormals[noKey] = totno
-                                totno += 1
-                                fw('vn %.6f %.6f %.6f\n' % noKey)
-                    else:
-                        # Hard, 1 normal from the face.
-                        noKey = veckey3d(f.normal)
-                        if noKey not in globalNormals:
-                            globalNormals[noKey] = totno
-                            totno += 1
-                            fw('vn %.6f %.6f %.6f\n' % noKey)
+                    for l_idx in f.loop_indices:
+                        no_key = veckey3d(loops[l_idx].normal)
+                        no_val = no_get(no_key)
+                        if no_val is None:
+                            no_val = normals_to_idx[no_key] = no_unique_count
+                            fw('vn %.6f %.6f %.6f\n' % no_key)
+                            no_unique_count += 1
+                        loops_to_normals[l_idx] = no_val
+                del normals_to_idx, no_get, no_key, no_val
+            else:
+                loops_to_normals = []
 
             if not faceuv:
                 f_image = None
@@ -610,31 +611,22 @@ def write_file(filepath, objects, scene,
                         fw('s off\n')
                     contextSmooth = f_smooth
 
-                f_v = [(vi, me_verts[v_idx]) for vi, v_idx in enumerate(f.vertices)]
+                #f_v = [(vi, me_verts[v_idx]) for vi, v_idx in enumerate(f.vertices)]
+                f_v = [(vi, me_verts[v_idx], l_idx) for vi, (v_idx, l_idx) in enumerate(zip(f.vertices, f.loop_indices))]
 
                 fw('f')
                 if faceuv:
                     if EXPORT_NORMALS:
-                        if f_smooth:  # Smoothed, use vertex normals
-                            for vi, v in f_v:
-                                fw(" %d/%d/%d" %
-                                           (v.index + totverts,
-                                            totuvco + uv_face_mapping[f_index][vi],
-                                            globalNormals[veckey3d(v.normal)],
-                                            ))  # vert, uv, normal
-
-                        else:  # No smoothing, face normals
-                            no = globalNormals[veckey3d(f.normal)]
-                            for vi, v in f_v:
-                                fw(" %d/%d/%d" %
-                                           (v.index + totverts,
-                                            totuvco + uv_face_mapping[f_index][vi],
-                                            no,
-                                            ))  # vert, uv, normal
+                        for vi, v, li in f_v:
+                            fw(" %d/%d/%d" %
+                                       (totverts + v.index,
+                                        totuvco + uv_face_mapping[f_index][vi],
+                                        totno + loops_to_normals[li],
+                                        ))  # vert, uv, normal
                     else:  # No Normals
-                        for vi, v in f_v:
+                        for vi, v, li in f_v:
                             fw(" %d/%d" % (
-                                       v.index + totverts,
+                                       totverts + v.index,
                                        totuvco + uv_face_mapping[f_index][vi],
                                        ))  # vert, uv
 
@@ -642,19 +634,11 @@ def write_file(filepath, objects, scene,
 
                 else:  # No UV's
                     if EXPORT_NORMALS:
-                        if f_smooth:  # Smoothed, use vertex normals
-                            for vi, v in f_v:
-                                fw(" %d//%d" % (
-                                           v.index + totverts,
-                                           globalNormals[veckey3d(v.normal)],
-                                           ))
-                        else:  # No smoothing, face normals
-                            no = globalNormals[veckey3d(f.normal)]
-                            for vi, v in f_v:
-                                fw(" %d//%d" % (v.index + totverts, no))
+                        for vi, v, li in f_v:
+                            fw(" %d//%d" % (totverts + v.index, totno + loops_to_normals[li]))
                     else:  # No Normals
-                        for vi, v in f_v:
-                            fw(" %d" % (v.index + totverts))
+                        for vi, v, li in f_v:
+                            fw(" %d" % (totverts + v.index))
 
                 fw('\n')
 
@@ -662,12 +646,12 @@ def write_file(filepath, objects, scene,
             if EXPORT_EDGES:
                 for ed in edges:
                     if ed.is_loose:
-                        fw('l %d %d\n' % (ed.vertices[0] + totverts, ed.vertices[1] + totverts))
+                        fw('l %d %d\n' % (totverts + ed.vertices[0], totverts + ed.vertices[1]))
 
             # Make the indices global rather then per mesh
             totverts += len(me_verts)
-            if faceuv:
-                totuvco += uv_unique_count
+            totuvco += uv_unique_count
+            totno += no_unique_count
 
             # clean up
             bpy.data.meshes.remove(me)

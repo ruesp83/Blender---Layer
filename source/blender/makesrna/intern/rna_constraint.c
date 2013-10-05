@@ -344,7 +344,8 @@ static EnumPropertyItem *rna_Constraint_target_space_itemf(bContext *UNUSED(C), 
 	return space_object_items;
 }
 
-static void rna_ActionConstraint_minmax_range(PointerRNA *ptr, float *min, float *max, float *softmin, float *softmax)
+static void rna_ActionConstraint_minmax_range(PointerRNA *ptr, float *min, float *max,
+                                              float *UNUSED(softmin), float *UNUSED(softmax))
 {
 	bConstraint *con = (bConstraint *)ptr->data;
 	bActionConstraint *acon = (bActionConstraint *)con->data;
@@ -465,7 +466,7 @@ static void rna_Constraint_objectSolver_camera_set(PointerRNA *ptr, PointerRNA v
 
 #else
 
-EnumPropertyItem constraint_distance_items[] = {
+static EnumPropertyItem constraint_distance_items[] = {
 	{LIMITDIST_INSIDE, "LIMITDIST_INSIDE", 0, "Inside",
 	                   "The object is constrained inside a virtual sphere around the target object, "
 	                   "with a radius defined by the limit distance"},

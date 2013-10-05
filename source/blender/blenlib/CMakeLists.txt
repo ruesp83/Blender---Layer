@@ -54,6 +54,7 @@ set(SRC
 	intern/boxpack2d.c
 	intern/buffer.c
 	intern/callbacks.c
+	intern/convexhull2d.c
 	intern/cpu.c
 	intern/dynlib.c
 	intern/edgehash.c
@@ -109,6 +110,7 @@ set(SRC
 	BLI_buffer.h
 	BLI_callbacks.h
 	BLI_compiler_attrs.h
+	BLI_convexhull2d.h
 	BLI_cpu.h
 	BLI_dlrbTree.h
 	BLI_dynlib.h
@@ -174,6 +176,10 @@ if(WITH_BINRELOC)
 		${BINRELOC_INCLUDE_DIRS}
 	)
 	add_definitions(-DWITH_BINRELOC)
+endif()
+
+if(WITH_MEM_VALGRIND)
+	add_definitions(-DWITH_MEM_VALGRIND)
 endif()
 
 if(WIN32)

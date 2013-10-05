@@ -115,6 +115,7 @@ void BKE_nurbList_duplicate(struct ListBase *lb1,  struct ListBase *lb2);
 void BKE_nurbList_handles_set(struct ListBase *editnurb, short code);
 
 void BKE_nurbList_handles_autocalc(ListBase *editnurb, int flag);
+void BKE_nurbList_flag_set(ListBase *editnurb, short flag);
 
 void BKE_nurb_free(struct Nurb *nu);
 struct Nurb *BKE_nurb_duplicate(struct Nurb *nu);
@@ -154,6 +155,7 @@ void BKE_nurb_handle_calc_simple(struct Nurb *nu, struct BezTriple *bezt);
 
 void BKE_nurb_handles_calc(struct Nurb *nu);
 void BKE_nurb_handles_autocalc(struct Nurb *nu, int flag);
-void BKE_nurb_handles_test(struct Nurb *nu);
+void BKE_nurb_bezt_handle_test(struct BezTriple *bezt, const bool use_handle);
+void BKE_nurb_handles_test(struct Nurb *nu, const bool use_handles);
 
 #endif  /* __BKE_CURVE_H__ */
