@@ -1,70 +1,71 @@
 BUG:
-	- Risolti Fase 2:
-		* 1) Non renderizza!!
-		* 2) Se rendo invisibile il baselayer e rimuovo i layer invisibili
-			 Blender crash!!
-		* 3) Merge All con foto in un layer crash.
+    - Risolti Fase 2:
+        * 1) Non renderizza!!
+        * 2) Se rendo invisibile il baselayer e rimuovo i layer invisibili
+             Blender crash!!
+        * 3) Merge All con foto in un layer crash.
 
-	- Risolti Fase 2.1:
-		* 1) Bordino nero sulla pennellata in un layer trasparente.
+    - Risolti Fase 2.1:
+        * 1) Bordino nero sulla pennellata in un layer trasparente.
 
-	- Risolti Fase 2.2:
-		* 1) BUG Silvio Grosso: Nello Space Image se passo nella modalità paint
-			 senza un'immagine, Blender crash.
-		* 2) Nello Space Image prodotto da un render o dal Composite se si passa
-			 nella modalità paint, Blender crash.
-		* 3) BUG danxsy: Crash quando aggiungo un layer mentre eseguo l'unwrap.
-		* 4) BUG: I layer non funzionano dopo la Revision 52235.
-		* 5) Se ho tutti i layer invisibili Blender crash.
+    - Risolti Fase 2.2:
+        * 1) BUG Silvio Grosso: Nello Space Image se passo nella modalità paint
+             senza un'immagine, Blender crash.
+        * 2) Nello Space Image prodotto da un render o dal Composite se si passa
+             nella modalità paint, Blender crash.
+        * 3) BUG danxsy: Crash quando aggiungo un layer mentre eseguo l'unwrap.
+        * 4) BUG: I layer non funzionano dopo la Revision 52235.
+        * 5) Se ho tutti i layer invisibili Blender crash.
 
-	- Risolti Fase 2.3:
-		* 1) Nella rotazione non viene calcolato correttamente le dimensioni
-			 dell'immagine.
-		* 2) Non dipinge sulle immagini trasparenti. (r56317)
+    - Risolti Fase 2.3:
+        * 1) Nella rotazione non viene calcolato correttamente le dimensioni
+             dell'immagine.
+        * 2) Non dipinge sulle immagini trasparenti. (r56317)
+        * 3) Non posso rendere tutti i layer invisibili. (r18 locale)
+        * 4) Problema nel salvare le immagini con layer. (r20 locale)
 
-	- BUG:
-		1) Pawel Lyczkowski: it crashes when I add new layer.
-		2) Pawel Lyczkowski: Windows 7 64 bit.
-							 Unwrapped cube, added a new 1024×1024 generated
-							 texture, saved texture, tried to paint on it,
-							 first stroke – crash.
-							 Created new image, add new layer – crash.
-							 Open existing image, add new layer – crash.
-							 The same with the 32 bit version.
-							 This happens on my laptop and pc. Anyone
-							 experiencing this?
-		3) Non renderizza se applichi una texture image composta da più layer.
-		4) Nel Node Editor i layer selezionati nel nodo Image non vengono
-		   visualizzati.
-		5) Problema nel salvare le immagini con layer.
-		6) Se creo dei layer e poi passo alla visualizzazione 3D Blender crash.
-		7) Non mantiene * vicino al file anche dopo fatta qualche operazione
-		   sull'immagine.
-		8) Non posso rendere tutti i layer invisibili.
+    - BUG:
+        1) Pawel Lyczkowski: it crashes when I add new layer.
+        2) Pawel Lyczkowski: Windows 7 64 bit.
+                             Unwrapped cube, added a new 1024×1024 generated
+                             texture, saved texture, tried to paint on it,
+                             first stroke – crash.
+                             Created new image, add new layer – crash.
+                             Open existing image, add new layer – crash.
+                             The same with the 32 bit version.
+                             This happens on my laptop and pc. Anyone
+                             experiencing this?
+        3) Non renderizza se applichi una texture image composta da più layer.
+        4) Nel Node Editor i layer selezionati nel nodo Image non vengono
+           visualizzati.
+        5) Se creo dei layer e poi passo alla visualizzazione 3D Blender crash.
+        6) Non mantiene * vicino al file anche dopo fatta qualche operazione
+           sull'immagine.
+        
 
 ToDo:
-	- Implementati:
-		* 1) Se il layer è invisibile si disattiva opacità e blend mode.
-		* 2) Controllare nella funzione select layer quando l'indice esce fuori
-			 dal range per il caso previous e next.
-		* 3) Il baselayer non si può cancellare solo se è da solo.
-		* 4) Aggiunto l'icona per Lock Alpha. Implementata la possibilità di
-			 pittare o no su un IBUF trasparente.
+    - Implementati:
+        * 1) Se il layer è invisibile si disattiva opacità e blend mode.
+        * 2) Controllare nella funzione select layer quando l'indice esce fuori
+             dal range per il caso previous e next.
+        * 3) Il baselayer non si può cancellare solo se è da solo.
+        * 4) Aggiunto l'icona per Lock Alpha. Implementata la possibilità di
+             pittare o no su un IBUF trasparente.
 
-	- Parziali:
-		* 1) Per la funzione PAINT_OT_sample_color visualizzare riquadro come
-			 in mypaint.
-			1.1) Controllare nella modalità paint il colore preso in
-				 considerazione.
+    - Parziali:
+        * 1) Per la funzione PAINT_OT_sample_color visualizzare riquadro come
+             in mypaint.
+            1.1) Controllare nella modalità paint il colore preso in
+                 considerazione.
 
-	- ToDo:
-		1) Cursore inerenti al tools (es.contagoccie)
-		2) Aggiungere alla rotazione arbitraria, il sampling dell'immagine e il
-		   centro di rotazione.
-		3) Fase 4: Importazione ed esportazione per gimp, ps,
-		   openraster(mypaint):
-		   * http://en.wikipedia.org/wiki/OpenRaster 
-		   * http://gitorious.org/openraster
+    - ToDo:
+        1) Cursore inerenti al tools (es.contagoccie)
+        2) Aggiungere alla rotazione arbitraria, il sampling dell'immagine e il
+           centro di rotazione.
+        3) Fase 4: Importazione ed esportazione per gimp, ps,
+           openraster(mypaint):
+           * http://en.wikipedia.org/wiki/OpenRaster 
+           * http://gitorious.org/openraster
 
 Test:
-	1) Verificare: Save Image, Save as Image
+    1) Verificare: Save Image, Save as Image
