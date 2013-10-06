@@ -3338,13 +3338,15 @@ static void direct_link_image(FileData *fd, Image *ima)
 	//ima->colorspace_settings = newdataadr(fd, &ima->colorspace_settings);
 	link_list(fd, &ima->imlayers);
 
-	for (iml = (ImageLayer *)ima->imlayers.first; iml; iml = iml->next) 
+	for (iml = (ImageLayer *)ima->imlayers.first; iml; iml = iml->next)
 		link_list(fd, &iml->ibufs);
 
 	for (iml = (ImageLayer *)ima->imlayers.first; iml; iml = iml->next) {
 		for (ibuf = (ImBuf *)iml->ibufs.first; ibuf; ibuf = ibuf->next) {
 			ibuf->rect_float = newdataadr(fd, ibuf->rect_float);
+			ibuf->float_colorspace = newdataadr(fd, ibuf->float_colorspace);
 			ibuf->rect = newdataadr(fd, ibuf->rect);
+			ibuf->rect_colorspace = newdataadr(fd, ibuf->rect_colorspace);
 		}
 	}
 

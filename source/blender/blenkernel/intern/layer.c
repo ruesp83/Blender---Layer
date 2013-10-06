@@ -538,6 +538,8 @@ ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode)
 		return IMB_dupImBuf(layer);
 
 	dest = IMB_dupImBuf(base);
+	dest->rect_colorspace = MEM_dupallocN(base->rect_colorspace);
+	dest->float_colorspace = MEM_dupallocN(base->float_colorspace);
 
 	if (opacity == 0.0f)
 		return dest;
@@ -873,7 +875,8 @@ ImageLayer *image_add_image_layer(Image *ima, const char *name, int depth, float
 	if (im_l) {
 		imaibuf = (ImBuf*)ima->ibufs.first;
 		ibuf = add_ibuf_size(imaibuf->x, imaibuf->y, im_l->name, depth, ima->gen_flag, 0, color, &ima->colorspace_settings);
-
+		ibuf->rect_colorspace = MEM_dupallocN(((ImBuf*)ima->ibufs.first)->rect_colorspace);
+		ibuf->float_colorspace = MEM_dupallocN(((ImBuf*)ima->ibufs.first)->float_colorspace);
 		BLI_addtail(&im_l->ibufs, ibuf);
 		if (order == 2) { /*Head*/
 			BLI_addhead(&ima->imlayers, im_l);

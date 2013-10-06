@@ -23,6 +23,11 @@ BUG:
         * 2) Non dipinge sulle immagini trasparenti. (r56317)
         * 3) Non posso rendere tutti i layer invisibili. (r18 locale)
         * 4) Problema nel salvare le immagini con layer. (r20 locale)
+        * 5) Problema nell'apertura di un file con all'interno un'immagine con
+             dei layer. (r23 locale)
+        * 6) Quando si apre un file con all'interno un'immagine con dei layer,
+             il color space risulta errato, provocando una visualizzazione
+             errata dell'immagine. (r23 locale)
 
     - BUG:
         1) Pawel Lyczkowski: it crashes when I add new layer.

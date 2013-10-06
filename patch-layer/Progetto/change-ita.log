@@ -18,18 +18,23 @@ Layers v0.2.3 fixed bug for Phase 2. Completed: __\__\201_:
               tutti invisibili venivano cancellati.
      12. FIX: Ora i layer di un'immagine salvati all'interno di un file .blend
               vengono letti correttamente.
-     13. UPD: Anche i layer ora sono Thread Safe.
-     14. UPD: Aggiornati i layer con la nuova gestione dell'Image Thread.
-     15. UPD: Aggiunto shortcut: ALT + LeftClick per creare un layer di default.
-     16. UPD: Il Panel "Image Layer" è visualizzato solo se esiste un immagine
+     13. FIX: Se si apre un file con all'interno un'immagine e i propri layer,
+              l'immagine viene visualizzato con un ColorSpace errato.
+     14. FIX: All'apertura di un file con all'interno un'immagine con i propri
+              layer si ha il crash di Blender, perchè non veniva salvato
+              correttamente il ColorSpace dei layer.
+     15. UPD: Anche i layer ora sono Thread Safe.
+     16. UPD: Aggiornati i layer con la nuova gestione dell'Image Thread.
+     17. UPD: Aggiunto shortcut: ALT + LeftClick per creare un layer di default.
+     18. UPD: Il Panel "Image Layer" è visualizzato solo se esiste un immagine
               e se ci si trova nella modalità "Paint".
-     17. ADD: Aggiunta la possibilità di utilizzare la modalità di Color Space:
+     19. ADD: Aggiunta la possibilità di utilizzare la modalità di Color Space:
               GrayScale.
-     18. ADD: Aggiunto il menù "Image".
-     19. ADD: Aggiunto il menù "Color".
-     20. ADD: Aggiunta la possibilità di bloccare l'alpha mentre si dipinge.
-     21. ADD: Aggiunti i seguenti Blend Mode: Inverse Color Burn, Soft Burn.
-     22. ADD: Aggiunta possibilità di utilizzare l'undo con le operazioni sui
+     20. ADD: Aggiunto il menù "Image".
+     21. ADD: Aggiunto il menù "Color".
+     22. ADD: Aggiunta la possibilità di bloccare l'alpha mentre si dipinge.
+     23. ADD: Aggiunti i seguenti Blend Mode: Inverse Color Burn, Soft Burn.
+     24. ADD: Aggiunta possibilità di utilizzare l'undo con le operazioni sui
               layer.
 
 Layers v0.2.1 fixed bug for Phase 2. Completed: 14\11\2012:
