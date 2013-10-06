@@ -3112,9 +3112,12 @@ void IMAGE_OT_flatten(wmOperatorType *ot)
 /********************** New Image Layer Operators *********************/
 
 static int image_layer_poll(bContext *C)
-{	
+{
 	SpaceImage *sima = CTX_wm_space_image(C);
-	return ED_space_image_show_paint(sima);
+	if (sima)
+		return ED_space_image_show_paint(sima);
+	else
+		return 0;
 }
  
 static int image_layer_add_exec(bContext *C, wmOperator *op)

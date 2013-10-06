@@ -28,6 +28,8 @@ BUG:
         * 6) Quando si apre un file con all'interno un'immagine con dei layer,
              il color space risulta errato, provocando una visualizzazione
              errata dell'immagine. (r23 locale)
+        * 7) Se creo dei layer e poi passo alla visualizzazione 3D Blender
+             crash. (r24 locale)
 
     - BUG:
         1) Pawel Lyczkowski: it crashes when I add new layer.
@@ -43,8 +45,7 @@ BUG:
         3) Non renderizza se applichi una texture image composta da più layer.
         4) Nel Node Editor i layer selezionati nel nodo Image non vengono
            visualizzati.
-        5) Se creo dei layer e poi passo alla visualizzazione 3D Blender crash.
-        6) Non mantiene * vicino al file anche dopo fatta qualche operazione
+        5) Non mantiene * vicino al file anche dopo fatta qualche operazione
            sull'immagine.
         
 

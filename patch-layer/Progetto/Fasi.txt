@@ -74,47 +74,47 @@ Phase 3:
     Amount   : 1200€
     Info     : 
         * 1) Operazioni per la modifica dei Colori
-			Menu Color
-				* |-> Luminosità - Contrasto
-				* |-> Esposizione
-				* |-> ------------------
-				|-> Tonalità - Saturazione (hue - saturation)
-				# |-> Tinta
-				# |-> Temperatura di colore e tinta
-				# |-> Nitidezza (Sharpness - Filtro)
-				* |-> Colora
-				* |-> Desaturazione
-				* |-> ------------------
-				* |-> Soglia
-				* |-> Posterizza
-				* |-> Inverti ...
-				* |-> Inverti Valore
+            Menu Color
+                * |-> Luminosità - Contrasto
+                * |-> Esposizione
+                * |-> ------------------
+                |-> Tonalità - Saturazione (hue - saturation)
+                # |-> Tinta
+                # |-> Temperatura di colore e tinta
+                # |-> Nitidezza (Sharpness - Filtro)
+                * |-> Colora
+                * |-> Desaturazione
+                * |-> ------------------
+                * |-> Soglia
+                * |-> Posterizza
+                * |-> Inverti ...
+                * |-> Inverti Valore
         * 2) Aggiungere GrayScale per il Color Space.
         3) Integrazione dei layer con Blender.
-			3.1) Node Editor:
-				 - Il Node Image deve avere la possibilità di poter selezionare
-				   tutti i layer o il singolo layer. Es.: Render Layer.
-			3.2) Cycles Render:
-				 - Il node Image Texture deve essere simile al node Image
-				   implementato sopra.
-			3.3) Properties Textures:
-				 - Se una texture è il risultato di più layer, si deve avere la
-				   possibilità di poter applicare al singolo layer tutte le
-				   proprietà di una texture(Bump, Normal, Emit, Color, ...)
-			3.4) Texture Paint:
-				 - Possibilità di poter dipingere con i layer anche nella vista
-				   3D. Applicando le proprietà delle texture sul singolo layer.
-			3.5) Bake:
-				 - Si può avere la possibilità di scegliere quali modalità di
-				   Bake fare e portarli tutti in un layer diverso.
-		4) Operazioni per la modifica delle immagini.
-			Menu Image
-				* |-> Color Space
-				*	|-> GrayScale
-				*	|-> RGB
-				* |-> ------------------
-				* |-> Duplicate
-				* |-> Trasforma
+            3.1) Node Editor:
+                 - Il Node Image deve avere la possibilità di poter selezionare
+                   tutti i layer o il singolo layer. Es.: Render Layer.
+            3.2) Cycles Render:
+                 - Il node Image Texture deve essere simile al node Image
+                   implementato sopra.
+            3.3) Properties Textures:
+                 - Se una texture è il risultato di più layer, si deve avere la
+                   possibilità di poter applicare al singolo layer tutte le
+                   proprietà di una texture(Bump, Normal, Emit, Color, ...)
+            3.4) Texture Paint:
+                 - Possibilità di poter dipingere con i layer anche nella vista
+                   3D. Applicando le proprietà delle texture sul singolo layer.
+            3.5) Bake:
+                 - Si può avere la possibilità di scegliere quali modalità di
+                   Bake fare e portarli tutti in un layer diverso.
+        * 4) Operazioni per la modifica delle immagini.
+            Menu Image
+                * |-> Color Space
+                *   |-> GrayScale
+                *   |-> RGB
+                * |-> ------------------
+                * |-> Duplicate
+                * |-> Trasforma
                 *    |-> Rifletti Orizzontalmente
                 *    |-> Rifletti Verticalmente
                 *    |-> ------------------
@@ -126,13 +126,13 @@ Phase 3:
                 *    |-> Spostamento
                 * |-> Scala Immagine
                 * |-> ------------------
-				* |-> Fonde livelli visibili (http://docs.gimp.org/it/gimp-image-merge-layers.html) (Possibile se si ha la possibilità dei layer di dimensioni differenti)
-				* |-> Appiattisci Immagine (http://docs.gimp.org/it/gimp-image-flatten.html)
+                * |-> Fonde livelli visibili (http://docs.gimp.org/it/gimp-image-merge-layers.html) (Possibile se si ha la possibilità dei layer di dimensioni differenti)
+                * |-> Appiattisci Immagine (http://docs.gimp.org/it/gimp-image-flatten.html)
 
 Phase 4:
     Stage    : Import & Export
     Target   : Permettere d'importare ed esportare i layer nei formati più
-			   comunemente utilizzati.
+               comunemente utilizzati.
     Deadline : Defined after phase 3
     Amount   : 2000€
     Info     : Esportazione e importazione in ora, xcf, ...
@@ -156,6 +156,6 @@ Phase 6:
     Amount   : 3000€
     Info     :
         1) Importare miglioramenti di Jason Wilkins svolti GSOC 2011 nel trunk
-		   onion per i Pennelli.
+           onion per i Pennelli.
         2) Aggiungere Blend Mode per i Pennelli.
         3) Da definire ancora!!

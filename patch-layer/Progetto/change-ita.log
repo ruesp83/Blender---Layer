@@ -23,18 +23,20 @@ Layers v0.2.3 fixed bug for Phase 2. Completed: __\__\201_:
      14. FIX: All'apertura di un file con all'interno un'immagine con i propri
               layer si ha il crash di Blender, perchè non veniva salvato
               correttamente il ColorSpace dei layer.
-     15. UPD: Anche i layer ora sono Thread Safe.
-     16. UPD: Aggiornati i layer con la nuova gestione dell'Image Thread.
-     17. UPD: Aggiunto shortcut: ALT + LeftClick per creare un layer di default.
-     18. UPD: Il Panel "Image Layer" è visualizzato solo se esiste un immagine
+     15. FIX: Se ho un'immagine con dei layer e passo dall'Image Editor al
+              3D View, Blender crash.
+     16. UPD: Anche i layer ora sono Thread Safe.
+     17. UPD: Aggiornati i layer con la nuova gestione dell'Image Thread.
+     18. UPD: Aggiunto shortcut: ALT + LeftClick per creare un layer di default.
+     19. UPD: Il Panel "Image Layer" è visualizzato solo se esiste un immagine
               e se ci si trova nella modalità "Paint".
-     19. ADD: Aggiunta la possibilità di utilizzare la modalità di Color Space:
+     20. ADD: Aggiunta la possibilità di utilizzare la modalità di Color Space:
               GrayScale.
-     20. ADD: Aggiunto il menù "Image".
-     21. ADD: Aggiunto il menù "Color".
-     22. ADD: Aggiunta la possibilità di bloccare l'alpha mentre si dipinge.
-     23. ADD: Aggiunti i seguenti Blend Mode: Inverse Color Burn, Soft Burn.
-     24. ADD: Aggiunta possibilità di utilizzare l'undo con le operazioni sui
+     21. ADD: Aggiunto il menù "Image".
+     22. ADD: Aggiunto il menù "Color".
+     23. ADD: Aggiunta la possibilità di bloccare l'alpha mentre si dipinge.
+     24. ADD: Aggiunti i seguenti Blend Mode: Inverse Color Burn, Soft Burn.
+     25. ADD: Aggiunta possibilità di utilizzare l'undo con le operazioni sui
               layer.
 
 Layers v0.2.1 fixed bug for Phase 2. Completed: 14\11\2012:
