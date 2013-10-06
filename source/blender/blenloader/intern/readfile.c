@@ -3344,9 +3344,7 @@ static void direct_link_image(FileData *fd, Image *ima)
 	for (iml = (ImageLayer *)ima->imlayers.first; iml; iml = iml->next) {
 		for (ibuf = (ImBuf *)iml->ibufs.first; ibuf; ibuf = ibuf->next) {
 			ibuf->rect_float = newdataadr(fd, ibuf->rect_float);
-			ibuf->float_colorspace = newdataadr(fd, ibuf->float_colorspace);
 			ibuf->rect = newdataadr(fd, ibuf->rect);
-			ibuf->rect_colorspace = newdataadr(fd, ibuf->rect_colorspace);
 		}
 	}
 

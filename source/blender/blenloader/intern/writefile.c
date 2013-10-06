@@ -2004,9 +2004,7 @@ static void write_images(WriteData *wd, ListBase *idbase)
 				for (iml = (ImageLayer *)ima->imlayers.first; iml; iml = iml->next) {
 					for (ibuf = (ImBuf *)iml->ibufs.first; ibuf; ibuf = ibuf->next) {
 						writedata(wd, DATA, ibuf->x * ibuf->y * sizeof(float) * 4, ibuf->rect_float);
-						writestruct(wd, DATA, "ColorSpace", 1, ibuf->float_colorspace);
 						writedata(wd, DATA, ibuf->x * ibuf->y * sizeof(char) * 4, ibuf->rect);
-						writestruct(wd, DATA, "ColorSpace", 1, ibuf->rect_colorspace);
 					}
 				}
 			}

@@ -441,6 +441,8 @@ ImBuf *IMB_dupImBuf(ImBuf *ibuf1)
 	tbuf.rect          = ibuf2->rect;
 	tbuf.rect_float    = ibuf2->rect_float;
 	tbuf.encodedbuffer = ibuf2->encodedbuffer;
+	tbuf.rect_colorspace = ibuf2->rect_colorspace;
+	tbuf.float_colorspace = ibuf2->float_colorspace;
 	tbuf.zbuf          = NULL;
 	tbuf.zbuf_float    = NULL;
 	for (a = 0; a < IB_MIPMAP_LEVELS; a++)
