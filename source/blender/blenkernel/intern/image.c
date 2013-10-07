@@ -223,7 +223,6 @@ void BKE_image_free(Image *ima)
 {
 	int a;
 
-	//image_free_image_layers(ima);
 	image_free_buffers(ima);
 	if (ima->packedfile) {
 		freePackedFile(ima->packedfile);
