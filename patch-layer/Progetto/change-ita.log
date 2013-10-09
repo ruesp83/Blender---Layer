@@ -33,7 +33,37 @@ Layers v0.2.3 fixed bug for Phase 2. Completed: __\__\201_:
      20. ADD: Aggiunta la possibilità di utilizzare la modalità di Color Space:
               GrayScale.
      21. ADD: Aggiunto il menù "Image".
+                Menu Image
+                |-> Color Space
+                  |-> GrayScale
+                  |-> RGB
+                |-> ------------------
+                |-> Duplicate
+                |-> Trasforma
+                   |-> Rifletti Orizzontalmente
+                   |-> Rifletti Verticalmente
+                   |-> ------------------
+                   |-> Ruota di 90° in senso orario
+                   |-> Ruota di 90° in senso antiorario
+                   |-> Ruota di 180°
+                   |-> Rotazione Arbitraria
+                   |-> ------------------
+                   |-> Spostamento
+                |-> Scala Immagine
+                |-> ------------------
+                |-> Fonde livelli visibili
+                |-> Appiattisci Immagine
      22. ADD: Aggiunto il menù "Color".
+                * |-> Luminosità - Contrasto
+                * |-> Esposizione
+                * |-> ------------------
+                * |-> Colora
+                * |-> Desaturazione ...
+                * |-> ------------------
+                * |-> Soglia
+                * |-> Posterizza
+                * |-> Inverti ...
+                * |-> Inverti Valore
      23. ADD: Aggiunta la possibilità di bloccare l'alpha mentre si dipinge.
      24. ADD: Aggiunti i seguenti Blend Mode: Inverse Color Burn, Soft Burn.
      25. ADD: Aggiunta possibilità di utilizzare l'undo con le operazioni sui
