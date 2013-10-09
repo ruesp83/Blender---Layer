@@ -1,7 +1,7 @@
 Layers v0.2.1 fixed bug for Phase 2. Completed: 14\11\2012:
-	 1. FIX: I solved the problem of the black border around the brush.
-	 2. FIX: Forgot IMA_IBUF_IMA in ImageExporter.cpp.
-	 3. DEL: Deleted unused variavbles.
+     1. FIX: I solved the problem of the black border around the brush.
+     2. FIX: Forgot IMA_IBUF_IMA in ImageExporter.cpp.
+     3. DEL: Deleted unused variavbles.
 
 Layers v0.2 beta6 new features and fixed bug for Phase 2. Completed: 28\09\2012:
      1. FIX: If there is only one layer and you try to delete it, Blender crashes.
