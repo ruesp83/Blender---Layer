@@ -513,10 +513,10 @@ static void copy_co(int rect, float *fp, char *cp, float co)
 				
 	/* rect */
 	if (rect == 1)
-		*cp = round(co * 255);
+		*cp = FTOCHAR(co);
 }
 
-ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode)
+ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode, short background)
 {
 	ImBuf *dest;
 	int i, flag;
@@ -683,7 +683,9 @@ ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode)
 			f_la = ((float)cp_l[3]) / 255.0f;
 		}
 
-		if ((f_la != 0.0f) && (f_ba != 0.0f)) {
+		if (((background & IMA_LAYER_BG_ALPHA) && ((f_la != 0.0f) || (f_ba != 0.0f))) ||
+		   ((!(background & IMA_LAYER_BG_ALPHA)) && ((f_la != 0.0f) && (f_ba != 0.0f)))) {
+		//if ((f_la != 0.0f) && (f_ba != 0.0f)) {
 			if (base->rect_float) {
 				f_br = fp_b[0];
 				f_bg = fp_b[1];
@@ -765,7 +767,7 @@ struct ImageLayer *merge_layers(Image *ima, ImageLayer *iml, ImageLayer *iml_nex
 	ImBuf *ibuf, *result_ibuf;
 	 /* merge layers */
 	result_ibuf = imalayer_blend((ImBuf*)((ImageLayer*)iml_next->ibufs.first), (ImBuf*)((ImageLayer*)iml->ibufs.first),
-								 iml->opacity, iml->mode);
+								 iml->opacity, iml->mode, ((ImageLayer*)iml_next->ibufs.first)->background);
 	
 	iml_next->background = IMA_LAYER_BG_RGB;
 	iml_next->file_path[0] = '\0';
@@ -799,15 +801,17 @@ void merge_layers_visible_nd(Image *ima)
 {
 	ImageLayer *layer;
 	ImBuf *ibuf, *result_ibuf, *next_ibuf;
+	short background;
 
 	result_ibuf = NULL;
+	background = ((ImageLayer *)ima->imlayers.last)->background;
 	
 	for (layer = (ImageLayer *)ima->imlayers.last; layer; layer = layer->prev) {
 		if (layer->visible & IMA_LAYER_VISIBLE) {
 			ibuf = (ImBuf*)((ImageLayer*)layer->ibufs.first);
 				
 			if (ibuf) {
-				next_ibuf = imalayer_blend(result_ibuf, ibuf, layer->opacity, layer->mode);
+				next_ibuf = imalayer_blend(result_ibuf, ibuf, layer->opacity, layer->mode, background);
 				
 				if (result_ibuf)
 					IMB_freeImBuf(result_ibuf);

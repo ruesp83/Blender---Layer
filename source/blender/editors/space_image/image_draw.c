@@ -869,7 +869,7 @@ void draw_image_main(const bContext *C, ARegion *ar)
 	int first = 0;
 	int x, y, b_x, b_y; // bg_x, bg_y;
 	void *lock;
-	char background = 0;
+	short background;
 
 	/* XXX can we do this in refresh? */
 #if 0
@@ -932,13 +932,11 @@ void draw_image_main(const bContext *C, ARegion *ar)
 
 		b_x = ibuf->x;
 		b_y = ibuf->y;
-		
-		if (layer->background & IMA_LAYER_BG_ALPHA) //Alpha
-			background = 1;
+		background = layer->background;
 
 		for (layer = (ImageLayer*)ima->imlayers.last; layer; layer = layer->prev) {
 			if (!first) {
-				if ((layer->opacity != 1.0f) || (ibuf->channels == 4) || (background == 1)) {
+				if ((layer->opacity != 1.0f) || (ibuf->channels == 4) || (background & IMA_LAYER_BG_ALPHA)) {
 					UI_view2d_to_region_no_clip(&ar->v2d, 0.0f, 0.0f, &x, &y);
 					fdrawcheckerboard(x, y, x + ibuf->x * zoomx, y + ibuf->y * zoomy);
 					first = 1;
@@ -949,7 +947,7 @@ void draw_image_main(const bContext *C, ARegion *ar)
 				ibuf_l = (ImBuf*)layer->ibufs.first;
 
 				if (ibuf_l) {
-					result_ibuf = imalayer_blend(next_ibuf, ibuf_l, layer->opacity, layer->mode);
+					result_ibuf = imalayer_blend(next_ibuf, ibuf_l, layer->opacity, layer->mode, background);
 
 					if (next_ibuf)
 						IMB_freeImBuf(next_ibuf);

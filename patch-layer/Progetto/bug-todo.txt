@@ -30,6 +30,9 @@ BUG:
              errata dell'immagine. (r23 locale)
         * 7) Se creo dei layer e poi passo alla visualizzazione 3D Blender
              crash. (r24 locale)
+        * 8) Se ho un'immagine trasparente e si aggiunge un layer, il blend mode
+             viene calcolato solo dove si sovrappongono i colori, non
+             visualizzando le parti dove la base è trasparente.
 
     - BUG:
         1) Pawel Lyczkowski: it crashes when I add new layer.

@@ -25,14 +25,18 @@ Layers v0.2.3 fixed bug for Phase 2. Completed: __\__\201_:
               correttamente il ColorSpace dei layer.
      15. FIX: Se ho un'immagine con dei layer e passo dall'Image Editor al
               3D View, Blender crash.
-     16. UPD: Anche i layer ora sono Thread Safe.
-     17. UPD: Aggiornati i layer con la nuova gestione dell'Image Thread.
-     18. UPD: Aggiunto shortcut: ALT + LeftClick per creare un layer di default.
-     19. UPD: Il Panel "Image Layer" è visualizzato solo se esiste un immagine
+     16. FIX: Risolto il problema che si presentava quando si aveva un'immagine
+              trasparente. Il blend mode veniva calcolato solo dove si
+              sovrapponevano i colori, non visualizzando le parti dove la base
+              era trasparente.
+     17. UPD: Anche i layer ora sono Thread Safe.
+     18. UPD: Aggiornati i layer con la nuova gestione dell'Image Thread.
+     19. UPD: Aggiunto shortcut: ALT + LeftClick per creare un layer di default.
+     20. UPD: Il Panel "Image Layer" è visualizzato solo se esiste un immagine
               e se ci si trova nella modalità "Paint".
-     20. ADD: Aggiunta la possibilità di utilizzare la modalità di Color Space:
+     21. ADD: Aggiunta la possibilità di utilizzare la modalità di Color Space:
               GrayScale.
-     21. ADD: Aggiunto il menù "Image".
+     22. ADD: Aggiunto il menù "Image".
                 Menu Image
                 |-> Color Space
                   |-> GrayScale
@@ -53,7 +57,7 @@ Layers v0.2.3 fixed bug for Phase 2. Completed: __\__\201_:
                 |-> ------------------
                 |-> Fonde livelli visibili
                 |-> Appiattisci Immagine
-     22. ADD: Aggiunto il menù "Color".
+     23. ADD: Aggiunto il menù "Color".
                 * |-> Luminosità - Contrasto
                 * |-> Esposizione
                 * |-> ------------------
@@ -64,9 +68,9 @@ Layers v0.2.3 fixed bug for Phase 2. Completed: __\__\201_:
                 * |-> Posterizza
                 * |-> Inverti ...
                 * |-> Inverti Valore
-     23. ADD: Aggiunta la possibilità di bloccare l'alpha mentre si dipinge.
-     24. ADD: Aggiunti i seguenti Blend Mode: Inverse Color Burn, Soft Burn.
-     25. ADD: Aggiunta possibilità di utilizzare l'undo con le operazioni sui
+     24. ADD: Aggiunta la possibilità di bloccare l'alpha mentre si dipinge.
+     25. ADD: Aggiunti i seguenti Blend Mode: Inverse Color Burn, Soft Burn.
+     26. ADD: Aggiunta possibilità di utilizzare l'undo con le operazioni sui
               layer.
 
 Layers v0.2.1 fixed bug for Phase 2. Completed: 14\11\2012:
