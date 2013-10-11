@@ -58,16 +58,16 @@ Layers v0.2.3 fixed bug for Phase 2. Completed: __\__\201_:
                 |-> Fonde livelli visibili
                 |-> Appiattisci Immagine
      23. ADD: Aggiunto il menù "Color".
-                * |-> Luminosità - Contrasto
-                * |-> Esposizione
-                * |-> ------------------
-                * |-> Colora
-                * |-> Desaturazione ...
-                * |-> ------------------
-                * |-> Soglia
-                * |-> Posterizza
-                * |-> Inverti ...
-                * |-> Inverti Valore
+                |-> Luminosità - Contrasto
+                |-> Esposizione
+                |-> ------------------
+                |-> Colora
+                |-> Desaturazione ...
+                |-> ------------------
+                |-> Soglia
+                |-> Posterizza
+                |-> Inverti ...
+                |-> Inverti Valore
      24. ADD: Aggiunta la possibilità di bloccare l'alpha mentre si dipinge.
      25. ADD: Aggiunti i seguenti Blend Mode: Inverse Color Burn, Soft Burn.
      26. ADD: Aggiunta possibilità di utilizzare l'undo con le operazioni sui
