@@ -704,27 +704,52 @@ ImBuf *imalayer_blend(ImBuf *base, ImBuf *layer, float opacity, short mode, shor
 				f_lr = (((float)cp_l[0]) / 255.0f);
 				f_lg = (((float)cp_l[1]) / 255.0f);
 				f_lb = (((float)cp_l[2]) / 255.0f);
+				//printf("base: %d %d %d %d\n", cp_b[0], cp_b[1], cp_b[2], cp_b[3]);
+				//printf("layer: %d %d %d %d\n", cp_l[0], cp_l[1], cp_l[2], cp_l[3]);
 			}
 
-			as = f_la;
-			ab = f_ba;
-			ao = as + ab * (1 - as);
-			copy_co(flag, &fp_d[3], &cp_d[3], ao);
+			if ((f_la != 0.0f) && (f_ba != 0.0f)) {
+				//printf("1\n");
+				as = f_la;
+				ab = f_ba;
+				ao = as + ab * (1 - as);
+				copy_co(flag, &fp_d[3], &cp_d[3], ao);
 
-			/* ...p_d[0] */
-			aoco = as * (1 - ab) * f_lr + as * ab * blend_callback(f_br, f_lr, opacity) + (1 - as) * ab * f_br;
-			co = clipcolour(aoco / ao);
-			copy_co(flag, &fp_d[0], &cp_d[0], co);
+				/* ...p_d[0] */
+				aoco = as * (1 - ab) * f_lr + as * ab * blend_callback(f_br, f_lr, opacity) + (1 - as) * ab * f_br;
+				co = clipcolour(aoco / ao);
+				copy_co(flag, &fp_d[0], &cp_d[0], co);
 
-			/* ...p_d[1] */
-			aoco = as * (1 - ab) * f_lg + as * ab * blend_callback(f_bg, f_lg, opacity) + (1 - as) * ab * f_bg;
-			co = clipcolour(aoco / ao);
-			copy_co(flag, &fp_d[1], &cp_d[1], co);
+				/* ...p_d[1] */
+				aoco = as * (1 - ab) * f_lg + as * ab * blend_callback(f_bg, f_lg, opacity) + (1 - as) * ab * f_bg;
+				co = clipcolour(aoco / ao);
+				copy_co(flag, &fp_d[1], &cp_d[1], co);
 
-			/* ...p_d[2] */
-			aoco = as * (1 - ab) * f_lb + as * ab * blend_callback(f_bb, f_lb, opacity) + (1 - as) * ab * f_bb;
-			co = clipcolour(aoco / ao);
-			copy_co(flag, &fp_d[2], &cp_d[2], co);
+				/* ...p_d[2] */
+				aoco = as * (1 - ab) * f_lb + as * ab * blend_callback(f_bb, f_lb, opacity) + (1 - as) * ab * f_bb;
+				co = clipcolour(aoco / ao);
+				copy_co(flag, &fp_d[2], &cp_d[2], co);
+				//printf("blend: %d %d %d %d\n\n", cp_d[0], cp_d[1], cp_d[2], cp_d[3]);
+			}
+			else {
+				if (background & IMA_LAYER_BG_ALPHA) {
+					/*if (f_ba != 0.0f) {
+						printf("2\n");
+						copy_co(flag, &fp_d[0], &cp_d[0], f_br);
+						copy_co(flag, &fp_d[1], &cp_d[1], f_bg);
+						copy_co(flag, &fp_d[2], &cp_d[2], f_bb);
+						copy_co(flag, &fp_d[3], &cp_d[3], f_ba);
+					}*/
+					//else {
+					if (f_la != 0.0f) {
+						//printf("3\n");
+						copy_co(flag, &fp_d[0], &cp_d[0], f_lr);
+						copy_co(flag, &fp_d[1], &cp_d[1], f_lg);
+						copy_co(flag, &fp_d[2], &cp_d[2], f_lb);
+						copy_co(flag, &fp_d[3], &cp_d[3], f_la);
+					}
+				}
+			}
 		}
 
 		if (base->rect_float) {
