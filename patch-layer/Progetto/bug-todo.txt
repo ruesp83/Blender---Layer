@@ -60,12 +60,11 @@ ToDo:
         * 3) Il baselayer non si può cancellare solo se è da solo.
         * 4) Aggiunto l'icona per Lock Alpha. Implementata la possibilità di
              pittare o no su un IBUF trasparente.
+        * 5) Per la funzione PAINT_OT_sample_color visualizzare riquadro come
+             in MyPaint.
 
     - Parziali:
-        * 1) Per la funzione PAINT_OT_sample_color visualizzare riquadro come
-             in mypaint.
-            1.1) Controllare nella modalità paint il colore preso in
-                 considerazione.
+        1) 
 
     - ToDo:
         1) Cursore inerenti al tools (es.contagoccie)

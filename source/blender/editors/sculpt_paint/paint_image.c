@@ -29,9 +29,11 @@
  *  \brief Functions to paint images in 2D and 3D.
  */
 
+#include <stddef.h>
 #include <float.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 
 #include "MEM_guardedalloc.h"
@@ -56,6 +58,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
+#include "DNA_screen_types.h"
 
 #include "BKE_camera.h"
 #include "BKE_context.h"
@@ -74,6 +77,7 @@
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_colortools.h"
+#include "BKE_screen.h"
 
 #include "BKE_editmesh.h"
 
@@ -86,6 +90,7 @@
 #include "ED_object.h"
 #include "ED_screen.h"
 #include "ED_sculpt.h"
+#include "ED_space_api.h"
 #include "ED_uvedit.h"
 #include "ED_view3d.h"
 #include "ED_mesh.h"
@@ -420,7 +425,7 @@ static int image_paint_poll(bContext *C)
 		if (sima) {
 			ARegion *ar = CTX_wm_region(C);
 
-			if ((sima->mode == SI_MODE_PAINT) && (ar->regiontype==RGN_TYPE_WINDOW) && (!(imalayer_is_locked(sima->image) & IMA_LAYER_LOCK))) {
+			if ((sima->mode == SI_MODE_PAINT) && (ar->regiontype == RGN_TYPE_WINDOW) && (!(imalayer_is_locked(sima->image) & IMA_LAYER_LOCK))) {
 				if ((!(win->modalcursor & BC_NSEW_SCROLLCURSOR)) || (!(win->modalcursor & BC_EYEDROPPER_CURSOR)))
 					WM_cursor_modal_set(win, BC_PAINTBRUSHCURSOR);
 				return 1;
@@ -930,27 +935,211 @@ void PAINT_OT_grab_clone(wmOperatorType *ot)
 }
 
 /******************** sample color operator ********************/
+typedef struct SampleColorInfo {
+	ARegionType *art;
+	void *draw_handle;
+	int x, y;
+	int channels;
+
+	unsigned char col[4];
+	float colf[4];
+	unsigned char orig_col[4];
+	float orig_colf[4];
+	float linearcol[4];
+	int z;
+	float zf;
+
+	unsigned char *colp;
+	float *colfp;
+	int *zp;
+	float *zfp;
+
+	int draw;
+	int color_manage;
+	int use_default_view;
+} SampleColorInfo;
+	
+
+
+static void sample_color_draw(const bContext *C, ARegion *ar, void *arg_info)
+{
+	SampleColorInfo *info = arg_info;
+	if (info->draw) {
+		Scene *scene = CTX_data_scene(C);
+		/* no color management needed for images (color_manage = 0) */
+		ED_image_draw_info(scene, ar, info->color_manage, info->use_default_view, info->channels,
+			               info->x, info->y, info->colp, info->colfp, info->linearcol, info->zp, info->zfp, 2);
+	}
+}
+
 static int sample_color_exec(bContext *C, wmOperator *op)
 {
-	Brush *brush = image_paint_brush(C);
+	SpaceImage *sima = CTX_wm_space_image(C);
 	ARegion *ar = CTX_wm_region(C);
+	Brush *brush = image_paint_brush(C);
+	void *lock;
+	ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock);
+	SampleColorInfo *info = op->customdata;
 	int location[2];
+	float fx, fy;
+
+	if(ibuf == NULL) {
+		ED_space_image_release_buffer(sima, ibuf, lock);
+		info->draw = 0;
+		return OPERATOR_CANCELLED;
+	}
 
 	RNA_int_get_array(op->ptr, "location", location);
-	paint_sample_color(C, ar, location[0], location[1]);
+	//paint_sample_color(C, ar, location[0], location[1]);
+
+	UI_view2d_region_to_view(&ar->v2d, location[0], location[1], &fx, &fy);
+
+	if ((fx >= 0.0f) && (fy >= 0.0f) && (fx < 1.0f) && (fy < 1.0f)) {
+		float *fp;
+		unsigned char *cp;
+		int x = (int)(fx * ibuf->x);
+		int y = (int)(fy * ibuf->y);
+		Image *image = ED_space_image(sima);
+
+		CLAMP(x, 0, ibuf->x-1);
+		CLAMP(y, 0, ibuf->y-1);
+
+		info->x = x;
+		info->y = y;
+		info->draw = 1;
+		info->channels = ibuf->channels;
+
+		info->colp = NULL;
+		info->colfp = NULL;
+		info->zp = NULL;
+		info->zfp = NULL;
+
+		info->use_default_view = (image->flag & IMA_VIEW_AS_RENDER) ? FALSE : TRUE;
+		
+		if (ibuf->rect) {
+			cp = (unsigned char *)(ibuf->rect + y * ibuf->x + x);
+
+			info->col[0] = cp[0];
+			info->col[1] = cp[1];
+			info->col[2] = cp[2];
+			info->col[3] = cp[3];
+			info->colp = info->col;
+
+			info->colf[0] = (float)cp[0] / 255.0f;
+			info->colf[1] = (float)cp[1] / 255.0f;
+			info->colf[2] = (float)cp[2] / 255.0f;
+			info->colf[3] = (float)cp[3] / 255.0f;
+			info->colfp = info->colf;
+
+			copy_v4_v4(info->linearcol, info->colf);
+			IMB_colormanagement_colorspace_to_scene_linear_v4(info->linearcol, false, ibuf->rect_colorspace);
+
+			info->color_manage = TRUE;
+
+			if (brush) {
+				brush->rgb[0] = cp[0] / 255.0f;
+				brush->rgb[1] = cp[1] / 255.0f;
+				brush->rgb[2] = cp[2] / 255.0f;
+				brush->rgb[3] = cp[3] / 255.0f;
+			}
+		}
+		if (ibuf->rect_float) {
+			fp = (ibuf->rect_float + (ibuf->channels) * (y * ibuf->x + x));
+
+			info->colf[0] = fp[0];
+			info->colf[1] = fp[1];
+			info->colf[2] = fp[2];
+			info->colf[3] = fp[3];
+			info->colfp = info->colf;
+
+			copy_v4_v4(info->linearcol, info->colf);
+
+			info->color_manage = TRUE;
+
+			if (brush) {
+				brush->rgb[0] = fp[0];
+				brush->rgb[1] = fp[1];
+				brush->rgb[2] = fp[2];
+				brush->rgb[3] = fp[3];
+			}
+		}
+
+		if (ibuf->zbuf) {
+			info->z = ibuf->zbuf[y * ibuf->x + x];
+			info->zp = &info->z;
+		}
+		if (ibuf->zbuf_float) {
+			info->zf = ibuf->zbuf_float[y * ibuf->x + x];
+			info->zfp = &info->zf;
+		}
+		
+		if ((sima->cumap) && (ibuf->channels == 4)) {
+			/* we reuse this callback for set curves point operators */
+			if (RNA_struct_find_property(op->ptr, "point")) {
+				int point = RNA_enum_get(op->ptr, "point");
+
+				if (point == 1) {
+					curvemapping_set_black_white(sima->cumap, NULL, info->colfp);
+				}
+				else if(point == 0) {
+					curvemapping_set_black_white(sima->cumap, info->colfp, NULL);
+				}
+			}
+		}
+	}
+	else {
+		info->draw = 0;
+	}
+
+	ED_space_image_release_buffer(sima, ibuf, lock);
+	ED_area_tag_redraw(CTX_wm_area(C));
 
 	WM_event_add_notifier(C, NC_BRUSH | NA_EDITED, brush);
 	
 	return OPERATOR_FINISHED;
 }
 
+static void sample_color_exit(bContext *C, wmOperator *op)
+{
+	SampleColorInfo *info = op->customdata;
+
+	ED_region_draw_cb_exit(info->art, info->draw_handle);
+	ED_area_tag_redraw(CTX_wm_area(C));
+	MEM_freeN(info);
+}
+
 static int sample_color_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+	SpaceImage *sima = CTX_wm_space_image(C);
+	ARegion *ar = CTX_wm_region(C);
+	Brush *brush = image_paint_brush(C);
+	void *lock;
+	ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock);
+	SampleColorInfo *info;
+
+	if (!ED_space_image_has_buffer(sima))
+		return OPERATOR_CANCELLED;
+
+	info = MEM_callocN(sizeof(SampleColorInfo), "ImageSampleInfo");
+	info->art = ar->type;
+	info->draw_handle = ED_region_draw_cb_activate(ar->type, sample_color_draw, info, REGION_DRAW_POST_PIXEL);
+	op->customdata = info;
+	if (brush) {
+		if (ibuf->rect) {
+			info->orig_col[0] = FTOCHAR(brush->rgb[0]);
+			info->orig_col[1] = FTOCHAR(brush->rgb[1]);
+			info->orig_col[2] = FTOCHAR(brush->rgb[2]);
+			info->orig_col[3] = FTOCHAR(brush->rgb[3]);
+		}
+		if (ibuf->rect_float) {
+			copy_v4_v4(info->orig_colf, brush->rgb);
+		}
+	}
 	RNA_int_set_array(op->ptr, "location", event->mval);
 	sample_color_exec(C, op);
 
-	op->customdata = SET_INT_IN_POINTER(event->type);
-
+	//op->customdata = SET_INT_IN_POINTER(event->type);
+	ED_space_image_release_buffer(sima, ibuf, lock);
 	WM_event_add_modal_handler(C, op);
 
 	return OPERATOR_RUNNING_MODAL;
@@ -958,22 +1147,57 @@ static int sample_color_invoke(bContext *C, wmOperator *op, const wmEvent *event
 
 static int sample_color_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
-	if (event->type == (intptr_t)(op->customdata) && event->val == KM_RELEASE)
+	SpaceImage *sima = CTX_wm_space_image(C);
+	void *lock;
+	ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock);
+	SampleColorInfo *info = op->customdata;
+	Brush *brush = image_paint_brush(C);
+	
+	if (event->type == (intptr_t)(op->customdata) && event->val == KM_RELEASE) {
+		ED_space_image_release_buffer(sima, ibuf, lock);
 		return OPERATOR_FINISHED;
+	}
 
 	switch (event->type) {
+		case LEFTMOUSE:
+		//case RIGHTMOUSE: // XXX hardcoded
+			sample_color_exit(C, op);
+			ED_space_image_release_buffer(sima, ibuf, lock);
+ 			return OPERATOR_FINISHED;
 		case MOUSEMOVE:
 			RNA_int_set_array(op->ptr, "location", event->mval);
 			sample_color_exec(C, op);
 			break;
+		case ESCKEY:
+		case RIGHTMOUSE:
+			if (brush) {
+				if (ibuf->rect) {
+					brush->rgb[0] = info->orig_col[0] / 255.0f;
+					brush->rgb[1] = info->orig_col[1] / 255.0f;
+					brush->rgb[2] = info->orig_col[2] / 255.0f;
+					brush->rgb[3] = info->orig_col[3] / 255.0f;
+				}
+				if (ibuf->rect_float) {
+					copy_v4_v4(brush->rgb, info->orig_colf);
+				}
+			}
+			sample_color_exit(C, op);
+			ED_space_image_release_buffer(sima, ibuf, lock);
+			return OPERATOR_CANCELLED;
 	}
-
+	ED_space_image_release_buffer(sima, ibuf, lock);
 	return OPERATOR_RUNNING_MODAL;
 }
 
 static int sample_color_poll(bContext *C)
 {
 	return (image_paint_poll(C) || vertex_paint_poll(C));
+}
+
+static int sample_color_cancel(bContext *C, wmOperator *op)
+{
+	sample_color_exit(C, op);
+	return OPERATOR_CANCELLED;
 }
 
 void PAINT_OT_sample_color(wmOperatorType *ot)
@@ -984,10 +1208,11 @@ void PAINT_OT_sample_color(wmOperatorType *ot)
 	ot->description = "Use the mouse to sample a color in the image";
 	
 	/* api callbacks */
-	ot->exec = sample_color_exec;
+	//ot->exec = sample_color_exec;
 	ot->invoke = sample_color_invoke;
 	ot->modal = sample_color_modal;
 	ot->poll = sample_color_poll;
+	ot->cancel = sample_color_cancel;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;

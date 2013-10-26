@@ -1,4 +1,4 @@
-Layers v0.2.3 fixed bug for Phase 2. Completed: __\__\201_:
+Layers v0.2.3 new features and fixed bug for Phase 3. Completed: __\__\201_:
       1. FIX: Mancata assegnazione del nome alla creazione di un layer di
               default.
       2. FIX: Nello Space Image se passo nella modalità paint senza un'immagine,
@@ -34,9 +34,13 @@ Layers v0.2.3 fixed bug for Phase 2. Completed: __\__\201_:
      19. UPD: Aggiunto shortcut: ALT + LeftClick per creare un layer di default.
      20. UPD: Il Panel "Image Layer" è visualizzato solo se esiste un immagine
               e se ci si trova nella modalità "Paint".
-     21. ADD: Aggiunta la possibilità di utilizzare la modalità di Color Space:
+     21. UPD: Migliorato Sample Color nella modalità Paint. Con il tasto destro
+              del mouse e con il tasto ESC, ripristina il colore iniziale.
+              Inoltre preleva solo il colore dell'immagine e non anche quella
+              dell'interfaccia.
+     22. ADD: Aggiunta la possibilità di utilizzare la modalità di Color Space:
               GrayScale.
-     22. ADD: Aggiunto il menù "Image".
+     23. ADD: Aggiunto il menù "Image".
                 Menu Image
                 |-> Color Space
                   |-> GrayScale
@@ -57,7 +61,7 @@ Layers v0.2.3 fixed bug for Phase 2. Completed: __\__\201_:
                 |-> ------------------
                 |-> Fonde livelli visibili
                 |-> Appiattisci Immagine
-     23. ADD: Aggiunto il menù "Color".
+     24. ADD: Aggiunto il menù "Color".
                 |-> Luminosità - Contrasto
                 |-> Esposizione
                 |-> ------------------
@@ -68,9 +72,9 @@ Layers v0.2.3 fixed bug for Phase 2. Completed: __\__\201_:
                 |-> Posterizza
                 |-> Inverti ...
                 |-> Inverti Valore
-     24. ADD: Aggiunta la possibilità di bloccare l'alpha mentre si dipinge.
-     25. ADD: Aggiunti i seguenti Blend Mode: Inverse Color Burn, Soft Burn.
-     26. ADD: Aggiunta possibilità di utilizzare l'undo con le operazioni sui
+     25. ADD: Aggiunta la possibilità di bloccare l'alpha mentre si dipinge.
+     26. ADD: Aggiunti i seguenti Blend Mode: Inverse Color Burn, Soft Burn.
+     27. ADD: Aggiunta possibilità di utilizzare l'undo con le operazioni sui
               layer.
 
 Layers v0.2.1 fixed bug for Phase 2. Completed: 14\11\2012:
