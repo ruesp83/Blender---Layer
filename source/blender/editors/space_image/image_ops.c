@@ -2729,12 +2729,15 @@ static int image_arbitrary_rot_exec(bContext *C, wmOperator *op)
 	ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 	ima->use_layers = TRUE;
 
+	if (ima->preview_ibuf) {
+		IMB_freeImBuf(ima->preview_ibuf);
+		ima->preview_ibuf = NULL;
+	}
+
 	//type = RNA_enum_get(op->ptr, "type");
 	angle = RNA_float_get(op->ptr, "angle");
 
-	layer = (ImageLayer*)ima->imlayers.last;
-	if (layer) 
-		get_color_background_layer(col, layer);
+	get_color_background_layer(col, (ImageLayer*)ima->imlayers.last);
 	
 	angle = angle * (-1);
 
@@ -2753,6 +2756,48 @@ static int image_arbitrary_rot_exec(bContext *C, wmOperator *op)
 	return OPERATOR_FINISHED;
 }
 
+static bool image_arbitrary_rot_check(bContext *C, wmOperator *op)
+{
+	Image *ima = CTX_data_edit_image(C);
+	ImBuf *ibuf;
+	float angle;
+	float col[4];
+
+	if (!ima)
+		return FALSE;
+
+	ima->use_layers = FALSE;
+	ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
+	ima->use_layers = TRUE;
+
+	angle = RNA_float_get(op->ptr, "angle");
+
+	get_color_background_layer(col, (ImageLayer*)ima->imlayers.last);
+
+	angle = angle * (-1);
+
+	if (ima->preview_ibuf) {
+		IMB_freeImBuf(ima->preview_ibuf);
+		ima->preview_ibuf = NULL;
+	}
+
+	ima->preview_ibuf = IMB_dupImBuf(ibuf);
+
+	ima->preview_ibuf = IMB_rotation(ima->preview_ibuf, 0.0, 0.0, angle, 2, col);
+
+	BKE_image_release_ibuf(ima, ibuf, NULL);
+}
+
+/*static int image_arbitrary_rot_cancel(bContext *C, wmOperator *op)
+{
+	//Image *ima = CTX_data_edit_image(C);
+	
+	printf("exit\n");
+	/*if (ima->preview_ibuf)
+		IMB_freeImBuf(ima->preview_ibuf);*/
+	/*return OPERATOR_CANCELLED;
+}*/
+
 void IMAGE_OT_arbitrary_rot(wmOperatorType *ot)
 {
 	PropertyRNA *prop;
@@ -2765,7 +2810,7 @@ void IMAGE_OT_arbitrary_rot(wmOperatorType *ot)
 	};
 
 	/* identifiers */
-	ot->name = "Arbitrary Rotating Layer";
+	ot->name = "Arbitrary Rotating Image";
 	ot->idname = "IMAGE_OT_arbitrary_rot";
 	ot->description = "Arbitrary Rotate the Imager";
  
@@ -2773,6 +2818,8 @@ void IMAGE_OT_arbitrary_rot(wmOperatorType *ot)
 	ot->exec = image_arbitrary_rot_exec;
 	ot->poll = image_operator_poll;
 	ot->invoke = image_op_layer_invoke;
+	ot->check = image_arbitrary_rot_check;
+	//ot->cancel = image_arbitrary_rot_cancel;
  
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -2815,9 +2862,7 @@ static int image_offset_exec(bContext *C, wmOperator *op)
 	}
 
 	if (!wrap) {
-		layer = (ImageLayer*)ima->imlayers.last;
-		if (layer)
-			get_color_background_layer(col, layer);
+		get_color_background_layer(col, (ImageLayer*)ima->imlayers.last);
 	}
 
 	ibuf = IMB_offset(ibuf, x, y, half, wrap, col);

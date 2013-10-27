@@ -961,14 +961,19 @@ void get_color_background_layer(float col[4], ImageLayer *layer)
 	static float black_color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 	static float white_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 
-	if (layer->background & IMA_LAYER_BG_WHITE)
-		copy_v4_v4(col, white_color);
-	else if (layer->background & IMA_LAYER_BG_ALPHA)
-		copy_v4_v4(col, alpha_color);
+	if (layer) {
+		if (layer->background & IMA_LAYER_BG_WHITE)
+			copy_v4_v4(col, white_color);
+		else if (layer->background & IMA_LAYER_BG_ALPHA)
+			copy_v4_v4(col, alpha_color);
+		else {
+			if (layer->default_color[0] != -1)
+				copy_v4_v4(col, layer->default_color);
+			else
+				copy_v4_v4(col, black_color);
+		}
+	}
 	else {
-		if (layer->default_color[0] != -1)
-			copy_v4_v4(col, layer->default_color);
-		else
-			copy_v4_v4(col, black_color);
+		copy_v4_v4(col, black_color);
 	}
 }

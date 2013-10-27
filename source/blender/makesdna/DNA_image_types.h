@@ -283,6 +283,7 @@ typedef struct Image {
 	char name[1024];			/* file path, 1024 = FILE_MAX */
 	
 	ListBase ibufs;					/* not written in file */
+	struct ImBuf *preview_ibuf;
 	struct GPUTexture *gputexture;	/* not written in file */
 	
 	/* sources from: */
