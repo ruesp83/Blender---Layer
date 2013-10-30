@@ -437,7 +437,7 @@ void IMB_invert_value(struct ImBuf *in);
  *
  * \attention defined in readimage.c
  */  
-struct ImBuf *IMB_loadifffile(int file, int flags, char colorspace[IM_MAX_SPACE], const char *descr);
+struct ImBuf *IMB_loadifffile(int file, const char *filepath, int flags, char colorspace[IM_MAX_SPACE], const char *descr);
 
 /**
  *

@@ -282,6 +282,9 @@ extern const char *imb_ext_image_qt[];
 extern const char *imb_ext_movie[];
 extern const char *imb_ext_audio[];
 
+/* image formats that can only be loaded via filepath */
+extern const char *imb_ext_image_filepath_only[];
+
 enum {
 	IMB_COLORMANAGE_IS_DATA = (1 << 0)
 };

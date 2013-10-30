@@ -805,6 +805,7 @@ static void toggle_paint_cursor(bContext *C, int enable)
 	if (settings->imapaint.paintcursor && !enable) {
 		WM_paint_cursor_end(wm, settings->imapaint.paintcursor);
 		settings->imapaint.paintcursor = NULL;
+		paint_cursor_delete_textures();
 	}
 	else if (enable)
 		paint_cursor_start(C, image_paint_poll);
@@ -832,6 +833,9 @@ void ED_space_image_paint_update(wmWindowManager *wm, ToolSettings *settings)
 		BKE_paint_init(&imapaint->paint, PAINT_CURSOR_TEXTURE_PAINT);
 
 		paint_cursor_start_explicit(&imapaint->paint, wm, image_paint_poll);
+	}
+	else {
+		paint_cursor_delete_textures();
 	}
 }
 
@@ -957,6 +961,8 @@ typedef struct SampleColorInfo {
 	int draw;
 	int color_manage;
 	int use_default_view;
+	bool show_cursor;
+	//short event_type;
 } SampleColorInfo;
 	
 
@@ -976,10 +982,13 @@ static int sample_color_exec(bContext *C, wmOperator *op)
 {
 	SpaceImage *sima = CTX_wm_space_image(C);
 	ARegion *ar = CTX_wm_region(C);
+	Paint *paint = BKE_paint_get_active_from_context(C);
 	Brush *brush = image_paint_brush(C);
 	void *lock;
 	ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock);
 	SampleColorInfo *info = op->customdata;
+	wmWindow *win = CTX_wm_window(C);
+	bool show_cursor = ((paint->flags & PAINT_SHOW_BRUSH) != 0);
 	int location[2];
 	float fx, fy;
 
@@ -988,6 +997,12 @@ static int sample_color_exec(bContext *C, wmOperator *op)
 		info->draw = 0;
 		return OPERATOR_CANCELLED;
 	}
+
+	paint->flags &= ~PAINT_SHOW_BRUSH;
+
+	/* force redraw without cursor */
+	//WM_paint_cursor_tag_redraw(win, ar);
+	//WM_redraw_windows(C);
 
 	RNA_int_get_array(op->ptr, "location", location);
 	//paint_sample_color(C, ar, location[0], location[1]);
@@ -1094,6 +1109,10 @@ static int sample_color_exec(bContext *C, wmOperator *op)
 	ED_space_image_release_buffer(sima, ibuf, lock);
 	ED_area_tag_redraw(CTX_wm_area(C));
 
+	if (show_cursor) {
+		paint->flags |= PAINT_SHOW_BRUSH;
+	}
+
 	WM_event_add_notifier(C, NC_BRUSH | NA_EDITED, brush);
 	
 	return OPERATOR_FINISHED;
@@ -1111,7 +1130,10 @@ static void sample_color_exit(bContext *C, wmOperator *op)
 static int sample_color_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	SpaceImage *sima = CTX_wm_space_image(C);
+	Paint *paint = BKE_paint_get_active_from_context(C);
+	//SampleColorData *data = MEM_mallocN(sizeof(SampleColorData), "sample color custom data");
 	ARegion *ar = CTX_wm_region(C);
+	wmWindow *win = CTX_wm_window(C);
 	Brush *brush = image_paint_brush(C);
 	void *lock;
 	ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock);
@@ -1122,6 +1144,8 @@ static int sample_color_invoke(bContext *C, wmOperator *op, const wmEvent *event
 
 	info = MEM_callocN(sizeof(SampleColorInfo), "ImageSampleInfo");
 	info->art = ar->type;
+	//info->event_type = event->type;
+	info->show_cursor = ((paint->flags & PAINT_SHOW_BRUSH) != 0);
 	info->draw_handle = ED_region_draw_cb_activate(ar->type, sample_color_draw, info, REGION_DRAW_POST_PIXEL);
 	op->customdata = info;
 	if (brush) {
@@ -1135,10 +1159,18 @@ static int sample_color_invoke(bContext *C, wmOperator *op, const wmEvent *event
 			copy_v4_v4(info->orig_colf, brush->rgb);
 		}
 	}
+	
+	//op->customdata = info;
+	paint->flags &= ~PAINT_SHOW_BRUSH;
+
+	/* force redraw without cursor */
+	//WM_paint_cursor_tag_redraw(win, ar);
+	//WM_redraw_windows(C);
+
 	RNA_int_set_array(op->ptr, "location", event->mval);
+	//paint_sample_color(C, ar, event->mval[0], event->mval[1]);
 	sample_color_exec(C, op);
 
-	//op->customdata = SET_INT_IN_POINTER(event->type);
 	ED_space_image_release_buffer(sima, ibuf, lock);
 	WM_event_add_modal_handler(C, op);
 
@@ -1151,9 +1183,18 @@ static int sample_color_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	void *lock;
 	ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock);
 	SampleColorInfo *info = op->customdata;
+	Paint *paint = BKE_paint_get_active_from_context(C);
 	Brush *brush = image_paint_brush(C);
+	ARegion *ar = CTX_wm_region(C);
 	
+	//if ((event->type == info->event_type) && (event->val == KM_RELEASE)) {
 	if (event->type == (intptr_t)(op->customdata) && event->val == KM_RELEASE) {
+		if (info->show_cursor) {
+			paint->flags |= PAINT_SHOW_BRUSH;
+		}
+
+		//MEM_freeN(info);
+		sample_color_exit(C, op);
 		ED_space_image_release_buffer(sima, ibuf, lock);
 		return OPERATOR_FINISHED;
 	}
@@ -1167,6 +1208,7 @@ static int sample_color_modal(bContext *C, wmOperator *op, const wmEvent *event)
 		case MOUSEMOVE:
 			RNA_int_set_array(op->ptr, "location", event->mval);
 			sample_color_exec(C, op);
+			//WM_event_add_notifier(C, NC_BRUSH | NA_EDITED, brush);
 			break;
 		case ESCKEY:
 		case RIGHTMOUSE:
