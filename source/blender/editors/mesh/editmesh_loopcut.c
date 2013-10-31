@@ -420,11 +420,10 @@ static int ringsel_init(bContext *C, wmOperator *op, bool do_cut)
 	return 1;
 }
 
-static int ringcut_cancel(bContext *C, wmOperator *op)
+static void ringcut_cancel(bContext *C, wmOperator *op)
 {
 	/* this is just a wrapper around exit() */
 	ringsel_exit(C, op);
-	return OPERATOR_CANCELLED;
 }
 
 static void loopcut_update_edge(RingSelOpData *lcd, BMEdge *e, const int previewlines)
@@ -551,7 +550,8 @@ static int loopcut_modal(bContext *C, wmOperator *op, const wmEvent *event)
 					ringsel_exit(C, op);
 				}
 				else {
-					return ringcut_cancel(C, op);
+					ringcut_cancel(C, op);
+					return OPERATOR_CANCELLED;
 				}
 
 				return OPERATOR_FINISHED;
@@ -571,7 +571,8 @@ static int loopcut_modal(bContext *C, wmOperator *op, const wmEvent *event)
 				ED_region_tag_redraw(lcd->ar);
 				ED_area_headerprint(CTX_wm_area(C), NULL);
 				
-				return ringcut_cancel(C, op);
+				ringcut_cancel(C, op);
+				return OPERATOR_CANCELLED;
 			}
 			
 			ED_region_tag_redraw(lcd->ar);
