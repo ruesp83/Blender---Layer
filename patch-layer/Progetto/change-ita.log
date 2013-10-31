@@ -76,6 +76,7 @@ Layers v0.2.3 new features and fixed bug for Phase 3. Completed: __\__\201_:
      26. ADD: Aggiunti i seguenti Blend Mode: Inverse Color Burn, Soft Burn.
      27. ADD: Aggiunta possibilità di utilizzare l'undo con le operazioni sui
               layer.
+     28. ADD: Aggiunto alla rotazione arbitraria, il sampling dell'immagine.
 
 Layers v0.2.1 fixed bug for Phase 2. Completed: 14\11\2012:
      1. FIX: Risolo il problema del bordino nero intorno alla pennellata.

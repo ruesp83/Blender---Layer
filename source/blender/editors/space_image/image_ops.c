@@ -2721,6 +2721,7 @@ static int image_arbitrary_rot_exec(bContext *C, wmOperator *op)
 	ImBuf *ibuf, *ibuf_l;
 	float angle;
 	float col[4];
+	short type;
 	
 	if (!ima)
 		return OPERATOR_CANCELLED;
@@ -2734,7 +2735,7 @@ static int image_arbitrary_rot_exec(bContext *C, wmOperator *op)
 		ima->preview_ibuf = NULL;
 	}
 
-	//type = RNA_enum_get(op->ptr, "type");
+	type = RNA_enum_get(op->ptr, "type");
 	angle = RNA_float_get(op->ptr, "angle");
 
 	get_color_background_layer(col, (ImageLayer*)ima->imlayers.last);
@@ -2746,7 +2747,7 @@ static int image_arbitrary_rot_exec(bContext *C, wmOperator *op)
 		ibuf_l = (ImBuf *)layer->ibufs.first;
 		layer->ibufs.first = NULL;
 		layer->ibufs.last = NULL;
-		BLI_addtail(&layer->ibufs, IMB_rotation(ibuf_l, 0.0, 0.0, angle, 2, col));
+		BLI_addtail(&layer->ibufs, IMB_rotation(ibuf_l, 0.0, 0.0, angle, type, col));
 	}
 
 	WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
@@ -2762,6 +2763,7 @@ static bool image_arbitrary_rot_check(bContext *C, wmOperator *op)
 	ImBuf *ibuf;
 	float angle;
 	float col[4];
+	short type;
 
 	if (!ima)
 		return FALSE;
@@ -2770,6 +2772,7 @@ static bool image_arbitrary_rot_check(bContext *C, wmOperator *op)
 	ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 	ima->use_layers = TRUE;
 
+	type = RNA_enum_get(op->ptr, "type");
 	angle = RNA_float_get(op->ptr, "angle");
 
 	get_color_background_layer(col, (ImageLayer*)ima->imlayers.last);
@@ -2783,7 +2786,7 @@ static bool image_arbitrary_rot_check(bContext *C, wmOperator *op)
 
 	ima->preview_ibuf = IMB_dupImBuf(ibuf);
 
-	ima->preview_ibuf = IMB_rotation(ima->preview_ibuf, 0.0, 0.0, angle, 2, col);
+	ima->preview_ibuf = IMB_rotation(ima->preview_ibuf, 0.0, 0.0, angle, type, col);
 
 	BKE_image_release_ibuf(ima, ibuf, NULL);
 }
@@ -2825,7 +2828,7 @@ void IMAGE_OT_arbitrary_rot(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
  
 	/* properties */
-	//RNA_def_enum(ot->srna, "type", rotate_items, 0, "Type", "");
+	RNA_def_enum(ot->srna, "type", rotate_items, 0, "Type", "");
 	prop = RNA_def_float_rotation(ot->srna, "angle", 0, NULL, DEG2RADF(-180.0f), DEG2RADF(180.0f),
 	                              "Angle", "Angle of rotation", DEG2RADF(-180.0f), DEG2RADF(180.0f));
 	RNA_def_property_float_default(prop, DEG2RADF(0.0f));
@@ -3919,6 +3922,7 @@ static int image_layer_arbitrary_rot_exec(bContext *C, wmOperator *op)
 	ImBuf *ibuf;
 	float angle;
 	float col[4];
+	short type;
 	
 	if (!ima)
 		return OPERATOR_CANCELLED;
@@ -3927,7 +3931,7 @@ static int image_layer_arbitrary_rot_exec(bContext *C, wmOperator *op)
 	if (!layer)
 			return OPERATOR_CANCELLED;
 
-	//type = RNA_enum_get(op->ptr, "type");
+	type = RNA_enum_get(op->ptr, "type");
 	angle = RNA_float_get(op->ptr, "angle");
 	
 	get_color_background_layer(col, layer);
@@ -3937,7 +3941,7 @@ static int image_layer_arbitrary_rot_exec(bContext *C, wmOperator *op)
 	ibuf = (ImBuf *)layer->ibufs.first;
 	layer->ibufs.first = NULL;
 	layer->ibufs.last = NULL;
-	BLI_addtail(&layer->ibufs, IMB_rotation(ibuf, 0.0, 0.0, angle, 2, col));
+	BLI_addtail(&layer->ibufs, IMB_rotation(ibuf, 0.0, 0.0, angle, type, col));
 
 	WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
  
@@ -3969,7 +3973,7 @@ void IMAGE_OT_layer_arbitrary_rot(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
  
 	/* properties */
-	//RNA_def_enum(ot->srna, "type", rotate_items, 0, "Type", "");
+	RNA_def_enum(ot->srna, "type", rotate_items, 0, "Type", "");
 	prop = RNA_def_float_rotation(ot->srna, "angle", 0, NULL, DEG2RADF(-180.0f), DEG2RADF(180.0f),
 	                              "Angle", "Angle of rotation", DEG2RADF(-180.0f), DEG2RADF(180.0f));
 	RNA_def_property_float_default(prop, DEG2RADF(0.0f));

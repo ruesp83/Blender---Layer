@@ -62,14 +62,14 @@ ToDo:
              pittare o no su un IBUF trasparente.
         * 5) Per la funzione PAINT_OT_sample_color visualizzare riquadro come
              in MyPaint.
+        * 6) Aggiunto alla rotazione arbitraria, il sampling dell'immagine.
 
     - Parziali:
         1) 
 
     - ToDo:
         1) Cursore inerenti al tools (es.contagoccie)
-        2) Aggiungere alla rotazione arbitraria, il sampling dell'immagine e il
-           centro di rotazione.
+        2) Aggiungere alla rotazione arbitraria il centro di rotazione.
         3) Fase 4: Importazione ed esportazione per gimp, ps,
            openraster(mypaint):
            * http://en.wikipedia.org/wiki/OpenRaster 
