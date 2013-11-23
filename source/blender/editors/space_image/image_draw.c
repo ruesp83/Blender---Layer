@@ -1014,8 +1014,8 @@ void draw_image_main(const bContext *C, ARegion *ar)
 
 		if (ima->preview_ibuf) {
 			draw_image_buffer(C, sima, ar, scene, ima->preview_ibuf, 0.0f, 0.0f, zoomx, zoomy);
-			IMB_freeImBuf(ima->preview_ibuf);
-			ima->preview_ibuf = NULL;
+			//IMB_freeImBuf(ima->preview_ibuf);
+			//ima->preview_ibuf = NULL;
 		}
 		else {
 			draw_image_buffer(C, sima, ar, scene, ibuf, 0.0f, 0.0f, zoomx, zoomy);

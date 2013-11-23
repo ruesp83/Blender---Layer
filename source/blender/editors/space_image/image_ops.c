@@ -2786,23 +2786,24 @@ static bool image_arbitrary_rot_check(bContext *C, wmOperator *op)
 	BKE_image_release_ibuf(ima, ibuf, NULL);
 }
 
-/*static int image_arbitrary_rot_cancel(bContext *C, wmOperator *op)
+static void image_arbitrary_rot_cancel(bContext *C, wmOperator *op)
 {
-	//Image *ima = CTX_data_edit_image(C);
-	
-	printf("exit\n");
-	/*if (ima->preview_ibuf)
-		IMB_freeImBuf(ima->preview_ibuf);*/
-	/*return OPERATOR_CANCELLED;
-}*/
+	Image *ima = CTX_data_edit_image(C);
+
+	if (ima->preview_ibuf) {
+		IMB_freeImBuf(ima->preview_ibuf);
+		ima->preview_ibuf = NULL;
+		WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
+	}
+}
 
 void IMAGE_OT_arbitrary_rot(wmOperatorType *ot)
 {
 	PropertyRNA *prop;
 	
 	static EnumPropertyItem rotate_items[] = {
-		{0, "NEAREST",   0, "Nearest",   ""},
-		{1, "BILINEAR",   0, "Bilinear",   ""},
+		{0, "NEAREST", 0, "Nearest", ""},
+		{1, "BILINEAR", 0, "Bilinear", ""},
 		{2, "BICUBIC", 0, "Bicubic", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
@@ -2817,7 +2818,7 @@ void IMAGE_OT_arbitrary_rot(wmOperatorType *ot)
 	ot->poll = image_operator_poll;
 	ot->invoke = image_op_layer_invoke;
 	ot->check = image_arbitrary_rot_check;
-	//ot->cancel = image_arbitrary_rot_cancel;
+	ot->cancel = image_arbitrary_rot_cancel;
  
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -3948,8 +3949,8 @@ void IMAGE_OT_layer_arbitrary_rot(wmOperatorType *ot)
 	PropertyRNA *prop;
 	
 	static EnumPropertyItem rotate_items[] = {
-		{0, "NEAREST",   0, "Nearest",   ""},
-		{1, "BILINEAR",   0, "Bilinear",   ""},
+		{0, "NEAREST", 0, "Nearest", ""},
+		{1, "BILINEAR", 0, "Bilinear", ""},
 		{2, "BICUBIC", 0, "Bicubic", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
