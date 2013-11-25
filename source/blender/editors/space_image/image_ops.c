@@ -1862,7 +1862,9 @@ static int image_new_exec(bContext *C, wmOperator *op)
 	else {
 		Tex *tex = CTX_data_pointer_get_type(C, "texture", &RNA_Texture).data;
 		if (tex && tex->type == TEX_IMAGE) {
-			tex->ima = ima;
+			if (tex->ima)
+				tex->ima->id.us--;	/* Decrease the previous image users count by 1 */
+			tex->ima = ima;			/* Assign the new image */
 			ED_area_tag_redraw(CTX_wm_area(C));
 		}
 	}
@@ -1981,7 +1983,7 @@ static int image_invert_exec(bContext *C, wmOperator *op)
 		}
 	}
 
-	ibuf->userflags |= IB_BITMAPDIRTY;
+	ibuf->userflags |= IB_BITMAPDIRTY | IB_DISPLAY_BUFFER_INVALID;
 	if (ibuf->mipmap[0])
 		ibuf->userflags |= IB_MIPMAP_INVALID;
 

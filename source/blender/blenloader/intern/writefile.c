@@ -1477,6 +1477,11 @@ static void write_modifiers(WriteData *wd, ListBase *modbase)
 			if (wmd->cmap_curve)
 				write_curvemapping(wd, wmd->cmap_curve);
 		}
+		else if(md->type==eModifierType_LaplacianDeform) {
+			LaplacianDeformModifierData *lmd = (LaplacianDeformModifierData*) md;
+
+			writedata(wd, DATA, sizeof(float)*lmd->total_verts * 3, lmd->vertexco);
+		}
 	}
 }
 
@@ -3312,13 +3317,14 @@ static void write_global(WriteData *wd, int fileflags, Main *mainvar)
 	fg.minsubversion= BLENDER_MINSUBVERSION;
 #ifdef WITH_BUILDINFO
 	{
-		extern char build_change[], build_hash[];
+		extern unsigned long build_commit_timestamp;
+		extern char build_hash[];
 		/* TODO(sergey): Add branch name to file as well? */
-		BLI_strncpy(fg.build_change, build_change, sizeof(fg.build_change));
+		fg.build_commit_timestamp = build_commit_timestamp;
 		BLI_strncpy(fg.build_hash, build_hash, sizeof(fg.build_hash));
 	}
 #else
-	BLI_strncpy(fg.build_change, "unknown", sizeof(fg.build_change));
+	fg.build_commit_timestamp = 0;
 	BLI_strncpy(fg.build_hash, "unknown", sizeof(fg.build_hash));
 #endif
 	writestruct(wd, GLOB, "FileGlobal", 1, &fg);

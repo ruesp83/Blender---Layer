@@ -443,7 +443,8 @@ static void template_ID(bContext *C, uiLayout *layout, TemplateID *template, Str
 			but->icon = RNA_struct_ui_icon(type);
 			/* default dragging of icon for id browse buttons */
 			uiButSetDragID(but, id);
-			uiButSetFlag(but, UI_HAS_ICON | UI_ICON_LEFT);
+			uiButSetFlag(but, UI_HAS_ICON);
+			uiButSetDrawFlag(but, UI_BUT_ICON_LEFT);
 		}
 
 		if ((idfrom && idfrom->lib) || !editable)
@@ -2474,11 +2475,7 @@ static void uilist_draw_item_default(struct uiList *ui_list, struct bContext *UN
                                      struct PointerRNA *UNUSED(active_dataptr), const char *UNUSED(active_propname),
                                      int UNUSED(index), int UNUSED(flt_flag))
 {
-	char *namebuf;
-	const char *name;
-
-	namebuf = RNA_struct_name_get_alloc(itemptr, NULL, 0, NULL);
-	name = (namebuf) ? namebuf : "";
+	PropertyRNA *nameprop = RNA_struct_name_property(itemptr->type);
 
 	/* Simplest one! */
 	switch (ui_list->layout_type) {
@@ -2488,13 +2485,13 @@ static void uilist_draw_item_default(struct uiList *ui_list, struct bContext *UN
 		case UILST_LAYOUT_DEFAULT:
 		case UILST_LAYOUT_COMPACT:
 		default:
-			uiItemL(layout, name, icon);
+			if (nameprop) {
+				uiItemFullR(layout, itemptr, nameprop, RNA_NO_INDEX, 0, UI_ITEM_R_NO_BG, "", icon);
+			}
+			else {
+				uiItemL(layout, "", icon);
+			}
 			break;
-	}
-
-	/* free name */
-	if (namebuf) {
-		MEM_freeN(namebuf);
 	}
 }
 
@@ -2712,8 +2709,8 @@ static void prepare_list(uiList *ui_list, int len, int activei, int rows, int ma
 }
 
 void uiTemplateList(uiLayout *layout, bContext *C, const char *listtype_name, const char *list_id,
-                    PointerRNA *dataptr, const char *propname, PointerRNA *active_dataptr,
-                    const char *active_propname, int rows, int maxrows, int layout_type, int columns)
+                    PointerRNA *dataptr, const char *propname, PointerRNA *active_dataptr, const char *active_propname,
+                    int rows, int maxrows, int layout_type, int columns)
 {
 	uiListType *ui_list_type;
 	uiList *ui_list = NULL;
@@ -2939,7 +2936,7 @@ void uiTemplateList(uiLayout *layout, bContext *C, const char *listtype_name, co
 
 					but = uiDefButR_prop(subblock, LISTROW, 0, "", 0, 0, UI_UNIT_X * 10, UI_UNIT_Y,
 					                     active_dataptr, activeprop, 0, 0, org_i, 0, 0, NULL);
-					uiButSetFlag(but, UI_BUT_NO_TOOLTIP);
+					uiButSetDrawFlag(but, UI_BUT_NO_TOOLTIP);
 
 					sub = uiLayoutRow(overlap, FALSE);
 
@@ -2948,7 +2945,6 @@ void uiTemplateList(uiLayout *layout, bContext *C, const char *listtype_name, co
 						icon = ICON_NONE;
 					draw_item(ui_list, C, sub, dataptr, itemptr, icon, active_dataptr, active_propname,
 					          org_i, flt_flag);
-
 
 					/* If we are "drawing" active item, set all labels as active. */
 					if (i == activei) {
@@ -3026,7 +3022,7 @@ void uiTemplateList(uiLayout *layout, bContext *C, const char *listtype_name, co
 
 					but = uiDefButR_prop(subblock, LISTROW, 0, "", 0, 0, UI_UNIT_X * 10, UI_UNIT_Y,
 					                     active_dataptr, activeprop, 0, 0, org_i, 0, 0, NULL);
-					uiButSetFlag(but, UI_BUT_NO_TOOLTIP);
+					uiButSetDrawFlag(but, UI_BUT_NO_TOOLTIP);
 
 					sub = uiLayoutRow(overlap, FALSE);
 
@@ -3238,6 +3234,16 @@ void uiTemplateRunningJobs(uiLayout *layout, bContext *C)
 			else if (WM_jobs_test(wm, scene, WM_JOB_TYPE_COMPOSITE)) {
 				handle_event = B_STOPCOMPO;
 				break;
+			}
+			else if (WM_jobs_test(wm, scene, WM_JOB_TYPE_OBJECT_BAKE_TEXTURE)) {
+				/* Skip bake jobs in compositor to avoid compo header displaying
+				 * progress bar which is not being updated (bake jobs only need
+				 * to update NC_IMAGE context.
+				 */
+				if (sa->spacetype != SPACE_NODE) {
+					handle_event = B_STOPOTHER;
+					break;
+				}
 			}
 			else if (WM_jobs_test(wm, scene, WM_JOB_TYPE_ANY)) {
 				handle_event = B_STOPOTHER;

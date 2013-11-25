@@ -54,6 +54,8 @@
 
 #include "UI_interface.h"
 
+#include "ED_armature.h"
+
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -61,10 +63,6 @@
 #include "interface_intern.h"
 
 /************************ Structs and Defines *************************/
-
-#define RNA_NO_INDEX    -1
-#define RNA_ENUM_VALUE  -2
-
 
 // #define USE_OP_RESET_BUT  // we may want to make this optional, disable for now.
 
@@ -375,6 +373,7 @@ static void ui_item_array(uiLayout *layout, uiBlock *block, const char *name, in
 		int cols = (len >= 20) ? 2 : 1;
 		const unsigned int colbuts = len / (2 * cols);
 		unsigned int layer_used = 0;
+		unsigned int layer_active = 0;
 
 		uiBlockSetCurLayout(block, uiLayoutAbsolute(layout, FALSE));
 
@@ -384,27 +383,59 @@ static void ui_item_array(uiLayout *layout, uiBlock *block, const char *name, in
 
 		if (ptr->type == &RNA_Armature) {
 			bArmature *arm = (bArmature *)ptr->data;
+			
 			layer_used = arm->layer_used;
+			
+			if (arm->edbo) {
+				if (arm->act_edbone) {
+					layer_active |= arm->act_edbone->layer;
+				}
+			}
+			else {
+				if (arm->act_bone) {
+					layer_active |= arm->act_bone->layer;
+				}
+			}
 		}
 
 		for (b = 0; b < cols; b++) {
 			uiBlockBeginAlign(block);
 
 			for (a = 0; a < colbuts; a++) {
-				if (layer_used & (1 << (a + b * colbuts))) icon = ICON_LAYER_USED;
-				else icon = ICON_BLANK1;
+				int layer_num  = a + b * colbuts;
+				int layer_flag = 1 << layer_num;
+				
+				if (layer_used & layer_flag) {
+					if (layer_active & layer_flag)
+						icon = ICON_LAYER_ACTIVE;
+					else
+						icon = ICON_LAYER_USED;
+				}
+				else {
+					icon = ICON_BLANK1;
+				}
 
-				but = uiDefAutoButR(block, ptr, prop, a + b * colbuts, "", icon, x + butw * a, y + buth, butw, buth);
+				but = uiDefAutoButR(block, ptr, prop, layer_num, "", icon, x + butw * a, y + buth, butw, buth);
 				if (subtype == PROP_LAYER_MEMBER)
-					uiButSetFunc(but, ui_layer_but_cb, but, SET_INT_IN_POINTER(a + b * colbuts));
+					uiButSetFunc(but, ui_layer_but_cb, but, SET_INT_IN_POINTER(layer_num));
 			}
 			for (a = 0; a < colbuts; a++) {
-				if (layer_used & (1 << (a + len / 2 + b * colbuts))) icon = ICON_LAYER_USED;
-				else icon = ICON_BLANK1;
+				int layer_num  = a + len / 2 + b * colbuts;
+				int layer_flag = 1 << layer_num;
+				
+				if (layer_used & layer_flag) {
+					if (layer_active & layer_flag)
+						icon = ICON_LAYER_ACTIVE;
+					else
+						icon = ICON_LAYER_USED;
+				}
+				else {
+					icon = ICON_BLANK1;
+				}
 
-				but = uiDefAutoButR(block, ptr, prop, a + len / 2 + b * colbuts, "", icon, x + butw * a, y, butw, buth);
+				but = uiDefAutoButR(block, ptr, prop, layer_num, "", icon, x + butw * a, y, butw, buth);
 				if (subtype == PROP_LAYER_MEMBER)
-					uiButSetFunc(but, ui_layer_but_cb, but, SET_INT_IN_POINTER(a + len / 2 + b * colbuts));
+					uiButSetFunc(but, ui_layer_but_cb, but, SET_INT_IN_POINTER(layer_num));
 			}
 			uiBlockEndAlign(block);
 
@@ -549,7 +580,7 @@ static void ui_item_enum_expand(uiLayout *layout, uiBlock *block, PointerRNA *pt
 		}
 
 		if (ui_layout_local_dir(layout) != UI_LAYOUT_HORIZONTAL)
-			but->flag |= UI_TEXT_LEFT;
+			but->drawflag |= UI_BUT_TEXT_LEFT;
 	}
 	uiBlockSetCurLayout(block, layout);
 
@@ -597,13 +628,11 @@ static uiBut *ui_item_with_label(uiLayout *layout, uiBlock *block, const char *n
 
 	if (subtype == PROP_FILEPATH || subtype == PROP_DIRPATH) {
 		uiBlockSetCurLayout(block, uiLayoutRow(sub, TRUE));
-		uiDefAutoButR(block, ptr, prop, index, "", icon, x, y, w - UI_UNIT_X, h);
+		but = uiDefAutoButR(block, ptr, prop, index, "", icon, x, y, w - UI_UNIT_X, h);
 
 		/* BUTTONS_OT_file_browse calls uiFileBrowseContextProperty */
-		but = uiDefIconButO(block, BUT, subtype == PROP_DIRPATH ?
-		                    "BUTTONS_OT_directory_browse" :
-		                    "BUTTONS_OT_file_browse",
-		                    WM_OP_INVOKE_DEFAULT, ICON_FILESEL, x, y, UI_UNIT_X, h, NULL);
+		uiDefIconButO(block, BUT, subtype == PROP_DIRPATH ? "BUTTONS_OT_directory_browse" : "BUTTONS_OT_file_browse",
+		              WM_OP_INVOKE_DEFAULT, ICON_FILESEL, x, y, UI_UNIT_X, h, NULL);
 	}
 	else if (flag & UI_ITEM_R_EVENT) {
 		uiDefButR_prop(block, KEYEVT, 0, name, x, y, w, h, ptr, prop, index, 0, 0, -1, -1, NULL);
@@ -731,7 +760,7 @@ PointerRNA uiItemFullO_ptr(uiLayout *layout, wmOperatorType *ot, const char *nam
 
 	/* text alignment for toolbar buttons */
 	if ((layout->root->type == UI_LAYOUT_TOOLBAR) && !icon)
-		but->flag |= UI_TEXT_LEFT;
+		but->drawflag |= UI_BUT_TEXT_LEFT;
 
 	if (flag & UI_ITEM_R_NO_BG)
 		uiBlockSetEmboss(block, UI_EMBOSS);
@@ -881,7 +910,7 @@ void uiItemsFullEnumO(uiLayout *layout, const char *opname, const char *propname
 
 					uiItemL(column, item->name, ICON_NONE);
 					but = block->buttons.last;
-					but->flag = UI_TEXT_LEFT;
+					but->drawflag = UI_BUT_TEXT_LEFT;
 					ui_but_tip_from_enum_item(but, item);
 				}
 				else {  /* XXX bug here, colums draw bottom item badly */
@@ -1107,7 +1136,7 @@ static void ui_item_rna_size(uiLayout *layout, const char *name, int icon, Point
 void uiItemFullR(uiLayout *layout, PointerRNA *ptr, PropertyRNA *prop, int index, int value, int flag, const char *name, int icon)
 {
 	uiBlock *block = layout->root->block;
-	uiBut *but;
+	uiBut *but = NULL;
 	PropertyType type;
 	char namestr[UI_MAX_NAME_STR];
 	int len, is_array, w, h, slider, toggle, expand, icon_only, no_bg;
@@ -1196,7 +1225,12 @@ void uiItemFullR(uiLayout *layout, PointerRNA *ptr, PropertyRNA *prop, int index
 		if (layout->redalert)
 			uiButSetFlag(but, UI_BUT_REDALERT);
 	}
-	
+
+	/* Mark non-embossed textfields inside a listbox. */
+	if (but && (block->flag & UI_BLOCK_LIST_ITEM) && (but->type == TEX) && (but->dt & UI_EMBOSSN)) {
+		uiButSetFlag(but, UI_BUT_LIST_ITEM);
+	}
+
 	if (no_bg)
 		uiBlockSetEmboss(block, UI_EMBOSS);
 }
@@ -1305,7 +1339,7 @@ void uiItemsEnumR(uiLayout *layout, struct PointerRNA *ptr, const char *propname
 
 					uiItemL(column, item[i].name, ICON_NONE);
 					bt = block->buttons.last;
-					bt->flag = UI_TEXT_LEFT;
+					bt->drawflag = UI_BUT_TEXT_LEFT;
 
 					ui_but_tip_from_enum_item(bt, &item[i]);
 				}
@@ -1455,7 +1489,7 @@ void ui_but_add_search(uiBut *but, PointerRNA *ptr, PropertyRNA *prop, PointerRN
 		but->hardmax = MAX2(but->hardmax, 256.0f);
 		but->rnasearchpoin = *searchptr;
 		but->rnasearchprop = searchprop;
-		but->flag |= UI_ICON_LEFT | UI_TEXT_LEFT;
+		but->drawflag |= UI_BUT_ICON_LEFT | UI_BUT_TEXT_LEFT;
 
 		if (RNA_property_type(prop) == PROP_ENUM) {
 			/* XXX, this will have a menu string,
@@ -1598,7 +1632,7 @@ static void ui_item_menu(uiLayout *layout, const char *name, int icon, uiMenuCre
 	    (force_menu && layout->root->type != UI_LAYOUT_MENU))  /* We never want a dropdown in menu! */
 	{
 		but->type = MENU;
-		but->flag |= UI_TEXT_LEFT;
+		but->drawflag |= UI_BUT_TEXT_LEFT;
 	}
 }
 
@@ -1650,13 +1684,13 @@ static uiBut *uiItemL_(uiLayout *layout, const char *name, int icon)
 	 * make text aligned right if the layout is aligned right.
 	 */
 	if (uiLayoutGetAlignment(layout) == UI_LAYOUT_ALIGN_RIGHT) {
-		but->flag &= ~UI_TEXT_LEFT;	/* default, needs to be unset */
-		but->flag |= UI_TEXT_RIGHT;
+		but->drawflag &= ~UI_BUT_TEXT_LEFT;	/* default, needs to be unset */
+		but->drawflag |= UI_BUT_TEXT_RIGHT;
 	}
 
 	/* Mark as a label inside a listbox. */
 	if (block->flag & UI_BLOCK_LIST_ITEM) {
-		but->type = LISTLABEL;
+		but->flag |= UI_BUT_LIST_ITEM;
 	}
 
 	return but;
@@ -2417,8 +2451,9 @@ uiLayout *uiLayoutBox(uiLayout *layout)
 	return (uiLayout *)ui_layout_box(layout, ROUNDBOX);
 }
 
-/* Check all buttons defined in this layout, and set labels as active/selected.
- * Needed to handle correctly text colors of list items. */
+/* Check all buttons defined in this layout, and set any button flagged as UI_BUT_LIST_ITEM as active/selected.
+ * Needed to handle correctly text colors of active (selected) list item.
+ */
 void ui_layout_list_set_labels_active(uiLayout *layout)
 {
 	uiButtonItem *bitem;
@@ -2426,7 +2461,7 @@ void ui_layout_list_set_labels_active(uiLayout *layout)
 		if (bitem->item.type != ITEM_BUTTON) {
 			ui_layout_list_set_labels_active((uiLayout *)(&bitem->item));
 		}
-		else if (bitem->but->type == LISTLABEL) {
+		else if (bitem->but->flag & UI_BUT_LIST_ITEM) {
 			uiButSetFlag(bitem->but, UI_SELECT);
 		}
 	}
