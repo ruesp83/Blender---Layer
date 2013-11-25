@@ -862,7 +862,7 @@ void draw_image_main(const bContext *C, ARegion *ar)
 	Scene *scene = CTX_data_scene(C);
 	Image *ima;
 	ImageLayer *layer = NULL;
-	ImBuf *ibuf, *ibuf_l = NULL;
+	ImBuf *ibuf, *ibuf_l = NULL, *p_ibuf = NULL;
 	ImBuf *next_ibuf = NULL, *result_ibuf;
 	float zoomx, zoomy, sp_x, sp_y;
 	bool show_viewer, show_render, show_paint;
@@ -934,60 +934,74 @@ void draw_image_main(const bContext *C, ARegion *ar)
 		b_y = ibuf->y;
 		background = layer->background;
 
-		for (layer = (ImageLayer*)ima->imlayers.last; layer; layer = layer->prev) {
-			if (!first) {
-				if ((layer->opacity != 1.0f) || (ibuf->channels == 4) || (background & IMA_LAYER_BG_ALPHA)) {
-					UI_view2d_to_region_no_clip(&ar->v2d, 0.0f, 0.0f, &x, &y);
-					fdrawcheckerboard(x, y, x + ibuf->x * zoomx, y + ibuf->y * zoomy);
-					first = 1;
-				}
+		if (ima->preview_ibuf) {
+			p_ibuf = ima->preview_ibuf;
+			if ((p_ibuf->channels == 4) || (background & IMA_LAYER_BG_ALPHA)) {
+				UI_view2d_to_region_no_clip(&ar->v2d, 0.0f, 0.0f, &x, &y);
+				fdrawcheckerboard(x, y, x + p_ibuf->x * zoomx, y + p_ibuf->y * zoomy);
 			}
-
-			if (layer->visible & IMA_LAYER_VISIBLE) {
-				ibuf_l = (ImBuf*)layer->ibufs.first;
-
-				if (ibuf_l) {
-					result_ibuf = imalayer_blend(next_ibuf, ibuf_l, layer->opacity, layer->mode, background);
-
-					if (next_ibuf)
-						IMB_freeImBuf(next_ibuf);
-
-					next_ibuf = IMB_dupImBuf(result_ibuf);
-
-					if (layer->background & IMA_LAYER_BG_IMAGE) {
-						/*sp_x = 1 / ((float)(bg_x - ibuf_l->x) / 2);
-						sp_y = 1 / ((float)(bg_y - ibuf_l->y) / 2);
-						*/
-						sp_x = 0.0f;
-						sp_y = 0.0f;
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			draw_layer_buffer(C, sima, ar, scene, p_ibuf, 0.0f, 0.0f, zoomx, zoomy);
+			glDisable(GL_BLEND);
+			b_x = p_ibuf->x;
+			b_y = p_ibuf->y;
+		}
+		else {
+			for (layer = (ImageLayer*)ima->imlayers.last; layer; layer = layer->prev) {
+				if (!first) {
+					if ((layer->opacity != 1.0f) || (ibuf->channels == 4) || (background & IMA_LAYER_BG_ALPHA)) {
+						UI_view2d_to_region_no_clip(&ar->v2d, 0.0f, 0.0f, &x, &y);
+						fdrawcheckerboard(x, y, x + ibuf->x * zoomx, y + ibuf->y * zoomy);
+						first = 1;
 					}
-					else {
-						sp_x = 0.0f;
-						sp_y = 0.0f;
-					}
-					
-					glEnable(GL_BLEND);
-					glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-					glColor4f(1.0f, 1.0f, 1.0f, layer->opacity);
-					draw_layer_buffer(C, sima, ar, scene, result_ibuf, sp_x, sp_y, zoomx, zoomy);
-					glDisable(GL_BLEND);
-
-					if (result_ibuf)
-						IMB_freeImBuf(result_ibuf);
 				}
-			}
 
-			if (UI_GetThemeValue(TH_SHOW_BOUNDARY_LAYER)) {
-				if (layer->select & IMA_LAYER_SEL_CURRENT) {
+				if (layer->visible & IMA_LAYER_VISIBLE) {
+					ibuf_l = (ImBuf*)layer->ibufs.first;
+
 					if (ibuf_l) {
-						b_x = ibuf_l->x;
-						b_y = ibuf_l->y;
+						result_ibuf = imalayer_blend(next_ibuf, ibuf_l, layer->opacity, layer->mode, background);
+
+						if (next_ibuf)
+							IMB_freeImBuf(next_ibuf);
+
+						next_ibuf = IMB_dupImBuf(result_ibuf);
+
+						if (layer->background & IMA_LAYER_BG_IMAGE) {
+							/*sp_x = 1 / ((float)(bg_x - ibuf_l->x) / 2);
+							sp_y = 1 / ((float)(bg_y - ibuf_l->y) / 2);
+							*/
+							sp_x = 0.0f;
+							sp_y = 0.0f;
+						}
+						else {
+							sp_x = 0.0f;
+							sp_y = 0.0f;
+						}
+					
+						glEnable(GL_BLEND);
+						glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+						glColor4f(1.0f, 1.0f, 1.0f, layer->opacity);
+						draw_layer_buffer(C, sima, ar, scene, result_ibuf, sp_x, sp_y, zoomx, zoomy);
+						glDisable(GL_BLEND);
+
+						if (result_ibuf)
+							IMB_freeImBuf(result_ibuf);
+					}
+				}
+
+				if (UI_GetThemeValue(TH_SHOW_BOUNDARY_LAYER)) {
+					if (layer->select & IMA_LAYER_SEL_CURRENT) {
+						if (ibuf_l) {
+							b_x = ibuf_l->x;
+							b_y = ibuf_l->y;
+						}
 					}
 				}
 			}
 		}
-
 		glDisable(GL_BLEND);
 		if (UI_GetThemeValue(TH_SHOW_BOUNDARY_LAYER))
 			layer_draw_boundary(x, y, b_x, b_y, zoomx, zoomy);
@@ -1012,14 +1026,10 @@ void draw_image_main(const bContext *C, ARegion *ar)
 
 		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
-		if (ima->preview_ibuf) {
+		if (ima->preview_ibuf)
 			draw_image_buffer(C, sima, ar, scene, ima->preview_ibuf, 0.0f, 0.0f, zoomx, zoomy);
-			//IMB_freeImBuf(ima->preview_ibuf);
-			//ima->preview_ibuf = NULL;
-		}
-		else {
+		else
 			draw_image_buffer(C, sima, ar, scene, ibuf, 0.0f, 0.0f, zoomx, zoomy);
-		}
 
 		glDisable(GL_BLEND);
 		

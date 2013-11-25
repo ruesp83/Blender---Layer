@@ -2756,7 +2756,9 @@ static int image_arbitrary_rot_exec(bContext *C, wmOperator *op)
 
 static bool image_arbitrary_rot_check(bContext *C, wmOperator *op)
 {
+	//SpaceImage *sima = CTX_wm_space_image(C);
 	Image *ima = CTX_data_edit_image(C);
+	//ImageLayer *layer;
 	ImBuf *ibuf;
 	float angle;
 	float col[4];
@@ -2784,6 +2786,9 @@ static bool image_arbitrary_rot_check(bContext *C, wmOperator *op)
 	ima->preview_ibuf = IMB_dupImBuf(ibuf);
 
 	ima->preview_ibuf = IMB_rotation(ima->preview_ibuf, 0.0, 0.0, angle, type, col);
+	//if (sima->mode == SI_MODE_PAINT) {
+
+	//}
 
 	BKE_image_release_ibuf(ima, ibuf, NULL);
 }

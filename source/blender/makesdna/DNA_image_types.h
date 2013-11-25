@@ -90,6 +90,7 @@ typedef struct ImageLayer {
 	float default_color[4];
 	int pad2;
 	ListBase ibufs;
+	struct ImBuf *preview_ibuf;
 }ImageLayer;
 
 /* **************** IMAGE LAYER********************* */
