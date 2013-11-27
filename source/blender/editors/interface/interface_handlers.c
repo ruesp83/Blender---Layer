@@ -721,7 +721,7 @@ static bool ui_drag_toggle_set_xy_xy(bContext *C, ARegion *ar, const bool is_set
 {
 	/* popups such as layers won't re-evaluate on redraw */
 	const bool do_check = (ar->regiontype == RGN_TYPE_TEMPORARY);
-	bool change = false;
+	bool changed = false;
 	uiBlock *block;
 
 	for (block = ar->uiblocks.first; block; block = block->next) {
@@ -749,7 +749,7 @@ static bool ui_drag_toggle_set_xy_xy(bContext *C, ARegion *ar, const bool is_set
 							if (do_check) {
 								ui_check_but(but);
 							}
-							change = true;
+							changed = true;
 						}
 					}
 					/* done */
@@ -759,7 +759,7 @@ static bool ui_drag_toggle_set_xy_xy(bContext *C, ARegion *ar, const bool is_set
 		}
 	}
 
-	return change;
+	return changed;
 }
 
 static void ui_drag_toggle_set(bContext *C, uiDragToggleHandle *drag_info, const int xy_input[2])
@@ -1549,7 +1549,7 @@ static void ui_but_copy_paste(bContext *C, uiBut *but, uiHandleButtonData *data,
 			char *str;
 			opptr = uiButGetOperatorPtrRNA(but); /* allocated when needed, the button owns it */
 
-			str = WM_operator_pystring_ex(C, NULL, false, but->optype, opptr);
+			str = WM_operator_pystring_ex(C, NULL, false, true, but->optype, opptr);
 
 			WM_clipboard_text_set(str, 0);
 
@@ -1630,14 +1630,14 @@ static bool ui_textedit_delete_selection(uiBut *but, uiHandleButtonData *data)
 {
 	char *str = data->str;
 	const int len = strlen(str);
-	bool change = false;
+	bool changed = false;
 	if (but->selsta != but->selend && len) {
 		memmove(str + but->selsta, str + but->selend, (len - but->selend) + 1);
-		change = true;
+		changed = true;
 	}
 	
 	but->pos = but->selend = but->selsta;
-	return change;
+	return changed;
 }
 
 /* note, but->block->aspect is used here, when drawing button style is getting scaled too */
@@ -1925,19 +1925,19 @@ static bool ui_textedit_delete(uiBut *but, uiHandleButtonData *data, int directi
 static bool ui_textedit_autocomplete(bContext *C, uiBut *but, uiHandleButtonData *data)
 {
 	char *str;
-	bool change = true;
+	bool changed = true;
 
 	str = data->str;
 
 	if (data->searchbox)
-		change = ui_searchbox_autocomplete(C, data->searchbox, but, data->str);
+		changed = ui_searchbox_autocomplete(C, data->searchbox, but, data->str);
 	else
-		change = but->autocomplete_func(C, str, but->autofunc_arg);
+		changed = but->autocomplete_func(C, str, but->autofunc_arg);
 
 	but->pos = strlen(str);
 	but->selsta = but->selend = but->pos;
 
-	return change;
+	return changed;
 }
 
 /* mode for ui_textedit_copypaste() */
@@ -2578,6 +2578,26 @@ int ui_button_open_menu_direction(uiBut *but)
 		return data->menu->direction;
 	
 	return 0;
+}
+
+/* Hack for uiList LISTROW buttons to "give" events to overlaying TEX buttons (cltr-clic rename feature & co). */
+static uiBut* ui_but_list_row_text_activate(bContext *C, uiBut *but, uiHandleButtonData *data, const wmEvent *event,
+                                            uiButtonActivateType activate_type)
+{
+	ARegion *ar = CTX_wm_region(C);
+	uiBut *labelbut = ui_but_find_mouse_over_ex(ar, event->x, event->y, true);
+
+	if (labelbut && labelbut->type == TEX) {
+		/* exit listrow */
+		data->cancel = true;
+		button_activate_exit(C, but, data, false, false);
+
+		/* Activate the text button. */
+		button_activate_init(C, ar, labelbut, activate_type);
+
+		return labelbut;
+	}
+	return NULL;
 }
 
 /* ***************** events for different button types *************** */
@@ -3528,23 +3548,16 @@ static int ui_do_but_SCROLL(bContext *C, uiBlock *block, uiBut *but, uiHandleBut
 
 static int ui_do_but_LISTROW(bContext *C, uiBut *but, uiHandleButtonData *data, const wmEvent *event)
 {
-	ARegion *ar = CTX_wm_region(C);
-	
 	if (data->state == BUTTON_STATE_HIGHLIGHT) {
 		/* hack to pass on ctrl+click and double click to overlapping text
-		 * editing field for editing list item names */
+		 * editing field for editing list item names
+		 */
 		if ((ELEM3(event->type, LEFTMOUSE, PADENTER, RETKEY) && event->val == KM_PRESS && event->ctrl) ||
-		    (event->type == LEFTMOUSE && event->val == KM_DBL_CLICK)) {
-			uiBut *labelbut = ui_but_find_mouse_over_ex(ar, event->x, event->y, true);
-
-			if (labelbut && labelbut->type == TEX) {
-				/* exit listrow */
-				data->cancel = true;
-				button_activate_state(C, but, BUTTON_STATE_EXIT);
-				button_activate_exit(C, but, data, false, false);
-
-				/* enter text editing */
-				button_activate_init(C, ar, labelbut, BUTTON_ACTIVATE_TEXT_EDITING);
+		    (event->type == LEFTMOUSE && event->val == KM_DBL_CLICK))
+		{
+			uiBut *labelbut = ui_but_list_row_text_activate(C, but, data, event, BUTTON_ACTIVATE_TEXT_EDITING);
+			if (labelbut) {
+				/* Nothing else to do. */
 				return WM_UI_HANDLER_BREAK;
 			}
 		}
@@ -5572,7 +5585,15 @@ static int ui_do_button(bContext *C, uiBlock *block, uiBut *but, const wmEvent *
 	if ((data->state == BUTTON_STATE_HIGHLIGHT) || (event->type == EVT_DROP)) {
 		/* handle copy-paste */
 		if (ELEM(event->type, CKEY, VKEY) && event->val == KM_PRESS && (event->ctrl || event->oskey)) {
-			
+			/* Specific handling for listrows, we try to find their overlapping tex button. */
+			if (but->type == LISTROW) {
+				uiBut *labelbut = ui_but_list_row_text_activate(C, but, data, event, BUTTON_ACTIVATE_OVER);
+				if (labelbut) {
+					but = labelbut;
+					data = but->active;
+				}
+			}
+
 			ui_but_copy_paste(C, but, data, (event->type == CKEY) ? 'c' : 'v');
 			return WM_UI_HANDLER_BREAK;
 		}
