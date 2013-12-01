@@ -182,12 +182,15 @@ typedef struct ImBuf {
 #define IB_alphamode_detect	(1 << 13)  /* if this flag is set, alpha mode would be guessed from file */
 #define IB_ignore_alpha		(1 << 14)  /* ignore alpha on load and substitude it with 1.0f */
 
-
 /*
  * The bit flag is stored in the ImBuf.ftype variable.
- * Note that the lower 10 bits is used for storing custom flags 
+ * Note that the lower 11 bits is used for storing custom flags
  */
-#define IB_CUSTOM_FLAGS_MASK 0x3ff
+#define IB_CUSTOM_FLAGS_MASK 0x7ff
+
+#ifdef WITH_OPENIMAGEIO
+#define PSD				(1 << 31)
+#endif
 
 #define PNG				(1 << 30)
 #define TGA				(1 << 28)
