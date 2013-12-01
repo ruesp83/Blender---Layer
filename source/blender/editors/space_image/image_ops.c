@@ -2021,7 +2021,7 @@ void IMAGE_OT_invert(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-static int image_invert_value_exec(bContext *C, wmOperator *op)
+static int image_invert_value_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	SpaceImage *sima = CTX_wm_space_image(C);
 	Image *ima = CTX_data_edit_image(C);
@@ -2451,7 +2451,7 @@ void IMAGE_OT_colorize(wmOperatorType *ot)
 
 /********************* Color Space Operators *********************/
 
-static int image_grayscale_exec(bContext *C, wmOperator *op)
+static int image_grayscale_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	ImageLayer *layer;
 	Image *ima = CTX_data_edit_image(C);
@@ -2497,7 +2497,7 @@ void IMAGE_OT_color_space_grayscale(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER;
 }
 
-static int image_rgb_exec(bContext *C, wmOperator *op)
+static int image_rgb_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Image *ima = CTX_data_edit_image(C);
 
@@ -2791,9 +2791,10 @@ static bool image_arbitrary_rot_check(bContext *C, wmOperator *op)
 	//}
 
 	BKE_image_release_ibuf(ima, ibuf, NULL);
+	return TRUE;
 }
 
-static void image_arbitrary_rot_cancel(bContext *C, wmOperator *op)
+static void image_arbitrary_rot_cancel(bContext *C, wmOperator *UNUSED(op))
 {
 	Image *ima = CTX_data_edit_image(C);
 
@@ -3308,7 +3309,7 @@ void IMAGE_OT_layer_add_default(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-static int image_layer_duplicate_exec(bContext *C, wmOperator *op)
+static int image_layer_duplicate_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Image *ima = CTX_data_edit_image(C);
 	ImageLayer *iml;
@@ -3751,7 +3752,7 @@ void IMAGE_OT_layer_merge(wmOperatorType *ot)
 	RNA_def_enum(ot->srna, "type", slot_merge, 0, "Type", "");
 }
 
-static int image_layer_clean_exec(bContext *C, wmOperator *op)
+static int image_layer_clean_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Image *ima = CTX_data_edit_image(C);
 	ImageLayer *layer;
