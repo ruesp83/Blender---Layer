@@ -949,16 +949,22 @@ void draw_image_main(const bContext *C, ARegion *ar)
 		}
 		else {
 			for (layer = (ImageLayer*)ima->imlayers.last; layer; layer = layer->prev) {
-				if (!first) {
+				if ((!first) || (layer->preview_ibuf)) {
 					if ((layer->opacity != 1.0f) || (ibuf->channels == 4) || (background & IMA_LAYER_BG_ALPHA)) {
 						UI_view2d_to_region_no_clip(&ar->v2d, 0.0f, 0.0f, &x, &y);
-						fdrawcheckerboard(x, y, x + ibuf->x * zoomx, y + ibuf->y * zoomy);
+						if (layer->preview_ibuf)
+							fdrawcheckerboard(x, y, x + layer->preview_ibuf->x * zoomx, y + layer->preview_ibuf->y * zoomy);
+						else
+							fdrawcheckerboard(x, y, x + ibuf->x * zoomx, y + ibuf->y * zoomy);
 						first = 1;
 					}
 				}
 
 				if (layer->visible & IMA_LAYER_VISIBLE) {
-					ibuf_l = (ImBuf*)layer->ibufs.first;
+					if (layer->preview_ibuf)
+						ibuf_l = layer->preview_ibuf;
+					else
+						ibuf_l = (ImBuf*)layer->ibufs.first;
 
 					if (ibuf_l) {
 						result_ibuf = imalayer_blend(next_ibuf, ibuf_l, layer->opacity, layer->mode, background);

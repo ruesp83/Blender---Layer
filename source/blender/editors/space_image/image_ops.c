@@ -2786,9 +2786,6 @@ static bool image_arbitrary_rot_check(bContext *C, wmOperator *op)
 	ima->preview_ibuf = IMB_dupImBuf(ibuf);
 
 	ima->preview_ibuf = IMB_rotation(ima->preview_ibuf, 0.0, 0.0, angle, type, col);
-	//if (sima->mode == SI_MODE_PAINT) {
-
-	//}
 
 	BKE_image_release_ibuf(ima, ibuf, NULL);
 	return TRUE;
@@ -2798,10 +2795,12 @@ static void image_arbitrary_rot_cancel(bContext *C, wmOperator *UNUSED(op))
 {
 	Image *ima = CTX_data_edit_image(C);
 
-	if (ima->preview_ibuf) {
-		IMB_freeImBuf(ima->preview_ibuf);
-		ima->preview_ibuf = NULL;
-		WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
+	if (ima) {
+		if (ima->preview_ibuf) {
+			IMB_freeImBuf(ima->preview_ibuf);
+			ima->preview_ibuf = NULL;
+			WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
+		}
 	}
 }
 
@@ -3931,9 +3930,18 @@ static int image_layer_arbitrary_rot_exec(bContext *C, wmOperator *op)
 	if (!ima)
 		return OPERATOR_CANCELLED;
 	
+	ima->use_layers = FALSE;
+	ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_LAYER);
+	ima->use_layers = TRUE;
+
 	layer = imalayer_get_current(ima);
 	if (!layer)
 			return OPERATOR_CANCELLED;
+
+	if (layer->preview_ibuf) {
+		IMB_freeImBuf(layer->preview_ibuf);
+		layer->preview_ibuf = NULL;
+	}
 
 	type = RNA_enum_get(op->ptr, "type");
 	angle = RNA_float_get(op->ptr, "angle");
@@ -3947,9 +3955,63 @@ static int image_layer_arbitrary_rot_exec(bContext *C, wmOperator *op)
 	layer->ibufs.last = NULL;
 	BLI_addtail(&layer->ibufs, IMB_rotation(ibuf, 0.0, 0.0, angle, type, col));
 
+	BKE_image_release_ibuf(ima, ibuf, NULL);
+
 	WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
- 
+
 	return OPERATOR_FINISHED;
+}
+
+static bool image_layer_arbitrary_rot_check(bContext *C, wmOperator *op)
+{
+	Image *ima = CTX_data_edit_image(C);
+	ImageLayer *layer;
+	ImBuf *ibuf;
+	float angle;
+	float col[4];
+	short type;
+
+	if (!ima)
+		return FALSE;
+	
+	ima->use_layers = FALSE;
+	ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_LAYER);
+	ima->use_layers = TRUE;
+
+	layer = imalayer_get_current(ima);
+	type = RNA_enum_get(op->ptr, "type");
+	angle = RNA_float_get(op->ptr, "angle");
+
+	get_color_background_layer(col, layer);
+
+	angle = angle * (-1);
+
+	if (layer->preview_ibuf) {
+		IMB_freeImBuf(layer->preview_ibuf);
+		layer->preview_ibuf = NULL;
+	}
+
+	layer->preview_ibuf = IMB_dupImBuf(ibuf);
+
+	layer->preview_ibuf = IMB_rotation(layer->preview_ibuf, 0.0, 0.0, angle, type, col);
+	
+	BKE_image_release_ibuf(ima, ibuf, NULL);
+	return TRUE;
+}
+
+static void image_layer_arbitrary_rot_cancel(bContext *C, wmOperator *UNUSED(op))
+{
+	Image *ima = CTX_data_edit_image(C);
+	ImageLayer *layer;
+
+	layer = imalayer_get_current(ima);
+	if (layer) {
+		if (layer->preview_ibuf) {
+			IMB_freeImBuf(layer->preview_ibuf);
+			layer->preview_ibuf = NULL;
+			WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
+		}
+	}
 }
 
 void IMAGE_OT_layer_arbitrary_rot(wmOperatorType *ot)
@@ -3972,6 +4034,8 @@ void IMAGE_OT_layer_arbitrary_rot(wmOperatorType *ot)
 	ot->exec = image_layer_arbitrary_rot_exec;
 	ot->poll = image_layer_poll;
 	ot->invoke = image_op_layer_invoke;
+	ot->cancel = image_layer_arbitrary_rot_cancel;
+	ot->check = image_layer_arbitrary_rot_check;
  
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
