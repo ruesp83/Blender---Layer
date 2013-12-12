@@ -435,7 +435,7 @@ float file_string_width(const char *str)
 {
 	uiStyle *style = UI_GetStyle();
 	uiStyleFontSet(&style->widget);
-	return BLF_width(style->widget.uifont_id, str);
+	return BLF_width(style->widget.uifont_id, str, BLF_DRAW_STR_DUMMY_MAX);
 }
 
 float file_font_pointsize(void)
@@ -634,7 +634,7 @@ int file_select_match(struct SpaceFile *sfile, const char *pattern, char *matche
 	return match;
 }
 
-bool autocomplete_directory(struct bContext *C, char *str, void *UNUSED(arg_v))
+int autocomplete_directory(struct bContext *C, char *str, void *UNUSED(arg_v))
 {
 	SpaceFile *sfile = CTX_wm_space_file(C);
 	int match = AUTOCOMPLETE_NO_MATCH;
@@ -684,10 +684,10 @@ bool autocomplete_directory(struct bContext *C, char *str, void *UNUSED(arg_v))
 		}
 	}
 
-	return match == AUTOCOMPLETE_FULL_MATCH;
+	return match;
 }
 
-bool autocomplete_file(struct bContext *C, char *str, void *UNUSED(arg_v))
+int autocomplete_file(struct bContext *C, char *str, void *UNUSED(arg_v))
 {
 	SpaceFile *sfile = CTX_wm_space_file(C);
 	int match = AUTOCOMPLETE_NO_MATCH;
@@ -706,7 +706,8 @@ bool autocomplete_file(struct bContext *C, char *str, void *UNUSED(arg_v))
 		}
 		match = autocomplete_end(autocpl, str);
 	}
-	return match == AUTOCOMPLETE_FULL_MATCH;
+
+	return match;
 }
 
 void ED_fileselect_clear(struct wmWindowManager *wm, struct SpaceFile *sfile)

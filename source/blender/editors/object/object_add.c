@@ -999,7 +999,7 @@ static int object_speaker_add_exec(bContext *C, wmOperator *op)
 		BKE_nlatrack_add_strip(nlt, strip);
 
 		/* auto-name the strip, and give the track an interesting name  */
-		strcpy(nlt->name, DATA_("SoundTrack"));
+		BLI_strncpy(nlt->name, DATA_("SoundTrack"), sizeof(nlt->name));
 		BKE_nlastrip_validate_name(adt, strip);
 
 		WM_event_add_notifier(C, NC_ANIMATION | ND_NLA | NA_EDITED, NULL);
@@ -1057,7 +1057,7 @@ static int object_delete_exec(bContext *C, wmOperator *op)
 	wmWindowManager *wm = CTX_wm_manager(C);
 	wmWindow *win;
 	const short use_global = RNA_boolean_get(op->ptr, "use_global");
-	int deleted_num = 0;
+	int num_deleted = 0;
 
 	if (CTX_data_edit_object(C)) 
 		return OPERATOR_CANCELLED;
@@ -1069,7 +1069,7 @@ static int object_delete_exec(bContext *C, wmOperator *op)
 
 		/* remove from current scene only */
 		ED_base_object_free_and_unlink(bmain, scene, base);
-		deleted_num++;
+		num_deleted++;
 
 		if (use_global) {
 			Scene *scene_iter;
@@ -1104,8 +1104,8 @@ static int object_delete_exec(bContext *C, wmOperator *op)
 		}
 	}
 
-	if (deleted_num > 0)
-		BKE_reportf(op->reports, RPT_INFO, "Deleted %d objects", deleted_num);
+	if (num_deleted > 0)
+		BKE_reportf(op->reports, RPT_INFO, "Deleted %d objects", num_deleted);
 
 	return OPERATOR_FINISHED;
 }

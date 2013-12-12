@@ -458,25 +458,25 @@ void initTransformOrientation(bContext *C, TransInfo *t)
 	switch (t->current_orientation) {
 		case V3D_MANIP_GLOBAL:
 			unit_m3(t->spacemtx);
-			strcpy(t->spacename, IFACE_("global"));
+			BLI_strncpy(t->spacename, IFACE_("global"), sizeof(t->spacename));
 			break;
 
 		case V3D_MANIP_GIMBAL:
 			unit_m3(t->spacemtx);
 			if (gimbal_axis(ob, t->spacemtx)) {
-				strcpy(t->spacename, IFACE_("gimbal"));
+				BLI_strncpy(t->spacename, IFACE_("gimbal"), sizeof(t->spacename));
 				break;
 			}
 			/* fall-through */  /* no gimbal fallthrough to normal */
 		case V3D_MANIP_NORMAL:
 			if (obedit || (ob && ob->mode & OB_MODE_POSE)) {
-				strcpy(t->spacename, IFACE_("normal"));
+				BLI_strncpy(t->spacename, IFACE_("normal"), sizeof(t->spacename));
 				ED_getTransformOrientationMatrix(C, t->spacemtx, (v3d->around == V3D_ACTIVE));
 				break;
 			}
 			/* fall-through */  /* we define 'normal' as 'local' in Object mode */
 		case V3D_MANIP_LOCAL:
-			strcpy(t->spacename, IFACE_("local"));
+			BLI_strncpy(t->spacename, IFACE_("local"), sizeof(t->spacename));
 		
 			if (ob) {
 				copy_m3_m4(t->spacemtx, ob->obmat);
@@ -493,7 +493,7 @@ void initTransformOrientation(bContext *C, TransInfo *t)
 				RegionView3D *rv3d = t->ar->regiondata;
 				float mat[3][3];
 
-				strcpy(t->spacename, IFACE_("view"));
+				BLI_strncpy(t->spacename, IFACE_("view"), sizeof(t->spacename));
 				copy_m3_m4(mat, rv3d->viewinv);
 				normalize_m3(mat);
 				copy_m3_m3(t->spacemtx, mat);
@@ -577,7 +577,6 @@ int getTransformOrientation(const bContext *C, float normal[3], float plane[3], 
 				else if (em->bm->totvertsel == 3) {
 					BMVert *v1 = NULL, *v2 = NULL, *v3 = NULL;
 					BMIter iter;
-					float cotangent[3];
 					
 					BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
 						if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
@@ -588,11 +587,37 @@ int getTransformOrientation(const bContext *C, float normal[3], float plane[3], 
 								v2 = eve;
 							}
 							else {
-								v3 = eve;
+								float no_test[3];
 
-								sub_v3_v3v3(plane, v2->co, v1->co);
-								sub_v3_v3v3(cotangent, v3->co, v2->co);
-								cross_v3_v3v3(normal, cotangent, plane);
+								float tan_a[3], tan_b[3], tan_c[3];
+								float len_a, len_b, len_c;
+								const float *tan_best;
+
+
+								v3 = eve;
+								sub_v3_v3v3(tan_a, v2->co, v1->co);
+								sub_v3_v3v3(tan_b, v3->co, v2->co);
+								sub_v3_v3v3(tan_c, v1->co, v3->co);
+								cross_v3_v3v3(normal, tan_b, tan_a);
+
+								/* check if the normal is pointing opposite to vert normals */
+								no_test[0] = v1->no[0] + v2->no[0] + v3->no[0];
+								no_test[1] = v1->no[1] + v2->no[1] + v3->no[1];
+								no_test[2] = v1->no[2] + v2->no[2] + v3->no[2];
+								if (dot_v3v3(no_test, normal) < 0.0f) {
+									negate_v3(normal);
+								}
+
+								/* always give the plane to the 2 most distant verts */
+								len_a = len_squared_v3(tan_a);
+								len_b = len_squared_v3(tan_b);
+								len_c = len_squared_v3(tan_c);
+
+								tan_best = MAX3_PAIR(len_a, len_b, len_c,
+								                     tan_a, tan_b, tan_c);
+
+								copy_v3_v3(plane, tan_best);
+
 								break;
 							}
 						}
@@ -639,9 +664,9 @@ int getTransformOrientation(const bContext *C, float normal[3], float plane[3], 
 							else {
 								v2 = eve;
 								
-								copy_v3_v3(plane, v1->no);
-								add_v3_v3(plane, v2->no);
-								sub_v3_v3v3(normal, v2->co, v1->co);
+								copy_v3_v3(normal, v1->no);
+								add_v3_v3(normal, v2->no);
+								sub_v3_v3v3(plane, v2->co, v1->co);
 								break; 
 							}
 						}

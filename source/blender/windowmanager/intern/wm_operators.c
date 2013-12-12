@@ -296,6 +296,11 @@ static int wm_macro_modal(bContext *C, wmOperator *op, const wmEvent *event)
 		retval = opm->type->modal(C, opm, event);
 		OPERATOR_RETVAL_CHECK(retval);
 
+		/* if we're halfway through using a tool and cancel it, clear the options [#37149] */
+		if (retval & OPERATOR_CANCELLED) {
+			WM_operator_properties_clear(opm->ptr);
+		}
+
 		/* if this one is done but it's not the last operator in the macro */
 		if ((retval & OPERATOR_FINISHED) && opm->next) {
 			MacroData *md = op->customdata;
@@ -915,6 +920,15 @@ void WM_operator_properties_reset(wmOperator *op)
 			}
 		}
 		RNA_PROP_END;
+	}
+}
+
+void WM_operator_properties_clear(PointerRNA *ptr)
+{
+	IDProperty *properties = ptr->data;
+
+	if (properties) {
+		IDP_ClearProperty(properties);
 	}
 }
 
@@ -1694,8 +1708,8 @@ static uiBlock *wm_block_create_splash(bContext *C, ARegion *ar, void *UNUSED(ar
 	BLI_snprintf(date_buf, sizeof(date_buf), "Date: %s %s", build_commit_date, build_commit_time);
 	
 	BLF_size(style->widgetlabel.uifont_id, style->widgetlabel.points, U.pixelsize * U.dpi);
-	hash_width = (int)BLF_width(style->widgetlabel.uifont_id, hash_buf) + 0.5f * U.widget_unit;
-	date_width = (int)BLF_width(style->widgetlabel.uifont_id, date_buf) + 0.5f * U.widget_unit;
+	hash_width = (int)BLF_width(style->widgetlabel.uifont_id, hash_buf, sizeof(hash_buf)) + 0.5f * U.widget_unit;
+	date_width = (int)BLF_width(style->widgetlabel.uifont_id, date_buf, sizeof(date_buf)) + 0.5f * U.widget_unit;
 #endif  /* WITH_BUILDINFO */
 
 	block = uiBeginBlock(C, ar, "_popup", UI_EMBOSS);
@@ -1721,7 +1735,7 @@ static uiBlock *wm_block_create_splash(bContext *C, ARegion *ar, void *UNUSED(ar
 		char branch_buf[128] = "\0";
 		int branch_width;
 		BLI_snprintf(branch_buf, sizeof(branch_buf), "Branch: %s", build_branch);
-		branch_width = (int)BLF_width(style->widgetlabel.uifont_id, branch_buf) + 0.5f * U.widget_unit;
+		branch_width = (int)BLF_width(style->widgetlabel.uifont_id, branch_buf, sizeof(branch_buf)) + 0.5f * U.widget_unit;
 		uiDefBut(block, LABEL, 0, branch_buf, U.pixelsize * 494 - branch_width, U.pixelsize * (258 - label_delta), branch_width, UI_UNIT_Y, NULL, 0, 0, 0, 0, NULL);
 	}
 #endif  /* WITH_BUILDINFO */
@@ -2015,12 +2029,19 @@ static void WM_OT_read_history(wmOperatorType *ot)
 
 static void WM_OT_read_homefile(wmOperatorType *ot)
 {
+	PropertyRNA *prop;
 	ot->name = "Reload Start-Up File";
 	ot->idname = "WM_OT_read_homefile";
 	ot->description = "Open the default file (doesn't save the current file)";
 	
 	ot->invoke = WM_operator_confirm;
 	ot->exec = wm_homefile_read_exec;
+
+	prop = RNA_def_string_file_path(ot->srna, "filepath", "", 
+	                                FILE_MAX, "File Path", 
+	                                "Path to an alternative start-up file");
+	RNA_def_property_flag(prop, PROP_HIDDEN);
+
 	/* ommit poll to run in background mode */
 }
 

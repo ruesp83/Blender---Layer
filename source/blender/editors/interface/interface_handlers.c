@@ -421,7 +421,7 @@ static void ui_apply_but_func(bContext *C, uiBut *but)
 		after->func_arg2 = but->func_arg2;
 
 		after->funcN = but->funcN;
-		after->func_argN = MEM_dupallocN(but->func_argN);
+		after->func_argN = (but->func_argN) ? MEM_dupallocN(but->func_argN) : NULL;
 
 		after->rename_func = but->rename_func;
 		after->rename_arg1 = but->rename_arg1;
@@ -1604,7 +1604,7 @@ void ui_button_text_password_hide(char password_str[UI_MAX_DRAW_STR], uiBut *but
 	}
 	else {
 		/* convert text to hidden test using asterisks (e.g. pass -> ****) */
-		int i, len = BLI_strlen_utf8(but->drawstr);
+		const size_t len = BLI_strlen_utf8(but->drawstr);
 
 		/* remap cursor positions */
 		if (but->pos >= 0) {
@@ -1616,9 +1616,8 @@ void ui_button_text_password_hide(char password_str[UI_MAX_DRAW_STR], uiBut *but
 		/* save original string */
 		BLI_strncpy(password_str, but->drawstr, UI_MAX_DRAW_STR);
 
-		for (i = 0; i < len; i++)
-			but->drawstr[i] = '*';
-		but->drawstr[i] = '\0';
+		memset(but->drawstr, '*', len);
+		but->drawstr[len] = '\0';
 	}
 }
 
@@ -1656,9 +1655,9 @@ static void ui_textedit_set_cursor_pos(uiBut *but, uiHandleButtonData *data, con
 	ui_button_text_password_hide(password_str, but, FALSE);
 
 	origstr = MEM_mallocN(sizeof(char) * data->maxlen, "ui_textedit origstr");
-	
+
 	BLI_strncpy(origstr, but->drawstr, data->maxlen);
-	
+
 	/* XXX solve generic, see: #widget_draw_text_icon */
 	if (but->type == NUM || but->type == NUMSLI) {
 		startx += (int)(0.5f * (BLI_rctf_size_y(&but->rect)));
@@ -1680,7 +1679,7 @@ static void ui_textedit_set_cursor_pos(uiBut *but, uiHandleButtonData *data, con
 		while (i > 0) {
 			if (BLI_str_cursor_step_prev_utf8(origstr, but->ofs, &i)) {
 				/* 0.25 == scale factor for less sensitivity */
-				if (BLF_width(fstyle->uifont_id, origstr + i) > (startx - x) * 0.25f) {
+				if (BLF_width(fstyle->uifont_id, origstr + i, BLF_DRAW_STR_DUMMY_MAX) > (startx - x) * 0.25f) {
 					break;
 				}
 			}
@@ -1702,7 +1701,7 @@ static void ui_textedit_set_cursor_pos(uiBut *but, uiHandleButtonData *data, con
 		but->pos = pos_prev = strlen(origstr) - but->ofs;
 
 		while (true) {
-			cdist = startx + BLF_width(fstyle->uifont_id, origstr + but->ofs);
+			cdist = startx + BLF_width(fstyle->uifont_id, origstr + but->ofs, BLF_DRAW_STR_DUMMY_MAX);
 
 			/* check if position is found */
 			if (cdist < x) {
@@ -1897,7 +1896,7 @@ static bool ui_textedit_delete(uiBut *but, uiHandleButtonData *data, int directi
 			int step;
 			BLI_str_cursor_step_utf8(str, len, &pos, direction, jump, true);
 			step = pos - but->pos;
-			memmove(&str[but->pos], &str[but->pos + step], (len + 1) - but->pos);
+			memmove(&str[but->pos], &str[but->pos + step], (len + 1) - (but->pos + step));
 			changed = true;
 		}
 	}
@@ -1922,10 +1921,10 @@ static bool ui_textedit_delete(uiBut *but, uiHandleButtonData *data, int directi
 	return changed;
 }
 
-static bool ui_textedit_autocomplete(bContext *C, uiBut *but, uiHandleButtonData *data)
+static int ui_textedit_autocomplete(bContext *C, uiBut *but, uiHandleButtonData *data)
 {
 	char *str;
-	bool changed = true;
+	int changed;
 
 	str = data->str;
 
@@ -2332,7 +2331,12 @@ static void ui_do_but_textedit(bContext *C, uiBlock *block, uiBut *but, uiHandle
 			case TABKEY:
 				/* there is a key conflict here, we can't tab with autocomplete */
 				if (but->autocomplete_func || data->searchbox) {
-					changed = ui_textedit_autocomplete(C, but, data);
+					int autocomplete = ui_textedit_autocomplete(C, but, data);
+					changed = autocomplete != AUTOCOMPLETE_NO_MATCH;
+
+					if(autocomplete == AUTOCOMPLETE_FULL_MATCH)
+						button_activate_state(C, but, BUTTON_STATE_EXIT);
+
 					update = true;  /* do live update for tab key */
 				}
 				/* the hotkey here is not well defined, was G.qual so we check all */
@@ -7847,7 +7851,7 @@ static int ui_handler_region(bContext *C, const wmEvent *event, void *UNUSED(use
 	/* either handle events for already activated button or try to activate */
 	but = ui_but_find_activated(ar);
 
-	retval = ui_handler_panel_region(C, event);
+	retval = ui_handler_panel_region(C, event, ar);
 
 	if (retval == WM_UI_HANDLER_CONTINUE)
 		retval = ui_handle_list_event(C, event, ar);
@@ -8033,8 +8037,8 @@ void UI_remove_popup_handlers_all(bContext *C, ListBase *handlers)
 	WM_event_free_ui_handler_all(C, handlers, ui_handler_popup, ui_handler_remove_popup);
 }
 
-bool UI_textbutton_activate_event(const bContext *C, ARegion *ar,
-                                  const void *rna_poin_data, const char *rna_prop_id)
+bool UI_textbutton_activate_rna(const bContext *C, ARegion *ar,
+                                const void *rna_poin_data, const char *rna_prop_id)
 {
 	uiBlock *block;
 	uiBut *but = NULL;
@@ -8061,6 +8065,31 @@ bool UI_textbutton_activate_event(const bContext *C, ARegion *ar,
 		return false;
 	}
 }
+
+bool UI_textbutton_activate_but(const bContext *C, uiBut *actbut)
+{
+	ARegion *ar = CTX_wm_region(C);
+	uiBlock *block;
+	uiBut *but = NULL;
+	
+	for (block = ar->uiblocks.first; block; block = block->next) {
+		for (but = block->buttons.first; but; but = but->next)
+			if (but == actbut && but->type == TEX)
+				break;
+
+		if (but)
+			break;
+	}
+	
+	if (but) {
+		uiButActiveOnly(C, ar, block, but);
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
 
 void ui_button_clipboard_free(void)
 {

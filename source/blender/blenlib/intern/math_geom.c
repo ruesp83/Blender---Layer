@@ -88,16 +88,6 @@ float normal_quad_v3(float n[3], const float v1[3], const float v2[3], const flo
 	return normalize_v3(n);
 }
 
-float area_tri_v2(const float v1[2], const float v2[2], const float v3[2])
-{
-	return 0.5f * fabsf((v1[0] - v2[0]) * (v2[1] - v3[1]) + (v1[1] - v2[1]) * (v3[0] - v2[0]));
-}
-
-float area_tri_signed_v2(const float v1[2], const float v2[2], const float v3[2])
-{
-	return 0.5f * ((v1[0] - v2[0]) * (v2[1] - v3[1]) + (v1[1] - v2[1]) * (v3[0] - v2[0]));
-}
-
 /* only convex Quadrilaterals */
 float area_quad_v3(const float v1[3], const float v2[3], const float v3[3], const float v4[3])
 {
@@ -157,30 +147,35 @@ float area_poly_v3(int nr, float verts[][3], const float normal[3])
 	area = 0.0f;
 	for (a = 0; a < nr; a++) {
 		area += (co_curr[px] - co_prev[px]) * (co_curr[py] + co_prev[py]);
-		co_prev = verts[a];
-		co_curr = verts[a + 1];
+		co_prev = co_curr;
+		co_curr += 3;
 	}
 
 	return fabsf(0.5f * area / max);
 }
 
-float area_poly_v2(int nr, float verts[][2])
+float cross_poly_v2(int nr, float verts[][2])
 {
 	int a;
-	float area;
-	float *co_curr, *co_prev;
+	float cross;
+	const float *co_curr, *co_prev;
 
 	/* The Trapezium Area Rule */
 	co_prev = verts[nr - 1];
 	co_curr = verts[0];
-	area = 0.0f;
+	cross = 0.0f;
 	for (a = 0; a < nr; a++) {
-		area += (co_curr[0] - co_prev[0]) * (co_curr[1] + co_prev[1]);
-		co_prev = verts[a];
-		co_curr = verts[a + 1];
+		cross += (co_curr[0] - co_prev[0]) * (co_curr[1] + co_prev[1]);
+		co_prev = co_curr;
+		co_curr += 2;
 	}
 
-	return fabsf(0.5f * area);
+	return cross;
+}
+
+float area_poly_v2(int nr, float verts[][2])
+{
+	return fabsf(0.5f * cross_poly_v2(nr, verts));
 }
 
 /********************************* Planes **********************************/
@@ -2690,6 +2685,13 @@ void resolve_tri_uv(float r_uv[2], const float st[2], const float st0[2], const 
 /* bilinear reverse */
 void resolve_quad_uv(float r_uv[2], const float st[2], const float st0[2], const float st1[2], const float st2[2], const float st3[2])
 {
+	resolve_quad_uv_deriv(r_uv, NULL, st, st0, st1, st2, st3);
+}
+
+/* bilinear reverse with derivatives */
+void resolve_quad_uv_deriv(float r_uv[2], float r_deriv[2][2],
+                           const float st[2], const float st0[2], const float st1[2], const float st2[2], const float st3[2])
+{
 	const double signed_area = (st0[0] * st1[1] - st0[1] * st1[0]) + (st1[0] * st2[1] - st1[1] * st2[0]) +
 	                           (st2[0] * st3[1] - st2[1] * st3[0]) + (st3[0] * st0[1] - st3[1] * st0[0]);
 
@@ -2736,6 +2738,32 @@ void resolve_quad_uv(float r_uv[2], const float st[2], const float st0[2], const
 
 		if (IS_ZERO(denom) == 0)
 			r_uv[1] = (float)((double)((1.0f - r_uv[0]) * (st0[i] - st[i]) + r_uv[0] * (st1[i] - st[i])) / denom);
+	}
+
+	if (r_deriv) {
+		float tmp1[2], tmp2[2], s[2], t[2];
+		double denom;
+		
+		/* clear outputs */
+		zero_v2(r_deriv[0]);
+		zero_v2(r_deriv[1]);
+		
+		sub_v2_v2v2(tmp1, st1, st0);
+		sub_v2_v2v2(tmp2, st2, st3);
+		interp_v2_v2v2(s, tmp1, tmp2, r_uv[1]);
+		sub_v2_v2v2(tmp1, st3, st0);
+		sub_v2_v2v2(tmp2, st2, st1);
+		interp_v2_v2v2(t, tmp1, tmp2, r_uv[0]);
+
+		denom = t[0]*s[1] - t[1]*s[0];
+
+		if (!IS_ZERO(denom)) {
+			double inv_denom = 1.0 / denom;
+			r_deriv[0][0] = -t[1] * inv_denom;
+			r_deriv[0][1] =  t[0] * inv_denom;
+			r_deriv[1][0] =  s[1] * inv_denom;
+			r_deriv[1][1] = -s[0] * inv_denom;
+		}
 	}
 }
 

@@ -1712,6 +1712,9 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 	/* this could be an argument if we want to operate on non linear float imbuf's
 	 * for now though this is only used for renders which use scene settings */
 
+#define TEXT_SIZE_CHECK(str, w, h) \
+	((str[0]) && ((void)(h = h_fixed), (w = BLF_width(mono, str, sizeof(str)))))
+
 #define BUFF_MARGIN_X 2
 #define BUFF_MARGIN_Y 1
 
@@ -1741,9 +1744,8 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 	x = 0;
 	y = height;
 
-	if (stamp_data.file[0]) {
+	if (TEXT_SIZE_CHECK(stamp_data.file, w, h)) {
 		/* Top left corner */
-		BLF_width_and_height(mono, stamp_data.file, &w, &h); h = h_fixed;
 		y -= h;
 
 		/* also a little of space to the background. */
@@ -1759,8 +1761,7 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 	}
 
 	/* Top left corner, below File */
-	if (stamp_data.note[0]) {
-		BLF_width_and_height(mono, stamp_data.note, &w, &h); h = h_fixed;
+	if (TEXT_SIZE_CHECK(stamp_data.note, w, h)) {
 		y -= h;
 
 		/* and space for background. */
@@ -1775,8 +1776,7 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 	}
 
 	/* Top left corner, below File (or Note) */
-	if (stamp_data.date[0]) {
-		BLF_width_and_height(mono, stamp_data.date, &w, &h); h = h_fixed;
+	if (TEXT_SIZE_CHECK(stamp_data.date, w, h)) {
 		y -= h;
 
 		/* and space for background. */
@@ -1791,8 +1791,7 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 	}
 
 	/* Top left corner, below File, Date or Note */
-	if (stamp_data.rendertime[0]) {
-		BLF_width_and_height(mono, stamp_data.rendertime, &w, &h); h = h_fixed;
+	if (TEXT_SIZE_CHECK(stamp_data.rendertime, w, h)) {
 		y -= h;
 
 		/* and space for background. */
@@ -1807,8 +1806,7 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 	y = 0;
 
 	/* Bottom left corner, leaving space for timing */
-	if (stamp_data.marker[0]) {
-		BLF_width_and_height(mono, stamp_data.marker, &w, &h); h = h_fixed;
+	if (TEXT_SIZE_CHECK(stamp_data.marker, w, h)) {
 
 		/* extra space for background. */
 		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp,  display,
@@ -1823,8 +1821,7 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 	}
 
 	/* Left bottom corner */
-	if (stamp_data.time[0]) {
-		BLF_width_and_height(mono, stamp_data.time, &w, &h); h = h_fixed;
+	if (TEXT_SIZE_CHECK(stamp_data.time, w, h)) {
 
 		/* extra space for background */
 		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
@@ -1838,8 +1835,7 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		x += w + pad;
 	}
 
-	if (stamp_data.frame[0]) {
-		BLF_width_and_height(mono, stamp_data.frame, &w, &h); h = h_fixed;
+	if (TEXT_SIZE_CHECK(stamp_data.frame, w, h)) {
 
 		/* extra space for background. */
 		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
@@ -1853,8 +1849,7 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		x += w + pad;
 	}
 
-	if (stamp_data.camera[0]) {
-		BLF_width_and_height(mono, stamp_data.camera, &w, &h); h = h_fixed;
+	if (TEXT_SIZE_CHECK(stamp_data.camera, w, h)) {
 
 		/* extra space for background. */
 		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
@@ -1866,8 +1861,7 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		x += w + pad;
 	}
 
-	if (stamp_data.cameralens[0]) {
-		BLF_width_and_height(mono, stamp_data.cameralens, &w, &h); h = h_fixed;
+	if (TEXT_SIZE_CHECK(stamp_data.cameralens, w, h)) {
 
 		/* extra space for background. */
 		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
@@ -1876,8 +1870,7 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		BLF_draw_buffer(mono, stamp_data.cameralens);
 	}
 
-	if (stamp_data.scene[0]) {
-		BLF_width_and_height(mono, stamp_data.scene, &w, &h); h = h_fixed;
+	if (TEXT_SIZE_CHECK(stamp_data.scene, w, h)) {
 
 		/* Bottom right corner, with an extra space because blenfont is too strict! */
 		x = width - w - 2;
@@ -1891,8 +1884,7 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 		BLF_draw_buffer(mono, stamp_data.scene);
 	}
 
-	if (stamp_data.strip[0]) {
-		BLF_width_and_height(mono, stamp_data.strip, &w, &h); h = h_fixed;
+	if (TEXT_SIZE_CHECK(stamp_data.strip, w, h)) {
 
 		/* Top right corner, with an extra space because blenfont is too strict! */
 		x = width - w - pad;
@@ -1909,6 +1901,7 @@ void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rec
 	/* cleanup the buffer. */
 	BLF_buffer(mono, NULL, NULL, 0, 0, 0, NULL);
 
+#undef TEXT_SIZE_CHECK
 #undef BUFF_MARGIN_X
 #undef BUFF_MARGIN_Y
 }

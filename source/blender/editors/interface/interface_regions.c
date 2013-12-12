@@ -660,7 +660,7 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 	h = BLF_height_max(data->fstyle.uifont_id);
 
 	for (a = 0, fontw = 0, fonth = 0; a < data->totline; a++) {
-		w = BLF_width(data->fstyle.uifont_id, data->lines[a]);
+		w = BLF_width(data->fstyle.uifont_id, data->lines[a], sizeof(data->lines[a]));
 		fontw = max_ff(fontw, (float)w);
 		fonth += (a == 0) ? h : h + TIP_MARGIN_Y;
 	}
@@ -1051,7 +1051,7 @@ void ui_searchbox_update(bContext *C, ARegion *ar, uiBut *but, const bool reset)
 	ED_region_tag_redraw(ar);
 }
 
-bool ui_searchbox_autocomplete(bContext *C, ARegion *ar, uiBut *but, char *str)
+int ui_searchbox_autocomplete(bContext *C, ARegion *ar, uiBut *but, char *str)
 {
 	uiSearchboxData *data = ar->regiondata;
 	int match = AUTOCOMPLETE_NO_MATCH;
@@ -1064,7 +1064,8 @@ bool ui_searchbox_autocomplete(bContext *C, ARegion *ar, uiBut *but, char *str)
 		match = autocomplete_end(data->items.autocpl, str);
 		data->items.autocpl = NULL;
 	}
-	return match != AUTOCOMPLETE_NO_MATCH;
+
+	return match;
 }
 
 static void ui_searchbox_region_draw_cb(const bContext *UNUSED(C), ARegion *ar)
