@@ -136,6 +136,7 @@ static EnumPropertyItem part_hair_ren_as_items[] = {
 #include "BKE_DerivedMesh.h"
 #include "BKE_cdderivedmesh.h"
 #include "BKE_effect.h"
+#include "BKE_material.h"
 #include "BKE_modifier.h"
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
@@ -388,6 +389,47 @@ static void rna_ParticleSystem_co_hair(ParticleSystem *particlesystem, Object *o
 		}
 	}
 
+}
+
+
+static EnumPropertyItem *rna_Particule_Material_itemf(bContext *C, PointerRNA *UNUSED(ptr),
+                                                      PropertyRNA *UNUSED(prop), int *free)
+{
+	Object *ob = CTX_data_active_object(C);
+	Material *ma;
+	EnumPropertyItem *item = NULL;
+	EnumPropertyItem tmp = {0, "", 0, "", ""};
+	int totitem = 0;
+	int i;
+
+	if (ob->totcol > 0) {
+		for (i = 1; i <= ob->totcol; i++) {
+			ma = give_current_material(ob, i);
+			tmp.value = i;
+			tmp.icon = ICON_MATERIAL_DATA;
+			if (ma) {
+				tmp.name = ma->id.name + 2;
+				tmp.identifier = tmp.name;
+			}
+			else {
+				tmp.name = "Default Material";
+				tmp.identifier = tmp.name;
+			}
+			RNA_enum_item_add(&item, &totitem, &tmp);
+		}
+	}
+	else {
+		tmp.value = 1;
+		tmp.icon = ICON_MATERIAL_DATA;
+		tmp.name = "Default Material";
+		tmp.identifier = tmp.name;
+		RNA_enum_item_add(&item, &totitem, &tmp);
+	}
+
+	RNA_enum_item_end(&item, &totitem);
+	*free = 1;
+
+	return item;
 }
 
 static void rna_ParticleSystem_uv_on_emitter(ParticleSystem *particlesystem, ReportList *reports,
@@ -2018,6 +2060,11 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
+	static EnumPropertyItem part_mat_items[] = {
+		{0, "DUMMY", 0, "Dummy", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	srna = RNA_def_struct(brna, "ParticleSettings", "ID");
 	RNA_def_struct_ui_text(srna, "Particle Settings", "Particle settings, reusable by multiple particle systems");
 	RNA_def_struct_ui_icon(srna, ICON_PARTICLE_DATA);
@@ -2305,7 +2352,7 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Draw Color", "Draw additional particle data as a color");
 	RNA_def_property_update(prop, 0, "rna_Particle_redo");
 
-	prop = RNA_def_property(srna, "draw_size", PROP_INT, PROP_NONE);
+	prop = RNA_def_property(srna, "draw_size", PROP_INT, PROP_PIXEL);
 	RNA_def_property_range(prop, 0, 1000);
 	RNA_def_property_ui_range(prop, 0, 100, 1, -1);
 	RNA_def_property_ui_text(prop, "Draw Size", "Size of particles on viewport in pixels (0=default)");
@@ -2360,7 +2407,14 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "material", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "omat");
 	RNA_def_property_range(prop, 1, 32767);
-	RNA_def_property_ui_text(prop, "Material", "Material used for the particles");
+	RNA_def_property_ui_text(prop, "Material Index", "Index of material slot used for rendering particles");
+	RNA_def_property_update(prop, 0, "rna_Particle_redo");
+
+	prop = RNA_def_property(srna, "material_slot", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "omat");
+	RNA_def_property_enum_items(prop, part_mat_items);
+	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_Particule_Material_itemf");
+	RNA_def_property_ui_text(prop, "Material Slot", "Material slot used for rendering particles");
 	RNA_def_property_update(prop, 0, "rna_Particle_redo");
 
 	prop = RNA_def_property(srna, "integrator", PROP_ENUM, PROP_NONE);
@@ -2463,7 +2517,7 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "simplify_flag", PART_SIMPLIFY_VIEWPORT);
 	RNA_def_property_ui_text(prop, "Viewport", "");
 
-	prop = RNA_def_property(srna, "simplify_refsize", PROP_INT, PROP_UNSIGNED);
+	prop = RNA_def_property(srna, "simplify_refsize", PROP_INT, PROP_PIXEL);
 	RNA_def_property_int_sdna(prop, NULL, "simplify_refsize");
 	RNA_def_property_range(prop, 1, 32768);
 	RNA_def_property_ui_text(prop, "Reference Size", "Reference size in pixels, after which simplification begins");

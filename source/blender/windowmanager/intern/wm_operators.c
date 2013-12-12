@@ -611,6 +611,47 @@ char *WM_operator_pystring(bContext *C, wmOperator *op,
 	return WM_operator_pystring_ex(C, op, all_args, macro_args, op->type, op->ptr);
 }
 
+
+/**
+ * \return true if the string was shortened
+ */
+bool WM_operator_pystring_abbreviate(char *str, int str_len_max)
+{
+	const int str_len = strlen(str);
+	const char *parens_start = strchr(str, '(');
+
+	if (parens_start) {
+		const int parens_start_pos = parens_start - str;
+		const char *parens_end = strrchr(parens_start + 1, ')');
+
+		if (parens_end) {
+			const int parens_len = parens_end - parens_start;
+
+			if (parens_len > str_len_max) {
+				const char *comma_first = strchr(parens_start, ',');
+
+				/* truncate after the first comma */
+				if (comma_first) {
+					const char end_str[] = " ... )";
+					const int end_str_len = sizeof(end_str) - 1;
+
+					/* leave a place for the first argument*/
+					const int new_str_len = (comma_first - parens_start) + 1;
+
+					if (str_len >= new_str_len + parens_start_pos + end_str_len + 1) {
+						/* append " ... )" to the string after the comma */
+						memcpy(str + new_str_len + parens_start_pos, end_str, end_str_len + 1);
+
+						return true;
+					}
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
 /* return NULL if no match is found */
 #if 0
 static char *wm_prop_pystring_from_context(bContext *C, PointerRNA *ptr, PropertyRNA *prop, int index)
@@ -1957,7 +1998,6 @@ static void WM_OT_save_homefile(wmOperatorType *ot)
 		
 	ot->invoke = WM_operator_confirm;
 	ot->exec = wm_homefile_write_exec;
-	ot->poll = WM_operator_winactive;
 }
 
 static int wm_userpref_autoexec_add_exec(bContext *UNUSED(C), wmOperator *UNUSED(op))
@@ -1974,7 +2014,6 @@ static void WM_OT_userpref_autoexec_path_add(wmOperatorType *ot)
 	ot->description = "Add path to exclude from autoexecution";
 
 	ot->exec = wm_userpref_autoexec_add_exec;
-	ot->poll = WM_operator_winactive;
 
 	ot->flag = OPTYPE_INTERNAL;
 }
@@ -1996,7 +2035,6 @@ static void WM_OT_userpref_autoexec_path_remove(wmOperatorType *ot)
 	ot->description = "Remove path to exclude from autoexecution";
 
 	ot->exec = wm_userpref_autoexec_remove_exec;
-	ot->poll = WM_operator_winactive;
 
 	ot->flag = OPTYPE_INTERNAL;
 
@@ -2011,7 +2049,6 @@ static void WM_OT_save_userpref(wmOperatorType *ot)
 	
 	ot->invoke = WM_operator_confirm;
 	ot->exec = wm_userpref_write_exec;
-	ot->poll = WM_operator_winactive;
 }
 
 static void WM_OT_read_history(wmOperatorType *ot)
@@ -2470,7 +2507,6 @@ static void WM_OT_recover_last_session(wmOperatorType *ot)
 	ot->description = "Open the last closed file (\"" BLENDER_QUIT_FILE "\")";
 	
 	ot->exec = wm_recover_last_session_exec;
-	ot->poll = WM_operator_winactive;
 }
 
 /* *************** recover auto save **************** */
@@ -2515,7 +2551,6 @@ static void WM_OT_recover_auto_save(wmOperatorType *ot)
 	
 	ot->exec = wm_recover_auto_save_exec;
 	ot->invoke = wm_recover_auto_save_invoke;
-	ot->poll = WM_operator_winactive;
 
 	WM_operator_properties_filesel(ot, BLENDERFILE, FILE_BLENDER, FILE_OPENFILE,
 	                               WM_FILESEL_FILEPATH, FILE_LONGDISPLAY);
@@ -2743,7 +2778,6 @@ static void WM_OT_quit_blender(wmOperatorType *ot)
 
 	ot->invoke = WM_operator_confirm;
 	ot->exec = wm_exit_blender_exec;
-	ot->poll = WM_operator_winactive;
 }
 
 /* *********************** */
@@ -3502,6 +3536,7 @@ static void radial_control_set_initial_mouse(RadialControl *rc, const wmEvent *e
 	switch (rc->subtype) {
 		case PROP_NONE:
 		case PROP_DISTANCE:
+		case PROP_PIXEL:
 			d[0] = rc->initial_value;
 			break;
 		case PROP_FACTOR:
@@ -3602,6 +3637,7 @@ static void radial_control_paint_cursor(bContext *C, int x, int y, void *customd
 	switch (rc->subtype) {
 		case PROP_NONE:
 		case PROP_DISTANCE:
+		case PROP_PIXEL:
 			r1 = rc->current_value;
 			r2 = rc->initial_value;
 			tex_radius = r1;
@@ -3846,7 +3882,7 @@ static int radial_control_invoke(bContext *C, wmOperator *op, const wmEvent *eve
 
 	/* get subtype of property */
 	rc->subtype = RNA_property_subtype(rc->prop);
-	if (!ELEM4(rc->subtype, PROP_NONE, PROP_DISTANCE, PROP_FACTOR, PROP_ANGLE)) {
+	if (!ELEM5(rc->subtype, PROP_NONE, PROP_DISTANCE, PROP_FACTOR, PROP_ANGLE, PROP_PIXEL)) {
 		BKE_report(op->reports, RPT_ERROR, "Property must be a none, distance, a factor, or an angle");
 		MEM_freeN(rc);
 		return OPERATOR_CANCELLED;
@@ -3931,6 +3967,7 @@ static int radial_control_modal(bContext *C, wmOperator *op, const wmEvent *even
 			switch (rc->subtype) {
 				case PROP_NONE:
 				case PROP_DISTANCE:
+				case PROP_PIXEL:
 					new_value = dist;
 					if (snap) new_value = ((int)new_value + 5) / 10 * 10;
 					break;

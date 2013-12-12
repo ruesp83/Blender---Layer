@@ -413,7 +413,7 @@ static void ui_draw_x_icon(float x, float y)
 
 #define PNL_ICON    UI_UNIT_X  /* could be UI_UNIT_Y too */
 
-static void ui_draw_panel_scalewidget(rcti *rect)
+static void ui_draw_panel_scalewidget(const rcti *rect)
 {
 	float xmin, xmax, dx;
 	float ymin, ymax, dy;
@@ -464,7 +464,7 @@ static void ui_draw_panel_dragwidget(const rctf *rect)
 }
 
 
-static void ui_draw_aligned_panel_header(uiStyle *style, uiBlock *block, rcti *rect, char dir)
+static void ui_draw_aligned_panel_header(uiStyle *style, uiBlock *block, const rcti *rect, char dir)
 {
 	Panel *panel = block->panel;
 	rcti hrect;
@@ -497,7 +497,7 @@ static void ui_draw_aligned_panel_header(uiStyle *style, uiBlock *block, rcti *r
 }
 
 /* panel integrated in buttonswindow, tool/property lists etc */
-void ui_draw_aligned_panel(uiStyle *style, uiBlock *block, rcti *rect)
+void ui_draw_aligned_panel(uiStyle *style, uiBlock *block, const rcti *rect)
 {
 	Panel *panel = block->panel;
 	rcti headrect;
@@ -1128,7 +1128,7 @@ int ui_handler_panel_region(bContext *C, const wmEvent *event, ARegion *ar)
 
 	retval = WM_UI_HANDLER_CONTINUE;
 	for (block = ar->uiblocks.last; block; block = block->prev) {
-		int inside = 0, inside_header = 0, inside_scale = 0;
+		bool inside = false, inside_header = false, inside_scale = false;
 		
 		mx = event->x;
 		my = event->y;
@@ -1145,24 +1145,24 @@ int ui_handler_panel_region(bContext *C, const wmEvent *event, ARegion *ar)
 		/* clicked at panel header? */
 		if (pa->flag & PNL_CLOSEDX) {
 			if (block->rect.xmin <= mx && block->rect.xmin + PNL_HEADER >= mx)
-				inside_header = 1;
+				inside_header = true;
 		}
 		else if (block->rect.xmin > mx || block->rect.xmax < mx) {
 			/* outside left/right side */
 		}
 		else if ((block->rect.ymax <= my) && (block->rect.ymax + PNL_HEADER >= my)) {
-			inside_header = 1;
+			inside_header = true;
 		}
 		else if (!(pa->flag & PNL_CLOSEDY)) {
 			/* open panel */
 			if (pa->control & UI_PNL_SCALE) {
 				if (block->rect.xmax - PNL_HEADER <= mx)
 					if (block->rect.ymin + PNL_HEADER >= my)
-						inside_scale = 1;
+						inside_scale = true;
 			}
 			if (block->rect.xmin <= mx && block->rect.xmax >= mx)
 				if (block->rect.ymin <= my && block->rect.ymax + PNL_HEADER >= my)
-					inside = 1;
+					inside = true;
 		}
 		
 		/* XXX hardcoded key warning */

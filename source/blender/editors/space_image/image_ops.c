@@ -59,6 +59,8 @@
 #include "BKE_report.h"
 #include "BKE_screen.h"
 
+#include "GPU_draw.h"
+
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf.h"
 #include "DNA_imbuf_types.h"
@@ -86,6 +88,7 @@
 #include "PIL_time.h"
 
 #include "image_intern.h"
+#include "ED_sculpt.h"
 
 /******************** view navigation utilities *********************/
 
@@ -1921,8 +1924,10 @@ void IMAGE_OT_new(wmOperatorType *ot)
 
 	/* properties */
 	RNA_def_string(ot->srna, "name", IMA_DEF_NAME, MAX_ID_NAME - 2, "Name", "Image datablock name");
-	RNA_def_int(ot->srna, "width", 1024, 1, INT_MAX, "Width", "Image width", 1, 16384);
-	RNA_def_int(ot->srna, "height", 1024, 1, INT_MAX, "Height", "Image height", 1, 16384);
+	prop = RNA_def_int(ot->srna, "width", 1024, 1, INT_MAX, "Width", "Image width", 1, 16384);
+	RNA_def_property_subtype(prop, PROP_PIXEL);
+	prop = RNA_def_int(ot->srna, "height", 1024, 1, INT_MAX, "Height", "Image height", 1, 16384);
+	RNA_def_property_subtype(prop, PROP_PIXEL);
 	RNA_def_enum(ot->srna, "background", prop_background_items, 0, "Background", "");
 
 	prop= RNA_def_float_color(ot->srna, "color", 4, NULL, 0.0f, FLT_MAX, "Color", "Default fill color", 0.0f, 1.0f);
@@ -1952,6 +1957,9 @@ static int image_invert_exec(bContext *C, wmOperator *op)
 	Image *ima = CTX_data_edit_image(C);
 	ImBuf *ibuf;
 	short r, g, b, a;
+
+	/* undo is supported only on image paint mode currently */
+	bool support_undo = ((sima != NULL) && (sima->mode == SI_MODE_PAINT));
 	
 	if (!ima)
 		return OPERATOR_CANCELLED;
@@ -1972,11 +1980,20 @@ static int image_invert_exec(bContext *C, wmOperator *op)
 	if (ibuf == NULL)  /* TODO: this should actually never happen, but does for render-results -> cleanup */
 		return OPERATOR_CANCELLED;
 
+	if (support_undo) {
+		ED_undo_paint_push_begin(UNDO_PAINT_IMAGE, op->type->name,
+		                         ED_image_undo_restore, ED_image_undo_free);
+		/* not strictly needed, because we only imapaint_dirty_region to invalidate all tiles
+		 * but better do this right in case someone copies this for a tool that uses partial redraw better */
+		ED_imapaint_clear_partial_redraw();
+		ED_imapaint_dirty_region(ima, ibuf, 0, 0, ibuf->x, ibuf->y);
+	}
+
 	IMB_invert_channels(ibuf, r, g, b, a);
 	if (sima->mode != SI_MODE_PAINT) {
 		ImageLayer *layer;
 		ImBuf *ibuf_l;
-
+	
 		for (layer = ima->imlayers.first; layer; layer = layer->next) {
 			ibuf_l = (ImBuf *)layer->ibufs.first;
 			IMB_invert_channels(ibuf_l, r, g, b, a);
@@ -1984,8 +2001,15 @@ static int image_invert_exec(bContext *C, wmOperator *op)
 	}
 
 	ibuf->userflags |= IB_BITMAPDIRTY | IB_DISPLAY_BUFFER_INVALID;
+
 	if (ibuf->mipmap[0])
 		ibuf->userflags |= IB_MIPMAP_INVALID;
+
+	if (support_undo)
+		ED_undo_paint_push_end(UNDO_PAINT_IMAGE);
+
+	/* force GPU reupload, all image is invalid */
+	GPU_free_image(ima);
 
 	WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
 
