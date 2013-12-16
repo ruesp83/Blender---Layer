@@ -124,35 +124,11 @@ void IMB_flipx(struct ImBuf *ibuf)
 	}
 }
 
-/*float bilinear_interpolation(unsigned char *outI, float *outF, float x, float y, int width, int height)
-{
-    int x0 = int(x);
-    int y0 = int(y);
-    int x1 = x0 + 1;
-    int y1 = y1 + 1;
-    if (x1 >= width)
-		x1 = x0;
-
-    if (y1 >= height)
-	    y1 = y0;
-
-    float v0 = input[x0][y0];
-    float v1 = input[x1][y0];
-    float v2 = input[x0][y1];
-    float v3 = input[x1][y1];
-    float dx = x - float(x0);
-    float dx1 = 1 - dx;
-    float vx0 = v1 * dx + v0 * dx1;
-    float vx1 = v3 * dx + v2 * dx1;
-    float dy = y - float(y0);
-    return vx1 * dy + vx0 * (1 - dy);
-}*/
-
-struct ImBuf *IMB_rotation(struct ImBuf *ibuf, float x, float y, float angle, int filter_type, float default_color[4])
+struct ImBuf *IMB_rotation(struct ImBuf *ibuf, float x, float y, float angle, int filter_type, int lock, float default_color[4])
 {
 	ImBuf *ibuf2;
 	int w, h, flags = 0;
-	int offset_d, offset_s, Src_x, Src_y;
+	int offset_d, offset_s, Src_x, Src_y, xr, yr;
 	float cosine, sine, p1x, p1y, p2x, p2y, p3x, p3y, minx, miny, maxx, maxy;
 	unsigned char *outI_d, *outI_s;
 	unsigned char ccol[4];
@@ -167,31 +143,38 @@ struct ImBuf *IMB_rotation(struct ImBuf *ibuf, float x, float y, float angle, in
 		cosine = (float)cos(angle);
 		sine = (float)sin(angle);
 
-		p1x = (-ibuf->y * sine);
-		p1y = (ibuf->y * cosine);
-		p2x = (ibuf->x * cosine - ibuf->y * sine);
-		p2y = (ibuf->y * cosine + ibuf->x * sine);
-		p3x = (ibuf->x * cosine);
-		p3y = (ibuf->x * sine);
+		if (!lock) {
+			p1x = (-ibuf->y * sine);
+			p1y = (ibuf->y * cosine);
+			p2x = (ibuf->x * cosine - ibuf->y * sine);
+			p2y = (ibuf->y * cosine + ibuf->x * sine);
+			p3x = (ibuf->x * cosine);
+			p3y = (ibuf->x * sine);
 
-		minx = MIN2(0, MIN2(p1x, MIN2(p2x, p3x)));
-		miny = MIN2(0, MIN2(p1y, MIN2(p2y, p3y)));
-		maxx = MAX2(p1x, MAX2(p2x, p3x));
-		maxy = MAX2(p1y, MAX2(p2y, p3y));
+			minx = MIN2(0, MIN2(p1x, MIN2(p2x, p3x)));
+			miny = MIN2(0, MIN2(p1y, MIN2(p2y, p3y)));
+			maxx = MAX2(p1x, MAX2(p2x, p3x));
+			maxy = MAX2(p1y, MAX2(p2y, p3y));
 
-		if (RAD2DEGF(angle) <= -0.0f) {
-			if ((RAD2DEGF(angle) >= -90.0f) && (RAD2DEGF(angle) <= -0.0f))
+			if (RAD2DEGF(angle) <= -0.0f) {
+				if ((RAD2DEGF(angle) >= -90.0f) && (RAD2DEGF(angle) <= -0.0f))
+					h = (int)floor(fabs(maxy) - miny);
+				else
+					h = (int)floor(- miny);
+				w = (int)floor(fabs(maxx) - minx);
+			}
+			else {
+				if ((RAD2DEGF(angle) >= 0.0f) && (RAD2DEGF(angle) <= 90.0f))
+					w = (int)floor(fabs(maxx) - minx);
+				else
+					w = (int)floor(- minx);
 				h = (int)floor(fabs(maxy) - miny);
-			else
-				h = (int)floor(- miny);
-			w = (int)floor(fabs(maxx) - minx);
+			}
 		}
 		else {
-			if ((RAD2DEGF(angle) >= 0.0f) && (RAD2DEGF(angle) <= 90.0f))
-				w = (int)floor(fabs(maxx) - minx);
-			else
-				w = (int)floor(- minx);
-			h = (int)floor(fabs(maxy) - miny);
+			/* Pivot al centro dell'immagine */
+			xr = (int)(ibuf->x / 2);
+			yr = (int)(ibuf->y / 2);
 		}
 
 		if (ibuf->rect) flags |= IB_rect;
@@ -204,9 +187,14 @@ struct ImBuf *IMB_rotation(struct ImBuf *ibuf, float x, float y, float angle, in
 
 		for (j = 0; j < ibuf2->y; j++) {
 			for (i = 0; i < ibuf2->x; i++) {
-
-				Src_x = (int)((i + minx) * cosine + (j + miny) * sine); 
-				Src_y = (int)((j + miny) * cosine - (i + minx) * sine); 
+				if (!lock) {
+					Src_x = (int)((i + minx) * cosine + (j + miny) * sine);
+					Src_y = (int)((j + miny) * cosine - (i + minx) * sine);
+				}
+				else {
+					Src_x = (int)(xr + (i - xr) * cosine + (j - yr) * sine);
+					Src_y = (int)(yr + (j - yr) * cosine - (i - xr) * sine);
+				}
 
 				if ((Src_x >= 0) && (Src_x < ibuf->x) && (Src_y >=0) && 
 					(Src_y < ibuf->y)) {
@@ -221,7 +209,7 @@ struct ImBuf *IMB_rotation(struct ImBuf *ibuf, float x, float y, float angle, in
 
 							copy_v4_v4(outF_d, outF_s);
 						}
-						
+
 						if (ibuf->rect) {
 							outI_d = NULL;
 							outI_s = NULL;
