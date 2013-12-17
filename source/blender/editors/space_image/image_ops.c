@@ -3118,13 +3118,17 @@ static bool image_offset_check(bContext *C, wmOperator *op)
 	wrap = RNA_boolean_get(op->ptr, "wrap");
 
 	if (abs(x) > ibuf->x) {
-		BKE_report(op->reports, RPT_WARNING, "The offset can not be larger than the image.");
-		return FALSE;
+		if (x > 0)
+			x = ibuf->x;
+		else
+			x = - ibuf->x;
 	}
 
 	if (abs(y) > ibuf->y) {
-		BKE_report(op->reports, RPT_WARNING, "The offset can not be larger than the image.");
-		return FALSE;
+		if (y > 0)
+			y = ibuf->y;
+		else
+			y = - ibuf->y;
 	}
 
 	if (!wrap) {

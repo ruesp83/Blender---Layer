@@ -77,13 +77,12 @@ struct ImBuf *IMB_offset(struct ImBuf *ibuf, float x, float y, int half, int wra
 			for (i = 0; i < ibuf->x; i++) {
 
 				if (x != 0) {
+					x1 = i + x;
 					if (x > 0) {
-						x1 = i + (x - 1);
 						if (x1 >= ibuf_2->x)
 							x1 = x1 - ibuf->x;
 					}
 					else {
-						x1 = i + (x + 1);
 						if (x1 < 0)
 							x1 = x1 + ibuf->x;
 					}
@@ -92,13 +91,12 @@ struct ImBuf *IMB_offset(struct ImBuf *ibuf, float x, float y, int half, int wra
 					x1 = i;
 
 				if (y != 0) {
+					y1 = j + y;
 					if (y > 0) {
-						y1 = j + (y - 1);
 						if (y1 >= ibuf_2->y)
 							y1 = y1 - ibuf->y;
 					}
 					else {
-						y1 = j + (y + 1);
 						if (y1 < 0)
 							y1 = y1 + ibuf->y;
 
@@ -132,7 +130,8 @@ struct ImBuf *IMB_offset(struct ImBuf *ibuf, float x, float y, int half, int wra
 						copy_v4_v4(f_col_d, f_col_s);
 				}
 				else {
-					if (((i + (x - 1)) < ibuf->x) && ((j + (y - 1)) < ibuf->y)) {
+					if ((((i + x) >= 0) && ((i + x) < ibuf->x)) &&
+					    (((j + y) >= 0) && ((j + y) < ibuf->y))) {
 						if (ibuf->rect) {
 							col_d[0] = col_s[0];
 							col_d[1] = col_s[1];
