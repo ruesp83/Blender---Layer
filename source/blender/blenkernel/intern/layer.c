@@ -91,6 +91,11 @@ void free_image_layer(ImageLayer *layer)
 		IMB_freeImBuf(ibuf);
 	}
 
+	if (layer->preview_ibuf) {
+		IMB_freeImBuf(layer->preview_ibuf);
+		layer->preview_ibuf = NULL;
+	}
+
 	MEM_freeN(layer);
 }
 

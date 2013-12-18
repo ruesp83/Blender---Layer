@@ -238,6 +238,11 @@ void BKE_image_free(Image *ima)
 
 	BKE_previewimg_free(&ima->preview);
 
+	if (ima->preview_ibuf) {
+		IMB_freeImBuf(ima->preview_ibuf);
+		ima->preview_ibuf = NULL;
+	}
+
 	for (a = 0; a < IMA_MAX_RENDER_SLOT; a++) {
 		if (ima->renders[a]) {
 			RE_FreeRenderResult(ima->renders[a]);
