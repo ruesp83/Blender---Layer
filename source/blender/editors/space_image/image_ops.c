@@ -1953,14 +1953,28 @@ static int image_operator_poll(bContext *C)
 
 static void image_preview_cancel(bContext *C, wmOperator *UNUSED(op))
 {
+	SpaceImage *sima = CTX_wm_space_image(C);
 	Image *ima = CTX_data_edit_image(C);
+	ImageLayer *layer;
 
 	if (ima) {
 		if (ima->preview_ibuf) {
 			IMB_freeImBuf(ima->preview_ibuf);
 			ima->preview_ibuf = NULL;
-			WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
+			
 		}
+
+		if (sima->mode == SI_MODE_PAINT) {
+			layer = imalayer_get_current(ima);
+			if (layer) {
+				if (layer->preview_ibuf) {
+					IMB_freeImBuf(layer->preview_ibuf);
+					layer->preview_ibuf = NULL;
+					//WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
+				}
+			}
+		}
+		WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
 	}
 }
 
@@ -2165,27 +2179,45 @@ static int image_bright_contrast_exec(bContext *C, wmOperator *op)
 static bool image_bright_contrast_check(bContext *C, wmOperator *op)
 {
 	Image *ima = CTX_data_edit_image(C);
-	ImBuf *ibuf;
+	SpaceImage *sima = CTX_wm_space_image(C);
+	ImageLayer *layer;
+	ImBuf *ibuf, *preview_ibuf;
 	float bright, contrast;
 
 	if (!ima)
 		return FALSE;
 
 	ima->use_layers = FALSE;
-	ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
+	if (sima->mode == SI_MODE_PAINT)
+		ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_LAYER);
+	else 
+		ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 	ima->use_layers = TRUE;
 
 	bright = RNA_float_get(op->ptr, "bright");
 	contrast = RNA_float_get(op->ptr, "contrast");
 
-	if (ima->preview_ibuf) {
-		IMB_freeImBuf(ima->preview_ibuf);
-		ima->preview_ibuf = NULL;
+	if (sima->mode == SI_MODE_PAINT) {
+		layer = imalayer_get_current(ima);
+		preview_ibuf = layer->preview_ibuf;
+	}
+	else {
+		preview_ibuf = ima->preview_ibuf;
+	}
+	
+	if (preview_ibuf) {
+		IMB_freeImBuf(preview_ibuf);
+		preview_ibuf = NULL;
 	}
 
-	ima->preview_ibuf = IMB_dupImBuf(ibuf);
+	preview_ibuf = IMB_dupImBuf(ibuf);
 
-	IMB_bright_contrast(ima->preview_ibuf, bright, contrast);
+	IMB_bright_contrast(preview_ibuf, bright, contrast);
+
+	if (sima->mode == SI_MODE_PAINT)
+		layer->preview_ibuf = preview_ibuf;
+	else
+		ima->preview_ibuf = preview_ibuf;
 
 	BKE_image_release_ibuf(ima, ibuf, NULL);
 	return TRUE;
@@ -2323,26 +2355,44 @@ static int image_posterize_exec(bContext *C, wmOperator *op)
 static bool image_posterize_check(bContext *C, wmOperator *op)
 {
 	Image *ima = CTX_data_edit_image(C);
-	ImBuf *ibuf;
+	SpaceImage *sima = CTX_wm_space_image(C);
+	ImageLayer *layer;
+	ImBuf *ibuf, *preview_ibuf;
 	int levels;
 
 	if (!ima)
 		return FALSE;
 
 	ima->use_layers = FALSE;
-	ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
+	if (sima->mode == SI_MODE_PAINT)
+		ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_LAYER);
+	else 
+		ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 	ima->use_layers = TRUE;
 
 	levels = RNA_int_get(op->ptr, "levels");
 
-	if (ima->preview_ibuf) {
-		IMB_freeImBuf(ima->preview_ibuf);
-		ima->preview_ibuf = NULL;
+	if (sima->mode == SI_MODE_PAINT) {
+		layer = imalayer_get_current(ima);
+		preview_ibuf = layer->preview_ibuf;
+	}
+	else {
+		preview_ibuf = ima->preview_ibuf;
+	}
+	
+	if (preview_ibuf) {
+		IMB_freeImBuf(preview_ibuf);
+		preview_ibuf = NULL;
 	}
 
-	ima->preview_ibuf = IMB_dupImBuf(ibuf);
+	preview_ibuf = IMB_dupImBuf(ibuf);
 
-	IMB_posterize(ima->preview_ibuf, levels);
+	IMB_posterize(preview_ibuf, levels);
+
+	if (sima->mode == SI_MODE_PAINT)
+		layer->preview_ibuf = preview_ibuf;
+	else
+		ima->preview_ibuf = preview_ibuf;
 
 	BKE_image_release_ibuf(ima, ibuf, NULL);
 	return TRUE;
@@ -2417,27 +2467,45 @@ static int image_threshold_exec(bContext *C, wmOperator *op)
 static bool image_threshold_check(bContext *C, wmOperator *op)
 {
 	Image *ima = CTX_data_edit_image(C);
-	ImBuf *ibuf;
+	SpaceImage *sima = CTX_wm_space_image(C);
+	ImageLayer *layer;
+	ImBuf *ibuf, *preview_ibuf;
 	int low, high;
 
 	if (!ima)
 		return FALSE;
 
 	ima->use_layers = FALSE;
-	ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
+	if (sima->mode == SI_MODE_PAINT)
+		ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_LAYER);
+	else 
+		ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 	ima->use_layers = TRUE;
 
 	low = RNA_int_get(op->ptr, "low");
 	high = RNA_int_get(op->ptr, "high");
 
-	if (ima->preview_ibuf) {
-		IMB_freeImBuf(ima->preview_ibuf);
-		ima->preview_ibuf = NULL;
+	if (sima->mode == SI_MODE_PAINT) {
+		layer = imalayer_get_current(ima);
+		preview_ibuf = layer->preview_ibuf;
+	}
+	else {
+		preview_ibuf = ima->preview_ibuf;
+	}
+	
+	if (preview_ibuf) {
+		IMB_freeImBuf(preview_ibuf);
+		preview_ibuf = NULL;
 	}
 
-	ima->preview_ibuf = IMB_dupImBuf(ibuf);
+	preview_ibuf = IMB_dupImBuf(ibuf);
 
-	IMB_threshold(ima->preview_ibuf, low, high);
+	IMB_threshold(preview_ibuf, low, high);
+
+	if (sima->mode == SI_MODE_PAINT)
+		layer->preview_ibuf = preview_ibuf;
+	else
+		ima->preview_ibuf = preview_ibuf;
 
 	BKE_image_release_ibuf(ima, ibuf, NULL);
 	return TRUE;
@@ -2519,28 +2587,46 @@ static int image_exposure_exec(bContext *C, wmOperator *op)
 static bool image_exposure_check(bContext *C, wmOperator *op)
 {
 	Image *ima = CTX_data_edit_image(C);
-	ImBuf *ibuf;
+	SpaceImage *sima = CTX_wm_space_image(C);
+	ImageLayer *layer;
+	ImBuf *ibuf, *preview_ibuf;
 	float exposure, offset, gamma;
 
 	if (!ima)
 		return FALSE;
 
 	ima->use_layers = FALSE;
-	ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
+	if (sima->mode == SI_MODE_PAINT)
+		ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_LAYER);
+	else 
+		ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 	ima->use_layers = TRUE;
 
 	exposure = RNA_float_get(op->ptr, "exposure");
 	offset = RNA_float_get(op->ptr, "offset");
 	gamma = RNA_float_get(op->ptr, "gamma");
 
-	if (ima->preview_ibuf) {
-		IMB_freeImBuf(ima->preview_ibuf);
-		ima->preview_ibuf = NULL;
+	if (sima->mode == SI_MODE_PAINT) {
+		layer = imalayer_get_current(ima);
+		preview_ibuf = layer->preview_ibuf;
+	}
+	else {
+		preview_ibuf = ima->preview_ibuf;
+	}
+	
+	if (preview_ibuf) {
+		IMB_freeImBuf(preview_ibuf);
+		preview_ibuf = NULL;
 	}
 
-	ima->preview_ibuf = IMB_dupImBuf(ibuf);
+	preview_ibuf = IMB_dupImBuf(ibuf);
 
-	IMB_exposure(ima->preview_ibuf, exposure, offset, gamma);
+	IMB_exposure(preview_ibuf, exposure, offset, gamma);
+
+	if (sima->mode == SI_MODE_PAINT)
+		layer->preview_ibuf = preview_ibuf;
+	else
+		ima->preview_ibuf = preview_ibuf;
 
 	BKE_image_release_ibuf(ima, ibuf, NULL);
 	return TRUE;
@@ -2617,28 +2703,46 @@ static int image_colorize_exec(bContext *C, wmOperator *op)
 static bool image_colorize_check(bContext *C, wmOperator *op)
 {
 	Image *ima = CTX_data_edit_image(C);
-	ImBuf *ibuf;
+	SpaceImage *sima = CTX_wm_space_image(C);
+	ImageLayer *layer;
+	ImBuf *ibuf, *preview_ibuf;
 	int hue, saturation, lightness;
 
 	if (!ima)
 		return FALSE;
 
 	ima->use_layers = FALSE;
-	ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
+	if (sima->mode == SI_MODE_PAINT)
+		ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_LAYER);
+	else 
+		ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_IMA);
 	ima->use_layers = TRUE;
 
 	hue = RNA_int_get(op->ptr, "hue");
 	saturation = RNA_int_get(op->ptr, "saturation");
 	lightness = RNA_int_get(op->ptr, "lightness");
 
-	if (ima->preview_ibuf) {
-		IMB_freeImBuf(ima->preview_ibuf);
-		ima->preview_ibuf = NULL;
+	if (sima->mode == SI_MODE_PAINT) {
+		layer = imalayer_get_current(ima);
+		preview_ibuf = layer->preview_ibuf;
+	}
+	else {
+		preview_ibuf = ima->preview_ibuf;
+	}
+	
+	if (preview_ibuf) {
+		IMB_freeImBuf(preview_ibuf);
+		preview_ibuf = NULL;
 	}
 
-	ima->preview_ibuf = IMB_dupImBuf(ibuf);
+	preview_ibuf = IMB_dupImBuf(ibuf);
 
-	IMB_colorize(ima->preview_ibuf, hue, saturation, lightness);
+	IMB_colorize(preview_ibuf, hue, saturation, lightness);
+
+	if (sima->mode == SI_MODE_PAINT)
+		layer->preview_ibuf = preview_ibuf;
+	else
+		ima->preview_ibuf = preview_ibuf;
 
 	BKE_image_release_ibuf(ima, ibuf, NULL);
 	return TRUE;
@@ -4361,6 +4465,58 @@ static int image_layer_offset_exec(bContext *C, wmOperator *op)
 	return OPERATOR_FINISHED;
 }
 
+static bool image_layer_offset_check(bContext *C, wmOperator *op)
+{
+	Image *ima = CTX_data_edit_image(C);
+	ImageLayer *layer;
+	ImBuf *ibuf;
+	float col[4];
+	int x, y, half, wrap;
+
+	if (!ima)
+		return FALSE;
+
+	ima->use_layers = FALSE;
+	ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL, IMA_IBUF_LAYER);
+	ima->use_layers = TRUE;
+
+	layer = imalayer_get_current(ima);
+	x = RNA_int_get(op->ptr, "off_x");
+	y = RNA_int_get(op->ptr, "off_y");
+	half = RNA_boolean_get(op->ptr, "half");
+	wrap = RNA_boolean_get(op->ptr, "wrap");
+
+	if (abs(x) > ibuf->x) {
+		if (x > 0)
+			x = ibuf->x;
+		else
+			x = - ibuf->x;
+	}
+
+	if (abs(y) > ibuf->y) {
+		if (y > 0)
+			y = ibuf->y;
+		else
+			y = - ibuf->y;
+	}
+
+	if (!wrap) {
+		get_color_background_layer(col, layer);
+	}
+
+	if (layer->preview_ibuf) {
+		IMB_freeImBuf(layer->preview_ibuf);
+		layer->preview_ibuf = NULL;
+	}
+
+	layer->preview_ibuf = IMB_dupImBuf(ibuf);
+
+	layer->preview_ibuf = IMB_offset(layer->preview_ibuf, x, y, half, wrap, col);
+
+	BKE_image_release_ibuf(ima, ibuf, NULL);
+	return TRUE;
+}
+
 void IMAGE_OT_layer_offset(wmOperatorType *ot)
 {
 	/* identifiers */
@@ -4372,6 +4528,8 @@ void IMAGE_OT_layer_offset(wmOperatorType *ot)
 	ot->exec = image_layer_offset_exec;
 	ot->poll = image_layer_poll;
 	ot->invoke = image_op_layer_invoke;
+	ot->check = image_layer_offset_check;
+	ot->cancel = image_layer_preview_cancel;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;

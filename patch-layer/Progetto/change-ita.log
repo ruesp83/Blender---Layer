@@ -42,8 +42,9 @@ Layers v0.2.3 new features and fixed bug for Phase 3. Completed: __\__\201_:
      23. UPD: Aggiunto shortcut: ALT + LeftClick per creare un layer di default.
      24. UPD: Il Panel "Image Layer" è visualizzato solo se esiste un immagine
               e se ci si trova nella modalità "Paint".
-     25. UPD: Migliorato Sample Color nella modalità Paint. Con il tasto destro
-              del mouse e con il tasto ESC, ripristina il colore iniziale.
+     25. UPD: Migliorato Sample Color nella modalità Paint (tasto: S). Con il
+              tasto destro del mouse e con il tasto ESC, ripristina il colore
+              iniziale.
               Inoltre preleva solo il colore dell'immagine e non anche quella
               dell'interfaccia.
      26. ADD: Aggiunta la possibilità di utilizzare la modalità di Color Space:
@@ -70,6 +71,7 @@ Layers v0.2.3 new features and fixed bug for Phase 3. Completed: __\__\201_:
                 |-> Fonde livelli visibili
                 |-> Appiattisci Immagine
      28. ADD: Aggiunto il menù "Color".
+                Menu Color
                 |-> Luminosità - Contrasto
                 |-> Esposizione
                 |-> ------------------
@@ -85,9 +87,35 @@ Layers v0.2.3 new features and fixed bug for Phase 3. Completed: __\__\201_:
      31. ADD: Aggiunta possibilità di utilizzare l'undo con le operazioni sui
               layer.
      32. ADD: Aggiunto alla rotazione arbitraria, il sampling dell'immagine.
-     33. ADD: Aggiunto preview della rotazione arbitraria, in modo da conoscere
-              l'effetto dell'operazione sull'immagine. (Sia in modalità View che
-              Paint).
+     33. ADD: La rotazione arbitraria ora ha la possibilità di lasciare le
+              dimensioni originali dell'immagine.
+     34. ADD: Aggiunto preview alle seguenti operazioni:
+              Mode View:
+                Menu Image
+                |-> Trasforma
+                   |-> Rotazione Arbitraria
+                   |-> Spostamento
+                Menu Color
+                |-> Luminosità - Contrasto
+                |-> Esposizione
+                |-> Colora
+                |-> Soglia
+                |-> Posterizza
+              Mode Paint:
+                Menu Image
+                |-> Trasforma
+                   |-> Rotazione Arbitraria
+                   |-> Spostamento
+                Menu Color (Layer Selezionato)
+                |-> Luminosità - Contrasto
+                |-> Esposizione
+                |-> Colora
+                |-> Soglia
+                |-> Posterizza
+                Menu Layer (Layer Selezionato)
+                |-> Trasforma
+                   |-> Rotazione Arbitraria
+                   |-> Spostamento
 
 Layers v0.2.1 fixed bug for Phase 2. Completed: 14\11\2012:
      1. FIX: Risolo il problema del bordino nero intorno alla pennellata.
