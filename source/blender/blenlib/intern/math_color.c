@@ -104,17 +104,17 @@ static float hsl_value (float n1, float n2, float hue)
 {
 	float val;
 
-	if (hue > 6.0)
-		hue -= 6.0;
-	else if (hue < 0.0)
-		hue += 6.0;
+	if (hue > 6.0f)
+		hue -= 6.0f;
+	else if (hue < 0.0f)
+		hue += 6.0f;
 
-	if (hue < 1.0)
+	if (hue < 1.0f)
 		val = n1 + (n2 - n1) * hue;
-	else if (hue < 3.0)
+	else if (hue < 3.0f)
 		val = n2;
-	else if (hue < 4.0)
-		val = n1 + (n2 - n1) * (4.0 - hue);
+	else if (hue < 4.0f)
+		val = n1 + (n2 - n1) * (4.0f - hue);
 	else
 		val = n1;
 
@@ -132,16 +132,16 @@ void hsl_to_rgb(float h, float s, float l, float *r, float *g, float *b)
 	else {
 		float m1, m2;
 
-		if (l <= 0.5)
-			m2 = l * (1.0 + s);
+		if (l <= 0.5f)
+			m2 = l * (1.0f + s);
 		else
 			m2 = l + s - l * s;
 
-		m1 = 2.0 * l - m2;
+		m1 = 2.0f * l - m2;
 
-		*r = hsl_value (m1, m2, h * 6.0 + 2.0);
-		*g = hsl_value (m1, m2, h * 6.0);
-		*b = hsl_value (m1, m2, h * 6.0 - 2.0);
+		*r = hsl_value (m1, m2, h * 6.0f + 2.0f);
+		*g = hsl_value (m1, m2, h * 6.0f);
+		*b = hsl_value (m1, m2, h * 6.0f - 2.0f);
 	}
 }
 
